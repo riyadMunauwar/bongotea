@@ -1,5 +1,12 @@
 <?php
 
+use App\Models\Page;
+use App\Shortcodes\AttributeSchema;
+use App\Shortcodes\Node;
+use App\Shortcodes\ShortcodeDefinition;
+use App\Shortcodes\ShortcodeRegistry;
+use App\Support\PageCache\StaticPageCache;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -7,26 +14,44 @@ use Tests\TestCase;
 |--------------------------------------------------------------------------
 | Test Case
 |--------------------------------------------------------------------------
-|
-| The closure you provide to your test functions is always bound to a specific PHPUnit test
-| case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
-| need to change it using the "pest()" function to bind different classes or traits.
-|
 */
 
 pest()->extend(TestCase::class)
- // ->use(RefreshDatabase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Page cache isolation
+|--------------------------------------------------------------------------
+|
+| The static cache is pointed at a scratch directory for every feature test.
+| public/page-cache is served by nginx publish-blind, so a file left there by
+| the suite would be real content on a real site.
+|
+*/
+
+pest()->beforeEach(function (): void {
+    $this->cacheDirectory = storage_path('framework/testing/page-cache-'.bin2hex(random_bytes(4)));
+
+    $this->app->instance(StaticPageCache::class, new StaticPageCache(
+        $this->app->make(Filesystem::class),
+        $this->cacheDirectory,
+    ));
+
+    $this->cache = $this->app->make(StaticPageCache::class);
+})->in('Feature');
+
+pest()->afterEach(function (): void {
+    if (isset($this->cacheDirectory)) {
+        (new Filesystem)->deleteDirectory($this->cacheDirectory);
+    }
+})->in('Feature');
 
 /*
 |--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
-|
-| When you're writing tests, you often need to check that values meet certain conditions. The
-| "expect()" function gives you access to a set of "expectations" methods that you can use
-| to assert different things. Of course, you may extend the Expectation API at any time.
-|
 */
 
 expect()->extend('toBeOne', function () {
@@ -37,14 +62,39 @@ expect()->extend('toBeOne', function () {
 |--------------------------------------------------------------------------
 | Functions
 |--------------------------------------------------------------------------
-|
-| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
-| project that you don't want to repeat in every file. Here you can also expose helpers as
-| global functions to help you to reduce the number of lines of code in your test files.
-|
 */
 
-function something()
+/**
+ * Register a throwaway Shortcode Definition for the duration of one test.
+ *
+ * The registry is a singleton rebuilt per test, so this is how a test
+ * exercises the shortcode *mechanism* without coupling itself to the one
+ * shortcode v1 happens to ship.
+ *
+ * @param  Closure(Node, Page): string  $render
+ */
+function registerShortcode(string $name, Closure $render): void
 {
-    // ..
+    app(ShortcodeRegistry::class)->register(new class($name, $render) implements ShortcodeDefinition
+    {
+        public function __construct(
+            private readonly string $name,
+            private readonly Closure $render,
+        ) {}
+
+        public function name(): string
+        {
+            return $this->name;
+        }
+
+        public function attributes(): AttributeSchema
+        {
+            return AttributeSchema::none();
+        }
+
+        public function render(Node $node, Page $page): string
+        {
+            return ($this->render)($node, $page);
+        }
+    });
 }
