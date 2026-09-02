@@ -3,7 +3,6 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
-use App\Filament\Resources\Orders\OrderResource;
 use Filament\FontProviders\BunnyFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -18,10 +17,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -94,19 +91,13 @@ class AdminPanelProvider extends PanelProvider
             ->collapsedSidebarWidth('3.5rem')
             ->sidebarCollapsibleOnDesktop()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
+            /**
+             * Discovery is what registers `Pages\Dashboard` on the panel root,
+             * and the class is where the reasoning about it sits. No widget is
+             * registered anywhere, which is what leaves that screen empty.
+             */
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
-            /**
-             * The panel opens onto the work. Filament's Dashboard owned the
-             * panel root, so with it gone the bare URL is pointed at the queue
-             * by hand, rather than left to whichever navigation item happens to
-             * sort first.
-             */
-            ->authenticatedRoutes(function (): void {
-                Route::get('/', fn (): RedirectResponse => redirect(OrderResource::getUrl('index')))->name('home');
-            })
-            /** The sidebar branding links here, so it has to lead somewhere a User wants. */
-            ->homeUrl(fn (): string => OrderResource::getUrl('index'))
             /**
              * The branding, and specifically the mark.
              *
