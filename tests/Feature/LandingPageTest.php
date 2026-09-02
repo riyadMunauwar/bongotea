@@ -16,6 +16,22 @@ it('serves a published page at its slug and writes it to the cache', function ()
     expect($this->cache->has('promo'))->toBeTrue();
 });
 
+it('writes the cache the same bytes it hands the visitor', function () {
+    Page::factory()->published()->create(['slug' => 'promo']);
+
+    $response = $this->get('/promo');
+
+    /**
+     * The controller writes the file before the response leaves the framework,
+     * so anything that edits it on the way out — a middleware, a
+     * `RequestHandled` listener — splits the two apart silently: the visitor
+     * who paid for the render gets the edited bytes, and nginx hands everyone
+     * after them the file. This equality is what the whole static cache rests
+     * on, and it is the assertion that fails whatever the cause.
+     */
+    expect(file_get_contents($this->cache->htmlPath('promo')))->toBe($response->getContent());
+});
+
 it('serves the stored document byte for byte', function () {
     $page = Page::factory()->published()->create(['slug' => 'promo']);
 

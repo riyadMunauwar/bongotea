@@ -31,6 +31,13 @@ abstract class TestCase extends BaseTestCase
      * a guarantee — so this flushes per request rather than per test, which
      * also closes the case of two requests inside a single test.
      *
+     * What flushing before rather than after costs: Livewire's own test setup
+     * helpers are per-request state too, so `Livewire::withoutLazyLoading()`
+     * and `Livewire::forceAssetInjection()` are cleared again if they are
+     * called ahead of a `$this->get()`. Neither is used in this suite; if one
+     * is ever wanted against an HTTP request it belongs inside this method,
+     * below the flush, where it cannot be undone behind the test's back.
+     *
      * It matters here because `LandingPageTest` asserts a Page comes back byte
      * for byte, and those same bytes are what `StaticPageCache` freezes onto
      * disk for every visitor after the first.
