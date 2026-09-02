@@ -11,6 +11,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -91,6 +93,23 @@ class AdminPanelProvider extends PanelProvider
             })
             /** The sidebar branding links here, so it has to lead somewhere a User wants. */
             ->homeUrl(fn (): string => OrderResource::getUrl('index'))
+            /**
+             * The branding, and specifically the mark.
+             *
+             * Filament renders its brand logo inside a container it hides the
+             * moment the sidebar collapses, so branding placed there leaves the
+             * rail's top-left empty — which reads as broken rather than
+             * compact, in a state a User can sit in all day. The mark is
+             * rendered ahead of that container instead, where nothing hides it,
+             * and the wordmark is left to Filament's own brand name: the word
+             * is the half that can afford to go with the width. `sidebar.css`
+             * is where the rail gives the mark the slot the expand button
+             * otherwise fills.
+             */
+            ->renderHook(
+                PanelsRenderHook::SIDEBAR_LOGO_BEFORE,
+                fn (): View => view('filament.admin.brand-mark'),
+            )
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

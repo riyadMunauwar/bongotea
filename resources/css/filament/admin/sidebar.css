@@ -102,3 +102,93 @@
         scrollbar-gutter: auto;
     }
 }
+
+/*
+ * The branding.
+ *
+ * The mark is rendered ahead of Filament's logo container rather than inside
+ * it — `AdminPanelProvider` has the reason — so the header holds two elements
+ * that behave differently: a mark nothing hides, and a wordmark Filament hides
+ * with the width. Neither is given a colour. The wordmark takes the body's
+ * text colour from Filament and the mark is drawn in `currentColor`, so the
+ * pair inverts together and dark mode stays the one edit in `tokens.css`.
+ */
+.fi-sidebar-header {
+    gap: 0.5rem;
+}
+
+.gp-brand-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+
+    /* The rail is 3.5rem; the mark is the one thing in it that must not give. */
+    flex-shrink: 0;
+}
+
+.fi-sidebar-header .fi-logo {
+    /* Filament spaces the wordmark off the collapse button. The mark does that now. */
+    margin-inline-start: 0;
+
+    /*
+     * Down from Filament's 1.25rem bold, which was sized for a wordmark
+     * standing alone. Beside a 1.5rem mark it competes with it, and in a 14rem
+     * sidebar it is the loudest thing on a surface meant to stay quiet.
+     */
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/*
+ * The rail's branding slot.
+ *
+ * Rail and expand button want the same 3.5rem: the button is 2.25rem and the
+ * mark is 1.5rem, and side by side they overflow. They share one cell instead
+ * and cross-fade — the mark is what the rail shows at rest, the button is what
+ * it shows under a pointer.
+ *
+ * The button is faded rather than hidden so it stays in the tab order, and
+ * `:focus-within` is what brings it back for a User who never reaches for a
+ * mouse. The mark gives up its pointer events for the same reason it keeps its
+ * place: it is the anchor, and the button beneath it is the control.
+ */
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header {
+    @variant lg {
+        display: grid;
+        place-items: center;
+    }
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header > * {
+    @variant lg {
+        grid-area: 1 / 1;
+        transition: opacity 100ms ease-out;
+    }
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .gp-brand-mark {
+    @variant lg {
+        pointer-events: none;
+    }
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-open-collapse-sidebar-btn {
+    @variant lg {
+        opacity: 0;
+    }
+}
+
+.fi-sidebar:not(.fi-sidebar-open)
+    .fi-sidebar-header:is(:hover, :focus-within)
+    .gp-brand-mark {
+    @variant lg {
+        opacity: 0;
+    }
+}
+
+.fi-sidebar:not(.fi-sidebar-open)
+    .fi-sidebar-header:is(:hover, :focus-within)
+    .fi-sidebar-open-collapse-sidebar-btn {
+    @variant lg {
+        opacity: 1;
+    }
+}
