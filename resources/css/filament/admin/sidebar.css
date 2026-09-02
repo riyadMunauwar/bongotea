@@ -1,6 +1,11 @@
 /*
  * The sidebar. Quieter than the working area in both modes, so navigation and
  * content never blur together.
+ *
+ * With the topbar gone the sidebar owns the full height of the window and
+ * carries the branding, global search, navigation and account menu on its own.
+ * It is also the panel's densest surface: its padding and the gaps between its
+ * groups were the single biggest source of wasted vertical space in the chrome.
  */
 .fi-sidebar {
     background-color: var(--gp-surface-muted);
@@ -13,4 +18,87 @@
  */
 .fi-sidebar-header {
     background-color: transparent;
+}
+
+/*
+ * The collapsed rail.
+ *
+ * Filament emits `--collapsed-sidebar-width` from the panel but reads it
+ * nowhere, so a collapsed sidebar is otherwise only as wide as whatever
+ * happens to be inside it. Binding the width here is what makes
+ * `collapsedSidebarWidth()` mean anything.
+ *
+ * Below `lg` this same selector is the off-canvas drawer, which is translated
+ * out of view and takes the full `--sidebar-width` when it opens, so the rail
+ * is scoped to the breakpoint where it actually exists.
+ */
+.fi-sidebar:not(.fi-sidebar-open) {
+    @variant lg {
+        width: var(--collapsed-sidebar-width);
+    }
+}
+
+/*
+ * Everything below sizes against the rail, because 3.5rem is the tighter of
+ * the two constraints: the widest thing the sidebar holds is a 2.25rem control
+ * — the expand button, a navigation icon, the account avatar — and each has to
+ * sit centred in the rail without touching its edges.
+ *
+ * Filament keeps the navigation, the footer and the search box on one vertical
+ * line by pairing a navigation padding with a footer margin 0.5rem smaller,
+ * because the navigation's group list pulls itself back out by that much.
+ * Zeroing that pull-back is what lets one inset be stated once and hold
+ * everywhere.
+ */
+.fi-sidebar-header,
+.fi-sidebar-footer,
+.fi-sidebar .fi-global-search-ctn {
+    margin-inline: 0;
+    padding-inline: 0.5rem;
+}
+
+.fi-sidebar-nav {
+    /* Was 1.5rem of inset and 2rem of vertical padding. */
+    padding-inline: 0.5rem;
+    padding-block: 0.75rem;
+    gap: 0.75rem;
+}
+
+.fi-sidebar-nav-groups {
+    /* Filament pulls the group list back out past the navigation's padding. */
+    margin-inline: 0;
+
+    /* Group spacing, down from 1.75rem. */
+    gap: 1rem;
+}
+
+.fi-sidebar-footer {
+    margin-block: 0.5rem;
+}
+
+.fi-sidebar .fi-global-search-ctn {
+    margin-block-start: 0.75rem;
+}
+
+/*
+ * The account menu is the one control that does not fit the rail on its own:
+ * its avatar is 2rem where a navigation icon is 1.5rem, and Filament's 0.5rem
+ * of padding around it pushes the button past the 2.5rem the rail leaves. It
+ * keeps the avatar and gives up the padding.
+ */
+.fi-sidebar:not(.fi-sidebar-open) .fi-user-menu-trigger {
+    @variant lg {
+        padding: 0.25rem;
+    }
+}
+
+/*
+ * The navigation reserves room for a scrollbar it only needs when it overflows.
+ * In the rail that reserved strip is a sixth of the width, and it is taken from
+ * one side, so every icon sits visibly off-centre.
+ */
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav {
+    @variant lg {
+        scrollbar-gutter: auto;
+    }
 }

@@ -38,6 +38,16 @@ class AdminPanelProvider extends PanelProvider
                  */
                 'gray' => Color::Neutral,
             ])
+            /**
+             * No topbar. It spent 4rem across every screen on a search field
+             * and an avatar; Filament moves global search, database
+             * notifications and the account menu into the sidebar on its own
+             * once it is gone, so nothing is lost.
+             */
+            ->topbar(false)
+            ->sidebarWidth('14rem')
+            ->collapsedSidebarWidth('3.5rem')
+            ->sidebarCollapsibleOnDesktop()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')

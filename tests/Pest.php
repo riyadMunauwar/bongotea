@@ -8,6 +8,7 @@ use App\Shortcodes\ShortcodeRegistry;
 use App\Support\PageCache\StaticPageCache;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /*
@@ -46,6 +47,23 @@ pest()->afterEach(function (): void {
     if (isset($this->cacheDirectory)) {
         (new Filesystem)->deleteDirectory($this->cacheDirectory);
     }
+})->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Livewire state isolation
+|--------------------------------------------------------------------------
+|
+| Livewire remembers, for the length of a request, that it rendered a
+| component, and injects its own styles and scripts into every HTML response
+| after that. A test process is one long-lived request as far as that flag is
+| concerned, so a test that opens the admin leaves Livewire injecting itself
+| into the public Pages rendered by every test that follows.
+|
+*/
+
+pest()->beforeEach(function (): void {
+    Livewire::flushState();
 })->in('Feature');
 
 /*
