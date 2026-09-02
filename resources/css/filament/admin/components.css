@@ -1,0 +1,14 @@
+/*
+ * Shared components: the vocabulary that appears on more than one screen —
+ * buttons, badges, dropdowns, modals, pagination and notifications. Only their
+ * surfaces are settled here; elevation and radius are not.
+ */
+
+/*
+ * Overlays sit on the working surface. What sets them apart from the page is
+ * that they float above it, which is the shadow's job, not the surface's.
+ */
+.fi-dropdown-panel,
+.fi-modal-window {
+    background-color: var(--gp-surface);
+}

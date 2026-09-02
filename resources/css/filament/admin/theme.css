@@ -1,0 +1,19 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+/*
+ * Split by concern, mirroring how Filament organises its own source CSS, so
+ * that the rules touching any one surface stay together instead of scattering
+ * through a single file as the theme fills out.
+ *
+ * `tokens.css` comes first because every partial after it is written against
+ * the properties it defines.
+ */
+@import './tokens.css';
+@import './layout.css';
+@import './sidebar.css';
+@import './tables.css';
+@import './forms.css';
+@import './components.css';

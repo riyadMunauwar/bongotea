@@ -1,0 +1,21 @@
+/*
+ * Tables: the Orders queue and every other table in the panel. Density is not
+ * settled here.
+ */
+.fi-ta-ctn {
+    background-color: var(--gp-surface);
+}
+
+.fi-ta-row {
+    /*
+     * A hovered row, a selected row, a striped row and a group header are all
+     * the same idea: something marked out within the table's own surface,
+     * rather than a surface of its own.
+     */
+    &.fi-clickable:hover,
+    &.fi-selected:not(.fi-striped),
+    &.fi-striped,
+    &.fi-ta-group-header-row > td {
+        background-color: var(--gp-surface-accented);
+    }
+}

@@ -1,0 +1,16 @@
+/*
+ * The sidebar. Quieter than the working area in both modes, so navigation and
+ * content never blur together.
+ */
+.fi-sidebar {
+    background-color: var(--gp-surface-muted);
+}
+
+/*
+ * Filament gives the drawer's header the working surface, which was in step
+ * with the drawer while the drawer was white and reads as a band across the
+ * top of it now that the drawer is muted.
+ */
+.fi-sidebar-header {
+    background-color: transparent;
+}

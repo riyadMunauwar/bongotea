@@ -1,0 +1,29 @@
+/*
+ * Forms: sections, inputs, infolists and the Order Line repeater. Density and
+ * input styling are not settled here.
+ */
+
+/*
+ * Sections are the container every form and infolist in the panel sits in. An
+ * aside section carries its surface on the content container instead, because
+ * its heading sits outside the card.
+ */
+.fi-section:not(.fi-section-not-contained) {
+    &:not(.fi-aside) {
+        background-color: var(--gp-surface);
+
+        &.fi-secondary {
+            background-color: var(--gp-surface-accented);
+        }
+    }
+
+    &.fi-aside > .fi-section-content-ctn {
+        background-color: var(--gp-surface);
+    }
+}
+
+/* The rules dividing a section from its header and its footer. */
+.fi-section-content-ctn,
+.fi-section-footer {
+    border-color: var(--gp-border);
+}

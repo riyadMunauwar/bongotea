@@ -1,0 +1,67 @@
+/*
+ * The theme's whole vocabulary.
+ *
+ * Every rule in every other partial is written against the properties defined
+ * here, and dark mode is this same list with different values. That is the one
+ * convention this theme depends on: a component rule must never carry a
+ * dark-mode variant of its own, or dark mode stops being one edit and turns
+ * into a second design maintained by hand. It is also what lets a Filament
+ * component the panel does not render yet inherit these surfaces the first
+ * time it appears.
+ *
+ * The neutral ramp itself is deliberately not defined here. `--gray-*` is
+ * emitted by the panel from the palette named in `AdminPanelProvider`, so the
+ * choice of a pure neutral gray lives in one place and these tokens name
+ * shades of it.
+ */
+
+:root {
+    /*
+     * Surfaces.
+     *
+     * The working area is the brightest thing on screen and the chrome around
+     * it sits a shade quieter, so attention lands on the data rather than on
+     * the navigation. `accented` is a third role rather than a second name for
+     * `muted`: it marks something out *within* a surface — a hovered row, a
+     * selected row — where `muted` sits behind everything. Light mode happens
+     * to reach for the same shade twice; dark mode is where the two roles
+     * visibly part, because a fill inside the working area has to sit lighter
+     * than it while the chrome behind it sits darker.
+     */
+    --gp-surface: #fff;
+    --gp-surface-muted: var(--gray-50);
+    --gp-surface-accented: var(--gray-50);
+
+    /*
+     * Borders.
+     *
+     * Hairlines do the separating that Filament's default shadows do, which is
+     * what later lets a shadow mean "this floats above the page" rather than
+     * "this is a box".
+     */
+    --gp-border: var(--gray-200);
+    --gp-hairline: 1px solid var(--gp-border);
+
+    /*
+     * Radii: the scale the panel's corners are drawn from, tighter than
+     * Filament's 12px on cards. Nothing reads these yet — rounding the
+     * components is the shared-component pass, and doing it here would leave
+     * containers with tight outer corners and Filament's own radius still on
+     * the headers and footers nested inside them.
+     */
+    --gp-radius-sm: 0.25rem;
+    --gp-radius: 0.375rem;
+    --gp-radius-lg: 0.5rem;
+}
+
+/*
+ * Dark mode: the same relationships, inverted. The chrome stays quieter than
+ * the working area, so the interface reads the same way it does in light.
+ */
+:root.dark {
+    --gp-surface: var(--gray-900);
+    --gp-surface-muted: var(--gray-950);
+    --gp-surface-accented: rgb(255 255 255 / 0.05);
+
+    --gp-border: rgb(255 255 255 / 0.1);
+}

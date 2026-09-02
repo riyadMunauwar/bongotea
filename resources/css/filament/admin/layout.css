@@ -1,0 +1,21 @@
+/*
+ * The shell: the ground the panel sits on, and the working area laid over it.
+ */
+
+/* The ground the chrome sits on. The sidebar is drawn over this. */
+.fi-body {
+    background-color: var(--gp-surface-muted);
+}
+
+/*
+ * The working area is the brightest surface on screen, and a hairline — not a
+ * shadow and not a change of tone — is what separates it from the sidebar.
+ */
+.fi-main-ctn {
+    background-color: var(--gp-surface);
+
+    /* Below `lg` the sidebar is off-canvas, so there is nothing to separate. */
+    @variant lg {
+        border-inline-start: var(--gp-hairline);
+    }
+}
