@@ -1,6 +1,10 @@
 /*
- * Forms: sections, inputs, infolists and the Order Line repeater. Density and
- * input styling are not settled here.
+ * Forms: sections, inputs, infolists and the Order Line repeater.
+ *
+ * Authoring a Page, editing a Product, reading an Order and correcting a
+ * quantity on an Order Line are four screens that have to read as one
+ * interface, so everything here is written once against the shared tokens
+ * rather than per screen.
  */
 
 /*
@@ -28,10 +32,232 @@
         border-radius: var(--gp-radius);
         --tw-ring-color: var(--gp-border);
     }
+
+    /*
+     * Density.
+     *
+     * Filament pads a section's content with 1.5rem and its header and footer
+     * with 1.5rem across and 1rem down. A section's header is chrome — a
+     * heading and a description over the fields that hold the work — so it
+     * compresses hard, the way the page header did in `layout.css`. The content
+     * padding comes down with it to a single 1rem, which is the figure the rest
+     * of this file is built on.
+     *
+     * This lands close to where Filament's own `fi-compact` section sits, so a
+     * compact section in this panel is no longer visibly tighter than a normal
+     * one. Nothing renders one today; a screen that wants a genuinely denser
+     * card needs a step below 1rem defined here rather than the modifier.
+     */
+    &:not(.fi-divided) > .fi-section-content-ctn > .fi-section-content {
+        padding: 1rem;
+    }
+
+    &.fi-divided > .fi-section-content-ctn > .fi-section-content > * {
+        padding: 1rem;
+    }
+
+    &:not(.fi-aside) > .fi-section-header {
+        padding: 0.75rem 1rem;
+    }
+
+    & > .fi-section-content-ctn > .fi-section-footer {
+        padding: 0.75rem 1rem;
+    }
 }
 
 /* The rules dividing a section from its header and its footer. */
 .fi-section-content-ctn,
 .fi-section-footer {
     border-color: var(--gp-border);
+}
+
+/*
+ * The space between things.
+ *
+ * Filament separates one field from the next, and one section from the next,
+ * by 1.5rem. Left alone against the padding above, a field would sit further
+ * from its neighbour than from the edge of the card holding both — which is
+ * the "tight box, loose contents" look that makes a compressed interface read
+ * as cramped rather than dense.
+ *
+ * So one figure, 1rem, governs everything inside the working area: the padding
+ * of a card, the gap between two fields in it, and the gap between two cards.
+ * The chrome above the work keeps the wider 1.25rem set in `layout.css`, which
+ * is what still separates the page's blocks from each other.
+ *
+ * Filament's own `fi-dense` schemas are left at their 0.75rem: dense is a
+ * deliberate choice made per schema, and it has to stay tighter than this.
+ */
+.fi-sc.fi-sc-has-gap:not(.fi-sc-dense) {
+    gap: 1rem;
+}
+
+.fi-sc-form:not(.fi-dense) {
+    gap: 1rem;
+}
+
+/*
+ * Inputs.
+ *
+ * Filament wraps every text input, textarea, select, date picker and colour
+ * picker in one `fi-input-wrp`, so binding that single surface is most of what
+ * makes the controls on four screens agree. It takes the working surface — an
+ * input is not a tone lighter or darker than the card it sits in, it is the
+ * same surface with an edge, exactly as in light mode where both are white —
+ * and the shared radius.
+ *
+ * Only the resting ring is bound. The focused ring and the invalid ring are
+ * state, they are Filament's blue and red, and they must go on winning; both
+ * are excluded here rather than restated, since restating them would mean
+ * writing their dark variants by hand.
+ */
+.fi-input-wrp {
+    background-color: var(--gp-surface);
+    border-radius: var(--gp-radius);
+
+    /*
+     * A field a User cannot change — the Customer's phone number, an Order
+     * Line's captured price — sinks to the muted surface and gives its edge
+     * back to the plain hairline. On the Order screen that distinction is the
+     * fastest answer to "what can I actually correct here", so it is worth the
+     * two extra rules.
+     */
+    &.fi-disabled {
+        background-color: var(--gp-surface-muted);
+    }
+
+    &:not(:focus-within):not(.fi-invalid) {
+        --tw-ring-color: var(--gp-border-control);
+
+        &.fi-disabled {
+            --tw-ring-color: var(--gp-border);
+        }
+    }
+}
+
+/*
+ * A searchable select renders a button inside that wrapper rather than a
+ * `<select>`, and rounds itself independently.
+ */
+.fi-select-input-btn {
+    border-radius: var(--gp-radius);
+}
+
+/*
+ * Checkboxes, radios and toggles are deliberately left alone. They are the
+ * panel's affordance colour — blue is what says a control is interactive — and
+ * they are drawn with a `checked:` and a `focus:` fill that these unlayered
+ * rules would silently outrank.
+ */
+
+/*
+ * FilePond draws the Product image field's own frame, so it is bound by hand
+ * to the same surface, edge and radius as every other input.
+ */
+.fi-fo-file-upload .filepond--root {
+    background-color: var(--gp-surface);
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border-control);
+
+    &[data-disabled='disabled'] {
+        background-color: var(--gp-surface-muted);
+        --tw-ring-color: var(--gp-border);
+    }
+}
+
+/*
+ * The date picker's panel floats, and `components.css` has already handed it
+ * back its shadow. Its surface and edge are still its own.
+ */
+.fi-fo-date-time-picker-panel {
+    background-color: var(--gp-surface);
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border);
+}
+
+/*
+ * The Order Line repeater, and the infolist's repeatable entry beside it.
+ *
+ * This is the one nested container in the panel, and the place a tighter scale
+ * is most likely to go wrong: a card inside a card, at 6px radii, with 1rem of
+ * padding around it and its own padding inside. Three things keep it from
+ * reading as cramped.
+ *
+ * It is filled rather than outlined. A repeater item is not a second card
+ * floating on the page, it is a thing marked out *within* the section holding
+ * it — the same idea as a hovered or striped row in `tables.css`, and the role
+ * `--gp-surface-accented` exists for. On white, an item drawn white and edged
+ * with a hairline has nothing but that hairline to say it is a unit; tinted, it
+ * is a unit at a glance, and the inputs inside it stand out against it because
+ * they keep the working surface.
+ *
+ * It rounds one step tighter than its container, to `--gp-radius-sm`. Nesting
+ * a 6px corner inside a 6px corner reads as a mistake at close spacing; a
+ * smaller corner inside a larger one reads as deliberate.
+ *
+ * And its padding compresses gently — 1rem to 0.75rem, not to the 0.5rem the
+ * arithmetic would allow. Correcting a quantity on an Order Line is real daily
+ * work and the fields are targets, so the repeater follows the table rows'
+ * rule rather than the chrome's: it gives up a quarter-rem and no more.
+ */
+/*
+ * An Order Line is one thing whether it is being corrected or read, so the
+ * editable repeater's item and the infolist's repeatable item are drawn by the
+ * same rules rather than by two that have to be kept in step.
+ */
+.fi-fo-repeater .fi-fo-repeater-item,
+.fi-in-repeatable.fi-contained > .fi-in-repeatable-item {
+    background-color: var(--gp-surface-accented);
+    border-radius: var(--gp-radius-sm);
+    --tw-ring-color: var(--gp-border);
+}
+
+/* One item stands off the next by less than the section stands off its own edge. */
+.fi-fo-repeater .fi-fo-repeater-items,
+.fi-in-repeatable {
+    gap: 0.75rem;
+}
+
+/*
+ * The padding lands a level apart in the two components — a repeater item wraps
+ * its fields in a content element so that a header can sit above them, where a
+ * repeatable entry, which has no header, holds them directly.
+ */
+.fi-fo-repeater .fi-fo-repeater-item-content,
+.fi-in-repeatable.fi-contained > .fi-in-repeatable-item {
+    padding: 0.75rem;
+}
+
+/* What only the editable one has: the header, and the rule under it. */
+.fi-fo-repeater {
+    & .fi-fo-repeater-item-header {
+        padding: 0.5rem 0.75rem;
+    }
+
+    & .fi-fo-repeater-item-has-header > .fi-fo-repeater-item-content {
+        border-color: var(--gp-border);
+    }
+}
+
+/*
+ * And the fields inside an item follow the item, not the section: the same
+ * figure governs a container's padding and the gaps within it one level down
+ * as it does one level up. Left at the section's 1rem, an Order Line's three
+ * fields would sit further from each other than from the edge of the item
+ * holding them — the imbalance the section rules above exist to avoid, arriving
+ * from the other direction.
+ */
+.fi-fo-repeater-item-content > .fi-sc.fi-sc-has-gap:not(.fi-sc-dense),
+.fi-in-repeatable-item > .fi-sc.fi-sc-has-gap:not(.fi-sc-dense) {
+    gap: 0.75rem;
+}
+
+/*
+ * An infolist entry carries no surface of its own — it is a label over a value
+ * — so the only corner it has to draw from the theme is the one on a copyable
+ * value's focus ring. `order_number` and the Customer's phone number are both
+ * copied off the Order screen daily.
+ */
+.fi-in-text-item > .fi-copyable {
+    border-radius: var(--gp-radius);
 }

@@ -43,6 +43,20 @@
     --gp-hairline: 1px solid var(--gp-border);
 
     /*
+     * The edge of something a User can type into.
+     *
+     * A control has to announce itself as a target in a way a card does not,
+     * and its own fill cannot do that here: an input is drawn in the working
+     * surface's colour and sits on the working surface, so its edge is the
+     * whole of what says "this is where you type". Light mode reaches for the
+     * same shade as `--gp-border`, because a hairline is already as strong as
+     * Filament draws an input in light; dark mode is where the two roles part,
+     * since at a tenth of white an input's edge disappears into the card
+     * behind it. The same shape as the surface roles above.
+     */
+    --gp-border-control: var(--gray-200);
+
+    /*
      * Radii: the scale the panel's corners are drawn from, tighter than
      * Filament's 12px on cards. Corners are among the first things the eye
      * registers, so holding cards, controls and overlays to one figure is most
@@ -88,6 +102,7 @@
     --gp-surface-accented: rgb(255 255 255 / 0.05);
 
     --gp-border: rgb(255 255 255 / 0.1);
+    --gp-border-control: rgb(255 255 255 / 0.2);
 
     /* Deeper and wider, because there is no light left to lose against a dark page. */
     --gp-shadow-overlay:
