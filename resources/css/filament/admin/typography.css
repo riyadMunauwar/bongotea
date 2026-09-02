@@ -1,0 +1,45 @@
+/*
+ * Typography: the two faces the panel is set in, and how figures line up.
+ */
+
+/*
+ * One stack, two faces. Geist carries the Latin text and every digit; Noto
+ * Sans Bengali is named behind it for the characters Geist has no glyph for —
+ * `৳`, which is on every price and Order total, and any Bengali name or
+ * address an Order carries. Naming it is the point: left to the system, that
+ * symbol arrives in a different typeface, weight and baseline from its own
+ * digits, and differently on Windows, macOS and Android.
+ *
+ * The stack is restated here rather than defined, which is why it sits outside
+ * `tokens.css`: Filament composes `--font-sans` from the panel's `font()`, and
+ * recomposing it is the only seam a fallback can go into ahead of the system
+ * faces. Geist still comes from the panel, and `AdminPanelProvider` loads both
+ * faces at the same four weights, so a bold Order total has a real 600 for its
+ * symbol instead of a synthesised one.
+ */
+@theme inline {
+    --font-sans:
+        var(--font-family), 'Noto Sans Bengali', ui-sans-serif, system-ui,
+        sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+}
+
+/*
+ * Tabular figures. Geist's digits are proportional by default — its `1` is 384
+ * units against its `0` at 663 — so a column of Order totals genuinely does
+ * not line up until `tnum` is asked for. Alignment is functional here rather
+ * than decorative: money is in every Order row, and a Customer *is* their
+ * phone number.
+ *
+ * Set once on the body, so every figure in the panel inherits it. Inputs are
+ * named too, because preflight gives them `font: inherit` and the shorthand
+ * takes `font-variant-numeric` with it — a figure being edited would otherwise
+ * stop lining up with the one being read.
+ */
+.fi-body {
+    font-variant-numeric: tabular-nums;
+
+    & :is(input, textarea, select, button) {
+        font-variant-numeric: inherit;
+    }
+}

@@ -12,6 +12,7 @@
  * the properties it defines.
  */
 @import './tokens.css';
+@import './typography.css';
 @import './layout.css';
 @import './sidebar.css';
 @import './tables.css';

@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Resources\Orders\OrderResource;
+use Filament\FontProviders\BunnyFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -38,6 +39,34 @@ class AdminPanelProvider extends PanelProvider
                  */
                 'gray' => Color::Neutral,
             ])
+            /**
+             * Geist, from Bunny — the host `vite.config.js` already has the
+             * public build pulling its face from. Noto Sans Bengali rides
+             * along in the same request at the same four weights, because
+             * Geist carries no `৳` and that symbol is on every price and Order
+             * total in the panel. Loading the two together is what keeps the
+             * symbol on the same weight as the digits beside it;
+             * `typography.css` is where they are ordered into one stack.
+             */
+            ->font(
+                'Geist',
+                url: 'https://fonts.bunny.net/css?family=geist:400,500,600,700|noto-sans-bengali:400,500,600,700&display=swap',
+                provider: BunnyFontProvider::class,
+                /**
+                 * Filament preloads nothing once a custom family is named, and
+                 * the two faces below are the ones a cold load cannot afford to
+                 * wait for: the body text, and the face `৳` comes from. Until
+                 * the second arrives the symbol is drawn by whichever Bengali
+                 * font the machine happens to ship — the defect this typeface
+                 * work exists to remove, showing through for as long as the
+                 * stylesheet takes to resolve. The other weights may swap in
+                 * late; these two should not.
+                 */
+                preload: [
+                    'https://fonts.bunny.net/geist/files/geist-latin-400-normal.woff2',
+                    'https://fonts.bunny.net/noto-sans-bengali/files/noto-sans-bengali-bengali-400-normal.woff2',
+                ],
+            )
             /**
              * No topbar. It spent 4rem across every screen on a search field
              * and an avatar; Filament moves global search, database
