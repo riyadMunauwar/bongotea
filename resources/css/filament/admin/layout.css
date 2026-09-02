@@ -19,3 +19,26 @@
         border-inline-start: var(--gp-hairline);
     }
 }
+
+/*
+ * Density: the chrome above the work.
+ *
+ * Filament stacks 2rem of padding around the page's header block against a 2rem
+ * gap beneath the heading and another 2rem between the blocks of content below
+ * it, which is where most of the ~6rem of emptiness above the first Order in
+ * the queue came from. All three are compressed by hand, and the panel's
+ * spacing unit is deliberately not touched: Tailwind derives width, height and
+ * size utilities from that unit, so scaling it would shrink every icon, avatar
+ * and toggle in the panel along with the padding.
+ *
+ * This is chrome, so it compresses hard. A table row is a click target and
+ * compresses gently; `tables.css` holds that half of the pass.
+ */
+.fi-page-header-main-ctn {
+    padding-block: 1.25rem;
+    row-gap: 1.25rem;
+}
+
+.fi-page-content {
+    row-gap: 1.25rem;
+}

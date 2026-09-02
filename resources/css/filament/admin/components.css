@@ -161,6 +161,12 @@
  * radius, above. This is a deliberate departure from the minimal instinct: the
  * status column is scanned constantly, and a filled tint gives the eye a
  * coloured area to lock onto where a dot gives it a point to hunt for.
+ *
+ * The density pass in `tables.css` leaves the badge's own padding alone, for
+ * the same reason. A badge carries the smallest type in the panel and is the
+ * thing the queue is scanned for, so it is the last place to take a quarter-rem
+ * from: the row around it tightens, and the coloured area the eye is hunting
+ * for stays the size it was.
  */
 
 /*

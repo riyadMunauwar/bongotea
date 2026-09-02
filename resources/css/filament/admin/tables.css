@@ -1,6 +1,5 @@
 /*
- * Tables: the Orders queue and every other table in the panel. Density is not
- * settled here.
+ * Tables: the Orders queue and every other table in the panel.
  */
 
 /*
@@ -27,5 +26,59 @@
     &.fi-striped,
     &.fi-ta-group-header-row > td {
         background-color: var(--gp-surface-accented);
+    }
+}
+
+/*
+ * Density.
+ *
+ * The header row is chrome and compresses hard; the rows beneath it hold the
+ * work and compress gently. That asymmetry is the whole rule: a User scans this
+ * queue all day for the Orders still `New`, so space taken back from the column
+ * headings is space gained, where space taken from the rows is space paid for
+ * in mis-clicks.
+ */
+
+/* Was 0.875rem, a 3rem strip of headings over rows only half again as tall. */
+.fi-ta-header-cell {
+    padding-block: 0.5rem;
+}
+
+/*
+ * Rows: 1rem down to 0.75rem, and no further.
+ *
+ * A row is a click target — it opens an Order, and it carries the View and Edit
+ * actions at its end — so 0.25rem is as much as it gives. At 0.75rem a
+ * single-line row still stands 2.75rem tall; below roughly 2.5rem mis-clicks
+ * start to rise and the queue gets harder to scan rather than easier, which is
+ * the opposite of what this pass is for.
+ *
+ * Filament pads the column's own wrapper rather than the cell around it, once
+ * per column type, so every wrapper the panel can render has to be named here:
+ * a type left out would keep its 1rem and go on setting the height of any row
+ * it appears in. The stacked-on-mobile arm is Filament's own shape — below `sm`
+ * a stacked column carries no padding of its own — restated so that compressing
+ * the desktop row does not quietly reintroduce it.
+ */
+:is(
+        .fi-ta-checkbox,
+        .fi-ta-color,
+        .fi-ta-icon,
+        .fi-ta-image,
+        .fi-ta-select,
+        .fi-ta-text,
+        .fi-ta-text-input,
+        .fi-ta-toggle
+    ) {
+    &:not(.fi-inline) {
+        padding-block: 0.75rem;
+    }
+
+    .fi-ta-table-stacked-on-mobile & {
+        padding-block: 0;
+
+        @variant sm {
+            padding-block: 0.75rem;
+        }
     }
 }
