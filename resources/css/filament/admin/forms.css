@@ -7,10 +7,16 @@
  * Sections are the container every form and infolist in the panel sits in. An
  * aside section carries its surface on the content container instead, because
  * its heading sits outside the card.
+ *
+ * As with tables, the ring is bound to the border token and the radius comes
+ * down to the shared scale: with the section's shadow banned the ring is the
+ * whole of what separates a card from the white page.
  */
 .fi-section:not(.fi-section-not-contained) {
     &:not(.fi-aside) {
         background-color: var(--gp-surface);
+        border-radius: var(--gp-radius);
+        --tw-ring-color: var(--gp-border);
 
         &.fi-secondary {
             background-color: var(--gp-surface-accented);
@@ -19,6 +25,8 @@
 
     &.fi-aside > .fi-section-content-ctn {
         background-color: var(--gp-surface);
+        border-radius: var(--gp-radius);
+        --tw-ring-color: var(--gp-border);
     }
 }
 

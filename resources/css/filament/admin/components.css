@@ -1,7 +1,166 @@
 /*
  * Shared components: the vocabulary that appears on more than one screen —
- * buttons, badges, dropdowns, modals, pagination and notifications. Only their
- * surfaces are settled here; elevation and radius are not.
+ * buttons, badges, dropdowns, modals, pagination and notifications.
+ */
+
+/*
+ * Elevation is information, not decoration.
+ *
+ * Every shadow in the panel is cleared here and handed back only to the things
+ * that genuinely float above the page and will go away again, so a User can
+ * tell at a glance what is temporary. Everything static is separated by the
+ * hairlines the rest of the theme is drawn with, which is also what keeps the
+ * white working area clean: a shadowed card on white has nothing to cast
+ * against and reads as smudged.
+ *
+ * The ban is blanket rather than a list of the surfaces the panel happens to
+ * render today, so a Filament component adopted later arrives flat and has to
+ * be named below to earn a shadow. Clearing Tailwind's `--tw-shadow` rather
+ * than `box-shadow` leaves the rings that draw the hairlines intact, since the
+ * two compose into the same property.
+ *
+ * One known consequence: Filament's toggle knob reads as a knob on this
+ * shadow, and no other component leans on it that way. The panel renders no
+ * Toggle today; whoever adds the first one will need to give the knob an edge
+ * that reads against its track.
+ */
+*,
+::before,
+::after,
+::backdrop {
+    --tw-shadow: 0 0 #0000;
+}
+
+/* What floats: dropdowns, modals, popovers and toasts. Nothing else. */
+.fi-dropdown-panel,
+.fi-modal-window,
+.fi-no-notification:not(.fi-inline),
+.fi-global-search-results-ctn,
+.fi-fo-date-time-picker-panel,
+.fi-fo-color-picker-panel,
+.fi-fo-rich-editor-floating-toolbar,
+.fi-fo-rich-editor-dropdown-tool-menu,
+.fi-sc-actions.fi-sticky .fi-ac,
+.fi-skip-link:focus {
+    --tw-shadow: var(--gp-shadow-overlay);
+}
+
+/*
+ * Two more, but only at the widths where they actually float. The sidebar is
+ * an off-canvas drawer below `lg` and docked chrome above it; the table's
+ * filter panel is a popover below `lg` and a docked column above it. Filament
+ * marks both with `lg:shadow-none`, and the drawer especially needs its shadow
+ * back: it slides over the working area with no scrim behind it.
+ */
+.fi-sidebar.fi-sidebar-open,
+.fi-ta-filters-before-content-ctn,
+.fi-ta-filters-after-content-ctn {
+    @variant max-lg {
+        --tw-shadow: var(--gp-shadow-overlay);
+    }
+}
+
+/* Corners, from the scale in `tokens.css`. */
+.fi-btn,
+.fi-icon-btn,
+.fi-badge,
+.fi-dropdown-panel,
+.fi-global-search-results-ctn,
+.fi-no-notification:not(.fi-inline) {
+    border-radius: var(--gp-radius);
+}
+
+/*
+ * A slide-over runs the full height of the window, so only a centred modal has
+ * corners to round. Its sticky header and footer are rounded with it, or they
+ * overhang the window they sit inside.
+ */
+.fi-modal:not(.fi-modal-slide-over):not(.fi-width-screen) {
+    & > .fi-modal-window-ctn > .fi-modal-window {
+        border-radius: var(--gp-radius);
+    }
+
+    &.fi-modal-has-sticky-header
+        > .fi-modal-window-ctn
+        > .fi-modal-window
+        > .fi-modal-header {
+        border-start-start-radius: var(--gp-radius);
+        border-start-end-radius: var(--gp-radius);
+    }
+
+    &.fi-modal-has-sticky-footer
+        > .fi-modal-window-ctn
+        > .fi-modal-window
+        > .fi-modal-footer {
+        border-end-start-radius: var(--gp-radius);
+        border-end-end-radius: var(--gp-radius);
+    }
+}
+
+/*
+ * A grouped button rounds only where its group does. Filament also draws the
+ * divider between grouped buttons as a 1px offset shadow, which the ban above
+ * cleared; it is redrawn from the border token here, since a hairline is what
+ * it always was — and it has to follow the writing direction, because a shadow
+ * offset has no logical form to state it in.
+ */
+.fi-btn-group {
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border);
+
+    & > .fi-btn {
+        border-radius: 0;
+
+        &:nth-child(1 of .fi-btn) {
+            border-start-start-radius: var(--gp-radius);
+            border-end-start-radius: var(--gp-radius);
+        }
+
+        &:nth-last-child(1 of .fi-btn) {
+            border-start-end-radius: var(--gp-radius);
+            border-end-end-radius: var(--gp-radius);
+        }
+
+        &:not(:nth-child(1 of .fi-btn)) {
+            --tw-shadow: -1px 0 0 0 var(--gp-border);
+
+            @variant rtl {
+                --tw-shadow: 1px 0 0 0 var(--gp-border);
+            }
+        }
+    }
+}
+
+/*
+ * The primary action, near-black. See `tokens.css` for why it is not blue.
+ *
+ * Only the filled primary button is remapped: an outlined or plain one is a
+ * secondary action wearing the primary colour, and a destructive action keeps
+ * its red, which is what leaves Delete unmistakable beside Save. Filament's
+ * focus ring is left blue on purpose — a primary button that does not match
+ * its own focus ring is the design, because the ring is state and the fill is
+ * weight.
+ */
+.fi-btn.fi-color-primary:not(.fi-outlined):not(label) {
+    background-color: var(--gp-action);
+    color: var(--gp-action-text);
+
+    & > .fi-icon {
+        color: var(--gp-action-text);
+    }
+
+    &.fi-force-enabled:hover,
+    &:not(.fi-disabled):not([disabled]):hover {
+        background-color: var(--gp-action-hover);
+        color: var(--gp-action-text);
+    }
+}
+
+/*
+ * Status badges keep Filament's colour-filled tint and take only the theme's
+ * radius, above. This is a deliberate departure from the minimal instinct: the
+ * status column is scanned constantly, and a filled tint gives the eye a
+ * coloured area to lock onto where a dot gives it a point to hunt for.
  */
 
 /*
@@ -11,4 +170,31 @@
 .fi-dropdown-panel,
 .fi-modal-window {
     background-color: var(--gp-surface);
+    --tw-ring-color: var(--gp-border);
+}
+
+/*
+ * Pagination is a static control strip inside the table's own surface: no
+ * shadow, hairline separators, and the ends rounded to the shared radius. Its
+ * fill is left to Filament, which already lands on the theme's surfaces — the
+ * working surface in light, an accented one in dark — but the ring around it
+ * has to be bound, or the outer edge and the dividers inside it disagree.
+ */
+.fi-pagination-items {
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border);
+
+    & .fi-pagination-item {
+        border-color: var(--gp-border);
+
+        &:first-of-type .fi-pagination-item-btn {
+            border-start-start-radius: var(--gp-radius);
+            border-end-start-radius: var(--gp-radius);
+        }
+
+        &:last-of-type .fi-pagination-item-btn {
+            border-start-end-radius: var(--gp-radius);
+            border-end-end-radius: var(--gp-radius);
+        }
+    }
 }

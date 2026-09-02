@@ -36,22 +36,46 @@
      * Borders.
      *
      * Hairlines do the separating that Filament's default shadows do, which is
-     * what later lets a shadow mean "this floats above the page" rather than
-     * "this is a box".
+     * what lets a shadow mean "this floats above the page" rather than "this is
+     * a box".
      */
     --gp-border: var(--gray-200);
     --gp-hairline: 1px solid var(--gp-border);
 
     /*
      * Radii: the scale the panel's corners are drawn from, tighter than
-     * Filament's 12px on cards. Nothing reads these yet — rounding the
-     * components is the shared-component pass, and doing it here would leave
-     * containers with tight outer corners and Filament's own radius still on
-     * the headers and footers nested inside them.
+     * Filament's 12px on cards. Corners are among the first things the eye
+     * registers, so holding cards, controls and overlays to one figure is most
+     * of what makes the panel read as designed rather than assembled — which
+     * is why everything drawn so far reaches for the base. `sm` and `lg` are
+     * the room either side of it, for surfaces that nest inside a card or sit
+     * around one; nothing needs them yet.
      */
     --gp-radius-sm: 0.25rem;
     --gp-radius: 0.375rem;
     --gp-radius-lg: 0.5rem;
+
+    /*
+     * Elevation: the only shadow in the theme, and the reason shadows are
+     * banned everywhere else. Anything casting this is floating above the page
+     * and will go away again — a dropdown, a modal, a popover, a toast.
+     * `components.css` holds the ban and the list of what qualifies.
+     */
+    --gp-shadow-overlay:
+        0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+
+    /*
+     * The primary action.
+     *
+     * Near-black rather than blue. Blue is spent on state and affordance —
+     * links, focus rings, active navigation, checkboxes, toggles — so a blue
+     * Save would be competing with every other blue thing on the screen it is
+     * meant to lead. Value contrast is the one axis nothing else in the panel
+     * uses, which is what makes it unmistakable.
+     */
+    --gp-action: var(--gray-950);
+    --gp-action-hover: var(--gray-800);
+    --gp-action-text: #fff;
 }
 
 /*
@@ -64,4 +88,13 @@
     --gp-surface-accented: rgb(255 255 255 / 0.05);
 
     --gp-border: rgb(255 255 255 / 0.1);
+
+    /* Deeper and wider, because there is no light left to lose against a dark page. */
+    --gp-shadow-overlay:
+        0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+
+    /* The extreme value on a dark panel is white, so the action inverts with it. */
+    --gp-action: var(--gray-50);
+    --gp-action-hover: var(--gray-300);
+    --gp-action-text: var(--gray-950);
 }

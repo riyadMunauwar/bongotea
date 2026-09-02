@@ -2,8 +2,18 @@
  * Tables: the Orders queue and every other table in the panel. Density is not
  * settled here.
  */
+
+/*
+ * With the working area white and the container's shadow banned, the ring is
+ * the only thing left separating a table from the page, so it is bound to the
+ * border token rather than left at Filament's faint default. The radius comes
+ * down with it: leaving the card at Filament's 12px around 6px controls is the
+ * half-converted look the theme is trying to get away from.
+ */
 .fi-ta-ctn {
     background-color: var(--gp-surface);
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border);
 }
 
 .fi-ta-row {
