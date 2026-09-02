@@ -4,6 +4,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
 use Illuminate\Support\Facades\Log;
+use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
 
 it('serves a published page at its slug and writes it to the cache', function () {
     Page::factory()->published()->withBody('<h1>Winter Promo</h1>')->create(['slug' => 'promo']);
@@ -23,6 +24,24 @@ it('serves the stored document byte for byte', function () {
      * around it or inject into it looks to them like the product broke their
      * page.
      */
+    expect($this->get('/promo')->getContent())->toBe($page->body);
+});
+
+it('serves the stored document byte for byte with a component already rendered', function () {
+    $page = Page::factory()->published()->create(['slug' => 'promo']);
+
+    /**
+     * What an admin screen leaves behind. Livewire sets this static flag when a
+     * component renders and injects its styles and its script tag into every
+     * HTML response while it stands; nothing in a request lifecycle clears it,
+     * so it walks from the test that opened the admin into this one — and the
+     * bytes it would land in are the ones `StaticPageCache` freezes onto disk.
+     *
+     * Set here rather than by fetching an admin page so the guarantee does not
+     * depend on which tests happen to run first, or on the alphabet.
+     */
+    SupportAutoInjectedAssets::$hasRenderedAComponentThisRequest = true;
+
     expect($this->get('/promo')->getContent())->toBe($page->body);
 });
 

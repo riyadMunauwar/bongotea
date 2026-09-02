@@ -2,16 +2,6 @@
 
 use App\Filament\Pages\Auth\Login;
 use Filament\Support\Enums\Width;
-use Livewire\Livewire;
-
-/**
- * Same reason as `AdminEntryTest`: rendering an admin screen over HTTP leaves
- * Livewire's "a component rendered this request" flag set in static state, and
- * it would otherwise follow this file into the next one.
- */
-afterEach(function (): void {
-    Livewire::flushState();
-});
 
 it('serves the login page the panel owns rather than the framework one', function () {
     expect(filament()->getCurrentOrDefaultPanel()->getLoginRouteAction())->toBe(Login::class);
