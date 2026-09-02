@@ -1,0 +1,72 @@
+/*
+ * The screens before a User is authenticated — today, the login screen.
+ *
+ * Filament calls this its simple layout: no sidebar, no page header, one card
+ * centred on the page. It is the first thing anyone sees of the product, so it
+ * is drawn from the same tokens as everything behind it and the panel does not
+ * change identity at the moment a User signs in.
+ */
+
+/*
+ * The ground, and the gutter around the card.
+ *
+ * `layout.css` already gives the body the muted surface, so the card has the
+ * same quiet ground under it that the chrome sits on everywhere else. What is
+ * missing is room at the edges: Filament centres the card with no inline
+ * padding on its container and hangs 4rem of margin off the card itself, which
+ * leaves it flush to the sides of a phone — the reason Filament drops its
+ * corners below `sm`. The margin moves onto the container as one figure on all
+ * four sides instead, so the card keeps its boundary at every width and the
+ * corners never have to go.
+ */
+.fi-simple-main-ctn {
+    padding: 1.25rem;
+}
+
+/*
+ * The card.
+ *
+ * The surface, the hairline and the radius every other card in the panel is
+ * drawn with. Its shadow is already gone — `components.css` bans shadows on
+ * static surfaces — so the ring is the whole of what separates it from the
+ * ground, and it has to be bound to the border token or it stays Filament's.
+ *
+ * Density. Filament pads this card 1.5rem across and 3rem down, widening to
+ * 3rem across at `sm`; that becomes one figure, 1.5rem. It sits a step above
+ * the 1rem the working area is built on in `forms.css`, deliberately: a
+ * section's padding only has to hold a field off an edge the page already
+ * frames, where this card has no chrome around it and no second card beside
+ * it, so its padding is the entire distance between the form and the ground.
+ * The card's own gaps are Filament's 1.5rem already, which is what keeps the
+ * figure inside it matching the figure around it.
+ */
+.fi-simple-main {
+    background-color: var(--gp-surface);
+    border-radius: var(--gp-radius);
+    --tw-ring-color: var(--gp-border);
+
+    margin-block: 0;
+    padding: 1.5rem;
+}
+
+/*
+ * The mark, above the form.
+ *
+ * `AdminPanelProvider` renders it here and `App\Filament\Pages\Auth\Login`
+ * switches off the wordmark it stands in for, so this is the whole of the
+ * branding on the screen and it can afford the extra half-rem the rail could
+ * not. It is given no colour, for the reason `sidebar.css` gives: the mark is
+ * drawn in `currentColor` and inverts through the body with everything else.
+ *
+ * `block` with auto margins is what centres it — the header below centres its
+ * own contents with flexbox, but the mark sits outside that header, as a child
+ * of the page. Its margin matches the gap Filament already puts between the
+ * heading and the form, so the three read as one evenly spaced stack.
+ */
+.fi-simple-page > .gp-brand-mark {
+    display: block;
+    width: 2rem;
+    height: 2rem;
+    margin-inline: auto;
+    margin-block-end: 1.5rem;
+}

@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use App\Filament\Resources\Orders\OrderResource;
 use Filament\FontProviders\BunnyFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -11,6 +12,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -31,7 +33,13 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
-            ->login()
+            /**
+             * The login screen is the first thing anyone sees of the product,
+             * so it is the panel's own rather than the framework's. The class
+             * only switches off the wordmark Filament prints above the heading;
+             * the mark that stands in for it is the render hook further down.
+             */
+            ->login(Login::class)
             ->colors([
                 'primary' => Color::Blue,
                 /**
@@ -76,6 +84,12 @@ class AdminPanelProvider extends PanelProvider
              * once it is gone, so nothing is lost.
              */
             ->topbar(false)
+            /**
+             * The login card, down from Filament's 32rem. Two fields and a
+             * button read as a wide empty box at that width, and it only got
+             * wider once the density pass took the card's padding in.
+             */
+            ->simplePageMaxContentWidth(Width::Medium)
             ->sidebarWidth('14rem')
             ->collapsedSidebarWidth('3.5rem')
             ->sidebarCollapsibleOnDesktop()
@@ -108,6 +122,20 @@ class AdminPanelProvider extends PanelProvider
              */
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_LOGO_BEFORE,
+                fn (): View => view('filament.admin.brand-mark'),
+            )
+            /**
+             * And the same mark on the way in, above the login form.
+             *
+             * Filament offers no hook inside its simple header, so the mark is
+             * rendered ahead of the whole of it — which is where it belongs
+             * anyway, since the wordmark it stands in for is switched off in
+             * `Login`. Left unscoped on purpose: every screen a User meets
+             * before they are authenticated should be branded the same way,
+             * and the login screen is only the first of them.
+             */
+            ->renderHook(
+                PanelsRenderHook::SIMPLE_PAGE_START,
                 fn (): View => view('filament.admin.brand-mark'),
             )
             ->middleware([

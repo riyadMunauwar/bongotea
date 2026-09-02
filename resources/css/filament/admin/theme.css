@@ -14,6 +14,7 @@
 @import './tokens.css';
 @import './typography.css';
 @import './layout.css';
+@import './auth.css';
 @import './sidebar.css';
 @import './tables.css';
 @import './forms.css';
