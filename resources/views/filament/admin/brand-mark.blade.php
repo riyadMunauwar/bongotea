@@ -1,16 +1,14 @@
 {{--
-    The GioPages mark.
-
-    Rendered through `SIDEBAR_LOGO_BEFORE` rather than as the panel's brand
-    logo, because Filament hides the logo container the moment the sidebar
-    collapses and this is the half of the branding that has to survive that.
-    `sidebar.css` is where it is sized and where the rail hands it the slot.
+    The GioPages mark. `AdminPanelProvider` has the reason it is rendered here
+    rather than as the panel's brand logo, and `sidebar.css` sizes it and hands
+    it the rail's slot.
 
     A page with a hero band and a call to action under it, which is the thing
-    the application makes, drawn on the theme's 6px radius so it corners like
-    every card and control beside it. The bands are a real knockout rather than
-    a shape filled in the sidebar's colour, so the mark carries across any
-    surface it is later dropped onto.
+    the application makes. The 24-unit viewBox is rendered at 1.5rem, so a unit
+    is a pixel and `rx="6"` is literally the `--gp-radius` every card and
+    control beside it corners on. The bands are a real knockout rather than
+    shapes filled in the sidebar's colour, so the mark carries onto any surface
+    it is later dropped onto.
 
     Decorative: the wordmark beside it is the accessible name in the expanded
     sidebar, and in the rail the labelled expand button is the only thing there
@@ -35,7 +33,7 @@
         <rect x="6" y="13" width="7" height="5" rx="1.5" fill="#000" />
     </mask>
 
-    {{-- `currentColor`, so the mark inverts with the panel's text and dark mode stays one edit. --}}
+    {{-- `currentColor`, so the mark inverts with the panel and dark mode stays one edit. --}}
     <rect
         width="24"
         height="24"

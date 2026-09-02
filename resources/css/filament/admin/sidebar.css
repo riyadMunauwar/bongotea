@@ -109,9 +109,11 @@
  * The mark is rendered ahead of Filament's logo container rather than inside
  * it — `AdminPanelProvider` has the reason — so the header holds two elements
  * that behave differently: a mark nothing hides, and a wordmark Filament hides
- * with the width. Neither is given a colour. The wordmark takes the body's
- * text colour from Filament and the mark is drawn in `currentColor`, so the
- * pair inverts together and dark mode stays the one edit in `tokens.css`.
+ * with the width. Neither is given a colour. Filament already draws `.fi-logo`
+ * in the near-black the body is set in, and the mark is drawn in
+ * `currentColor`, which resolves to that same colour through the body — so the
+ * pair inverts together without either being named here, and dark mode stays
+ * the one edit in `tokens.css`.
  */
 .fi-sidebar-header {
     gap: 0.5rem;

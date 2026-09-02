@@ -8,8 +8,16 @@ beforeEach(function (): void {
 });
 
 it('names the panel GioPages rather than the framework default', function () {
-    expect(config('app.name'))->toBe('GioPages')
-        ->and(filament()->getCurrentOrDefaultPanel()->getBrandName())->toBe('GioPages');
+    expect(filament()->getCurrentOrDefaultPanel()->getBrandName())->toBe('GioPages');
+});
+
+/**
+ * `.env` is untracked, so the example is the half of the name the repository
+ * can hold itself to — and it is the half a fresh checkout and CI copy from.
+ * The name above is only ever as right as this file is.
+ */
+it('carries the name in the environment example', function () {
+    expect(file_get_contents(base_path('.env.example')))->toContain('APP_NAME=GioPages');
 });
 
 it('shows the mark and the wordmark together in the sidebar', function () {
