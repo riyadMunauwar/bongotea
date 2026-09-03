@@ -35,11 +35,17 @@ class OrderLine extends Model
     }
 
     /**
+     * The Order this line belongs to, trashed or not.
+     *
+     * `withTrashed` because OrderResource deliberately routes to soft-deleted
+     * Orders, so their lines are still editable — and a line whose parent
+     * resolves to null cannot recalculate the totals it just invalidated.
+     *
      * @return BelongsTo<Order, $this>
      */
     public function order(): BelongsTo
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(Order::class)->withTrashed();
     }
 
     /**

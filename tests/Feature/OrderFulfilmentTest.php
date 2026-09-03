@@ -314,3 +314,51 @@ it('refuses a corrected number no courier could call', function () {
 
     expect($order->refresh()->customer_phone)->toBe($phone);
 });
+
+/**
+ * The two corrections a confirmation call actually produces, made together.
+ *
+ * Filament saves the repeater's lines before it saves the Order, and the line
+ * observer recalculates through its own `belongsTo` — a different instance from
+ * the one being edited. The Order must not then write a total derived from the
+ * subtotal it was still holding.
+ */
+it('keeps the total matching its parts when a quantity and the delivery charge are corrected together', function () {
+    $order = capturedOrder(price: 99000);
+
+    $component = Livewire::test(EditOrder::class, ['record' => $order->getKey()]);
+
+    $lines = [];
+
+    foreach ($component->get('data.lines') as $key => $line) {
+        $lines[$key] = [...$line, 'quantity' => 3];
+    }
+
+    $component->fillForm(['lines' => $lines, 'delivery_charge' => '120'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $order->refresh();
+
+    /** What the courier collects at the door, and what the screen promised. */
+    expect($order->subtotal)->toBe(297000)
+        ->and($order->delivery_charge)->toBe(12000)
+        ->and($order->total)->toBe(309000);
+});
+
+/**
+ * OrderResource drops the soft-deleting scope from its route binding and the
+ * document tells you to restore the order before working it, so this screen is
+ * somewhere an operator lands and can type into.
+ */
+it('works an order that has been deleted without falling over', function () {
+    $order = capturedOrder(price: 99000);
+    $order->delete();
+
+    editingLines($order, fn (array $line): array => [...$line, 'quantity' => 2]);
+
+    $order->refresh();
+
+    expect($order->subtotal)->toBe(198000)
+        ->and($order->total)->toBe(204000);
+});
