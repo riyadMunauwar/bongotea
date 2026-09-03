@@ -70,7 +70,7 @@ class OrderInfolist
                             ->copyable()
                             ->hintIcon(
                                 Heroicon::OutlinedPhone,
-                                tooltip: 'The number to call to confirm this order. A customer is their phone number, so it cannot be edited.',
+                                tooltip: 'The number to call to confirm this order, in its canonical form. A customer is their phone number, so correcting it on the edit screen moves this order to a different customer.',
                             ),
 
                         TextEntry::make('customer_district')

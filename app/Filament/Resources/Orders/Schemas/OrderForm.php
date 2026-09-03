@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Orders\Schemas;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Support\Money;
+use App\Support\PhoneNumber;
+use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
@@ -93,19 +95,28 @@ class OrderForm
                             ->maxLength(255),
 
                         /**
-                         * Text, not an input: the phone number *is* the
-                         * Customer. Editing it would leave the order's snapshot
-                         * disagreeing with the identity it is linked to, and
-                         * re-pointing the link is merge semantics this system
-                         * has not designed. A number that cannot be reached is
-                         * what `cancelled` is for.
+                         * Editable, and the one field on this screen that
+                         * changes what the Order *is* rather than what it says.
+                         *
+                         * A Customer is their phone number, so a corrected
+                         * number is a different Customer: EditOrder re-points
+                         * the Order at whoever owns the new one rather than
+                         * leaving the snapshot disagreeing with the identity it
+                         * is linked to. Stored canonical, never as typed, so
+                         * two spellings cannot fork into two Customers.
                          */
-                        TextEntry::make('customer_phone')
+                        TextInput::make('customer_phone')
                             ->label('Phone')
-                            ->state(fn (?Order $record): ?string => $record?->customer_phone)
+                            ->required()
+                            ->maxLength(32)
+                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                if (! is_string($value) || ! PhoneNumber::isValid($value)) {
+                                    $fail('That is not a number a courier could call.');
+                                }
+                            })
                             ->hintIcon(
                                 Heroicon::OutlinedPhone,
-                                tooltip: 'A customer is their phone number, so this cannot be edited. Cancel the order if the number does not reach anyone.',
+                                tooltip: 'A customer is their phone number, so changing this moves the order to a different customer. Correct a wrong number here; cancel the order if no number reaches anyone.',
                             ),
 
                         Select::make('customer_district')

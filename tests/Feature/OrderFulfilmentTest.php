@@ -4,6 +4,7 @@ use App\Enums\OrderStatus;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Product;
@@ -248,19 +249,68 @@ it('leaves an order that is fine unmarked', function () {
         ->assertDontSeeText('Deleted — this order has been removed.');
 });
 
-it('refuses to let the customer phone be edited away', function () {
+/**
+ * A Customer *is* their phone number, so correcting the number on an Order is
+ * not correcting an attribute — it is saying the Order belongs to someone else.
+ * These pin the link, not just the snapshot.
+ */
+it('moves the order to the customer who owns a corrected number', function () {
     $order = capturedOrder();
 
-    $phone = $order->customer_phone;
+    $originalCustomer = $order->customer_id;
 
     Livewire::test(EditOrder::class, ['record' => $order->getKey()])
         ->fillForm(['customer_phone' => '01911111111'])
         ->call('save')
         ->assertHasNoFormErrors();
 
+    $order->refresh();
+
+    expect($order->customer_phone)->toBe('+8801911111111')
+        ->and($order->customer_id)->not->toBe($originalCustomer)
+        ->and($order->customer->phone)->toBe('+8801911111111');
+});
+
+it('reuses the existing customer when the corrected number is already known', function () {
+    $order = capturedOrder();
+
+    $existing = Customer::forPhone('01911111111');
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_phone' => '01911111111'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Re-pointed at the identity that already existed, not a second copy of it. */
+    expect($order->refresh()->customer_id)->toBe($existing->getKey())
+        ->and(Customer::where('phone', '+8801911111111')->count())->toBe(1);
+});
+
+it('stores a corrected number in its canonical form', function () {
+    $order = capturedOrder();
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_phone' => '01911-111111'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
     /**
-     * A customer *is* their phone number. Rendering it as text rather than as a
-     * disabled input must not have quietly reopened it for writing.
+     * Punctuation is not information. Storing it as typed does not look like a
+     * bug — it looks like two customers.
      */
+    expect($order->refresh()->customer_phone)->toBe('+8801911111111')
+        ->and(Customer::where('phone', '+8801911111111')->count())->toBe(1);
+});
+
+it('refuses a corrected number no courier could call', function () {
+    $order = capturedOrder();
+
+    $phone = $order->customer_phone;
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_phone' => 'not a number'])
+        ->call('save')
+        ->assertHasFormErrors(['customer_phone']);
+
     expect($order->refresh()->customer_phone)->toBe($phone);
 });

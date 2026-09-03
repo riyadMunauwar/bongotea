@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Pages;
 
 use App\Filament\Resources\Orders\OrderResource;
+use App\Models\Customer;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -28,6 +29,35 @@ class EditOrder extends EditRecord
             ForceDeleteAction::make(),
             RestoreAction::make(),
         ];
+    }
+
+    /**
+     * Keep the Order pointed at the Customer who owns the phone number it
+     * carries.
+     *
+     * A Customer *is* their phone number, so a corrected number is not a
+     * corrected attribute — it is a different identity, and an Order left
+     * linked to the old one would claim a person placed an order they never
+     * did. `Customer::forPhone` is the only thing that resolves a number, so
+     * the canonical form is written back here too: an operator typing
+     * `01712-345678` must not fork the identity that `+8801712345678` already
+     * has.
+     *
+     * The Customer left behind is not cleaned up. A customer with no orders is
+     * harmless; deleting one that a second operator is mid-edit on is not.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        /** The field's own rule already rejected anything unresolvable. */
+        $customer = Customer::forPhone((string) $data['customer_phone']);
+
+        $data['customer_id'] = $customer->getKey();
+        $data['customer_phone'] = $customer->phone;
+
+        return $data;
     }
 
     protected function getRedirectUrl(): string
