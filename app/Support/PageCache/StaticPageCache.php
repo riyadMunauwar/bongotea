@@ -6,8 +6,16 @@ use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
 
 /**
- * Writes rendered landing pages to disk as static HTML so nginx can serve them
- * with `try_files` and PHP never boots on a cache hit.
+ * Writes rendered landing pages to disk as static HTML so a cache hit can be
+ * answered without the framework booting.
+ *
+ * This class only writes and deletes; it never reads. Reading is not entirely
+ * outside the application, though. A configured webserver reads the file itself
+ * and PHP is never contacted — nginx does it with `try_files` — and where the
+ * webserver was never configured to, `FallbackPageCacheReader` reads it above
+ * the Composer autoloader. Existence is the whole contract between writer and
+ * readers: a file is served because it is there, so the slug rule below is this
+ * class's alone and no reader repeats it.
  *
  * The cache key is the page's slug and nothing else. Query strings are
  * deliberately excluded: every ad click arrives with `?fbclid=...`, so a
@@ -17,11 +25,11 @@ use InvalidArgumentException;
  * side.
  *
  * Every entry is written twice — `<slug>.html` and a pre-compressed
- * `<slug>.html.gz` with a matching mtime — so nginx's `gzip_static` can answer
- * without spending CPU on compression per request. The two files are written
- * and removed as a unit; a `.gz` outliving its `.html` is served as stale
- * content with no error anywhere, which is the failure this class exists to
- * make impossible.
+ * `<slug>.html.gz` with a matching mtime — so nginx's `gzip_static` and the
+ * fallback reader's own negotiation can answer without spending CPU on
+ * compression per request. The two files are written and removed as a unit; a
+ * `.gz` outliving its `.html` is served as stale content with no error
+ * anywhere, which is the failure this class exists to make impossible.
  */
 class StaticPageCache
 {

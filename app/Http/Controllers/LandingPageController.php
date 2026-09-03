@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Page;
 use App\Shortcodes\ShortcodeExpander;
+use App\Support\PageCache\FallbackPageCacheReader;
 use App\Support\PageCache\StaticPageCache;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
@@ -19,9 +20,12 @@ class LandingPageController extends Controller
      * Renders a published landing page and writes it to the static cache on
      * the way out.
      *
-     * This runs on a cache miss only. Once the file exists, nginx answers every
-     * subsequent request for the slug from disk and this method is not reached
-     * again until the Page is saved.
+     * This runs on a cache miss only. Once the file exists, one of the cache's
+     * readers answers every subsequent request for the slug from disk and this
+     * method is not reached again until the Page is saved.
+     *
+     * The response is marked as a full render, which is how the panel tells a
+     * merchant whose webserver serves the cache from one whose does not.
      */
     public function show(string $slug): Response
     {
@@ -46,7 +50,8 @@ class LandingPageController extends Controller
          * invalidate that.
          */
         return response($rendered->html, ResponseCode::HTTP_OK)
-            ->header('Cache-Control', 'no-store');
+            ->header('Cache-Control', 'no-store')
+            ->header(FallbackPageCacheReader::HEADER, FallbackPageCacheReader::MISS_MARKER);
     }
 
     /**

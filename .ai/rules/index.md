@@ -7,3 +7,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | resources/css/filament/admin/** | .ai/rules/admin.md |
 | app/Filament/Resources/** | .ai/rules/resources.md |
 | tests/** | .ai/rules/tests.md |
+| app/Support/PageCache/**, public/index.php, deploy/** | .ai/rules/page-cache.md |

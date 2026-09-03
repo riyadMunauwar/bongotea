@@ -3,6 +3,7 @@
 use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
+use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
 use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
 
@@ -16,7 +17,7 @@ it('serves a published page at its slug and writes it to the cache', function ()
     expect($this->cache->has('promo'))->toBeTrue();
 });
 
-it('writes the cache the same bytes it hands the visitor', function () {
+it('hands the visitor, the disk and the fallback reader the same bytes', function () {
     Page::factory()->published()->create(['slug' => 'promo']);
 
     $response = $this->get('/promo');
@@ -25,11 +26,31 @@ it('writes the cache the same bytes it hands the visitor', function () {
      * The controller writes the file before the response leaves the framework,
      * so anything that edits it on the way out — a middleware, a
      * `RequestHandled` listener — splits the two apart silently: the visitor
-     * who paid for the render gets the edited bytes, and nginx hands everyone
-     * after them the file. This equality is what the whole static cache rests
-     * on, and it is the assertion that fails whatever the cause.
+     * who paid for the render gets the edited bytes, and the webserver hands
+     * everyone after them the file. This equality is what the whole static
+     * cache rests on, and it is the assertion that fails whatever the cause.
+     *
+     * The third representation is what a Merchant whose webserver was never
+     * configured serves. If it ever diverged they would ship different HTML
+     * from a Merchant on the fast path, with nothing anywhere to say so — which
+     * is why the identity is pinned in one place rather than pairwise.
      */
-    expect(file_get_contents($this->cache->htmlPath('promo')))->toBe($response->getContent());
+    $served = (new FallbackPageCacheReader($this->cacheDirectory))->resolve('/promo', 'GET');
+
+    expect(file_get_contents($this->cache->htmlPath('promo')))->toBe($response->getContent())
+        ->and(file_get_contents($served['path']))->toBe($response->getContent());
+});
+
+it('marks a full render as the path that did not come from the cache', function () {
+    Page::factory()->published()->create(['slug' => 'promo']);
+
+    /**
+     * One header names the three serving paths, and the fast path is the one
+     * that sets nothing: Apache cannot reliably stamp a header onto a static
+     * file, so absence is the only marker every supported webserver can
+     * produce.
+     */
+    expect($this->get('/promo')->headers->get('X-GioPages-Cache'))->toBe('miss');
 });
 
 it('serves the stored document byte for byte', function () {
