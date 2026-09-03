@@ -42,16 +42,11 @@ it('forgets the html and the gzip together', function () {
         ->and(file_exists($html.'.gz'))->toBeFalse();
 });
 
-it('stores the site root under a key no slug can claim', function () {
-    $this->cache->put('', '<h1>Home</h1>');
-
-    expect($this->cacheDirectory.DIRECTORY_SEPARATOR.'__root__.html')->toBeFile();
-});
-
 it('refuses slugs that could escape the cache directory', function (string $slug) {
     expect(fn () => $this->cache->put($slug, '<h1>Nope</h1>'))
         ->toThrow(InvalidArgumentException::class);
 })->with([
+    'empty' => '',
     'traversal' => '../../../etc/passwd',
     'nested' => 'blog/post',
     'backslash' => '..\windows',

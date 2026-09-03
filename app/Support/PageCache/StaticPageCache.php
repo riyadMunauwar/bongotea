@@ -26,12 +26,6 @@ use InvalidArgumentException;
 class StaticPageCache
 {
     /**
-     * Cache key standing in for the site root, which has no slug of its own.
-     * Not a legal slug (see `assertValidSlug`), so it cannot be claimed by a page.
-     */
-    public const ROOT_KEY = '__root__';
-
-    /**
      * Flat, lowercase slugs only — the character class that makes directory
      * traversal impossible by construction rather than by sanitising.
      */
@@ -47,12 +41,12 @@ class StaticPageCache
      */
     public function put(string $slug, string $html): void
     {
-        $key = $this->key($slug);
+        $this->assertValidSlug($slug);
 
         $this->files->ensureDirectoryExists($this->directory);
 
-        $htmlPath = $this->htmlPath($key);
-        $gzipPath = $this->gzipPath($key);
+        $htmlPath = $this->htmlPath($slug);
+        $gzipPath = $this->gzipPath($slug);
 
         /**
          * Written to a sibling temp file and renamed so a concurrent request
@@ -80,7 +74,7 @@ class StaticPageCache
      */
     public function forget(string $slug): void
     {
-        $key = $this->key($slug);
+        $this->assertValidSlug($slug);
 
         /**
          * Filtered to what exists rather than deleting blind: invalidation
@@ -89,7 +83,7 @@ class StaticPageCache
          * not raise a warning.
          */
         $present = array_filter(
-            [$this->htmlPath($key), $this->gzipPath($key)],
+            [$this->htmlPath($slug), $this->gzipPath($slug)],
             fn (string $path): bool => $this->files->exists($path),
         );
 
@@ -111,21 +105,23 @@ class StaticPageCache
 
     public function has(string $slug): bool
     {
-        return $this->files->exists($this->htmlPath($this->key($slug)));
+        $this->assertValidSlug($slug);
+
+        return $this->files->exists($this->htmlPath($slug));
     }
 
     /**
      * Absolute path of the cached HTML for a slug. Exposed for assertions and
      * for the artisan command; callers should not derive this themselves.
      */
-    public function htmlPath(string $key): string
+    public function htmlPath(string $slug): string
     {
-        return $this->directory.DIRECTORY_SEPARATOR.$key.'.html';
+        return $this->directory.DIRECTORY_SEPARATOR.$slug.'.html';
     }
 
-    public function gzipPath(string $key): string
+    public function gzipPath(string $slug): string
     {
-        return $this->htmlPath($key).'.gz';
+        return $this->htmlPath($slug).'.gz';
     }
 
     /**
@@ -141,22 +137,6 @@ class StaticPageCache
             fn (string $path): string => basename($path, '.html'),
             $this->files->glob($this->directory.DIRECTORY_SEPARATOR.'*.html') ?: [],
         ));
-    }
-
-    /**
-     * Map a slug to its cache key, translating the empty slug to the root key.
-     */
-    private function key(string $slug): string
-    {
-        $slug = trim($slug, '/');
-
-        if ($slug === '' || $slug === self::ROOT_KEY) {
-            return self::ROOT_KEY;
-        }
-
-        $this->assertValidSlug($slug);
-
-        return $slug;
     }
 
     private function assertValidSlug(string $slug): void
