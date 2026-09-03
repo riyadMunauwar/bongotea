@@ -4,14 +4,26 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
 
 /**
  * Everything a person needs to make the confirmation call and hand the parcel
- * to a courier, on one screen.
+ * to a courier, on one screen, laid out as the invoice it stands in for.
+ *
+ * The shape is the document's: who and what at the top, the goods in a ruled
+ * table down the middle, the money in a ladder at the bottom right. Prose that
+ * would break that shape hides behind hint icons — nothing here is editable, so
+ * a warning has no action attached to it and does not need to be read before
+ * you can act.
+ *
+ * OrderForm mirrors this block for block. Changing the shape here means
+ * changing it there.
  */
 class OrderInfolist
 {
@@ -19,8 +31,9 @@ class OrderInfolist
     {
         return $schema
             ->components([
+                ...OrderDocument::warnings(),
+
                 Section::make('Order')
-                    ->columns(4)
                     ->schema([
                         TextEntry::make('order_number')
                             ->label('Order number')
@@ -28,7 +41,11 @@ class OrderInfolist
                             ->weight('bold'),
 
                         TextEntry::make('status')
-                            ->badge(),
+                            ->badge()
+                            ->hintIcon(
+                                Heroicon::OutlinedQuestionMarkCircle,
+                                tooltip: 'Cancelled means the order genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel.',
+                            ),
 
                         TextEntry::make('created_at')
                             ->label('Taken')
@@ -44,7 +61,6 @@ class OrderInfolist
                     ]),
 
                 Section::make('Deliver to')
-                    ->columns(2)
                     ->schema([
                         TextEntry::make('customer_name')
                             ->label('Name'),
@@ -52,52 +68,85 @@ class OrderInfolist
                         TextEntry::make('customer_phone')
                             ->label('Phone')
                             ->copyable()
-                            ->helperText('The number to call to confirm this order.'),
+                            ->hintIcon(
+                                Heroicon::OutlinedPhone,
+                                tooltip: 'The number to call to confirm this order. A customer is their phone number, so it cannot be edited.',
+                            ),
 
                         TextEntry::make('customer_district')
                             ->label('District'),
 
                         TextEntry::make('customer_address')
-                            ->label('Address')
-                            ->columnSpanFull(),
+                            ->label('Address'),
                     ]),
 
                 Section::make('Items')
+                    ->columnSpanFull()
                     ->schema([
                         RepeatableEntry::make('lines')
                             ->hiddenLabel()
-                            ->columns(4)
+                            ->table([
+                                TableColumn::make('Product'),
+                                TableColumn::make('Unit price')
+                                    ->alignment(Alignment::End),
+                                TableColumn::make('Qty')
+                                    ->alignment(Alignment::End),
+                                TableColumn::make('Line total')
+                                    ->alignment(Alignment::End),
+                            ])
+                            /**
+                             * Labels repeat the column headings on purpose.
+                             * Filament hides them once the table is wide enough
+                             * to show its header row, and falls back to them
+                             * when it stacks on a narrow screen.
+                             */
                             ->schema([
                                 TextEntry::make('product_name')
                                     ->label('Product')
-                                    ->helperText('As sold. The product may have been renamed or removed since.'),
+                                    ->hintIcon(
+                                        Heroicon::OutlinedQuestionMarkCircle,
+                                        tooltip: 'As sold. The product may have been renamed or removed since.',
+                                    ),
 
                                 TextEntry::make('unit_price')
                                     ->label('Unit price')
+                                    ->alignment(Alignment::End)
                                     ->formatStateUsing(fn (int $state): string => Money::format($state)),
 
                                 TextEntry::make('quantity')
-                                    ->label('Qty'),
+                                    ->label('Qty')
+                                    ->alignment(Alignment::End),
 
                                 TextEntry::make('line_total')
                                     ->label('Line total')
+                                    ->alignment(Alignment::End)
                                     ->formatStateUsing(fn (int $state): string => Money::format($state)),
                             ]),
                     ]),
 
+                /**
+                 * Starts in the second column so the money sits under the right
+                 * edge of the items table, where an invoice puts it, rather than
+                 * spread across the page as a row of unrelated figures.
+                 */
                 Section::make('To collect at the door')
-                    ->columns(3)
+                    ->columnStart(2)
+                    ->columns(1)
+                    ->inlineLabel()
                     ->schema([
                         TextEntry::make('subtotal')
+                            ->alignment(Alignment::End)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),
 
                         TextEntry::make('delivery_charge')
                             ->label('Delivery')
+                            ->alignment(Alignment::End)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),
 
                         /** Includes delivery, so nobody does arithmetic against a cash payment. */
                         TextEntry::make('total')
                             ->label('Total')
+                            ->alignment(Alignment::End)
                             ->weight('bold')
                             ->size(TextSize::Large)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),

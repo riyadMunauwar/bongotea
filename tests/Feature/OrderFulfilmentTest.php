@@ -3,10 +3,12 @@
 use App\Enums\OrderStatus;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Money;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -172,4 +174,93 @@ it('keeps a trail of what changed after capture', function () {
      * want a trail for when a parcel goes missing.
      */
     expect($order->activitiesAsSubject()->count())->toBeGreaterThan(0);
+});
+
+/**
+ * The figures are the reason to open the editor, so they have to move while it
+ * is open. These assert the screen, not the database: what is stored after a
+ * save is already covered above.
+ */
+it('shows what a corrected quantity will cost before anything is saved', function () {
+    $order = capturedOrder(price: 99000);
+
+    $component = Livewire::test(EditOrder::class, ['record' => $order->getKey()]);
+
+    $lines = [];
+
+    foreach ($component->get('data.lines') as $key => $line) {
+        $lines[$key] = [...$line, 'quantity' => 3];
+    }
+
+    $component->fillForm(['lines' => $lines])
+        ->assertSeeText(Money::format(297000))
+        ->assertSeeText(Money::format(303000));
+
+    /** Nothing was saved: those figures came from form state, not the Order. */
+    expect($order->refresh()->subtotal)->toBe(99000)
+        ->and($order->total)->toBe(105000);
+});
+
+it('shows what a corrected delivery charge will cost before anything is saved', function () {
+    $order = capturedOrder(price: 99000);
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['delivery_charge' => '120'])
+        ->assertSeeText(Money::format(111000));
+
+    expect($order->refresh()->total)->toBe(105000);
+});
+
+/**
+ * The document is deliberately shaped to look routine, so a status badge alone
+ * is easy to skim past. The cost of missing one is a courier delivering goods
+ * nobody is going to pay for.
+ */
+it('warns on both screens that a cancelled order must not be sent', function (string $page) {
+    $order = capturedOrder(attributes: ['status' => OrderStatus::Cancelled]);
+
+    Livewire::test($page, ['record' => $order->getKey()])
+        ->assertSeeText('Cancelled — this order will not be fulfilled.');
+})->with([
+    'reading it' => ViewOrder::class,
+    'working it' => EditOrder::class,
+]);
+
+it('warns that a deleted order has been removed', function () {
+    $order = capturedOrder();
+    $order->delete();
+
+    /** Reachable at all because OrderResource drops the soft-deleting scope. */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertSeeText('Deleted — this order has been removed.');
+});
+
+it('leaves an order that is fine unmarked', function () {
+    $order = capturedOrder();
+
+    /**
+     * The whole sentence, not a fragment of it: the status hint explains what
+     * cancelling means on every order, so a substring would match the healthy
+     * document too and this test would never fail.
+     */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertDontSeeText('Cancelled — this order will not be fulfilled.')
+        ->assertDontSeeText('Deleted — this order has been removed.');
+});
+
+it('refuses to let the customer phone be edited away', function () {
+    $order = capturedOrder();
+
+    $phone = $order->customer_phone;
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_phone' => '01911111111'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * A customer *is* their phone number. Rendering it as text rather than as a
+     * disabled input must not have quietly reopened it for writing.
+     */
+    expect($order->refresh()->customer_phone)->toBe($phone);
 });

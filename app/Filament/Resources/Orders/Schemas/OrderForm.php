@@ -3,16 +3,30 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
+use App\Models\Order;
 use App\Support\Money;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
 
 /**
- * What may be changed about an Order after Capture.
+ * What may be changed about an Order after Capture, in the shape of the
+ * document it edits.
+ *
+ * Block for block this is OrderInfolist, so opening the editor moves nothing on
+ * screen except which cells accept typing. Everything fixed at Capture renders
+ * as text rather than as a disabled input: a greyed-out box still looks like
+ * something you might be able to fix, and the whole point of this screen is
+ * that most of it cannot be.
  *
  * Filament hands you full-field editing by default, so everything agreed at
  * Capture has to be *actively* held shut here rather than assumed immutable.
@@ -22,22 +36,56 @@ use Filament\Schemas\Schema;
  */
 class OrderForm
 {
+    /**
+     * How long typing pauses before the totals redraw.
+     *
+     * Live rather than on-save, because the figures are the reason to open this
+     * screen: a quantity changed against no visible total is a number you only
+     * learn after committing it. Debounced rather than per-keystroke, because
+     * "30" would otherwise cost two round-trips and show the total for "3" in
+     * between.
+     */
+    private const RECOMPUTE_DEBOUNCE = 500;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Fulfilment')
-                    ->description('The confirmation call is the COD workflow. Mark what happened so the same customer is not called twice, or missed.')
+                ...OrderDocument::warnings(),
+
+                Section::make('Order')
                     ->schema([
+                        TextEntry::make('order_number')
+                            ->label('Order number')
+                            ->state(fn (?Order $record): ?string => $record?->order_number)
+                            ->copyable()
+                            ->weight('bold'),
+
                         Select::make('status')
                             ->options(OrderStatus::class)
                             ->required()
                             ->native(false)
-                            ->helperText('Cancelled means it genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel.'),
+                            ->hintIcon(
+                                Heroicon::OutlinedQuestionMarkCircle,
+                                tooltip: 'The confirmation call is the COD workflow — mark what happened so the same customer is not called twice, or missed. Cancelled means the order genuinely happened but will not be fulfilled.',
+                            ),
+
+                        TextEntry::make('created_at')
+                            ->label('Taken')
+                            ->state(fn (?Order $record) => $record?->created_at)
+                            ->dateTime(),
+
+                        /**
+                         * The slug as captured, not the Page's current one. A
+                         * renamed or deleted Page must not rewrite which
+                         * campaign this order belongs to.
+                         */
+                        TextEntry::make('page_slug')
+                            ->label('Ordered from')
+                            ->state(fn (?Order $record): ?string => $record?->page_slug),
                     ]),
 
                 Section::make('Deliver to')
-                    ->columns(2)
                     ->schema([
                         TextInput::make('customer_name')
                             ->label('Name')
@@ -45,18 +93,20 @@ class OrderForm
                             ->maxLength(255),
 
                         /**
-                         * Read-only: the phone number *is* the Customer. Editing
-                         * it here would leave the order's snapshot disagreeing
-                         * with the identity it is linked to, and re-pointing the
-                         * link is merge semantics this system has not designed.
-                         * A number that cannot be reached is what `cancelled` is
-                         * for.
+                         * Text, not an input: the phone number *is* the
+                         * Customer. Editing it would leave the order's snapshot
+                         * disagreeing with the identity it is linked to, and
+                         * re-pointing the link is merge semantics this system
+                         * has not designed. A number that cannot be reached is
+                         * what `cancelled` is for.
                          */
-                        TextInput::make('customer_phone')
+                        TextEntry::make('customer_phone')
                             ->label('Phone')
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->helperText('A customer is their phone number, so this cannot be edited. Cancel the order if the number does not reach anyone.'),
+                            ->state(fn (?Order $record): ?string => $record?->customer_phone)
+                            ->hintIcon(
+                                Heroicon::OutlinedPhone,
+                                tooltip: 'A customer is their phone number, so this cannot be edited. Cancel the order if the number does not reach anyone.',
+                            ),
 
                         Select::make('customer_district')
                             ->label('District')
@@ -68,55 +118,142 @@ class OrderForm
                             ->searchable()
                             ->native(false),
 
-                        TextInput::make('delivery_charge')
-                            ->label('Delivery charge ('.config('giopages.currency.code').')')
-                            ->required()
-                            ->numeric()
-                            ->minValue(0)
-                            ->prefix(config('giopages.currency.symbol'))
-                            ->helperText('Editable, because what the courier charges is agreed on the call. The total follows automatically.')
-                            ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::toMajorString($state))
-                            ->dehydrateStateUsing(fn (string $state): int => Money::toMinorUnits($state)),
-
                         Textarea::make('customer_address')
                             ->label('Address')
                             ->required()
                             ->rows(3)
-                            ->maxLength(1000)
-                            ->columnSpanFull(),
+                            ->maxLength(1000),
                     ]),
 
                 Section::make('Items')
-                    ->description('Quantity is editable; the price is not. Totals recompute from the price captured with the order, never from the product\'s price today.')
+                    ->columnSpanFull()
                     ->schema([
                         Repeater::make('lines')
                             ->relationship()
                             ->hiddenLabel()
-                            ->columns(3)
                             /** An Order's shape was fixed at Capture. Only its numbers move. */
                             ->addable(false)
                             ->deletable(false)
                             ->reorderable(false)
+                            ->table([
+                                TableColumn::make('Product'),
+                                TableColumn::make('Unit price')
+                                    ->alignment(Alignment::End),
+                                TableColumn::make('Qty')
+                                    ->alignment(Alignment::End)
+                                    ->markAsRequired(),
+                                TableColumn::make('Line total')
+                                    ->alignment(Alignment::End),
+                            ])
                             ->schema([
-                                TextInput::make('product_name')
+                                TextEntry::make('product_name')
                                     ->label('Product')
-                                    ->disabled()
-                                    ->dehydrated(false),
+                                    ->hintIcon(
+                                        Heroicon::OutlinedQuestionMarkCircle,
+                                        tooltip: 'As sold. The product may have been renamed or removed since, which is why the name is fixed here.',
+                                    ),
 
-                                TextInput::make('unit_price')
+                                TextEntry::make('unit_price')
                                     ->label('Unit price')
-                                    ->disabled()
-                                    ->dehydrated(false)
-                                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::format($state)),
+                                    ->alignment(Alignment::End)
+                                    ->formatStateUsing(fn (mixed $state): string => Money::format((int) $state))
+                                    ->hintIcon(
+                                        Heroicon::OutlinedLockClosed,
+                                        tooltip: 'The price agreed at Capture. Totals recompute from this, never from the price the product carries today.',
+                                    ),
 
                                 TextInput::make('quantity')
                                     ->label('Qty')
                                     ->required()
                                     ->numeric()
                                     ->minValue(1)
-                                    ->maxValue(config('giopages.checkout.max_quantity')),
+                                    ->maxValue(config('giopages.checkout.max_quantity'))
+                                    ->live(debounce: self::RECOMPUTE_DEBOUNCE),
+
+                                /** Recomputed from state, so it moves as the quantity beside it is typed. */
+                                TextEntry::make('line_total')
+                                    ->label('Line total')
+                                    ->alignment(Alignment::End)
+                                    ->state(fn (Get $get): string => Money::format(self::lineTotal([
+                                        'unit_price' => $get('unit_price'),
+                                        'quantity' => $get('quantity'),
+                                    ]))),
                             ]),
                     ]),
+
+                /**
+                 * Starts in the second column so the money sits under the right
+                 * edge of the items table, where an invoice puts it, rather than
+                 * spread across the page as a row of unrelated figures.
+                 */
+                Section::make('To collect at the door')
+                    ->columnStart(2)
+                    ->columns(1)
+                    ->inlineLabel()
+                    ->schema([
+                        TextEntry::make('subtotal')
+                            ->alignment(Alignment::End)
+                            ->state(fn (Get $get): string => Money::format(self::subtotal($get))),
+
+                        TextInput::make('delivery_charge')
+                            ->label('Delivery')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix(config('giopages.currency.symbol'))
+                            ->live(debounce: self::RECOMPUTE_DEBOUNCE)
+                            ->hintIcon(
+                                Heroicon::OutlinedQuestionMarkCircle,
+                                tooltip: 'Editable, because what the courier charges is agreed on the call. The total follows automatically.',
+                            )
+                            ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::toMajorString($state))
+                            ->dehydrateStateUsing(fn (string $state): int => Money::toMinorUnits($state)),
+
+                        /** Includes delivery, so nobody does arithmetic against a cash payment. */
+                        TextEntry::make('total')
+                            ->label('Total')
+                            ->alignment(Alignment::End)
+                            ->weight('bold')
+                            ->size(TextSize::Large)
+                            ->state(fn (Get $get): string => Money::format(
+                                self::subtotal($get) + Money::toMinorUnits($get('delivery_charge') ?? 0)
+                            )),
+                    ]),
             ]);
+    }
+
+    /**
+     * What one line costs, from the price snapshotted at Capture.
+     *
+     * Mirrors OrderLineObserver::saving so the figure on screen is the figure
+     * that will be stored — never the Product's current price, which is the bug
+     * the snapshot exists to close.
+     *
+     * @param  array{unit_price?: mixed, quantity?: mixed}  $line
+     */
+    private static function lineTotal(array $line): int
+    {
+        return (int) ($line['unit_price'] ?? 0) * (int) ($line['quantity'] ?? 0);
+    }
+
+    /**
+     * The subtotal as the form currently stands, before anything is saved.
+     *
+     * Read from form state rather than from the Order, because the Order's
+     * stored subtotal is still the pre-edit figure until OrderLineObserver has
+     * run — which is only after a save this screen has not performed yet.
+     */
+    private static function subtotal(Get $get): int
+    {
+        $lines = $get('lines');
+
+        if (! is_array($lines)) {
+            return 0;
+        }
+
+        return array_sum(array_map(
+            fn (mixed $line): int => self::lineTotal(is_array($line) ? $line : []),
+            $lines,
+        ));
     }
 }
