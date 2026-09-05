@@ -25,8 +25,16 @@ Something a Customer can order, carrying a single price and no variations. Produ
 _Avoid_: item, SKU, variant, listing
 
 **Checkout**:
-The form on a Page that captures a cash-on-delivery Order. There is no cart and no multi-step flow: a Checkout captures one Order in one submission.
+The form on a Page that captures a cash-on-delivery Order. There is no cart and no multi-step flow: a Checkout captures one Order in one submission. Every Page has its own Checkout, defined by its own Checkout Config.
 _Avoid_: cart, basket, funnel
+
+**Checkout Config**:
+Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else.
+_Avoid_: settings, preset, theme, template
+
+**Checkout Field**:
+One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
+_Avoid_: input, form field, custom field, attribute
 
 **Shortcode**:
 A placeholder a Merchant writes into a Page's HTML that the system replaces with generated content when the Page is rendered. It is the only way a Page gets content the Merchant did not type themselves.
@@ -55,11 +63,15 @@ A person identified by their phone number, and nothing else. A Customer holds no
 _Avoid_: user, account, buyer, client, lead
 
 **District**:
-The delivery region agreed with the Customer at Capture. It is the coarse location signal that delivery pricing keys off, distinct from the free-text address that tells a courier where the door is.
+The delivery region agreed with the Customer at Capture, distinct from the free-text address that tells a courier where the door is. It is optional fulfilment data, captured because couriers want a structured region that cannot be recovered from an address afterwards, and it settles nothing about what an Order costs.
 _Avoid_: zone, area, thana, city
 
+**Delivery Option**:
+One delivery arrangement a Page offers, named and priced by the Merchant — "Inside Dhaka", "Outside Dhaka", "Free". A Page may offer none, one or several; which one is agreed at Capture is what a Delivery Charge comes from.
+_Avoid_: shipping method, delivery zone, tier, rate
+
 **Delivery Charge**:
-The amount added to an Order for getting the parcel to the door. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order.
+The amount added to an Order for getting the parcel to the door, taken from the Delivery Option agreed at Capture. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order.
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
