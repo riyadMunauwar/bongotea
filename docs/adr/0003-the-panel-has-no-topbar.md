@@ -42,5 +42,5 @@ something this decision gives up.
 
 They are recorded apart because only the topbar's saving is collected on every screen, every day,
 against a cost paid on the one screen that matters most. The Dashboard's cost was a single screen
-on the way in. What it is for, and why it ships carrying no widgets, is written on the class rather
-than here.
+on the way in. What it is for is written on the class rather than here — as is the widget that has
+since claimed the slot it was held open for.

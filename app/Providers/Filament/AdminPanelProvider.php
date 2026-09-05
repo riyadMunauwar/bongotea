@@ -93,8 +93,8 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             /**
              * Discovery is what registers `Pages\Dashboard` on the panel root,
-             * and the class is where the reasoning about it sits. No widget is
-             * registered anywhere, which is what leaves that screen empty.
+             * and the class is where the reasoning about it sits — including
+             * what the widget discovery below it puts on that screen.
              */
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
