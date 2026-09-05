@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Page;
-use App\Support\PhoneNumber;
+use App\Support\Checkout\CheckoutConfig;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -16,6 +16,11 @@ use Illuminate\Validation\Validator;
  * the database rather than trusted from the payload. Nothing priced is
  * accepted at all: the request carries a slug and a quantity, and the price
  * comes from the Page's own Product.
+ *
+ * The details it asks about are not listed here either. They are compiled from
+ * the Checkout Config of the Page being ordered from — the same list that
+ * rendered the form — so what the visitor was asked and what the server checks
+ * are one definition with two renderings.
  */
 class StoreOrderRequest extends FormRequest
 {
@@ -49,25 +54,8 @@ class StoreOrderRequest extends FormRequest
                     ->whereNull('deleted_at'),
             ],
 
-            'name' => ['required', 'string', 'max:255'],
-
-            'phone' => [
-                'required',
-                'string',
-                'max:32',
-                fn (string $attribute, mixed $value, callable $fail) => is_string($value) && PhoneNumber::isValid($value)
-                    ? null
-                    : $fail('Please enter a valid phone number we can call you on.'),
-            ],
-
-            /**
-             * All four capture fields are required. An order without an address
-             * is not an order, it is a lead — and mixing the two in one table
-             * makes every downstream number ambiguous.
-             */
-            'address' => ['required', 'string', 'max:1000'],
-
-            'district' => ['required', 'string', Rule::in(config('giopages.districts'))],
+            /** Whatever this Page's Checkout asks for, checked as it asks it. */
+            ...$this->checkoutConfig()->rules(),
 
             'quantity' => [
                 'required',
@@ -85,11 +73,7 @@ class StoreOrderRequest extends FormRequest
     {
         return [
             'page.exists' => 'This page is no longer taking orders.',
-            'name.required' => 'Please enter your name.',
-            'phone.required' => 'Please enter a phone number we can call you on.',
-            'address.required' => 'Please enter the address we should deliver to.',
-            'district.required' => 'Please choose your district.',
-            'district.in' => 'Please choose your district from the list.',
+            ...$this->checkoutConfig()->messages(),
             'quantity.min' => 'Please order at least one.',
             'quantity.max' => 'That is more than we can take in a single order.',
         ];
@@ -118,6 +102,19 @@ class StoreOrderRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    /**
+     * The Checkout the visitor filled in — or the default one when the payload
+     * names no Page this installation can serve.
+     *
+     * That fallback never decides anything: such a request is refused on `page`
+     * regardless. It keeps the rules one shape rather than branching on a Page
+     * that is already on its way to being reported missing.
+     */
+    private function checkoutConfig(): CheckoutConfig
+    {
+        return $this->page()?->checkout_config ?? CheckoutConfig::default();
     }
 
     /**

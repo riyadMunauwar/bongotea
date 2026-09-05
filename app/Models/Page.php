@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PageStatus;
 use App\Observers\PageObserver;
+use App\Support\Checkout\AsCheckoutConfig;
 use Database\Factories\PageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -29,6 +30,12 @@ class Page extends Model
         return [
             'status' => PageStatus::class,
             'published_at' => 'datetime',
+
+            /**
+             * Never null and never partial: the column is non-nullable and a
+             * Page is seeded with a complete Config as it is created.
+             */
+            'checkout_config' => AsCheckoutConfig::class,
         ];
     }
 

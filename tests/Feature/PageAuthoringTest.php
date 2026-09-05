@@ -7,6 +7,7 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Checkout\CheckoutField;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -132,4 +133,29 @@ it('stores a product price as integer minor units', function () {
         ->assertHasNoFormErrors();
 
     expect(Product::query()->sole()->price)->toBe(99050);
+});
+
+it('gives a new page a complete checkout nobody had to configure', function () {
+    Livewire::test(CreatePage::class)
+        ->fillForm([
+            'title' => 'Winter Promo',
+            'slug' => 'winter-promo',
+            'body' => '<h1>Winter</h1>',
+            'status' => PageStatus::Draft->value,
+            'products' => [],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $config = Page::where('slug', 'winter-promo')->sole()->checkout_config;
+
+    /**
+     * Seeded on create and never partial, so a Page publishes without anyone
+     * opening the checkout settings and nothing downstream has to ask whether
+     * this Page has been configured yet.
+     */
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $config->fields))
+        ->toBe(['name', 'phone', 'district', 'address'])
+        ->and(array_filter($config->fields, fn (CheckoutField $field): bool => ! $field->required))
+        ->toBeEmpty();
 });

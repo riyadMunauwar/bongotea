@@ -4,6 +4,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\Checkout\CheckoutConfig;
 
 /**
  * A published Page selling exactly one Product — the only shape a Checkout can
@@ -242,6 +243,33 @@ it('turns away a flood of captures from one address', function () {
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertTooManyRequests();
+
+    expect(Order::count())->toBe(1);
+});
+
+it('checks a capture against the checkout config of the page it came from', function () {
+    $product = Product::factory()->create();
+
+    $asksForAnAddress = sellingPage($product, 'asks');
+
+    $doesNot = sellingPage($product, 'does-not');
+    $doesNot->checkout_config = CheckoutConfig::fromArray([
+        'fields' => [['key' => 'address', 'label' => 'Delivery address', 'required' => false]],
+    ]);
+    $doesNot->save();
+
+    /**
+     * One payload, two Pages, two answers. The form a visitor filled in and the
+     * rules their answers are checked against are the same definition, so a
+     * Customer is never refused for leaving out something they were never
+     * asked for.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($asksForAnAddress, ['address' => '']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.address.0', 'Please enter the address we should deliver to.');
+
+    $this->postJson(route('checkout.store'), capturePayload($doesNot, ['address' => '']))
+        ->assertCreated();
 
     expect(Order::count())->toBe(1);
 });

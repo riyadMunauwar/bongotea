@@ -3,6 +3,7 @@
 use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
+use App\Support\Checkout\CheckoutConfig;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
 use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
@@ -235,4 +236,46 @@ it('serves a page whose shortcode threw, but refuses to freeze it onto disk', fu
     expect($this->cache->has('promo'))->toBeFalse();
 
     Log::shouldHaveReceived('error')->once();
+});
+
+it('asks a page nobody configured for the details the checkout has always asked for', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach(Product::factory()->create());
+
+    /**
+     * The seeded Checkout Config reproduces the form as it stood before a Page
+     * could carry one. A merchant who never opens the checkout settings has to
+     * see no change at all.
+     */
+    $this->get('/promo')
+        ->assertSee('Your name')
+        ->assertSee('Phone number')
+        ->assertSee('District')
+        ->assertSee('Delivery address');
+});
+
+it('asks in the wording and the order the page\'s own checkout config names', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'promo',
+        'checkout_config' => CheckoutConfig::fromArray([
+            'fields' => [
+                ['key' => 'phone', 'label' => 'আপনার মোবাইল নম্বর', 'required' => true],
+                ['key' => 'name', 'label' => 'আপনার নাম', 'required' => true],
+            ],
+        ]),
+    ]);
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match_all('/ name="([a-z]+)"/', $html, $asked);
+
+    /**
+     * The merchant's wording, in the merchant's order, with the built-ins their
+     * Config never mentioned following on behind — a Checkout is complete
+     * whatever was stored for it.
+     */
+    expect($html)->toContain('আপনার মোবাইল নম্বর')
+        ->and($html)->not->toContain('Phone number')
+        ->and($asked[1])->toBe(['page', 'phone', 'name', 'district', 'address', 'quantity']);
 });

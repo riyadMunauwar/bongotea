@@ -16,6 +16,7 @@
     instead of a page reload, and a retry path for clients that send no
     Sec-Fetch-Site header.
 --}}
+@use(App\Support\Checkout\CheckoutFieldType)
 @php
     $currencySymbol = config('giopages.currency.symbol');
     $currencyDecimals = (int) config('giopages.currency.decimals');
@@ -74,37 +75,40 @@
           data-token-url="{{ route('checkout.token') }}">
         <input type="hidden" name="page" value="{{ $page->slug }}">
 
-        <div class="gio-checkout-field">
-            <label class="gio-checkout-label" for="gio-name">Your name</label>
-            <input class="gio-checkout-input" id="gio-name" name="name" type="text"
-                   autocomplete="name" required maxlength="255">
-            <p class="gio-checkout-error" data-gio-error-for="name"></p>
-        </div>
+        {{--
+            The questions, their wording and their order come from this Page's
+            own Checkout Config — the same list the server compiles its rules
+            from, so a visitor is never blocked from typing something the
+            Capture would have accepted.
+        --}}
+        @foreach ($fields as $field)
+            <div class="gio-checkout-field">
+                <label class="gio-checkout-label" for="gio-{{ $field->key() }}">{{ $field->label }}</label>
 
-        <div class="gio-checkout-field">
-            <label class="gio-checkout-label" for="gio-phone">Phone number</label>
-            <input class="gio-checkout-input" id="gio-phone" name="phone" type="tel"
-                   autocomplete="tel" inputmode="tel" required maxlength="32">
-            <p class="gio-checkout-error" data-gio-error-for="phone"></p>
-        </div>
+                @switch ($field->type())
+                    @case (CheckoutFieldType::Textarea)
+                        <textarea class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
+                                  {{ $field->controlAttributes() }} @required($field->required)></textarea>
+                        @break
 
-        <div class="gio-checkout-field">
-            <label class="gio-checkout-label" for="gio-district">District</label>
-            <select class="gio-checkout-input" id="gio-district" name="district" required>
-                <option value="" selected disabled>Choose your district</option>
-                @foreach ($districts as $district)
-                    <option value="{{ $district }}">{{ $district }}</option>
-                @endforeach
-            </select>
-            <p class="gio-checkout-error" data-gio-error-for="district"></p>
-        </div>
+                    @case (CheckoutFieldType::Select)
+                        <select class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
+                                {{ $field->controlAttributes() }} @required($field->required)>
+                            <option value="" selected disabled>{{ $field->placeholder() }}</option>
+                            @foreach ($field->options() as $option)
+                                <option value="{{ $option }}">{{ $option }}</option>
+                            @endforeach
+                        </select>
+                        @break
 
-        <div class="gio-checkout-field">
-            <label class="gio-checkout-label" for="gio-address">Delivery address</label>
-            <textarea class="gio-checkout-input" id="gio-address" name="address" rows="3"
-                      autocomplete="street-address" required maxlength="1000"></textarea>
-            <p class="gio-checkout-error" data-gio-error-for="address"></p>
-        </div>
+                    @default
+                        <input class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
+                               {{ $field->controlAttributes() }} @required($field->required)>
+                @endswitch
+
+                <p class="gio-checkout-error" data-gio-error-for="{{ $field->key() }}"></p>
+            </div>
+        @endforeach
 
         <div class="gio-checkout-field">
             <label class="gio-checkout-label" for="gio-quantity">Quantity</label>
@@ -190,12 +194,25 @@
         });
     }
 
+    /*
+     * Where an error is shown. A refusal keyed to something this form never
+     * asked for — a field the merchant switched off after these bytes were
+     * written to disk — falls back to the page-level slot, because the visitor
+     * whose order was refused has to be told something. Discarding it leaves
+     * them tapping a button that re-enables and says nothing.
+     */
+    function slotFor(form, field) {
+        return form.querySelector('[data-gio-error-for="' + field + '"]')
+            || form.querySelector('[data-gio-error-for="page"]');
+    }
+
     function showErrors(form, errors) {
         var first = null;
 
         Object.keys(errors || {}).forEach(function (field) {
-            var el = form.querySelector('[data-gio-error-for="' + field + '"]');
-            if (!el) { return; }
+            var el = slotFor(form, field);
+            /* One slot, one message: the first refusal to reach it stands. */
+            if (!el || el.hasAttribute('data-shown')) { return; }
             el.textContent = [].concat(errors[field])[0];
             el.setAttribute('data-shown', '');
             if (!first) { first = el; }

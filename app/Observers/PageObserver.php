@@ -4,13 +4,14 @@ namespace App\Observers;
 
 use App\Enums\PageStatus;
 use App\Models\Page;
+use App\Support\Checkout\CheckoutConfig;
 use App\Support\PageCache\PageCacheInvalidator;
 
 /**
- * Two jobs, split by when they have to run.
+ * Three jobs, split by when they have to run.
  *
- * `saving` stamps the publish time, before the write, because it changes what
- * gets written.
+ * `creating` seeds the Checkout Config and `saving` stamps the publish time,
+ * both before the write, because they change what gets written.
  *
  * The rest clear the static cache after the write. `saved` covers create and
  * update, `deleted` and `restored` the rest. All fire after the write commits,
@@ -23,6 +24,26 @@ use App\Support\PageCache\PageCacheInvalidator;
 class PageObserver
 {
     public function __construct(private readonly PageCacheInvalidator $invalidator) {}
+
+    /**
+     * Every Page is born with a complete Checkout Config, so a Merchant can
+     * publish without opening the Checkout settings and nothing anywhere has to
+     * ask whether a Page has been configured yet.
+     *
+     * Here rather than in the Filament form for the same reason the publish
+     * stamp is: it is a fact about a Page, so one created by a seeder, a
+     * factory or tinker gets it too.
+     *
+     * Tested against the raw attributes rather than the cast value, which is
+     * never null by design — reading it would seed over a Config the caller
+     * just supplied.
+     */
+    public function creating(Page $page): void
+    {
+        if (! array_key_exists('checkout_config', $page->getAttributes())) {
+            $page->checkout_config = CheckoutConfig::default();
+        }
+    }
 
     /**
      * `published_at` records when a Page *first* went live, so this only ever

@@ -62,7 +62,14 @@ class CheckoutShortcode implements ShortcodeDefinition
         return view('shortcodes.checkout', [
             'page' => $page,
             'product' => $product,
-            'districts' => (array) config('giopages.districts'),
+
+            /**
+             * What this Page asks for, in its own words and its own order. The
+             * same list compiles into the rules the Capture is checked against,
+             * so the form and the server cannot disagree.
+             */
+            'fields' => $page->checkout_config->fields,
+
             'deliveryCharges' => $this->deliveryCharge->byDistrict(),
             'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
         ])->render();
