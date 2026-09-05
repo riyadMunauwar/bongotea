@@ -135,9 +135,26 @@ a search engine will index it and split the ranking of the URL your ad creatives
 point at:
 
 ```bash
+# The plain address.
 curl -sS -o /dev/null -w '%{http_code}\n' https://your-site.example/page-cache/your-page-slug.html
-# 403 on Apache and LiteSpeed; 404 on nginx, which is how `internal` refuses.
+
+# And two respellings of the same address, which are the checks that matter.
+# The hyphen percent-encoded — curl sends the escape through untouched:
+curl -sS -o /dev/null -w '%{http_code}\n' https://your-site.example/page%2Dcache/your-page-slug.html
+
+# And a dot segment, where --path-as-is stops curl tidying it away before it
+# sends, which would leave you testing the plain address a second time:
+curl -sS -o /dev/null --path-as-is -w '%{http_code}\n' https://your-site.example/./page-cache/your-page-slug.html
+
+# 403 on Apache and LiteSpeed for all three; 404 on nginx, which is how
+# `internal` refuses.
 ```
+
+All three have to be refused, not just the first. Apache decodes and normalises
+the path before it maps it to a file, so a lock that reads the raw request line
+would let the second and third through and serve the page at a second address —
+the exact outcome the lock exists to prevent. The rules here test the resolved
+path instead, and refuse it unless the request came from our own rewrite.
 
 `public/robots.txt` disallows that directory as well, and the two are not
 redundant. The lock is a refusal to serve, and it only exists where the rewrite

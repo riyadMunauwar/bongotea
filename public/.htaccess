@@ -40,14 +40,24 @@
     # second indexable address for a page splits the ranking of the one the
     # merchant's ad creatives point at.
     #
-    # The condition reads the unmodified HTTP request line, which is what the
-    # client sent and which the internal rewrite below never touches. That is
-    # the exact translation of nginx's `internal`: it distinguishes "the client
-    # asked for this" from "we rewrote to this", so the lock and the rewrite
-    # target can be the same path. A nested .htaccess with a Require directive
-    # would not do — authorization applies to internal redirects too, so it
-    # would refuse our own rewrite as well as the visitor's.
-    RewriteCond %{THE_REQUEST} \s/+page-cache[/?\s] [NC]
+    # Both conditions read values Apache has already resolved, so the lock does
+    # not depend on how the client spelled the address. REQUEST_URI is the
+    # decoded, dot-normalised path, which is what /page%2Dcache/promo.html and
+    # /./page-cache/promo.html both arrive here as. REDIRECT_STATUS is empty
+    # only on a request as it came off the wire: the cache lookup below re-runs
+    # these rules through an internal redirect, which sets it, so our own
+    # rewrite reaches the file and a client asking for it does not.
+    #
+    # This is weaker than nginx's `internal`, which is a property of the
+    # location and cannot be spelled around at all. What it does guarantee is
+    # the narrower thing the cache needs: a request that entered from a client
+    # and resolves under the cache directory is refused whatever spelling it
+    # used, while the rewrite we perform ourselves is served. A nested .htaccess
+    # with a Require directive would not do — authorization applies to internal
+    # redirects too, so it would refuse our own rewrite as well as the
+    # visitor's.
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
+    RewriteCond %{REQUEST_URI} ^/+page-cache(/|$) [NC]
     RewriteRule ^ - [F,L]
 
     # A real file — an asset, or the front controller itself — is served as it
