@@ -3,8 +3,9 @@
 A Page's stored `body` keeps the literal `[checkout]` text forever; expansion happens when the
 Page is rendered, on a cache miss. The obvious optimisation is the opposite — expand once at save
 time and store the result — but the static page cache (issue #4) means there is no per-request cost to
-optimise away: nginx serves every cache hit off disk and a render happens only on a miss, so
-expansion is already amortised to near zero.
+optimise away: every cache hit is answered from a file on disk with nothing expanded — by the
+webserver where it is configured to, and otherwise by the fallback reader (ADR-0004) — and a render
+happens only on a miss, so expansion is already amortised to near zero.
 
 ## Consequences
 
