@@ -46,12 +46,12 @@ class PagesTable
                     ->dateTime()
                     ->sortable()
                     ->placeholder('—'),
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            /**
+             * Sorts on a column the table no longer shows. Deliberate: this is an
+             * authoring list, so "what did I touch last" is the useful order, and
+             * published_at would sink every draft below every published page.
+             */
             ->defaultSort('updated_at', 'desc')
             ->filters([
                 SelectFilter::make('status')->options(PageStatus::class),

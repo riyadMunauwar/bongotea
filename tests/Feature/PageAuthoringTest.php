@@ -39,6 +39,8 @@ it('publishes a page that is then served at its slug', function () {
     $this->get('/winter-promo')
         ->assertOk()
         ->assertSee('Winter Jacket');
+
+    expect(Page::where('slug', 'winter-promo')->sole()->published_at)->not->toBeNull();
 });
 
 it('refuses to publish a page whose checkout has no product to sell', function () {

@@ -16,6 +16,10 @@ _Avoid_: post, article, template, funnel step
 The flat path a Page is served at, and its permanent public identity. A slug is claimed for good once used, because it may be baked into ad creatives that outlive the Page itself.
 _Avoid_: permalink, path, URL
 
+**Went live**:
+The moment a Page first became reachable at its slug. A Page can be pulled back to draft and published again, but it went live only once — the date is what a Merchant matches a Page against ad spend, so it is the first one, never the most recent.
+_Avoid_: launched, activated, last published
+
 **Product**:
 Something a Customer can order, carrying a single price and no variations. Products have no public address of their own; they are only ever reached through a Page.
 _Avoid_: item, SKU, variant, listing
