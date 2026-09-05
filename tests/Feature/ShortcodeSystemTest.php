@@ -146,14 +146,14 @@ describe('the save-time linter', function () {
             ->toHaveCount(1);
     });
 
-    it('blocks a checkout with more than one product linked', function () {
+    it('passes a checkout with more than one product linked', function () {
         /**
-         * Resolving to "the first by pivot position" would be silent and would
-         * retarget the live page on a reorder — the wrong item at the wrong
-         * price, collected at the door.
+         * One linked Product is the floor, not the ceiling: a page may sell a
+         * combo or an upsell, and each Product carries its own quantity and its
+         * own line.
          */
-        expect(app(PageBodyValidator::class)->errors('[checkout]', linkedProductCount: 2))
-            ->toHaveCount(1);
+        expect(app(PageBodyValidator::class)->errors('[checkout]', linkedProductCount: 3))
+            ->toBe([]);
     });
 
     it('passes a page with one checkout and one product', function () {

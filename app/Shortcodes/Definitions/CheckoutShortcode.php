@@ -41,15 +41,18 @@ class CheckoutShortcode implements ShortcodeDefinition
 
     public function render(Node $node, Page $page): string
     {
-        $product = $page->soleProduct();
+        /** Soft-deleted Products have already fallen out of this relation. */
+        $products = $page->products;
 
-        if ($product === null) {
+        if ($products->isEmpty()) {
             /**
              * Publishing a Page with no linked Product is blocked at save time,
-             * so this can only be reached after publish — a Product
-             * soft-deleted under a live campaign. Zero visible bytes and a
-             * diagnosable comment: the Page keeps rendering, the checkout goes
-             * away, and the operator finds out the way they would anyway, from
+             * so this can only be reached after publish — every linked Product
+             * soft-deleted under a live campaign. Losing one of several is not
+             * this case: the rest keep selling at their own prices, and the
+             * Pages list is what says so. Zero visible bytes and a diagnosable
+             * comment: the Page keeps rendering, the checkout goes away, and
+             * the operator finds out the way they would anyway, from
              * conversions going to zero.
              *
              * A visible "temporarily unavailable" notice was rejected. Injecting
@@ -61,7 +64,9 @@ class CheckoutShortcode implements ShortcodeDefinition
 
         return view('shortcodes.checkout', [
             'page' => $page,
-            'product' => $product,
+
+            /** Everything the Page sells, each with a quantity of its own. */
+            'products' => $products,
 
             /**
              * What this Page asks for, in its own words and its own order. The

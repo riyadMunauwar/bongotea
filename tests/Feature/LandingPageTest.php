@@ -6,6 +6,7 @@ use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
 
 it('serves a published page at its slug and writes it to the cache', function () {
@@ -196,7 +197,78 @@ it('bakes no request forgery token into a page every visitor shares', function (
     $this->get('/promo')->assertDontSee('_token', escape: false);
 });
 
-it('drops the checkout when the page product was soft deleted, and keeps rendering', function () {
+it('renders every product the page sells, each with a quantity of its own', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach([$jacket->id, $boots->id]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Named by Product id rather than by position: reordering the links in the
+     * admin must not point a form already open on a phone at a different item.
+     */
+    expect($html)->toContain('Winter Jacket')
+        ->and($html)->toContain('৳990.00')
+        ->and($html)->toContain('name="quantities['.$jacket->getKey().']"')
+        ->and($html)->toContain('Hiking Boots')
+        ->and($html)->toContain('৳1490.00')
+        ->and($html)->toContain('name="quantities['.$boots->getKey().']"')
+        /** One of everything, which is what the quantity boxes start on. */
+        ->and($html)->toContain('৳2480.00');
+});
+
+it('shows each product its own image', function () {
+    Storage::fake('public');
+
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $jacket->addMediaFromString('jacket-bytes')->usingFileName('jacket.jpg')->toMediaCollection(Product::IMAGE_COLLECTION);
+    $boots->addMediaFromString('boots-bytes')->usingFileName('boots.jpg')->toMediaCollection(Product::IMAGE_COLLECTION);
+
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach([$jacket->id, $boots->id]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * A customer buying from a page that sells several things has to be able to
+     * see which is which. Each image is the Product's own, alt-texted with the
+     * Product's own name.
+     */
+    expect($jacket->imageUrl())->toContain('jacket.jpg')
+        ->and($boots->imageUrl())->toContain('boots.jpg')
+        ->and($html)->toContain('src="'.$jacket->imageUrl().'"')
+        ->and($html)->toContain('src="'.$boots->imageUrl().'"')
+        ->and($html)->toContain('alt="Winter Jacket"')
+        ->and($html)->toContain('alt="Hiking Boots"');
+});
+
+it('keeps selling the rest when one of several products is deleted', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach([$jacket->id, $boots->id]);
+
+    /**
+     * Taking a working page off the air over a deleted upsell turns a
+     * merchandising slip into dead ad spend. The jacket is still exactly what
+     * it was, at the price it was.
+     */
+    $boots->delete();
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Winter Jacket')
+        ->assertDontSee('Hiking Boots')
+        ->assertSee('gio-checkout', escape: false);
+});
+
+it('drops the checkout when every product the page sells was soft deleted, and keeps rendering', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
@@ -277,5 +349,11 @@ it('asks in the wording and the order the page\'s own checkout config names', fu
      */
     expect($html)->toContain('আপনার মোবাইল নম্বর')
         ->and($html)->not->toContain('Phone number')
-        ->and($asked[1])->toBe(['page', 'phone', 'name', 'district', 'address', 'quantity']);
+        /**
+         * The quantity boxes are absent from this list because they are named
+         * `quantities[<id>]` — keyed by Product, which this pattern does not
+         * match. What is being pinned here is the field list, and the fields
+         * are all of it.
+         */
+        ->and($asked[1])->toBe(['page', 'phone', 'name', 'district', 'address']);
 });

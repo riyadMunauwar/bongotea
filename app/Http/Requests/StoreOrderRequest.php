@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -14,8 +16,8 @@ use Illuminate\Validation\Validator;
  * The visitor submits from a page that may have been cached on disk for days,
  * so everything the request asserts about that page is re-checked here against
  * the database rather than trusted from the payload. Nothing priced is
- * accepted at all: the request carries a slug and a quantity, and the price
- * comes from the Page's own Product.
+ * accepted at all: the request carries a slug and a quantity per item, and the
+ * prices come from the Page's own Products.
  *
  * The details it asks about are not listed here either. They are compiled from
  * the Checkout Config of the Page being ordered from — the same list that
@@ -57,13 +59,40 @@ class StoreOrderRequest extends FormRequest
             /** Whatever this Page's Checkout asks for, checked as it asks it. */
             ...$this->checkoutConfig()->rules(),
 
-            'quantity' => [
+            ...$this->quantityRules(),
+        ];
+    }
+
+    /**
+     * One quantity per Product the Page still sells, keyed by Product id.
+     *
+     * Keyed rather than positional so a reorder in the admin can never point a
+     * form already on someone's phone at a different item.
+     *
+     * A key naming a Product this Page no longer sells carries no rule and is
+     * dropped at Capture — that is how a Product soft-deleted under a live
+     * campaign leaves a form written to disk before it went, while the rest
+     * keep selling. A Product with no quantity is refused rather than sold at
+     * one, because a COD parcel holding an item nobody chose is refused at the
+     * door; `after()` is what tells the visitor to reload, since their form has
+     * no box for that Product to complain about.
+     *
+     * @return array<string, list<string>>
+     */
+    private function quantityRules(): array
+    {
+        $rules = ['quantities' => ['required', 'array']];
+
+        foreach ($this->page()?->products ?? [] as $product) {
+            $rules['quantities.'.$product->getKey()] = [
                 'required',
                 'integer',
                 'min:1',
                 'max:'.config('giopages.checkout.max_quantity'),
-            ],
-        ];
+            ];
+        }
+
+        return $rules;
     }
 
     /**
@@ -74,8 +103,16 @@ class StoreOrderRequest extends FormRequest
         return [
             'page.exists' => 'This page is no longer taking orders.',
             ...$this->checkoutConfig()->messages(),
-            'quantity.min' => 'Please order at least one.',
-            'quantity.max' => 'That is more than we can take in a single order.',
+
+            /**
+             * Wildcards rather than a message per Product: the keys are ids,
+             * so there is nothing to write them out against, and every line is
+             * refused for the same reasons in the same words.
+             */
+            'quantities.required' => 'Please choose how many of each item you want.',
+            'quantities.*.required' => 'Please order at least one.',
+            'quantities.*.min' => 'Please order at least one.',
+            'quantities.*.max' => 'That is more than we can take in a single order.',
         ];
     }
 
@@ -91,17 +128,59 @@ class StoreOrderRequest extends FormRequest
                 }
 
                 /**
-                 * The page is published but has nothing unambiguously for sale
-                 * — its Product was soft-deleted, or a second one was linked,
-                 * after the visitor's copy of the page was rendered. Reported
+                 * The page is published but has nothing left to sell — every
+                 * Product it links was soft-deleted after the visitor's copy of
+                 * the page was rendered. Losing one of several is not this case:
+                 * those Products simply carry no rules and no lines. Reported
                  * rather than captured: taking cash for something that cannot
                  * ship is the one outcome worse than a lost order.
                  */
-                if ($this->page()?->soleProduct() === null) {
+                $page = $this->page();
+
+                if ($page === null || $page->products->isEmpty()) {
                     $validator->errors()->add('page', 'This page is no longer taking orders.');
+
+                    return;
+                }
+
+                /**
+                 * The Page has gained a Product since the visitor's copy was
+                 * written to disk, so their form has no box for it. The rules
+                 * already refuse the Capture — nothing unagreed is ever sold —
+                 * but that refusal is keyed to a box they cannot see, and a
+                 * visitor told to "order at least one" of an item that is not
+                 * on their screen is being asked to fix something they cannot
+                 * reach.
+                 *
+                 * So it is reported as what it is: the page changed underneath
+                 * them, and reloading is the fix. ADR-0007 keeps this in the
+                 * page-level slot, ahead of the field error that has nowhere to
+                 * land.
+                 */
+                if ($this->unofferedProducts()->isNotEmpty()) {
+                    $validator->errors()->add('page', 'This page has changed since you opened it. Please reload and try again.');
                 }
             },
         ];
+    }
+
+    /**
+     * The Products this Page sells that the submission never mentioned.
+     *
+     * Empty for every form rendered from the Page as it stands. A Product
+     * appears here only when it was linked after the visitor's copy of the page
+     * was written to disk.
+     *
+     * @return Collection<int, Product>
+     */
+    private function unofferedProducts(): Collection
+    {
+        $offered = array_map(strval(...), array_keys($this->quantities()));
+
+        return $this->page()?->products
+            ->reject(fn (Product $product): bool => in_array((string) $product->getKey(), $offered, true))
+            ->values()
+            ?? new Collection;
     }
 
     /**
@@ -138,7 +217,7 @@ class StoreOrderRequest extends FormRequest
      * optional, and it lands with the setting that lets a Merchant switch one
      * off.
      *
-     * @return array{name: string, phone: string, address: string, district: string, quantity: int}
+     * @return array{name: string, phone: string, address: string, district: string, quantities: array<int, int>}
      */
     public function details(): array
     {
@@ -147,7 +226,27 @@ class StoreOrderRequest extends FormRequest
             'phone' => $this->string('phone')->trim()->toString(),
             'address' => $this->string('address')->trim()->toString(),
             'district' => $this->string('district')->toString(),
-            'quantity' => $this->integer('quantity'),
+            'quantities' => $this->quantities(),
         ];
+    }
+
+    /**
+     * How many of each Product, keyed by Product id.
+     *
+     * Cast on the way through because a form post arrives as strings and
+     * Capture writes these straight onto an Order Line. A key for a Product the
+     * Page no longer sells survives this and is dropped there.
+     *
+     * @return array<int, int>
+     */
+    private function quantities(): array
+    {
+        $quantities = [];
+
+        foreach ((array) $this->input('quantities', []) as $productId => $quantity) {
+            $quantities[(int) $productId] = (int) $quantity;
+        }
+
+        return $quantities;
     }
 }

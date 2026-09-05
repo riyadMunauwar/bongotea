@@ -24,12 +24,16 @@
 <div class="gio-checkout" data-gio-checkout data-page-slug="{{ $page->slug }}">
     <style>
         .gio-checkout { box-sizing: border-box; max-width: 30rem; margin: 1.5rem auto; padding: 1rem; border: 1px solid #e5e7eb; border-radius: .5rem; font-family: inherit; }
-        .gio-checkout-product { display: flex; gap: .75rem; align-items: center; }
+        .gio-checkout-products { margin: 0 0 1.25rem; }
+        .gio-checkout-product + .gio-checkout-product { margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid #e5e7eb; }
+        .gio-checkout-product-head { display: flex; gap: .75rem; align-items: center; }
         .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: .375rem; flex: none; }
         .gio-checkout-name { margin: 0 0 .25rem; font-size: 1rem; font-weight: 600; }
         .gio-checkout-price { margin: 0; font-size: 1.125rem; font-weight: 700; }
         .gio-checkout-description { margin: .5rem 0 0; font-size: .875rem; line-height: 1.5; }
-        .gio-checkout-form { margin: 1rem 0 0; }
+        .gio-checkout-quantity { margin: .75rem 0 0; }
+        .gio-checkout-quantity-input { width: 7rem; }
+        .gio-checkout-form { margin: 0; }
         .gio-checkout-field { margin: 0 0 .75rem; }
         .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125rem; font-weight: 600; }
         .gio-checkout-help { margin: 0 0 .375rem; font-size: .75rem; line-height: 1.4; opacity: .75; }
@@ -45,21 +49,6 @@
         .gio-checkout-note { margin: .625rem 0 0; font-size: .75rem; text-align: center; opacity: .75; }
     </style>
 
-    <div class="gio-checkout-product">
-        @if ($image = $product->imageUrl())
-            <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
-        @endif
-
-        <div>
-            <p class="gio-checkout-name">{{ $product->name }}</p>
-            <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
-        </div>
-    </div>
-
-    @if ($product->description)
-        <p class="gio-checkout-description">{{ $product->description }}</p>
-    @endif
-
     {{--
         No @csrf token: this markup is shared by every visitor, so a token here
         would be one person's token handed to everyone. The POST authenticates
@@ -69,12 +58,61 @@
           method="post"
           action="{{ route('checkout.store') }}"
           data-gio-checkout-form
-          data-unit-price="{{ $product->price }}"
           data-currency-symbol="{{ $currencySymbol }}"
           data-currency-decimals="{{ $currencyDecimals }}"
           data-delivery-charges="{{ json_encode($deliveryCharges) }}"
           data-token-url="{{ route('checkout.token') }}">
         <input type="hidden" name="page" value="{{ $page->slug }}">
+
+        {{--
+            Everything this Page sells, each with a quantity of its own.
+
+            Quantities are keyed by Product id rather than by the position the
+            Product sits at, so reordering them in the admin cannot point a form
+            already open on someone's phone at a different item. A Product
+            soft-deleted since these bytes were written is simply absent from
+            the Page by the time the Capture is checked, and the rest still sell.
+        --}}
+        <div class="gio-checkout-products">
+            @foreach ($products as $product)
+                <div class="gio-checkout-product" data-gio-line data-unit-price="{{ $product->price }}">
+                    <div class="gio-checkout-product-head">
+                        @if ($image = $product->imageUrl())
+                            <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
+                        @endif
+
+                        <div>
+                            <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
+                            <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
+                        </div>
+                    </div>
+
+                    @if ($product->description)
+                        <p class="gio-checkout-description">{{ $product->description }}</p>
+                    @endif
+
+                    <div class="gio-checkout-quantity">
+                        {{--
+                            Labelled by its own word *and* the product's name, so a
+                            screen reader on a page selling three things hears
+                            "Quantity, Winter Jacket" rather than "Quantity" three
+                            times. The visible label stays the visible label, which
+                            is what a voice-control user says out loud.
+                        --}}
+                        <label class="gio-checkout-label"
+                               id="gio-quantity-label-{{ $product->getKey() }}"
+                               for="gio-quantity-{{ $product->getKey() }}">Quantity</label>
+                        <input class="gio-checkout-input gio-checkout-quantity-input"
+                               id="gio-quantity-{{ $product->getKey() }}"
+                               name="quantities[{{ $product->getKey() }}]"
+                               aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
+                               type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
+                               inputmode="numeric" required data-gio-quantity>
+                        <p class="gio-checkout-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
+                    </div>
+                </div>
+            @endforeach
+        </div>
 
         {{--
             The questions, their wording and their order come from this Page's
@@ -130,17 +168,19 @@
             </div>
         @endforeach
 
-        <div class="gio-checkout-field">
-            <label class="gio-checkout-label" for="gio-quantity">Quantity</label>
-            <input class="gio-checkout-input" id="gio-quantity" name="quantity" type="number"
-                   value="1" min="1" max="{{ $maxQuantity }}" step="1" inputmode="numeric" required>
-            <p class="gio-checkout-error" data-gio-error-for="quantity"></p>
-        </div>
+        {{--
+            One of everything, which is what the quantity boxes above start on.
+            The script keeps these truthful as the visitor changes them; a
+            visitor whose scripts never run reads the figures the page was
+            rendered with, and the confirmation page after Capture is where they
+            see what they actually owe.
+        --}}
+        @php($subtotal = (int) $products->sum('price'))
 
         <div class="gio-checkout-summary">
             <p class="gio-checkout-row">
                 <span>Subtotal</span>
-                <span data-gio-subtotal>{{ \App\Support\Money::format($product->price) }}</span>
+                <span data-gio-subtotal>{{ \App\Support\Money::format($subtotal) }}</span>
             </p>
             <p class="gio-checkout-row">
                 <span>Delivery</span>
@@ -148,7 +188,7 @@
             </p>
             <p class="gio-checkout-row gio-checkout-total">
                 <span>Total</span>
-                <span data-gio-total>{{ \App\Support\Money::format($product->price) }}</span>
+                <span data-gio-total>{{ \App\Support\Money::format($subtotal) }}</span>
             </p>
         </div>
 
@@ -190,11 +230,27 @@
         }
     }
 
+    /*
+     * The subtotal of one line, from the price rendered into it. Read off the
+     * line rather than off a single price on the form: a page may sell several
+     * products, each at its own price and its own quantity.
+     */
+    function lineSubtotal(line) {
+        var unitPrice = parseInt(line.dataset.unitPrice, 10) || 0;
+        var input = line.querySelector('[data-gio-quantity]');
+        var quantity = Math.max(1, parseInt(input ? input.value : '', 10) || 1);
+
+        return unitPrice * quantity;
+    }
+
     /* The figure the customer hands over in cash, kept truthful as they type. */
     function retotal(form) {
-        var unitPrice = parseInt(form.dataset.unitPrice, 10) || 0;
-        var quantity = Math.max(1, parseInt(form.elements.quantity.value, 10) || 1);
-        var subtotal = unitPrice * quantity;
+        var subtotal = 0;
+
+        form.querySelectorAll('[data-gio-line]').forEach(function (line) {
+            subtotal += lineSubtotal(line);
+        });
+
         var delivery = deliveryFor(form);
 
         var set = function (name, text) {

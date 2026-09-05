@@ -7,19 +7,27 @@ use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 
 /**
- * A published Page selling exactly one Product — the only shape a Checkout can
- * appear on, because publishing any other is blocked.
+ * A published Page selling whatever Products it is handed. One is the shape
+ * every Page had before Products could be linked in numbers; more is what a
+ * combo or an upsell page looks like.
  */
-function sellingPage(Product $product, string $slug = 'promo'): Page
+function sellingPage(Product|iterable $products, string $slug = 'promo'): Page
 {
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => $slug]);
 
-    $page->products()->attach($product);
+    $page->products()->attach($products instanceof Product
+        ? $products
+        : collect($products)->map(fn (Product $product): int => $product->getKey())->all());
 
     return $page;
 }
 
 /**
+ * A submission of one of everything the Page sells.
+ *
+ * Quantities are keyed by Product id, the way the rendered form names them, so
+ * a test never has to know what order the admin arranged them in.
+ *
  * @return array<string, mixed>
  */
 function capturePayload(Page $page, array $overrides = []): array
@@ -30,7 +38,9 @@ function capturePayload(Page $page, array $overrides = []): array
         'phone' => '01712345678',
         'address' => 'House 4, Road 12, Banani',
         'district' => 'Dhaka',
-        'quantity' => 1,
+        'quantities' => $page->products->mapWithKeys(
+            fn (Product $product): array => [$product->getKey() => 1],
+        )->all(),
     ], $overrides);
 }
 
@@ -38,7 +48,9 @@ it('captures an order at the price agreed on the page', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
     $page = sellingPage($product);
 
-    $response = $this->postJson(route('checkout.store'), capturePayload($page, ['quantity' => 2]));
+    $response = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => 2],
+    ]));
 
     $response->assertCreated();
 
@@ -123,7 +135,30 @@ it('rejects incomplete details and captures nothing', function (string $field, s
     'no address' => ['address', '', 'Please enter the address we should deliver to.'],
     'no district' => ['district', '', 'Please choose your district.'],
     'district we do not deliver to' => ['district', 'Atlantis', 'Please choose your district from the list.'],
-    'no quantity' => ['quantity', '0', 'Please order at least one.'],
+]);
+
+it('rejects an unusable quantity against the product it was given for', function (string $quantity, string $message) {
+    $product = Product::factory()->create();
+    $page = sellingPage($product);
+
+    /**
+     * Reported against the line rather than the form, so the visitor is told
+     * which of several items they have to fix — and the error lands in a slot
+     * the rendered form actually has.
+     */
+    $response = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => $quantity],
+    ]))->assertUnprocessable();
+
+    /**
+     * Read as a key rather than a path: the key *contains* a dot, which is
+     * exactly what the form's error slot is named after.
+     */
+    expect($response->json('errors')['quantities.'.$product->getKey()][0])->toBe($message)
+        ->and(Order::count())->toBe(0);
+})->with([
+    'none of it' => ['0', 'Please order at least one.'],
+    'more than we can take' => ['101', 'That is more than we can take in a single order.'],
 ]);
 
 it('refuses an order against a page that is not published', function () {
@@ -152,6 +187,106 @@ it('refuses an order once the page has nothing left to sell', function () {
     $this->postJson(route('checkout.store'), capturePayload($page))
         ->assertUnprocessable()
         ->assertJsonPath('errors.page.0', 'This page is no longer taking orders.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('captures one line per product, each at its own price and quantity', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$jacket->getKey() => 2, $boots->getKey() => 1],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+    $lines = $order->lines->keyBy('product_name');
+
+    expect($order->lines)->toHaveCount(2)
+        ->and($lines['Winter Jacket']->unit_price)->toBe(99000)
+        ->and($lines['Winter Jacket']->quantity)->toBe(2)
+        ->and($lines['Winter Jacket']->line_total)->toBe(198000)
+        ->and($lines['Hiking Boots']->unit_price)->toBe(149000)
+        ->and($lines['Hiking Boots']->quantity)->toBe(1)
+        ->and($lines['Hiking Boots']->line_total)->toBe(149000)
+        /** The subtotal is the sum of the lines, and the total is still that plus delivery. */
+        ->and($order->subtotal)->toBe(347000)
+        ->and($order->delivery_charge)->toBe(6000)
+        ->and($order->total)->toBe(353000);
+});
+
+it('matches a quantity to its product by id, not by the order they are linked in', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    /**
+     * The submission arrives with the boots first. Resolving by position would
+     * put the boots' quantity against the jacket — the wrong item in the wrong
+     * number, collected at the door — and a reorder in the admin would do the
+     * same to every form already open on a phone.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$boots->getKey() => 5, $jacket->getKey() => 1],
+    ]))->assertCreated();
+
+    $lines = Order::sole()->lines->keyBy('product_name');
+
+    expect($lines['Winter Jacket']->quantity)->toBe(1)
+        ->and($lines['Hiking Boots']->quantity)->toBe(5);
+});
+
+it('keeps selling the rest when one of several products is deleted', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    $payload = capturePayload($page, [
+        'quantities' => [$jacket->getKey() => 1, $boots->getKey() => 1],
+    ]);
+
+    /**
+     * The visitor is holding a form that offered both. Taking the page off the
+     * air over a deleted upsell turns a merchandising slip into dead ad spend;
+     * the jacket is still exactly what it was, at the price it was.
+     */
+    $boots->delete();
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines->pluck('product_name')->all())->toBe(['Winter Jacket'])
+        ->and($order->subtotal)->toBe(99000);
+});
+
+it('refuses to sell a product the submission never offered', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $page = sellingPage($jacket);
+
+    $upsell = Product::factory()->create(['name' => 'Wool Scarf']);
+
+    $payload = capturePayload($page);
+
+    /** Linked after the visitor's copy of the page was written to disk. */
+    $page->products()->attach($upsell);
+
+    /**
+     * Selling it at one anyway would put an item nobody chose into a
+     * cash-on-delivery parcel, which is refused at the door and costs the
+     * merchant courier fees in both directions — on the jacket too.
+     *
+     * The visitor is told to reload rather than to fix a field, because the
+     * form on their screen has no box for the scarf to complain about. ADR-0007
+     * keeps a refusal nobody can edit their way out of in the page-level slot.
+     */
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -187,7 +322,9 @@ it('shows the visitor their order without printing their details back', function
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
     $page = sellingPage($product);
 
-    $this->postJson(route('checkout.store'), capturePayload($page, ['quantity' => 2]))->assertCreated();
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => 2],
+    ]))->assertCreated();
 
     $order = Order::sole();
 

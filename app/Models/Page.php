@@ -40,6 +40,14 @@ class Page extends Model
     }
 
     /**
+     * Everything this Page still sells, in the order the admin arranged them.
+     *
+     * A soft-deleted Product falls out of here on its own, which is what makes
+     * a merchandising slip cost one item rather than a live campaign. The
+     * ordering is for the admin and the eye only — nothing resolves a Product
+     * by the position it sits at, because a reorder would then retarget a Page
+     * that is spending money, silently.
+     *
      * @return BelongsToMany<Product, $this>
      */
     public function products(): BelongsToMany
@@ -50,19 +58,39 @@ class Page extends Model
     }
 
     /**
-     * The single Product this Page sells, or null when the link is missing or
-     * its Product has been soft-deleted.
+     * The links whose Product has since been soft-deleted.
      *
-     * Never falls back to "the first of several": a Page with two linked
-     * Products cannot be published (see PageBodyValidator), so more than one
-     * here means the data changed underneath a published Page and the honest
-     * answer is that nothing is unambiguously for sale.
+     * A Checkout drops these and keeps selling the rest, which is the right
+     * outcome and a silent one — so the Pages list reads this to say out loud
+     * that a published Page now sells fewer Products than it was linked with.
+     *
+     * @return BelongsToMany<Product, $this>
      */
-    public function soleProduct(): ?Product
+    public function deletedProducts(): BelongsToMany
     {
-        $products = $this->products;
+        return $this->belongsToMany(Product::class)->onlyTrashed();
+    }
 
-        return $products->count() === 1 ? $products->first() : null;
+    /**
+     * How many Products this Page has lost since they were linked.
+     *
+     * Prefers a count the query already loaded, because the one screen that
+     * asks this asks it for every row it shows.
+     */
+    public function lostProductCount(): int
+    {
+        return (int) ($this->deleted_products_count ?? $this->deletedProducts()->count());
+    }
+
+    /**
+     * Whether this Page is quietly selling less than it was linked with.
+     *
+     * Published only. A draft is not in front of anybody and not spending
+     * anything, so there is nothing there to warn about.
+     */
+    public function hasLostProducts(): bool
+    {
+        return $this->isPublished() && $this->lostProductCount() > 0;
     }
 
     public function isPublished(): bool

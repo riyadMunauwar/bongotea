@@ -76,12 +76,21 @@ class PageForm
                         Tab::make('Checkout')
                             ->columns(1)
                             ->schema([
+                                /**
+                                 * Shows the live links only, and leaves the rest
+                                 * alone: Filament detaches what its own relationship
+                                 * query returned and is missing from the selection
+                                 * (Select::saveRelationshipsAfterStateUpdated), and a
+                                 * soft-deleted Product is in neither. So saving an
+                                 * unrelated field does not quietly drop the link the
+                                 * Pages list is flagging as lost.
+                                 */
                                 Select::make('products')
                                     ->relationship('products', 'name')
                                     ->multiple()
                                     ->preload()
                                     ->searchable()
-                                    ->helperText('[checkout] sells exactly one product, so link exactly one.'),
+                                    ->helperText('[checkout] sells everything linked here, each with its own quantity. Link at least one to publish.'),
 
                                 /**
                                  * The built-in fields, and only them. A key and a type

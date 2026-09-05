@@ -5,6 +5,7 @@ namespace App\Support\Orders;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
+use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,24 +14,30 @@ use Illuminate\Support\Facades\DB;
  *
  * What is agreed here is fixed from here — the products, their prices and the
  * totals. The one rule this class exists to enforce is that *nothing priced
- * comes from the request*: the visitor sends a Page, a quantity and their
- * delivery details, and every figure on the resulting Order is derived
- * server-side from the Page's own Product.
+ * comes from the request*: the visitor sends a Page, a quantity per item and
+ * their delivery details, and every figure on the resulting Order is derived
+ * server-side from the Page's own Products.
  */
 class OrderCapture
 {
     public function __construct(private readonly DeliveryCharge $deliveryCharge) {}
 
     /**
-     * @param  array{name: string, phone: string, address: string, district: string, quantity: int}  $details
+     * @param  array{name: string, phone: string, address: string, district: string, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
-        $product = $page->soleProduct();
-
-        if ($product === null) {
-            throw new CheckoutUnavailable("Page [{$page->slug}] has no single product to sell.");
+        if ($page->products->isEmpty()) {
+            throw new CheckoutUnavailable("Page [{$page->slug}] has nothing left to sell.");
         }
+
+        /**
+         * The lines are built before the transaction opens, so a Product the
+         * submission gave no quantity for stops the Capture rather than being
+         * quietly sold at one — a COD parcel holding an item the Customer never
+         * agreed to is refused at the door, at the Merchant's expense.
+         */
+        $lines = $this->lines($page, $details['quantities']);
 
         /**
          * Resolved outside the transaction: firstOrCreate recovers from a
@@ -40,7 +47,7 @@ class OrderCapture
          */
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($page, $product, $customer, $details): Order {
+        return DB::transaction(function () use ($page, $customer, $details, $lines): Order {
             $order = $customer->orders()->create([
                 'page_id' => $page->getKey(),
 
@@ -62,20 +69,42 @@ class OrderCapture
                 'delivery_charge' => $this->deliveryCharge->forDistrict($details['district']),
             ]);
 
-            /**
-             * The snapshot. `product_id` is kept as a reference for the admin,
-             * but the name and the price are copied because they are what gets
-             * quoted on the confirmation call and collected at the door.
-             */
-            $order->lines()->create([
+            foreach ($lines as $line) {
+                $order->lines()->create($line);
+            }
+
+            /** The lines' observer recomputed the totals; load them back. */
+            return $order->refresh();
+        });
+    }
+
+    /**
+     * One Order Line per Product the Page sells, snapshotted.
+     *
+     * `product_id` is kept as a reference for the admin, but the name and the
+     * price are copied because they are what gets quoted on the confirmation
+     * call and collected at the door.
+     *
+     * @param  array<int, int>  $quantities  keyed by Product id, per StoreOrderRequest
+     * @return list<array{product_id: int, product_name: string, unit_price: int, quantity: int}>
+     */
+    private function lines(Page $page, array $quantities): array
+    {
+        return $page->products->map(function (Product $product) use ($page, $quantities): array {
+            $quantity = $quantities[$product->getKey()] ?? null;
+
+            if ($quantity === null) {
+                throw new CheckoutUnavailable(
+                    "Page [{$page->slug}] was captured with no quantity for product [{$product->getKey()}]."
+                );
+            }
+
+            return [
                 'product_id' => $product->getKey(),
                 'product_name' => $product->name,
                 'unit_price' => $product->price,
-                'quantity' => $details['quantity'],
-            ]);
-
-            /** The line's observer recomputed the totals; load them back. */
-            return $order->refresh();
-        });
+                'quantity' => $quantity,
+            ];
+        })->values()->all();
     }
 }

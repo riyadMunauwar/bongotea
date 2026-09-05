@@ -53,17 +53,13 @@ class PageBodyValidator
             $errors[] = 'This page has '.$checkouts.' [checkout] shortcodes. A page may hold at most one.';
         }
 
+        /**
+         * One is the floor, not the ceiling. A Page may sell a combo or an
+         * upsell alongside its headline item; what it may not do is go live
+         * with a form that has nothing behind it.
+         */
         if ($checkouts > 0 && $linkedProductCount === 0) {
             $errors[] = 'This page has a [checkout] shortcode but no linked product, so there is nothing to sell.';
-        }
-
-        if ($checkouts > 0 && $linkedProductCount > 1) {
-            /**
-             * Resolving to "the first Product by position" would be silent and
-             * would retarget the live page on a reorder — the wrong item at the
-             * wrong price, collected at the door.
-             */
-            $errors[] = 'This page links '.$linkedProductCount.' products. [checkout] sells exactly one, so link only the product this page is for.';
         }
 
         return $errors;

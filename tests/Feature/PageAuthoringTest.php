@@ -3,6 +3,7 @@
 use App\Enums\PageStatus;
 use App\Filament\Resources\Pages\Pages\CreatePage;
 use App\Filament\Resources\Pages\Pages\EditPage;
+use App\Filament\Resources\Pages\Pages\ListPages;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Models\Page;
 use App\Models\Product;
@@ -57,23 +58,62 @@ it('refuses to publish a page whose checkout has no product to sell', function (
         ->assertHasFormErrors(['status']);
 });
 
-it('refuses to publish a page that links more than one product', function () {
-    $products = Product::factory()->count(2)->create();
+it('publishes a page that sells more than one product', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf']);
 
-    /**
-     * Falling back to "the first product by pivot position" would retarget the
-     * live page on a reorder, with nothing reporting the change.
-     */
+    /** A combo, or an upsell alongside the headline item. One is the floor. */
     Livewire::test(CreatePage::class)
         ->fillForm([
             'title' => 'Winter Promo',
             'slug' => 'winter-promo',
-            'body' => '[checkout]',
+            'body' => '<!doctype html><html><body>[checkout]</body></html>',
             'status' => PageStatus::Published->value,
-            'products' => $products->pluck('id')->all(),
+            'products' => [$jacket->id, $scarf->id],
         ])
         ->call('create')
-        ->assertHasFormErrors(['status']);
+        ->assertHasNoFormErrors();
+
+    $this->get('/winter-promo')
+        ->assertOk()
+        ->assertSee('Winter Jacket')
+        ->assertSee('Wool Scarf');
+});
+
+it('marks a published page that has lost a linked product', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf']);
+
+    $selling = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $selling->products()->attach([$jacket->id, $scarf->id]);
+
+    $intact = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'intact']);
+    $intact->products()->attach($jacket);
+
+    /**
+     * The checkout quietly drops the scarf and keeps selling the jacket, which
+     * is the right outcome and an invisible one. The merchant has to find out
+     * at their desk rather than from a conversion graph a day later.
+     */
+    $scarf->delete();
+
+    Livewire::test(ListPages::class)
+        ->assertCanSeeTableRecords([$selling, $intact])
+        ->assertTableColumnStateSet('deleted_products_count', '1 product deleted', $selling)
+        ->assertTableColumnStateSet('deleted_products_count', null, $intact);
+});
+
+it('leaves a draft that has lost a product unmarked', function () {
+    $product = Product::factory()->create();
+
+    $draft = Page::factory()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $draft->products()->attach($product);
+
+    /** Nothing is being spent on a draft, so there is nothing to warn about. */
+    $product->delete();
+
+    Livewire::test(ListPages::class)
+        ->assertTableColumnStateSet('deleted_products_count', null, $draft);
 });
 
 it('lets a draft hold a shortcode it could not be published with', function () {
