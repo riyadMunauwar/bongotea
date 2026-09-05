@@ -7,12 +7,27 @@ namespace App\Support\PageCache;
  *
  * The static cache is only fast because the webserver reads the file itself and
  * PHP never boots. That takes configuration, and a merchant on shared hosting
- * may have none of it: rewriting disabled by the host, an OpenLiteSpeed install
- * where nobody pasted the vhost rules, a document root pointed at the wrong
- * directory. Their site works — pages load, checkouts capture — and they simply
- * pay a full framework boot on every click of the ad traffic they bought, with
- * no signal anywhere. This class is what catches them: slower than the
- * webserver reading the file, and far faster than booting the framework.
+ * may have the front controller running while the cache rules never took: an
+ * OpenLiteSpeed vhost carrying the stock Laravel rewrite, where nobody pasted
+ * `deploy/openlitespeed/giopages.conf`; a host that rewrites to the front
+ * controller from its own configuration under `AllowOverride None`, so
+ * `public/.htaccess` is never read at all; a `public/.htaccess` an upgrade or a
+ * control panel replaced with the framework's stock copy. Their site works —
+ * pages load, checkouts capture — and they simply pay a full framework boot on
+ * every click of the ad traffic they bought, with no signal anywhere. This
+ * class is what catches them: slower than the webserver reading the file, and
+ * far faster than booting the framework.
+ *
+ * Two neighbouring misconfigurations sit outside that reach, and are worth
+ * naming because the answer to them is not this class. Rewriting disabled
+ * entirely takes the front controller's own rewrite with it — the two share the
+ * `<IfModule mod_rewrite.c>` block — so `/promo` matches no file and no PHP
+ * runs for this class to be part of. A document root pointed at the wrong
+ * directory misses here too: the lookup below keeps the whole request path, so
+ * an install reached at `/public/promo` asks for `page-cache/public/promo.html`
+ * and never finds it. The fast path misses that layout as well, by its own
+ * route, which is why `deploy/README.md` marks it unsupported and
+ * `CachePathIndicator` is what tells the merchant.
  *
  * It is shipped enabled and self-disabling by construction. On a correctly
  * configured host it never runs on a cache hit, because the request never

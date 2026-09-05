@@ -12,11 +12,12 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /**
  * Tells the User which of the three paths is serving their Pages.
  *
- * Every way the fast path can fail produces a working site — the list is on
- * `FallbackPageCacheReader`, which exists to catch them — and the merchant is
- * told about none of it. They simply pay a framework boot on every click of the
- * ad traffic they bought, forever, with no signal anywhere. Without this widget
- * that reader is less a safety net than a hiding place.
+ * The fast path can fail while leaving a working site behind it —
+ * `FallbackPageCacheReader` names the misconfigurations it catches and the
+ * ones it does not — and the merchant is told about none of it. They simply pay
+ * a framework boot on every click of the ad traffic they bought, forever, with
+ * no signal anywhere. Without this widget that reader is less a safety net than
+ * a hiding place.
  *
  * **The check runs in the User's browser, not on the server.** A server-side
  * check would have to make an HTTP request to its own domain, and loopback is

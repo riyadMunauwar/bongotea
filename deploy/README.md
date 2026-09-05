@@ -62,8 +62,19 @@ overwhelming majority of shared hosting.
 
 The rules need `AllowOverride` to include `FileInfo`, which every host that
 supports Laravel at all already grants (the front controller rewrite needs the
-same). If your host disabled rewriting entirely, the fallback reader still
-serves the cache from PHP and you land on `X-GioPages-Cache: fallback`.
+same). If the front controller runs but the cache rules never took — an
+OpenLiteSpeed vhost with the stock Laravel rewrite and nobody having pasted
+`deploy/openlitespeed/giopages.conf`, a host that rewrites to the front
+controller from its own configuration under `AllowOverride None` so this file is
+never read, a `public/.htaccess` an upgrade replaced with the framework's stock
+copy — the fallback reader still serves the cache from PHP and you land on
+`X-GioPages-Cache: fallback`.
+
+If rewriting is disabled entirely there is nothing to fall back to. The front
+controller's own rewrite lives in the same `<IfModule mod_rewrite.c>` block as
+the cache rules, so `/your-page-slug` matches no file, Apache answers 404, and
+`public/index.php` never runs — the fallback reader is never reached. Get
+`mod_rewrite` enabled; there is no configuration here that substitutes for it.
 
 Rule order, which every configuration here shares: trailing-slash
 canonicalisation, the direct-access lock, the real-file check, the cache lookup,
