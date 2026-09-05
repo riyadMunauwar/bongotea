@@ -2,6 +2,8 @@
 
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\PageCache\StaticPageCache;
+use Illuminate\Filesystem\Filesystem;
 
 it('writes the html and a matching pre-compressed sibling', function () {
     $this->cache->put('promo', '<h1>Winter</h1>');
@@ -155,4 +157,28 @@ it('forgets an entry that was never written without raising a warning', function
 
     expect($raised)->toBeNull()
         ->and($this->cache->has('never-cached'))->toBeFalse();
+});
+
+it('refuses to report a clean flush when an entry survived it', function () {
+    $this->cache->put('promo', '<h1>Winter</h1>');
+
+    /**
+     * A deploy commonly runs as a different user from the one PHP-FPM wrote
+     * the cache as, so a failed unlink is the realistic case — and a flush
+     * that reported success over a surviving file would leave the webserver
+     * answering ad clicks from the previous version's HTML with the operator
+     * told the opposite.
+     */
+    $refusingToDelete = new class extends Filesystem
+    {
+        public function cleanDirectory($directory)
+        {
+            return false;
+        }
+    };
+
+    $cache = new StaticPageCache($refusingToDelete, $this->cacheDirectory);
+
+    expect(fn () => $cache->flush())->toThrow(RuntimeException::class)
+        ->and($this->cache->has('promo'))->toBeTrue();
 });

@@ -128,6 +128,38 @@ the warning at the top of that file. OpenLiteSpeed does not read `.htaccess` by
 default; the shortest route is to turn that on, and the file gives the explicit
 rules for operators who keep it off.
 
+## Releasing
+
+Empty the cache as the last step of any release that changes how a Page
+renders:
+
+```bash
+php artisan page-cache:flush
+```
+
+It removes every cached Page — the HTML and its gzip sibling — and reports how
+many it removed. Running it against an empty cache is harmless and reports
+zero, so there is no need to work out whether it is needed: put it in the
+deploy script unconditionally.
+
+It re-reads the directory before reporting, and exits non-zero if anything
+survived — the case where the release runs as a different user from the one
+PHP-FPM wrote the cache as, and the unlinks silently fail. A deploy script
+running under `set -e` will stop there, which is the right outcome: a flush
+that was believed and did not happen is worse than a failed deploy.
+
+**A release that changes checkout rendering must run it.** The cache is
+invalidated per URL by saves — a Page edit, a Product price change — and a
+release is not a save. Nothing in the database moved, so nothing tells the
+cache that the files on disk were written by templates that no longer exist,
+and the webserver keeps answering ad clicks from the previous version's HTML
+without PHP ever booting to notice. A Checkout rendering the old markup against
+the new Capture endpoint is the failure that costs orders.
+
+The same applies to any template, shortcode, or asset-URL change. If you are
+unsure whether a release touches rendered output, flush: the cost is one full
+render per Page on the next click.
+
 ## Verifying
 
 Request a published page and look at the response headers:

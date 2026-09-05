@@ -4,6 +4,7 @@ namespace App\Support\PageCache;
 
 use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * Writes rendered landing pages to disk as static HTML so a cache hit can be
@@ -103,12 +104,47 @@ class StaticPageCache
     /**
      * Empty the cache. The blunt instrument for a template or global change,
      * where per-URL invalidation has nothing to enumerate.
+     *
+     * Returns the number of Pages removed, counted as HTML files: the gzip
+     * siblings go too, but they are a representation of a Page rather than a
+     * Page of their own, and the count is read by an operator checking that a
+     * release cleared what they expected it to.
+     *
+     * The directory is re-read afterwards rather than the count being reported
+     * from what was there beforehand. On shared hosting the release runs as a
+     * different user from the one PHP-FPM wrote the files as, so an unlink can
+     * fail; reporting a clean flush over a surviving file would leave the
+     * webserver answering ad clicks from the previous version's HTML with the
+     * operator told the opposite.
+     *
+     * @throws RuntimeException if the cache could not be read, or if anything
+     *                          survived the flush.
      */
-    public function flush(): void
+    public function flush(): int
     {
-        if ($this->files->isDirectory($this->directory)) {
-            $this->files->cleanDirectory($this->directory);
+        if (! $this->files->isDirectory($this->directory)) {
+            return 0;
         }
+
+        $removed = count($this->entriesMatching($this->htmlPath('*')));
+
+        $this->files->cleanDirectory($this->directory);
+
+        /**
+         * Every entry, not just the HTML: a `.gz` outliving its `.html` is
+         * served as stale content with no error anywhere.
+         */
+        $survivors = $this->entriesMatching($this->directory.DIRECTORY_SEPARATOR.'*');
+
+        if ($survivors !== []) {
+            throw new RuntimeException(sprintf(
+                'The page cache at [%s] still holds %d file(s) after being flushed. Check the permissions of the user running this.',
+                $this->directory,
+                count($survivors),
+            ));
+        }
+
+        return $removed;
     }
 
     public function has(string $slug): bool
@@ -131,6 +167,27 @@ class StaticPageCache
     public function gzipPath(string $slug): string
     {
         return $this->htmlPath($slug).'.gz';
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws RuntimeException
+     */
+    private function entriesMatching(string $pattern): array
+    {
+        $matches = $this->files->glob($pattern);
+
+        /**
+         * `glob()` reports an unreadable directory by returning false, which
+         * would otherwise read as an empty cache — the one answer that must
+         * never be guessed here.
+         */
+        if ($matches === false) {
+            throw new RuntimeException("The page cache at [{$this->directory}] could not be read.");
+        }
+
+        return array_values($matches);
     }
 
     private function assertValidSlug(string $slug): void
