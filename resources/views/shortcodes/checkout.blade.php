@@ -31,6 +31,17 @@
      * before the visitor touches anything.
      */
     $preselected = $deliveryOptions[0] ?? null;
+
+    /**
+     * What a product's name and picture are wrapped in.
+     *
+     * A label where there is a box to tick, so a thumb on a phone ticks it by
+     * tapping the name or the picture rather than by finding the checkbox
+     * itself. A plain div everywhere else: a label with nothing to label is a
+     * promise the row does not keep, and it would change the markup of every
+     * page that asks no question.
+     */
+    $productHead = $picksProducts ? 'label' : 'div';
 @endphp
 <div class="gio-checkout" data-gio-checkout data-page-slug="{{ $page->slug }}">
     <style>
@@ -38,6 +49,17 @@
         .gio-checkout-products { margin: 0 0 1.25rem; }
         .gio-checkout-product + .gio-checkout-product { margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid #e5e7eb; }
         .gio-checkout-product-head { display: flex; gap: .75rem; align-items: center; }
+        .gio-checkout-pickable { display: grid; grid-template-columns: auto 1fr; column-gap: .625rem; }
+        .gio-checkout-pickable > * { grid-column: 2; }
+        .gio-checkout-pickable > .gio-checkout-pick { grid-column: 1; grid-row: 1; align-self: center; width: 1.15rem; height: 1.15rem; margin: 0; flex: none; }
+        .gio-checkout-pickable .gio-checkout-product-head { cursor: pointer; }
+        {{--
+            The whole point of the picker: five products on a phone are five
+            lines of text until they are wanted, rather than five steppers for
+            items nobody chose. A sibling selector rather than :has(), so the
+            oldest webview that can render the form can also hide the stepper.
+        --}}
+        .gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }
         .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: .375rem; flex: none; }
         .gio-checkout-name { margin: 0 0 .25rem; font-size: 1rem; font-weight: 600; }
         .gio-checkout-price { margin: 0; font-size: 1.125rem; font-weight: 700; }
@@ -97,8 +119,30 @@
         --}}
         <div class="gio-checkout-products">
             @foreach ($products as $product)
-                <div class="gio-checkout-product" data-gio-line data-unit-price="{{ $product->price }}">
-                    <div class="gio-checkout-product-head">
+                <div class="gio-checkout-product{{ $picksProducts ? ' gio-checkout-pickable' : '' }}"
+                     data-gio-line data-unit-price="{{ $product->price }}">
+                    @if ($picksProducts)
+                        {{--
+                            Unticked, every one of them. On a cash-on-delivery
+                            page a pre-ticked upsell is not a lost sale, it is a
+                            refused parcel and a courier fee in both directions
+                            on the whole order — including the item the customer
+                            actually wanted.
+
+                            Labelled by the product's own name, so a screen
+                            reader hears what is being ticked rather than
+                            "checkbox" three times.
+                        --}}
+                        <input class="gio-checkout-pick"
+                               id="gio-pick-{{ $product->getKey() }}"
+                               name="selected[]"
+                               value="{{ $product->getKey() }}"
+                               aria-labelledby="gio-product-{{ $product->getKey() }}"
+                               type="checkbox" data-gio-pick>
+                    @endif
+
+                    {{-- The `for` carries its own leading space, so a page that asks nothing renders the tag it always did. --}}
+                    <{{ $productHead }} class="gio-checkout-product-head"@if ($picksProducts) for="gio-pick-{{ $product->getKey() }}"@endif>
                         @if ($image = $product->imageUrl())
                             <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
                         @endif
@@ -107,7 +151,7 @@
                             <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
                             <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
                         </div>
-                    </div>
+                    </{{ $productHead }}>
 
                     @if ($product->description)
                         <p class="gio-checkout-description">{{ $product->description }}</p>
@@ -124,17 +168,36 @@
                         <label class="gio-checkout-label"
                                id="gio-quantity-label-{{ $product->getKey() }}"
                                for="gio-quantity-{{ $product->getKey() }}">Quantity</label>
+                        {{--
+                            Not `required` where the box can be hidden. A
+                            stepper emptied and then unticked would fail the
+                            browser's own check from behind `display: none`,
+                            which refuses to submit and shows the customer
+                            nothing at all. The server checks what was ticked
+                            either way, and the island puts that refusal in the
+                            slot below.
+                        --}}
                         <input class="gio-checkout-input gio-checkout-quantity-input"
                                id="gio-quantity-{{ $product->getKey() }}"
                                name="quantities[{{ $product->getKey() }}]"
                                aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
                                type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
-                               inputmode="numeric" required data-gio-quantity>
+                               inputmode="numeric" @required(! $picksProducts) data-gio-quantity>
                         <p class="gio-checkout-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
                     </div>
                 </div>
             @endforeach
         </div>
+
+        {{--
+            Where an order for nothing is refused, beside the boxes that were
+            never ticked. Only a page that asks the question has anywhere to
+            show the answer being wrong; on any other, the island's fallback
+            puts it in the page-level slot instead.
+        --}}
+        @if ($picksProducts)
+            <p class="gio-checkout-error" data-gio-error-for="selected"></p>
+        @endif
 
         {{--
             The questions, their wording and their order come from this Page's
@@ -233,8 +296,12 @@
             scripts never run reads the figures the page was rendered with, and
             the confirmation page after Capture is where they see what they
             actually owe.
+
+            Nothing at all where the customer picks: nothing is ticked, so
+            nothing is being bought yet, and a subtotal quoting the whole shelf
+            would be a figure no order could ever come to.
         --}}
-        @php($subtotal = (int) $products->sum('price'))
+        @php($subtotal = $picksProducts ? 0 : (int) $products->sum('price'))
 
         <div class="gio-checkout-summary">
             <p class="gio-checkout-row">
@@ -306,12 +373,29 @@
         return { label: null, amount: parseInt(form.dataset.deliveryAmount, 10) || 0 };
     }
 
+    /* Whether this form asks the customer which products to buy. */
+    function picks(form) {
+        return form.querySelector('[data-gio-pick]') !== null;
+    }
+
+    /* Whether they have chosen any. */
+    function picked(form) {
+        return form.querySelector('[data-gio-pick]:checked') !== null;
+    }
+
     /*
      * The subtotal of one line, from the price rendered into it. Read off the
      * line rather than off a single price on the form: a page may sell several
      * products, each at its own price and its own quantity.
+     *
+     * Nothing for a line the customer has not ticked, so the summary only ever
+     * totals up what they are actually ordering.
      */
     function lineSubtotal(line) {
+        var pick = line.querySelector('[data-gio-pick]');
+
+        if (pick && !pick.checked) { return 0; }
+
         var unitPrice = parseInt(line.dataset.unitPrice, 10) || 0;
         var input = line.querySelector('[data-gio-quantity]');
         var quantity = Math.max(1, parseInt(input ? input.value : '', 10) || 1);
@@ -415,7 +499,23 @@
 
     document.addEventListener('change', function (event) {
         var form = formFor(event);
-        if (form) { retotal(form); }
+        if (!form) { return; }
+
+        /*
+         * Unticking forgets the quantity, so a stepper is back at one the next
+         * time it is revealed — which is what a customer ticking a box again
+         * expects, and what the box said when they first saw it.
+         */
+        var target = event.target;
+
+        if (target.matches && target.matches('[data-gio-pick]') && !target.checked) {
+            var line = target.closest('[data-gio-line]');
+            var quantity = line ? line.querySelector('[data-gio-quantity]') : null;
+
+            if (quantity) { quantity.value = '1'; }
+        }
+
+        retotal(form);
     });
 
     document.addEventListener('submit', function (event) {
@@ -423,6 +523,18 @@
         if (!form) { return; }
 
         event.preventDefault();
+
+        clearErrors(form);
+
+        /*
+         * An order for nothing is not an order. Refused here as well as at the
+         * server, so a customer who ticked nothing is told beside the boxes
+         * rather than after a round trip that leaves them looking at a button.
+         */
+        if (picks(form) && !picked(form)) {
+            showErrors(form, { selected: ['Please choose at least one item to order.'] });
+            return;
+        }
 
         var button = form.querySelector('[data-gio-submit]');
         var buttonLabel = button ? button.innerHTML : null;
@@ -440,8 +552,6 @@
                 button.innerHTML = buttonLabel;
             }
         };
-
-        clearErrors(form);
 
         var handle = function (response, allowRetry) {
             if (response.status === 201) {

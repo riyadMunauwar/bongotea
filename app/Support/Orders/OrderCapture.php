@@ -27,7 +27,7 @@ class OrderCapture
      * on a form with no address box records that it has no address, rather than
      * a blank that reads as a Customer who declined to give one.
      *
-     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, quantities: array<int, int>}  $details
+     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
@@ -54,7 +54,7 @@ class OrderCapture
          * quietly sold at one — a COD parcel holding an item the Customer never
          * agreed to is refused at the door, at the Merchant's expense.
          */
-        $lines = $this->lines($page, $details['quantities']);
+        $lines = $this->lines($page, $details['quantities'], $details['selected']);
 
         /**
          * Resolved outside the transaction: firstOrCreate recovers from a
@@ -108,18 +108,31 @@ class OrderCapture
     }
 
     /**
-     * One Order Line per Product the Page sells, snapshotted.
+     * One Order Line per Product the Customer is buying, snapshotted.
      *
      * `product_id` is kept as a reference for the admin, but the name and the
      * price are copied because they are what gets quoted on the confirmation
      * call and collected at the door.
      *
      * @param  array<int, int>  $quantities  keyed by Product id, per StoreOrderRequest
+     * @param  list<int>|null  $selected  Product ids the Customer ticked, or null where the Page never asked
      * @return list<array{product_id: int, product_name: string, unit_price: int, quantity: int}>
      */
-    private function lines(Page $page, array $quantities): array
+    private function lines(Page $page, array $quantities, ?array $selected): array
     {
-        return $page->products->map(function (Product $product) use ($page, $quantities): array {
+        /**
+         * The one place that decides what is in the parcel, asked of the Page.
+         * A submission carries a list of ids and nothing more; the names, the
+         * prices and the fact that a Product is on sale here all come from the
+         * Page, like every other figure on the Order.
+         */
+        $products = $page->productsChosen($selected);
+
+        if ($products->isEmpty()) {
+            throw new CheckoutUnavailable("Page [{$page->slug}] was captured with nothing chosen to sell.");
+        }
+
+        return $products->map(function (Product $product) use ($page, $quantities): array {
             $quantity = $quantities[$product->getKey()] ?? null;
 
             if ($quantity === null) {

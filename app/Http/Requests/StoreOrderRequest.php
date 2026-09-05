@@ -63,8 +63,54 @@ class StoreOrderRequest extends FormRequest
 
             ...$this->deliveryRules(),
 
+            ...$this->selectionRules(),
+
             ...$this->quantityRules(),
         ];
+    }
+
+    /**
+     * Which Products the Customer chose, where this Page asks them to choose.
+     *
+     * Names and never prices, like the delivery arrangement: what arrives is a
+     * list of Product ids and everything about them is read off the Page. A
+     * name for something this Page does not sell carries no rule and sells
+     * nothing, which is the same treatment a quantity for a departed Product
+     * gets — the Page is what decides, not the payload.
+     *
+     * Required, because an Order for nothing is not an Order. A submission that
+     * was never asked to choose — the picker switched off, or one Product on
+     * offer — carries no such rule and ignores whatever a stale form posts.
+     *
+     * @return array<string, list<mixed>>
+     */
+    private function selectionRules(): array
+    {
+        if (! $this->wasAskedToChoose()) {
+            return [];
+        }
+
+        return ['selected' => ['required', 'array']];
+    }
+
+    /**
+     * Whether the form this submission came from asked the Customer which
+     * Products to buy.
+     *
+     * The Merchant's switch, and how many Products the submission was offered —
+     * which its quantity keys say, because the form posts one per Product it
+     * drew a row for, ticked or not.
+     *
+     * Counted from the submission rather than from the Page for the same reason
+     * the quantities are keyed by id: the Page may have changed since these
+     * bytes were written. A Page whose second Product was deleted mid-form
+     * still asked this Customer to choose, and selling them whatever is left
+     * because it is now the only one would put an item they never ticked into a
+     * cash-on-delivery parcel.
+     */
+    private function wasAskedToChoose(): bool
+    {
+        return $this->checkoutConfig()->productPicker && count($this->quantities()) > 1;
     }
 
     /**
@@ -96,7 +142,7 @@ class StoreOrderRequest extends FormRequest
     }
 
     /**
-     * One quantity per Product the Page still sells, keyed by Product id.
+     * One quantity per Product this submission would sell, keyed by Product id.
      *
      * Keyed rather than positional so a reorder in the admin can never point a
      * form already on someone's phone at a different item.
@@ -109,13 +155,18 @@ class StoreOrderRequest extends FormRequest
      * door; `after()` is what tells the visitor to reload, since their form has
      * no box for that Product to complain about.
      *
+     * Only what was ticked, where the Page asks the Customer to tick. The
+     * stepper beside an unticked Product is hidden rather than removed, so its
+     * box still posts a figure that decides nothing — checking it would refuse
+     * an Order over a box the Customer never opened.
+     *
      * @return array<string, list<string>>
      */
     private function quantityRules(): array
     {
         $rules = ['quantities' => ['required', 'array']];
 
-        foreach ($this->page()?->products ?? [] as $product) {
+        foreach ($this->soldProducts() as $product) {
             $rules['quantities.'.$product->getKey()] = [
                 'required',
                 'integer',
@@ -132,6 +183,8 @@ class StoreOrderRequest extends FormRequest
      */
     public function messages(): array
     {
+        $nothingChosen = 'Please choose at least one item to order.';
+
         return [
             'page.exists' => 'This page is no longer taking orders.',
             ...$this->checkoutConfig()->messages(),
@@ -143,6 +196,16 @@ class StoreOrderRequest extends FormRequest
              */
             'delivery_option.required' => 'Please choose how you would like it delivered.',
             'delivery_option.in' => 'Please choose one of the delivery options listed.',
+
+            /**
+             * Nothing ticked, no tick list at all, and a tick list that is not
+             * one are a single refusal in a single wording: an unticked
+             * checkbox is simply absent from a form post, so a Customer who
+             * chose nothing and a payload that says nothing arrive the same way
+             * and mean the same thing.
+             */
+            'selected.required' => $nothingChosen,
+            'selected.array' => $nothingChosen,
 
             /**
              * Wildcards rather than a message per Product: the keys are ids,
@@ -184,24 +247,83 @@ class StoreOrderRequest extends FormRequest
                 }
 
                 /**
-                 * The Page has gained a Product since the visitor's copy was
-                 * written to disk, so their form has no box for it. The rules
-                 * already refuse the Capture — nothing unagreed is ever sold —
-                 * but that refusal is keyed to a box they cannot see, and a
-                 * visitor told to "order at least one" of an item that is not
-                 * on their screen is being asked to fix something they cannot
-                 * reach.
-                 *
-                 * So it is reported as what it is: the page changed underneath
-                 * them, and reloading is the fix. ADR-0007 keeps this in the
-                 * page-level slot, ahead of the field error that has nowhere to
-                 * land.
+                 * Already refused for having chosen nothing, which is the
+                 * Customer's to fix at the boxes. What follows is about the
+                 * Page having moved under them, and saying both would tell them
+                 * to reload a form they can still put right themselves.
                  */
-                if ($this->unofferedProducts()->isNotEmpty()) {
+                if ($validator->errors()->has('selected')) {
+                    return;
+                }
+
+                /**
+                 * Two ways for a form to have gone out of date under a visitor,
+                 * and one thing either of them can be told to do about it.
+                 * ADR-0007 keeps a refusal nobody can edit their way out of in
+                 * the page-level slot, ahead of the field error that has
+                 * nowhere to land.
+                 */
+                if ($this->unofferedProducts()->isNotEmpty() || $this->nothingChosenIsOnSale()) {
                     $validator->errors()->add('page', 'This page has changed since you opened it. Please reload and try again.');
                 }
             },
         ];
+    }
+
+    /**
+     * Whether a submission that chose Products named nothing this Page sells.
+     *
+     * Every one of them soft-deleted since the form was written, in practice.
+     * The Page is not off the air — it still sells whatever is left — but
+     * nothing the Customer agreed to buy survives, and an Order with no lines
+     * is a courier collecting a delivery charge for an empty parcel.
+     *
+     * It is also the shape of a hand-made post naming Products from somewhere
+     * else, which is refused here rather than left to fail as a Capture with
+     * nothing to sell.
+     *
+     * Having chosen nothing at all is a different thing, refused on `selected`
+     * where the boxes are; this one has no box to hang on.
+     */
+    private function nothingChosenIsOnSale(): bool
+    {
+        return $this->wasAskedToChoose() && $this->soldProducts()->isEmpty();
+    }
+
+    /**
+     * The Products this submission would sell: what the Customer ticked, or
+     * everything the Page sells where they were never asked to tick anything.
+     *
+     * Asked of the Page, which is the same place the Capture asks, so the rules
+     * cannot check one parcel and the Order be written for another.
+     *
+     * @return Collection<int, Product>
+     */
+    private function soldProducts(): Collection
+    {
+        return $this->page()?->productsChosen($this->selected()) ?? new Collection;
+    }
+
+    /**
+     * The Product ids the Customer ticked, as they arrived.
+     *
+     * Ids and nothing else: anything a hand-made post puts here that could not
+     * be one is dropped rather than turned into a zero that names no Product.
+     *
+     * Empty where they ticked nothing, which is the same payload a form that
+     * never drew a checkbox sends — `wasAskedToChoose()` is what tells the two
+     * apart.
+     *
+     * @return list<int>
+     */
+    private function selection(): array
+    {
+        $ticked = array_filter(
+            (array) $this->input('selected', []),
+            fn (mixed $id): bool => is_scalar($id) && ctype_digit((string) $id),
+        );
+
+        return array_values(array_map(intval(...), $ticked));
     }
 
     /**
@@ -261,15 +383,32 @@ class StoreOrderRequest extends FormRequest
      * posted for a field that is switched off is dropped here rather than
      * stored: it was never asked for and never checked.
      *
-     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, quantities: array<int, int>}
+     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}
      */
     public function details(): array
     {
         return [
             ...$this->answers(),
             'delivery_option' => $this->deliveryOption(),
+            'selected' => $this->selected(),
             'quantities' => $this->quantities(),
         ];
+    }
+
+    /**
+     * Which Products the Customer chose, where they were asked to choose.
+     *
+     * Null everywhere else — a Page selling one Product, or selling several
+     * without a picker, sells all of them — and null rather than whatever a
+     * stale form posted, for the same reason the delivery arrangement is: a
+     * choice that was never offered decides nothing, and carrying it forward
+     * would invite a reader to think it might.
+     *
+     * @return list<int>|null
+     */
+    private function selected(): ?array
+    {
+        return $this->wasAskedToChoose() ? $this->selection() : null;
     }
 
     /**

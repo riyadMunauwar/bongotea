@@ -66,6 +66,17 @@ class CheckoutShortcode implements ShortcodeDefinition
             'products' => $products,
 
             /**
+             * Whether the Customer picks which of them to buy, rather than
+             * buying all of them. Asked of the Page rather than of the Config,
+             * because a picker on a Page down to one Product is a box between a
+             * Customer and the only thing on offer.
+             *
+             * The same question the Capture asks, so the form cannot draw a
+             * checkbox the server ignores or sell something nobody ticked.
+             */
+            'picksProducts' => $page->offersProductChoice(),
+
+            /**
              * What this Page asks for, in its own words and its own order —
              * and only what it asks: a field the Merchant switched off is not
              * rendered at all. The same list compiles into the rules the

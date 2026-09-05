@@ -93,7 +93,25 @@ class PageForm
                                     ->multiple()
                                     ->preload()
                                     ->searchable()
-                                    ->helperText('[checkout] sells everything linked here, each with its own quantity. Link at least one to publish.'),
+                                    ->helperText('[checkout] sells everything linked here, each with its own quantity, unless you let the customer choose below. Link at least one to publish.'),
+
+                                /**
+                                 * Whether the customer chooses which of them to
+                                 * buy. Off, so linking a second product sells
+                                 * both together the way this page always has,
+                                 * and offering a choice is something a merchant
+                                 * asks for rather than something a link does to
+                                 * them.
+                                 *
+                                 * No control decides how many products make a
+                                 * choice worth asking about: a page down to one
+                                 * sells it implicitly, which `Page` answers for
+                                 * the form and the capture together.
+                                 */
+                                Toggle::make('checkout_config.product_picker')
+                                    ->label('Let the customer choose')
+                                    ->default(false)
+                                    ->helperText('Each product gets a checkbox, unticked, and its quantity appears only once it is ticked. A page selling one product asks nothing and sells it.'),
 
                                 /**
                                  * The built-in fields, and only them. A key and a type

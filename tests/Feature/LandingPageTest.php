@@ -410,3 +410,45 @@ it('asks for an email address once the merchant switches one on', function () {
         ->and($html)->toContain('type="email"')
         ->and($html)->toContain('inputmode="email"');
 });
+
+it('hides a quantity behind the checkbox that reveals it', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'promo',
+        'checkout_config' => CheckoutConfig::fromArray(['product_picker' => true]),
+    ]);
+    $page->products()->attach([$jacket->id, $boots->id]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Five products on a phone are five lines of text until they are wanted,
+     * which is the whole point of the picker. The stepper is hidden by the
+     * checkbox's own state, so it appears without a script having to run.
+     */
+    expect($html)->toMatch('/\.gio-checkout-pick:not\(:checked\)\s*~\s*\.gio-checkout-quantity\s*\{[^}]*display:\s*none/')
+        ->and(substr_count($html, 'name="selected[]"'))->toBe(2)
+        /** The name and the picture are the box's label, so a thumb can tick them. */
+        ->and($html)->toContain('<label class="gio-checkout-product-head" for="gio-pick-'.$jacket->getKey().'"')
+        ->and($html)->toContain('name="quantities['.$jacket->getKey().']"')
+        ->and($html)->toContain('name="quantities['.$boots->getKey().']"');
+
+    /**
+     * The steppers stop being `required` where they can be hidden: a box
+     * emptied and then unticked would fail the browser's own check from
+     * behind `display: none`, which refuses to submit and shows the customer
+     * nothing at all.
+     */
+    preg_match_all('/<input[^>]*data-gio-quantity[^>]*>/', $html, $quantities);
+
+    expect($quantities[0])->toHaveCount(2);
+
+    foreach ($quantities[0] as $quantity) {
+        expect($quantity)->not->toContain('required');
+    }
+
+    /** Nothing is ticked, so nothing is being bought yet. */
+    expect($html)->toContain('৳0.00');
+});

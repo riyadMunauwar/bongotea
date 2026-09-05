@@ -32,6 +32,10 @@ _Avoid_: cart, basket, funnel
 Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else.
 _Avoid_: settings, preset, theme, template
 
+**Product Picker**:
+Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. Nothing is picked to begin with, because on a cash-on-delivery Page an extra nobody chose is not a larger sale, it is a refused parcel. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice.
+_Avoid_: cart, add-on, bundle, upsell toggle
+
 **Checkout Field**:
 One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
 _Avoid_: input, form field, custom field, attribute

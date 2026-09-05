@@ -480,3 +480,72 @@ it('refuses a delivery option nobody could choose or be charged', function (arra
         ['label' => '0', 'amount' => '120'],
     ]],
 ]);
+
+it('starts a new page off selling everything it links', function () {
+    Livewire::test(CreatePage::class)
+        ->fillForm([
+            'title' => 'Winter Promo',
+            'slug' => 'winter-promo',
+            'body' => '<!doctype html><html><body>[checkout]</body></html>',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    /**
+     * The picker is a decision a merchant makes about one campaign. Switching
+     * it on for every new page would put an unticked box between paid traffic
+     * and an order nobody asked us to change.
+     */
+    expect(Page::where('slug', 'winter-promo')->sole()->checkout_config->productPicker)
+        ->toBeFalse();
+});
+
+it('lets a merchant hand the choice of products to the customer', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach([$jacket->id, $boots->id]);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['product_picker' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A form with boxes to tick is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse()
+        ->and($page->refresh()->checkout_config->productPicker)->toBeTrue();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)->toContain('name="selected[]"')
+        ->and($html)->toContain('value="'.$jacket->getKey().'"')
+        ->and($html)->toContain('value="'.$boots->getKey().'"');
+});
+
+it('keeps the delivery options and the questions a page had when the picker is switched on', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([['label' => 'Inside Dhaka', 'amount' => '60']]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['product_picker' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * One Checkout Config, edited a control at a time. A switch saved on the
+     * Checkout tab must not take the rest of the tab down with it.
+     */
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->productPicker)->toBeTrue()
+        ->and($config->deliveryOptionsToArray())->toBe([['label' => 'Inside Dhaka', 'amount' => 6000]])
+        ->and(array_map(fn (CheckoutField $field): string => $field->key(), $config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address']);
+});

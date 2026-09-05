@@ -841,3 +841,271 @@ it('drops a delivery option nothing could be chosen by', function () {
         ['label' => 'Refunded delivery', 'amount' => 0],
     ]);
 });
+
+/**
+ * The same Page's Checkout with the Product picker switched on or off.
+ *
+ * Written through `toArray()` and read back through `fromArray()`, which is the
+ * round trip the Checkout tab performs on save, so a test can never store a
+ * shape the admin could not have produced.
+ */
+function picking(Page $page, bool $picker = true): Page
+{
+    $page->checkout_config = CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'product_picker' => $picker,
+    ]);
+
+    $page->save();
+
+    return $page->refresh();
+}
+
+it('sells every product a page links while the picker is off', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    /** Off in a new Config, so this is the Checkout every Page already had. */
+    expect($page->checkout_config->productPicker)->toBeFalse()
+        ->and($page->offersProductChoice())->toBeFalse();
+
+    /** The same markup it drew before there was a picker to switch on. */
+    $this->get('/promo')
+        ->assertOk()
+        ->assertDontSee('name="selected[]"', escape: false)
+        ->assertSee('<div class="gio-checkout-product-head">', escape: false);
+
+    /** Nothing names a selection, and both are sold. */
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->lines->pluck('product_name')->all())
+        ->toBe(['Winter Jacket', 'Hiking Boots']);
+});
+
+it('offers an unticked checkbox per product once the picker is on', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match_all('/<input[^>]*name="selected\[\]"[^>]*>/', $html, $picks);
+
+    expect($picks[0])->toHaveCount(2);
+
+    /**
+     * Nothing is pre-selected. On a cash-on-delivery page a pre-ticked upsell
+     * is not a lost sale, it is a refused parcel and a courier fee in both
+     * directions on the whole order — including the item the customer wanted.
+     */
+    foreach ($picks[0] as $pick) {
+        expect($pick)->not->toContain('checked');
+    }
+
+    expect($html)->toContain('value="'.$jacket->getKey().'"')
+        ->and($html)->toContain('value="'.$boots->getKey().'"')
+        /** Nothing chosen is nothing to pay for, delivery aside. */
+        ->and($html)->toContain('৳0.00');
+});
+
+it('renders no checkbox for the one product a page links', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+
+    $page = picking(sellingPage($product));
+
+    /**
+     * A choice of one is not a choice. Asking a customer to tick the only thing
+     * on the page is a box between them and the order, and forgetting it is a
+     * sale lost to a form nobody meant to make optional.
+     */
+    expect($page->offersProductChoice())->toBeFalse();
+
+    $this->get('/promo')->assertOk()->assertDontSee('name="selected[]"', escape: false);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->lines->pluck('product_name')->all())->toBe(['Winter Jacket']);
+});
+
+it('captures a line only for the products the customer ticked', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    /**
+     * The form posts a quantity for every product it drew, ticked or not — the
+     * stepper is hidden rather than removed, so the page can still say which
+     * products it offered. What was chosen is the ticked list and nothing else.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'selected' => [$boots->getKey()],
+        'quantities' => [$jacket->getKey() => 1, $boots->getKey() => 2],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines->pluck('product_name')->all())->toBe(['Hiking Boots'])
+        ->and($order->lines->sole()->quantity)->toBe(2)
+        ->and($order->subtotal)->toBe(298000)
+        ->and($order->total)->toBe(304000);
+});
+
+it('refuses a capture with nothing ticked and creates no order', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    /**
+     * An order for nothing is not an order. The refusal is named against the
+     * selection so the island shows it beside the boxes the customer never
+     * ticked, rather than under a field they filled in correctly.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.selected.0', 'Please choose at least one item to order.');
+
+    /** An empty tick list says the same thing as no tick list at all. */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['selected' => []]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.selected.0', 'Please choose at least one item to order.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('tells the visitor to reload when everything they ticked has gone', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    $payload = capturePayload($page, ['selected' => [$boots->getKey()]]);
+
+    /** Soft-deleted after the visitor ticked it and before they submitted. */
+    $boots->delete();
+
+    /**
+     * The page still sells the jacket, so it is not off the air — but nothing
+     * the customer agreed to buy is left, and an Order with no lines is a
+     * courier collecting a delivery charge for an empty parcel. ADR-0007 keeps
+     * a refusal nobody can edit their way out of in the page-level slot.
+     */
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('ignores what a form claims about a product nobody ticked', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    /**
+     * A quantity nobody chose decides nothing: it is not checked and it is not
+     * sold. Refusing the capture over it would turn a hidden box the customer
+     * never opened into a lost order.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'selected' => [$jacket->getKey()],
+        'quantities' => [$jacket->getKey() => 1, $boots->getKey() => 0],
+    ]))->assertCreated();
+
+    expect(Order::sole()->lines->pluck('product_name')->all())->toBe(['Winter Jacket']);
+});
+
+it('checks the quantity of a product that was ticked', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    $response = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'selected' => [$jacket->getKey()],
+        'quantities' => [$jacket->getKey() => 0, $boots->getKey() => 1],
+    ]))->assertUnprocessable();
+
+    /** Read as a key rather than a path: the key contains a dot. */
+    expect($response->json('errors')['quantities.'.$jacket->getKey()][0])
+        ->toBe('Please order at least one.')
+        ->and(Order::count())->toBe(0);
+});
+
+it('sells nothing a tick names that the page does not sell', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    $elsewhere = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 49000]);
+
+    /**
+     * A tick names a Product; whether this Page sells it is read off the Page.
+     * A hand-made post naming something linked to another page sells nothing
+     * extra — the same rule that keeps every figure out of the request.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'selected' => [$jacket->getKey(), $elsewhere->getKey()],
+        'quantities' => [
+            $jacket->getKey() => 1,
+            $boots->getKey() => 1,
+            $elsewhere->getKey() => 5,
+        ],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines->pluck('product_name')->all())->toBe(['Winter Jacket'])
+        ->and($order->subtotal)->toBe(99000);
+});
+
+it('refuses a form drawn before the picker was switched on', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    /** Written to disk while the page still sold both together. */
+    $payload = capturePayload($page);
+
+    picking($page);
+
+    /**
+     * Selling both anyway would put an item the customer was never asked about
+     * into a cash-on-delivery parcel. Being turned away with a message is the
+     * safe direction to fail in, and the island shows it in the page-level slot
+     * because the older form has no boxes to hang it on.
+     */
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.selected.0', 'Please choose at least one item to order.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('refuses a tick that names nothing this page could sell', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    /**
+     * A hand-made post, ticking something that is not a product id at all. It
+     * is refused here rather than left to reach a Capture with nothing to
+     * sell, which the visitor would meet as a server error rather than as an
+     * answer.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'selected' => ['not-a-product'],
+    ]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});

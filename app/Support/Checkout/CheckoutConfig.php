@@ -28,6 +28,15 @@ class CheckoutConfig implements Arrayable
     private function __construct(
         public readonly array $fields,
         public readonly array $deliveryOptions,
+
+        /**
+         * Whether the Customer chooses which of this Page's Products to buy.
+         *
+         * The Merchant's switch and nothing more. Whether a Checkout actually
+         * asks the question depends on how many Products the Page still sells,
+         * which is Page's to answer — see `Page::offersProductChoice()`.
+         */
+        public readonly bool $productPicker,
     ) {}
 
     /**
@@ -44,6 +53,14 @@ class CheckoutConfig implements Arrayable
         return new self(
             array_map(CheckoutField::default(...), BuiltInField::cases()),
             [self::seededDeliveryOption()],
+
+            /**
+             * Off, so a Page sells everything it links the way it always has.
+             * A picker is a decision a Merchant makes about one campaign, and
+             * switching it on for every Page at once would put an unticked box
+             * between paid traffic and an order nobody asked us to change.
+             */
+            productPicker: false,
         );
     }
 
@@ -98,7 +115,17 @@ class CheckoutConfig implements Arrayable
             $fields[$builtIn->value] ??= CheckoutField::default($builtIn);
         }
 
-        return new self(array_values($fields), self::deliveryOptionsFromArray($stored));
+        return new self(
+            array_values($fields),
+            self::deliveryOptionsFromArray($stored),
+
+            /**
+             * Absent means off, which is what every Config written before the
+             * picker existed holds and what those Pages have always done: sell
+             * everything they link.
+             */
+            productPicker: (bool) ($stored['product_picker'] ?? false),
+        );
     }
 
     /**
@@ -255,13 +282,14 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>, delivery_options: list<array{label: string, amount: int}>}
+     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>, delivery_options: list<array{label: string, amount: int}>, product_picker: bool}
      */
     public function toArray(): array
     {
         return [
             'fields' => $this->fieldsToArray(),
             'delivery_options' => $this->deliveryOptionsToArray(),
+            'product_picker' => $this->productPicker,
         ];
     }
 
