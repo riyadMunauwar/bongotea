@@ -6,6 +6,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
+use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Orders\CapturedAnswer;
 use Illuminate\Support\Str;
 
@@ -1445,6 +1446,39 @@ it('drops a question the merchant added that nothing could answer', function (ar
     'a key the order form uses' => [['key' => 'quantities', 'label' => 'How many', 'type' => 'number']],
     'a key no input could carry' => [['key' => 'gift note!', 'label' => 'Gift note', 'type' => 'text']],
 ]);
+
+it('keeps every built-in whichever side of one a stray row claiming its key sits', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A row claiming `phone` before the built-in's own, which is the shape only
+     * a Config written by some other route could hold. Whichever of the two is
+     * read, a phone is still asked, still checked as a phone and still written
+     * to the column waiting for it — a Checkout cannot lose a built-in or
+     * retype one however its Config was written.
+     */
+    $page = checkoutOf($page, [
+        question('phone', 'checkbox', ['label' => 'A phone that is not one']),
+        ...$page->checkout_config->fieldsToArray(),
+    ]);
+
+    $phone = collect($page->checkout_config->fields)
+        ->firstWhere(fn (CheckoutField $field): bool => $field->key() === 'phone');
+
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->checkout_config->fields))
+        ->toBe(['phone', 'name', 'email', 'district', 'address'])
+        ->and($phone->type())->toBe(CheckoutFieldType::Text)
+        ->and($phone->snapshotsAnswer())->toBeFalse();
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '12']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.phone.0', 'Please enter a valid phone number we can call you on.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->customer_phone)->toBe('+8801712345678')
+        ->and(Order::sole()->answers)->toBe([]);
+});
 
 it('takes no answer to a question the page being ordered from does not ask', function () {
     $product = Product::factory()->create();

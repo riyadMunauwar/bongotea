@@ -120,11 +120,13 @@ class BuiltInCheckoutField extends CheckoutField
 
     /**
      * The stored shape, which is also the shape the Checkout tab edits a row at
-     * a time — so `type` and `options` ride along even though a built-in
-     * dictates the first and the installation supplies the second. One list on
-     * screen means one row shape underneath it.
+     * a time. One list on screen means one row shape underneath it, so `type`
+     * and `options` are both here — the first stating what the built-in
+     * dictates and the Config ignores, the second always empty, because a
+     * District's choices are installation configuration and no built-in has
+     * choices a Merchant may author.
      *
-     * @return array{key: string, label: string, type: string, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -132,6 +134,7 @@ class BuiltInCheckoutField extends CheckoutField
             'key' => $this->key(),
             'label' => $this->label,
             'type' => $this->type()->value,
+            'built_in' => true,
             'enabled' => $this->enabled,
             'required' => $this->required,
             'placeholder' => $this->placeholder,

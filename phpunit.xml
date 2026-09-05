@@ -18,6 +18,15 @@
         </include>
     </source>
     <php>
+        <!--
+            Above PHP's 128M default, which the suite now runs past. The feature
+            tests drive the real admin screens, and one Filament form is a few
+            hundred component objects that the run holds on to; the whole suite
+            is one process, so what accumulates is the sum of every screen it
+            has opened. It is a ceiling, not a budget: nothing here allocates
+            anything like this on its own.
+        -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

@@ -14,6 +14,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\CodeEditor;
 use Filament\Forms\Components\CodeEditor\Enums\Language;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -157,15 +158,26 @@ class PageForm
                                      * to the merchant's next save.
                                      */
                                     ->deleteAction(fn (Action $action): Action => $action->visible(
-                                        fn (array $arguments, Repeater $component): bool => BuiltInField::tryFrom(
-                                            (string) ($component->getRawItemState($arguments['item'])['key'] ?? '')
-                                        ) === null,
+                                        fn (array $arguments, Repeater $component): bool => ! ($component
+                                            ->getRawItemState($arguments['item'])['built_in'] ?? false),
                                     ))
                                     /** Says which questions this page has stopped asking without opening a row. */
                                     ->itemLabel(fn (array $state): string => (string) ($state['label'] ?? '')
                                         .(($state['enabled'] ?? true) ? '' : ' — not asked'))
                                     ->columns(4)
                                     ->schema([
+                                        /**
+                                         * Which kind of field wrote this row, as the
+                                         * Config derived it from the key. Carried so
+                                         * that what a row may do never depends on the
+                                         * key box beside it, which is a box the
+                                         * merchant types in — see `isBuiltIn()`. A row
+                                         * they have just added has none, and defaults
+                                         * to theirs.
+                                         */
+                                        Hidden::make('built_in')
+                                            ->default(false),
+
                                         TextInput::make('label')
                                             ->required()
                                             ->maxLength(255)
@@ -193,13 +205,15 @@ class PageForm
                                          */
                                         TextInput::make('key')
                                             ->required()
-                                            ->maxLength(40)
+                                            ->maxLength(CustomCheckoutField::KEY_MAX_LENGTH)
                                             ->readOnly(fn (Get $get): bool => self::isBuiltIn($get))
                                             ->helperText(fn (Get $get): string => self::isBuiltIn($get)
                                                 ? 'Fixed. Every order has a column waiting for this answer.'
                                                 : 'What the answer is filed under on the order. Fixed once orders have used it.')
                                             ->rules([
-                                                fn (Get $get): Closure => fn (string $attribute, mixed $value, Closure $fail) => self::refuseUnusableKey($get, $value, $fail),
+                                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                                    self::refuseUnusableKey($get, $value, $fail);
+                                                },
                                             ]),
 
                                         /**
@@ -209,7 +223,7 @@ class PageForm
                                          * and the Config's to ignore.
                                          */
                                         Select::make('type')
-                                            ->options(CheckoutFieldType::options())
+                                            ->options(CheckoutFieldType::labels())
                                             /**
                                              * Asked of the merchant only where it
                                              * is theirs to answer. A built-in row
@@ -459,11 +473,8 @@ class PageForm
     }
 
     /**
-     * Whether the repeater row being rendered holds a field a Checkout may not
-     * stop asking for.
-     *
-     * Read from the row's own key rather than its position, because the rows
-     * are a stored list and nothing here may assume which one is which.
+     * Whether the row being rendered holds a field a Checkout may not stop
+     * asking for.
      */
     private static function isMandatory(Get $get): bool
     {
@@ -471,17 +482,25 @@ class PageForm
     }
 
     /**
-     * Whether the row holds one of the fields the system knows by name, and so
-     * one whose key and type belong to a column rather than to the merchant.
+     * Whether the row being rendered holds one of the fields the system knows
+     * by name — the ones whose key and type belong to a column rather than to
+     * the merchant.
+     *
+     * Read from the flag the Config wrote the row with rather than from the key
+     * box beside it, because that box is one the merchant types in and what a
+     * row may do must not change under them as they type. A question of their
+     * own that they key `district` stays theirs to edit and to delete, and is
+     * refused at save; deciding on the key alone would turn it into a row they
+     * could neither correct nor remove, and so could never save past.
      */
     private static function isBuiltIn(Get $get): bool
     {
-        return self::builtIn($get) !== null;
+        return (bool) $get('built_in');
     }
 
     private static function builtIn(Get $get): ?BuiltInField
     {
-        return BuiltInField::tryFrom((string) $get('key'));
+        return self::isBuiltIn($get) ? BuiltInField::tryFrom((string) $get('key')) : null;
     }
 
     /**
@@ -511,43 +530,36 @@ class PageForm
      *
      * Raised on the row's own key box rather than on the repeater, because it
      * is one row that has to be corrected and the merchant should be told which.
-     * Both rows of a duplicated pair are refused, since either one of them
-     * could be the one that is wrong.
+     * Never on a built-in's row: its key is not typed and not the merchant's to
+     * change, so an error there would name a box nobody can edit and a row
+     * nobody can delete. Both rows of a pair the merchant keyed alike are
+     * refused, since either one could be the one meant to be something else.
      */
     private static function refuseUnusableKey(Get $get, mixed $value, Closure $fail): void
     {
-        $key = is_string($value) ? trim($value) : '';
-
         /** Blank is `required`'s to refuse, and saying so twice helps nobody. */
-        if ($key === '') {
+        if (self::isBuiltIn($get) || ($key = trim((string) $value)) === '') {
             return;
         }
 
-        $rows = array_filter((array) $get('../'), is_array(...));
+        /**
+         * Shape, the built-ins and the names a Capture already uses, answered
+         * by the Config so that the tab refusing a key and the Config dropping
+         * one cannot disagree about which keys are allowed.
+         */
+        if (($refusal = CustomCheckoutField::keyRefusal($key)) !== null) {
+            $fail($refusal);
+
+            return;
+        }
 
         $sharing = array_filter(
-            $rows,
+            array_filter((array) $get('../'), is_array(...)),
             fn (array $row): bool => trim((string) ($row['key'] ?? '')) === $key,
         );
 
         if (count($sharing) > 1) {
             $fail('Two questions cannot share the key "'.$key.'". It is what the answer is filed under on every order.');
-
-            return;
-        }
-
-        /**
-         * A built-in standing alone under its own key is the one row entitled
-         * to it. Anything else is checked against what a merchant may key their
-         * own question, which the Config answers so that the two cannot
-         * disagree.
-         */
-        if (BuiltInField::tryFrom($key) !== null) {
-            return;
-        }
-
-        if (($refusal = CustomCheckoutField::keyRefusal($key)) !== null) {
-            $fail($refusal);
         }
     }
 

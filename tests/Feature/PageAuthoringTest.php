@@ -246,7 +246,7 @@ it('cannot lose a built-in field however the checkout tab is saved', function ()
      */
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => ['fields' => [
-            ['key' => 'name', 'label' => 'The only question', 'required' => true],
+            ['key' => 'name', 'built_in' => true, 'label' => 'The only question', 'required' => true],
         ]]])
         ->call('save')
         ->assertHasNoFormErrors();
@@ -311,7 +311,7 @@ it('will not let the checkout tab stop asking for a phone number', function () {
      */
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => ['fields' => [
-            ['key' => 'phone', 'label' => 'Phone number', 'enabled' => false, 'required' => false],
+            ['key' => 'phone', 'built_in' => true, 'label' => 'Phone number', 'enabled' => false, 'required' => false],
         ]]])
         ->call('save')
         ->assertHasNoFormErrors();
@@ -561,6 +561,12 @@ it('keeps the delivery options and the questions a page had when the picker is s
 function questionRow(string $key, array $overrides = []): array
 {
     return array_merge([
+        /**
+         * Which kind of field wrote the row. The tab carries it so that what a
+         * row may do never turns on the key box the merchant types in, and it
+         * is false here because these are the merchant's own questions.
+         */
+        'built_in' => false,
         'key' => $key,
         'label' => 'Gift note',
         'type' => 'text',
@@ -695,7 +701,6 @@ it('refuses a question of the merchant that nothing could answer', function (arr
         questionRow('gift_note'),
         questionRow('gift_note', ['label' => 'A second note']),
     ]],
-    'a key one of the built-in questions holds' => [[questionRow('district', ['label' => 'Which district?'])]],
     'a key the order form already uses' => [[questionRow('page', ['label' => 'Which page?'])]],
     'a key no form input could carry' => [[questionRow('Gift Note!')]],
     'a dropdown with nothing to choose between' => [[questionRow('colour', ['type' => 'select', 'options' => []])]],
@@ -721,4 +726,25 @@ it('refuses a duplicated key on the row that holds it', function () {
     expect(array_keys($component->errors()->messages()))
         ->toHaveCount(2)
         ->each->toEndWith('.key');
+});
+
+it('refuses a built-in key on the row that typed it and not on the built-in', function () {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('district', ['label' => 'Which district?'])]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * One refusal, on the row the merchant can put right. The district built-in
+     * is untouched: its key box is read-only and its row cannot be deleted, so
+     * an error raised there would name a control nobody can act on and leave
+     * the merchant unable to save at all.
+     */
+    expect($component->errors()->messages())
+        ->toHaveCount(1)
+        ->and(array_key_first($component->errors()->messages()))->toEndWith('.key')
+        ->and(array_values($component->errors()->messages())[0][0])
+        ->toBe('This checkout already asks a question under that key. Give yours one of its own.');
 });

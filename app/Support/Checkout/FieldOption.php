@@ -31,6 +31,18 @@ class FieldOption
     }
 
     /**
+     * The values a list of options may be answered with, which is what an
+     * answer is checked against wherever a choice is offered.
+     *
+     * @param  list<self>  $options
+     * @return list<string>
+     */
+    public static function values(array $options): array
+    {
+        return array_map(fn (self $option): string => $option->value, $options);
+    }
+
+    /**
      * Rebuild an option from its stored shape, or nothing where there is no
      * option to rebuild.
      *

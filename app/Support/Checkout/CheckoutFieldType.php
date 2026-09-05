@@ -62,25 +62,14 @@ enum CheckoutFieldType: string
     }
 
     /**
-     * Whether the control labels itself.
+     * How the Checkout tab words each type in the list a Merchant picks from.
      *
-     * A radio group is worded by its legend and a checkbox by the text beside
-     * the box, so a label block above either would ask the same question twice.
-     */
-    public function labelsItself(): bool
-    {
-        return match ($this) {
-            self::Radio, self::Checkbox => true,
-            default => false,
-        };
-    }
-
-    /**
-     * How the Checkout tab words the type in the list a Merchant picks from.
+     * Not `options()`: that word is a Checkout Field's own, and means the
+     * choices a Customer answers between.
      *
      * @return array<string, string>
      */
-    public static function options(): array
+    public static function labels(): array
     {
         return [
             self::Text->value => 'Single line',

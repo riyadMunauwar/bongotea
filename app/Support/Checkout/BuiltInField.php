@@ -184,10 +184,7 @@ enum BuiltInField: string
              */
             self::Email => ['string', 'email:filter', 'max:255'],
 
-            self::District => [
-                'string',
-                Rule::in(array_map(fn (FieldOption $option): string => $option->value, $this->options())),
-            ],
+            self::District => ['string', Rule::in(FieldOption::values($this->options()))],
             self::Address => ['string', 'max:1000'],
         };
     }

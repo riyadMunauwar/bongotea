@@ -26,7 +26,8 @@ class CustomCheckoutField extends CheckoutField
      */
     private const KEY_PATTERN = '/^[a-z][a-z0-9_]*$/';
 
-    private const KEY_MAX_LENGTH = 40;
+    /** Public because the Checkout tab caps the box at the same figure. */
+    public const KEY_MAX_LENGTH = 40;
 
     /**
      * The names a Capture already uses for something else.
@@ -199,7 +200,7 @@ class CustomCheckoutField extends CheckoutField
     }
 
     /**
-     * @return array{key: string, label: string, type: string, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -207,6 +208,7 @@ class CustomCheckoutField extends CheckoutField
             'key' => $this->fieldKey,
             'label' => $this->label,
             'type' => $this->fieldType->value,
+            'built_in' => false,
             'enabled' => $this->enabled,
             'required' => $this->required,
             'placeholder' => $this->placeholder,
@@ -232,7 +234,7 @@ class CustomCheckoutField extends CheckoutField
             CheckoutFieldType::Number => ['numeric'],
             CheckoutFieldType::Select, CheckoutFieldType::Radio => [
                 'string',
-                Rule::in(array_map(fn (FieldOption $option): string => $option->value, $this->fieldOptions)),
+                Rule::in(FieldOption::values($this->fieldOptions)),
             ],
             CheckoutFieldType::Checkbox => ['boolean'],
         };

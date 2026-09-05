@@ -61,14 +61,24 @@ abstract class CheckoutField
     abstract public function snapshotsAnswer(): bool;
 
     /**
-     * @return array<string, string>
-     */
-    abstract public function messages(): array;
-
-    /**
+     * The stored shape carries a `built_in` flag saying which kind of field
+     * wrote the row.
+     *
+     * Derived here on every read and never trusted on the way back in — the key
+     * is what decides which kind a stored row is. It is written because the
+     * Checkout tab has to tell the two kinds apart, and the only other thing it
+     * could ask is the key box, which is a box a Merchant types in: a question
+     * of their own that they happen to key `district` would otherwise turn into
+     * a row they could neither correct nor delete, and so could never save past.
+     *
      * @return array<string, mixed>
      */
     abstract public function toArray(): array;
+
+    /**
+     * @return array<string, string>
+     */
+    abstract public function messages(): array;
 
     /**
      * What an answer must look like beyond whether it was given at all, which

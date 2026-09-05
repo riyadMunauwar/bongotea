@@ -11,3 +11,8 @@ Livewire's `SupportAutoInjectedAssets::$hasRenderedAComponentThisRequest` is sta
 `Tests\TestCase::call()` calls `Livewire::flushState()` before every simulated request, so each request starts like a fresh process. Do not add a file-local `beforeEach`/`afterEach` flush to a test that renders an admin screen; it is already handled, and a per-test hook would not cover two requests inside one test.
 
 Production is not exposed: no persistent worker (no Octane), so the PHP process teardown is the reset.
+
+## The suite runs in one process and needs more than PHP's default memory
+`phpunit.xml` sets `memory_limit` to 512M. The feature tests drive the real admin screens through Livewire, and a single Filament form is a few hundred component objects the run holds on to — so what accumulates over a full run is the sum of every screen it has opened, not the cost of any one test. At PHP's 128M default the run dies partway through with a fatal in whatever happened to allocate next (`Field.php`, `ExtendedCompilerEngine.php`), which reads like a defect in the test that was running and is not one.
+
+Note `php artisan test` shells out to Pest without passing `-d` flags on, so `php -d memory_limit=... artisan test` changes nothing. Raise it in `phpunit.xml`, or run `php -d memory_limit=1G vendor/bin/pest` directly.

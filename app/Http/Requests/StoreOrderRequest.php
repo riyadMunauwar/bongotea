@@ -180,8 +180,12 @@ class StoreOrderRequest extends FormRequest
     }
 
     /**
-     * What a refusal calls a question this Page's Merchant worded themselves,
-     * where no message of ours words the refusal itself.
+     * What a refusal calls each question this Page asks, where no message of
+     * ours words the refusal itself.
+     *
+     * Every field, not only the Merchant's own — but theirs are why it exists:
+     * a built-in's refusals are all worded here already, and a question keyed
+     * `gift_wrap` has nothing but the Merchant's own wording to be called by.
      *
      * @return array<string, string>
      */
@@ -400,8 +404,8 @@ class StoreOrderRequest extends FormRequest
     public function details(): array
     {
         return [
-            ...$this->answers(),
-            'answers' => $this->capturedAnswers(),
+            ...$this->answersInColumns(),
+            'answers' => $this->answersInSnapshot(),
             'delivery_option' => $this->deliveryOption(),
             'selected' => $this->selected(),
             'quantities' => $this->quantities(),
@@ -452,7 +456,7 @@ class StoreOrderRequest extends FormRequest
      *
      * @return array<string, string|null>
      */
-    private function answers(): array
+    private function answersInColumns(): array
     {
         $answers = [];
 
@@ -485,7 +489,7 @@ class StoreOrderRequest extends FormRequest
      *
      * @return list<CapturedAnswer>
      */
-    private function capturedAnswers(): array
+    private function answersInSnapshot(): array
     {
         $answers = [];
 
