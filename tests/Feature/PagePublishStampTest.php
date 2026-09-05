@@ -28,6 +28,17 @@ it('keeps the first publish time when a page is republished', function () {
         ->toBe($firstWentLive->toDateTimeString());
 });
 
+it('leaves a hand-cleared publish time blank', function () {
+    $page = Page::factory()->create([
+        'status' => PageStatus::Published,
+        'published_at' => now()->subWeeks(3),
+    ]);
+
+    $page->update(['published_at' => null]);
+
+    expect($page->fresh()->published_at)->toBeNull();
+});
+
 it('leaves a draft without a publish time', function () {
     $page = Page::factory()->create();
 

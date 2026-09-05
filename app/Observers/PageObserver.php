@@ -35,9 +35,28 @@ class PageObserver
      */
     public function saving(Page $page): void
     {
-        if ($page->status === PageStatus::Published && $page->published_at === null) {
-            $page->published_at = now();
+        if ($page->status !== PageStatus::Published) {
+            return;
         }
+
+        if ($page->published_at !== null) {
+            return;
+        }
+
+        /**
+         * A live Page that had a date and now has none was cleared by hand.
+         * Leave it blank: restamping would quietly replace a lost go-live date
+         * with today's, and a wrong date reads as true where a blank does not.
+         *
+         * Checked against the original rather than `isDirty()`, which reports
+         * every attribute of an unsaved model as dirty — including the explicit
+         * null the create form submits — and would suppress the first stamp.
+         */
+        if ($page->exists && $page->getOriginal('published_at') !== null) {
+            return;
+        }
+
+        $page->published_at = now();
     }
 
     public function saved(Page $page): void

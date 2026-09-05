@@ -35,15 +35,15 @@ class PageForm
                     ->columnSpan(4)
                     ->schema([
                         /**
-                         * The key is what persistCollapsed() stores against. A
-                         * layout Section has no state path, so without one
-                         * `getId()` is null and every persisted section in the
-                         * panel shares the localStorage entry `section--isCollapsed`.
+                         * Collapsible but never persisted: Filament does not
+                         * reopen a collapsed Section to show a validation error,
+                         * and the body linter's "link exactly one product" is
+                         * raised on `body`, in the section below this one. A
+                         * remembered collapse would hide the field that fixes an
+                         * error the operator can see.
                          */
                         Section::make('Checkout')
-                            ->key('page-checkout')
                             ->collapsible()
-                            ->persistCollapsed()
                             ->columns(1)
                             ->schema([
                                 Select::make('products')

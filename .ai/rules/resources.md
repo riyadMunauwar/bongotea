@@ -17,7 +17,12 @@ PageForm declares `columns(5)`: a `Grid::make(1)->columnSpan(4)` stacks Checkout
 
 Every Section there states its own `columns()` even where it matches the default, so the next reader does not have to know Filament's fallback to predict the layout. Keep that up if you add one. Note `Grid::make()` defaults to 2 columns, so a stacking Grid must pass `Grid::make(1)` explicitly.
 
-Filament does not auto-expand a collapsed Section holding a validation error — the collapse state is Alpine-local and moves only on explicit `expand-section` events. Checkout is `collapsible()` but starts open for that reason: the body linter's "exactly one product" error is attached to `body`, in a different section from the `products` field that fixes it.
+## Do not persistCollapsed() a Section holding a field a validation error points at
+Filament never auto-expands a collapsed Section to reveal a validation error: the collapse state is Alpine-local (`Section::toEmbeddedHtml()`) and moves only on explicit `expand-section` events, which nothing dispatches on failed validation.
+
+So `collapsible()` is safe — the Section starts open every load — but `persistCollapsed()` is not. It stores the state in localStorage, so "starts open" holds only until the operator collapses it once; after that the Section is shut on arrival forever. Checkout is `collapsible()` alone for exactly this reason: the body linter raises "link exactly one product" on `body`, one section away from the `products` field that fixes it, so a remembered collapse would leave an operator staring at an error whose cause is invisible.
+
+If you ever do want `persistCollapsed()`, give the Section a `key()` first. A layout Section has no state path, so `HasKey::getKey()` returns blank and `HasId::getId()` returns null — every persisted Section in the panel would then share the single localStorage entry `section--isCollapsed`.
 
 ## Never add an index to make a searchable() column faster
 Filament builds column search as `LIKE "%term%"` (vendor/filament/tables/src/Columns/Concerns/InteractsWithTableQuery.php). The leading wildcard means no B-tree index can serve it, so an index on `customer_name`, `customer_phone` or `page_slug` is dead weight: it slows writes and fixes nothing. `orders` is deliberately left without one.
