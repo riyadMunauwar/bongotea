@@ -123,14 +123,15 @@ enum BuiltInField: string
      */
     public function messages(): array
     {
+        /** Keyed off the case's own value, so a message cannot outlive its key. */
         return match ($this) {
-            self::Name => ['name.required' => 'Please enter your name.'],
-            self::Phone => ['phone.required' => 'Please enter a phone number we can call you on.'],
+            self::Name => [$this->value.'.required' => 'Please enter your name.'],
+            self::Phone => [$this->value.'.required' => 'Please enter a phone number we can call you on.'],
             self::District => [
-                'district.required' => 'Please choose your district.',
-                'district.in' => 'Please choose your district from the list.',
+                $this->value.'.required' => 'Please choose your district.',
+                $this->value.'.in' => 'Please choose your district from the list.',
             ],
-            self::Address => ['address.required' => 'Please enter the address we should deliver to.'],
+            self::Address => [$this->value.'.required' => 'Please enter the address we should deliver to.'],
         };
     }
 }

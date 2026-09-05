@@ -252,11 +252,11 @@ it('checks a capture against the checkout config of the page it came from', func
 
     $asksForAnAddress = sellingPage($product, 'asks');
 
-    $doesNot = sellingPage($product, 'does-not');
-    $doesNot->checkout_config = CheckoutConfig::fromArray([
+    $doesNotAskForAnAddress = sellingPage($product, 'does-not');
+    $doesNotAskForAnAddress->checkout_config = CheckoutConfig::fromArray([
         'fields' => [['key' => 'address', 'label' => 'Delivery address', 'required' => false]],
     ]);
-    $doesNot->save();
+    $doesNotAskForAnAddress->save();
 
     /**
      * One payload, two Pages, two answers. The form a visitor filled in and the
@@ -268,7 +268,7 @@ it('checks a capture against the checkout config of the page it came from', func
         ->assertUnprocessable()
         ->assertJsonPath('errors.address.0', 'Please enter the address we should deliver to.');
 
-    $this->postJson(route('checkout.store'), capturePayload($doesNot, ['address' => '']))
+    $this->postJson(route('checkout.store'), capturePayload($doesNotAskForAnAddress, ['address' => '']))
         ->assertCreated();
 
     expect(Order::count())->toBe(1);

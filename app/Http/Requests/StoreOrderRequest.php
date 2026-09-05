@@ -129,6 +129,15 @@ class StoreOrderRequest extends FormRequest
     }
 
     /**
+     * The answers, in the shape an Order is written from.
+     *
+     * Still the four built-ins rather than whatever the Config asked for: the
+     * columns behind them are non-nullable, so a Page that stops asking for an
+     * address has nowhere to put the absence yet. Widening these columns and
+     * capturing a null instead of a blank is what makes a field genuinely
+     * optional, and it lands with the setting that lets a Merchant switch one
+     * off.
+     *
      * @return array{name: string, phone: string, address: string, district: string, quantity: int}
      */
     public function details(): array

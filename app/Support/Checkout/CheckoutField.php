@@ -11,8 +11,13 @@ use Illuminate\View\ComponentAttributeBag;
  * how it is worded, and whether an answer is compulsory. Everything else — the
  * key, the control, the rules — comes from the built-in and cannot be
  * configured away.
+ *
+ * It answers for its built-in rather than handing it out, so a form and a rule
+ * set are written against "a field" and not against what kind of field it
+ * happens to be. That is what lets the Merchant's own fields join this list
+ * later without either caller learning about the difference (ADR-0006).
  */
-final class CheckoutField
+class CheckoutField
 {
     public function __construct(
         public readonly BuiltInField $builtIn,

@@ -1,6 +1,5 @@
 <?php
 
-use App\Support\Checkout\CheckoutConfig;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -21,17 +20,22 @@ return new class extends Migration
         });
 
         /**
-         * Backfilled to the form each Page already had: name, phone, district
-         * and address, in that order, all required. A Merchant who never opens
-         * the Checkout settings sees no change at all.
+         * Backfilled to the form each Page already had, so a Merchant who never
+         * opens the Checkout settings sees no change at all.
          *
-         * Written from the class rather than a frozen literal. The two cannot
-         * drift into disagreeing about anything that matters: an installation
-         * runs this once against the rows it has, and a fresh database reaches
-         * it with no rows to fill.
+         * Spelled out rather than read from CheckoutConfig, like every other
+         * migration here: what a migration wrote on the day it ran must not
+         * change meaning afterwards. A row in this shape keeps reading
+         * correctly as the shape grows, because reading a Config fills in
+         * whatever it does not find.
          */
         DB::table('pages')->update([
-            'checkout_config' => json_encode(CheckoutConfig::default()->toArray()),
+            'checkout_config' => json_encode(['fields' => [
+                ['key' => 'name', 'label' => 'Your name', 'required' => true],
+                ['key' => 'phone', 'label' => 'Phone number', 'required' => true],
+                ['key' => 'district', 'label' => 'District', 'required' => true],
+                ['key' => 'address', 'label' => 'Delivery address', 'required' => true],
+            ]]),
         ]);
 
         Schema::table('pages', function (Blueprint $table) {

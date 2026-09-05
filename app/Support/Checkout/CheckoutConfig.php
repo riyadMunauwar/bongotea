@@ -18,7 +18,7 @@ use Illuminate\Contracts\Support\Arrayable;
  *
  * @implements Arrayable<string, mixed>
  */
-final class CheckoutConfig implements Arrayable
+class CheckoutConfig implements Arrayable
 {
     /**
      * @param  list<CheckoutField>  $fields
@@ -55,7 +55,9 @@ final class CheckoutConfig implements Arrayable
                 continue;
             }
 
-            $builtIn = BuiltInField::tryFrom((string) ($field['key'] ?? ''));
+            $key = $field['key'] ?? null;
+
+            $builtIn = is_string($key) ? BuiltInField::tryFrom($key) : null;
 
             /** A key twice over would ask twice and store once. */
             if ($builtIn === null || isset($fields[$builtIn->value])) {

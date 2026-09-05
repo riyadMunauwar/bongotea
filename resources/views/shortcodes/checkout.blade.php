@@ -94,7 +94,8 @@
                     @case (CheckoutFieldType::Select)
                         <select class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
                                 {{ $field->controlAttributes() }} @required($field->required)>
-                            <option value="" selected disabled>{{ $field->placeholder() }}</option>
+                            {{-- Unpickable only where an answer is compulsory, so a browser can submit what the server would accept. --}}
+                            <option value="" selected @disabled($field->required)>{{ $field->placeholder() }}</option>
                             @foreach ($field->options() as $option)
                                 <option value="{{ $option }}">{{ $option }}</option>
                             @endforeach
@@ -194,28 +195,39 @@
         });
     }
 
-    /*
-     * Where an error is shown. A refusal keyed to something this form never
-     * asked for — a field the merchant switched off after these bytes were
-     * written to disk — falls back to the page-level slot, because the visitor
-     * whose order was refused has to be told something. Discarding it leaves
-     * them tapping a button that re-enables and says nothing.
-     */
     function slotFor(form, field) {
-        return form.querySelector('[data-gio-error-for="' + field + '"]')
-            || form.querySelector('[data-gio-error-for="page"]');
+        return form.querySelector('[data-gio-error-for="' + field + '"]');
     }
 
     function showErrors(form, errors) {
         var first = null;
+        var fields = Object.keys(errors || {});
 
-        Object.keys(errors || {}).forEach(function (field) {
-            var el = slotFor(form, field);
-            /* One slot, one message: the first refusal to reach it stands. */
+        var show = function (el, message) {
+            /* One slot, one message: whatever reaches it first stands. */
             if (!el || el.hasAttribute('data-shown')) { return; }
-            el.textContent = [].concat(errors[field])[0];
+            el.textContent = message;
             el.setAttribute('data-shown', '');
             if (!first) { first = el; }
+        };
+
+        fields.forEach(function (field) {
+            show(slotFor(form, field), [].concat(errors[field])[0]);
+        });
+
+        /*
+         * A refusal keyed to something this form never asked for — a field the
+         * merchant switched off after these bytes were written to disk — falls
+         * back to the page-level slot, because a visitor whose order was
+         * refused has to be told something. Discarding it leaves them tapping a
+         * button that re-enables and says nothing.
+         *
+         * Second, so it can never take that slot from a page-level refusal that
+         * came in the same response and belongs there.
+         */
+        fields.forEach(function (field) {
+            if (slotFor(form, field)) { return; }
+            show(slotFor(form, 'page'), [].concat(errors[field])[0]);
         });
 
         if (first) { first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }

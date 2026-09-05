@@ -34,9 +34,9 @@ class PageObserver
      * stamp is: it is a fact about a Page, so one created by a seeder, a
      * factory or tinker gets it too.
      *
-     * Tested against the raw attributes rather than the cast value, which is
-     * never null by design — reading it would seed over a Config the caller
-     * just supplied.
+     * Asks the raw attributes rather than reading the cast value, which is
+     * never null by design: a null check on it would never once be true, so
+     * nothing would be seeded and the insert would hit the column's NOT NULL.
      */
     public function creating(Page $page): void
     {
