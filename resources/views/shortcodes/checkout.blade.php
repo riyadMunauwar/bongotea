@@ -61,6 +61,13 @@
           data-currency-symbol="{{ $currencySymbol }}"
           data-currency-decimals="{{ $currencyDecimals }}"
           data-delivery-charges="{{ json_encode($deliveryCharges) }}"
+          {{--
+              What delivery costs when this Page never asks which district the
+              parcel is going to. The server charges it either way, so the
+              figure on screen has to be the figure collected at the door — a
+              total that reads low by the delivery charge is a refused parcel.
+          --}}
+          data-delivery-charge-default="{{ $defaultDeliveryCharge }}"
           data-token-url="{{ route('checkout.token') }}">
         <input type="hidden" name="page" value="{{ $page->slug }}">
 
@@ -220,7 +227,19 @@
     }
 
     function deliveryFor(form) {
-        var district = form.elements.district ? form.elements.district.value : '';
+        /*
+         * A form with no district question is not a form waiting for an answer:
+         * the merchant switched that question off, and the server charges the
+         * flat figure regardless. Showing a dash there would quote the customer
+         * a total lower than the one the courier collects, which in COD is a
+         * parcel refused at the door.
+         */
+        if (!form.elements.district) {
+            var flat = parseInt(form.dataset.deliveryChargeDefault, 10);
+            return isNaN(flat) ? null : flat;
+        }
+
+        var district = form.elements.district.value;
         if (!district) { return null; }
         try {
             var charges = JSON.parse(form.dataset.deliveryCharges);

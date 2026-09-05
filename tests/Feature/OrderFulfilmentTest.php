@@ -362,3 +362,64 @@ it('works an order that has been deleted without falling over', function () {
     expect($order->subtotal)->toBe(198000)
         ->and($order->total)->toBe(204000);
 });
+
+it('works an order taken on a form that never asked for an address', function () {
+    /**
+     * A Page whose Checkout asks for a phone number and nothing else — a
+     * lead-capture campaign, or one where the courier calls to arrange
+     * everything. The Order is complete as far as it goes, so it queues, opens
+     * and saves like any other.
+     */
+    $order = capturedOrder(attributes: [
+        'customer_name' => null,
+        'customer_address' => null,
+        'customer_district' => null,
+    ]);
+
+    Livewire::test(ListOrders::class)
+        ->assertCanSeeTableRecords([$order])
+        ->assertSeeText($order->customer_phone);
+
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertSeeText('Not asked for');
+
+    /**
+     * Nothing here may demand a detail the Checkout never collected: an
+     * operator recording a confirmation call would otherwise have to invent an
+     * address before the screen would save.
+     */
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['status' => OrderStatus::Confirmed->value])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $order->refresh();
+
+    expect($order->status)->toBe(OrderStatus::Confirmed)
+        ->and($order->customer_address)->toBeNull()
+        ->and($order->customer_name)->toBeNull();
+});
+
+it('stores nothing rather than a blank when a detail is cleared by hand', function () {
+    $order = capturedOrder(attributes: ['customer_address' => 'House 4, Road 12, Banani']);
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_address' => ''])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** The same absence Capture writes, so the column holds two states and not three. */
+    expect($order->refresh()->customer_address)->toBeNull();
+});
+
+it('shows an email address only where one was captured', function () {
+    $withEmail = capturedOrder(attributes: ['customer_email' => 'rahim@example.com']);
+
+    Livewire::test(ViewOrder::class, ['record' => $withEmail->getKey()])
+        ->assertSeeText('rahim@example.com');
+
+    $withoutEmail = capturedOrder();
+
+    Livewire::test(ViewOrder::class, ['record' => $withoutEmail->getKey()])
+        ->assertSeeText('Not asked for');
+});

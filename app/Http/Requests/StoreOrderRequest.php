@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
@@ -210,24 +211,47 @@ class StoreOrderRequest extends FormRequest
     /**
      * The answers, in the shape an Order is written from.
      *
-     * Still the four built-ins rather than whatever the Config asked for: the
-     * columns behind them are non-nullable, so a Page that stops asking for an
-     * address has nowhere to put the absence yet. Widening these columns and
-     * capturing a null instead of a blank is what makes a field genuinely
-     * optional, and it lands with the setting that lets a Merchant switch one
-     * off.
+     * One key per built-in, whether or not this Page asked for it, so Capture
+     * writes the same shape for every Page. What differs is the value: a
+     * question this Checkout does not ask is null, and so is one it asked and
+     * the visitor left blank.
      *
-     * @return array{name: string, phone: string, address: string, district: string, quantities: array<int, int>}
+     * Null rather than a blank throughout, because the two say different things
+     * to whoever reads the Order afterwards — "we never asked" against "they
+     * had nothing to say" — and only the first is worth telling apart. Anything
+     * posted for a field that is switched off is dropped here rather than
+     * stored: it was never asked for and never checked.
+     *
+     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, quantities: array<int, int>}
      */
     public function details(): array
     {
         return [
-            'name' => $this->string('name')->trim()->toString(),
-            'phone' => $this->string('phone')->trim()->toString(),
-            'address' => $this->string('address')->trim()->toString(),
-            'district' => $this->string('district')->toString(),
+            ...$this->answers(),
             'quantities' => $this->quantities(),
         ];
+    }
+
+    /**
+     * What the visitor typed into the questions this Page actually asked.
+     *
+     * @return array<string, string|null>
+     */
+    private function answers(): array
+    {
+        $answers = [];
+
+        foreach (BuiltInField::cases() as $builtIn) {
+            $answers[$builtIn->value] = null;
+        }
+
+        foreach ($this->checkoutConfig()->enabledFields() as $field) {
+            $answer = $this->string($field->key())->trim()->toString();
+
+            $answers[$field->key()] = $answer === '' ? null : $answer;
+        }
+
+        return $answers;
     }
 
     /**

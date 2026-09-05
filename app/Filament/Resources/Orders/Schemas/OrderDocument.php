@@ -18,6 +18,16 @@ use Filament\Support\Icons\Heroicon;
 class OrderDocument
 {
     /**
+     * What stands where a detail the Checkout never asked for would have been.
+     *
+     * Said once for both screens, and said in those words rather than left
+     * blank: an empty cell reads as an Order someone filled in badly, and
+     * whether to chase a customer for the missing line turns on which of the
+     * two it is.
+     */
+    public const NOT_ASKED = 'Not asked for';
+
+    /**
      * Statuses that mean "do not send this parcel".
      *
      * The document is deliberately shaped to look routine, which is exactly why

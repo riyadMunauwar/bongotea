@@ -36,6 +36,10 @@ _Avoid_: settings, preset, theme, template
 One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
 _Avoid_: input, form field, custom field, attribute
 
+**Switched off**:
+Said of a Checkout Field its Page has stopped asking for. It is absent from the form and from what the server checks, and an Order taken without it records nothing rather than a blank. It keeps its wording and its rules meanwhile, so switching it back on restores the question as it was — switched off and not compulsory are separate things, and a compulsory field that is switched off is simply inert. Phone is the one field that cannot be switched off, because a Customer is their phone number.
+_Avoid_: disabled, hidden, removed, deleted, inactive, optional
+
 **Shortcode**:
 A placeholder a Merchant writes into a Page's HTML that the system replaces with generated content when the Page is rendered. It is the only way a Page gets content the Merchant did not type themselves.
 _Avoid_: tag, macro, snippet, token, embed

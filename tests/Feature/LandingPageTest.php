@@ -357,3 +357,56 @@ it('asks in the wording and the order the page\'s own checkout config names', fu
          */
         ->and($asked[1])->toBe(['page', 'phone', 'name', 'district', 'address']);
 });
+
+it('renders no box at all for a question the page has stopped asking', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'promo',
+        'checkout_config' => CheckoutConfig::fromArray([
+            'fields' => [
+                ['key' => 'name', 'label' => 'Your name', 'enabled' => false],
+                ['key' => 'district', 'label' => 'District', 'enabled' => false],
+            ],
+        ]),
+    ]);
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match_all('/ name="([a-z]+)"/', $html, $asked);
+
+    /**
+     * Switched off is absent, not hidden. A field left in the markup would
+     * still be posted by a browser and still be there to autofill, and the
+     * merchant asked for a shorter form.
+     */
+    expect($asked[1])->toBe(['page', 'phone', 'address'])
+        ->and($html)->not->toContain('Your name')
+        ->and($html)->not->toContain('Choose your district');
+});
+
+it('asks for an email address once the merchant switches one on', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'promo',
+        'checkout_config' => CheckoutConfig::fromArray([
+            'fields' => [
+                ['key' => 'email', 'label' => 'Email address', 'enabled' => true, 'required' => false],
+            ],
+        ]),
+    ]);
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Asked where the merchant's Config puts it, not appended to the end: the
+     * stored list is the order, and a built-in it never mentioned follows on
+     * behind.
+     */
+    preg_match_all('/ name="([a-z]+)"/', $html, $asked);
+
+    expect($asked[1])->toBe(['page', 'email', 'name', 'phone', 'district', 'address'])
+        ->and($html)->toContain('Email address')
+        /** The keyboard a phone opens for an address is not the one it opens for a name. */
+        ->and($html)->toContain('type="email"')
+        ->and($html)->toContain('inputmode="email"');
+});

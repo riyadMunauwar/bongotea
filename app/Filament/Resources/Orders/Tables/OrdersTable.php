@@ -43,9 +43,15 @@ class OrdersTable
                     ->sortable()
                     ->description(fn ($record): string => $record->created_at->diffForHumans()),
 
+                /**
+                 * Blank where the Page never asked for a name. The phone beside
+                 * it is what identifies a Customer, so a nameless row is still
+                 * a workable order rather than a broken one.
+                 */
                 TextColumn::make('customer_name')
                     ->label('Customer')
-                    ->searchable(),
+                    ->searchable()
+                    ->placeholder('—'),
 
                 TextColumn::make('customer_phone')
                     ->label('Phone')
@@ -55,7 +61,20 @@ class OrdersTable
                 TextColumn::make('customer_district')
                     ->label('District')
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->placeholder('—'),
+
+                /**
+                 * Off by default in a new Checkout, so most installations have
+                 * an empty column here — hidden until a merchant who asks for
+                 * one turns it on.
+                 */
+                TextColumn::make('customer_email')
+                    ->label('Email')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—'),
 
                 /**
                  * The snapshot, not the relation: this column must keep saying

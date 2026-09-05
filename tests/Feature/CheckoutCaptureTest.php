@@ -5,6 +5,7 @@ use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\CheckoutField;
 
 /**
  * A published Page selling whatever Products it is handed. One is the shape
@@ -409,4 +410,171 @@ it('checks a capture against the checkout config of the page it came from', func
         ->assertCreated();
 
     expect(Order::count())->toBe(1);
+});
+
+/**
+ * The same Page's Checkout with named fields reconfigured — switched off,
+ * switched on, reworded — one merchant edit at a time.
+ *
+ * Written through `fieldsToArray()` and read back through `fromArray()`, which
+ * is the round trip the Checkout tab performs on save, so a test can never
+ * store a shape the admin could not have produced.
+ *
+ * @param  array<string, array<string, mixed>>  $changes  keyed by field key
+ */
+function checkoutAsking(Page $page, array $changes): Page
+{
+    $page->checkout_config = CheckoutConfig::fromArray([
+        'fields' => array_map(
+            fn (array $field): array => array_merge($field, $changes[$field['key']] ?? []),
+            $page->checkout_config->fieldsToArray(),
+        ),
+    ]);
+
+    $page->save();
+
+    return $page->refresh();
+}
+
+it('stores nothing for a detail the page has stopped asking for', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * Left required on the way out. Required and asked-at-all are two flags: a
+     * merchant trying a shorter form keeps what they configured behind it, and
+     * a rule on a question nobody is asked decides nothing.
+     */
+    checkoutAsking($page, ['address' => ['enabled' => false, 'required' => true]]);
+
+    /**
+     * The payload carries an address regardless — a stale form, or a hand-made
+     * post. It was not asked for, so it is not checked and not stored: an Order
+     * carries what its Checkout collected and nothing a submission volunteered.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'address' => 'House 4, Road 12, Banani',
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    /**
+     * Null rather than a blank. "We never asked" and "they left it empty" read
+     * the same to a fulfiller otherwise, and only one of the two is worth
+     * calling a customer about.
+     */
+    expect($order->customer_address)->toBeNull()
+        ->and($order->customer_name)->toBe('Rahim Uddin');
+});
+
+it('captures a null for a question the visitor left blank', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    checkoutAsking($page, ['name' => ['required' => false]]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['name' => '  ']))
+        ->assertCreated();
+
+    expect(Order::sole()->customer_name)->toBeNull();
+});
+
+it('takes an email address only from a page that asks for one', function () {
+    $product = Product::factory()->create();
+
+    $asks = checkoutAsking(sellingPage($product, 'asks'), [
+        'email' => ['enabled' => true, 'required' => true],
+    ]);
+
+    /** Off in a new Config, so this one is the form every Page starts with. */
+    $doesNotAsk = sellingPage($product, 'does-not');
+
+    $this->postJson(route('checkout.store'), capturePayload($asks, ['email' => '']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.email.0', 'Please enter your email address.');
+
+    $this->postJson(route('checkout.store'), capturePayload($asks, ['email' => 'rahim at example']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.email.0', 'Please enter an email address we can reach you at.');
+
+    $this->postJson(route('checkout.store'), capturePayload($asks, ['email' => 'rahim@example.com']))
+        ->assertCreated();
+
+    $this->postJson(route('checkout.store'), capturePayload($doesNotAsk, ['email' => 'rahim@example.com']))
+        ->assertCreated();
+
+    expect(Order::where('page_slug', 'asks')->sole()->customer_email)->toBe('rahim@example.com')
+        ->and(Order::where('page_slug', 'does-not')->sole()->customer_email)->toBeNull();
+});
+
+it('goes on asking for a phone number whatever the stored config says', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * The shape only a tampered Config could hold: no control on the Checkout
+     * tab switches a phone off. A Customer *is* their phone number, and a
+     * cash-on-delivery Order nobody can call is a lead, not an Order — so the
+     * refusal lives in the Config itself rather than in the one screen that
+     * edits it.
+     */
+    $page = checkoutAsking($page, ['phone' => ['enabled' => false, 'required' => false]]);
+
+    expect(array_map(
+        fn (CheckoutField $field): string => $field->key(),
+        $page->checkout_config->enabledFields(),
+    ))->toContain('phone');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.phone.0', 'Please enter a phone number we can call you on.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('keeps what a field was configured with across a switch off and back on', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAsking($page, ['district' => [
+        'label' => 'Where are we delivering?',
+        'required' => false,
+        'help' => 'The nearest one, if yours is not listed.',
+    ]]);
+
+    $page = checkoutAsking($page, ['district' => ['enabled' => false]]);
+    $page = checkoutAsking($page, ['district' => ['enabled' => true]]);
+
+    /**
+     * Switching a question off is an experiment, not a deletion. A merchant
+     * trying a shorter form and putting it back must not have to rewrite what
+     * they had worded.
+     */
+    $district = collect($page->checkout_config->fields)
+        ->firstWhere(fn (CheckoutField $field): bool => $field->key() === 'district');
+
+    expect($district->label)->toBe('Where are we delivering?')
+        ->and($district->help)->toBe('The nearest one, if yours is not listed.')
+        ->and($district->required)->toBeFalse()
+        ->and($district->enabled)->toBeTrue();
+});
+
+it('quotes the delivery charge that a page with no district question will collect', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    checkoutAsking($page, ['district' => ['enabled' => false]]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match('/data-delivery-charge-default="(\d+)"/', $html, $quoted);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    /**
+     * With no district to price against, the flat charge is the only figure the
+     * island can show — and it has to be the one Capture adds. A form that
+     * totals up to less than the courier asks for at the door is a refused
+     * parcel and a fee in both directions.
+     */
+    expect($order->customer_district)->toBeNull()
+        ->and((int) ($quoted[1] ?? 0))->toBe($order->delivery_charge)
+        ->and($order->total)->toBe($order->subtotal + $order->delivery_charge);
 });

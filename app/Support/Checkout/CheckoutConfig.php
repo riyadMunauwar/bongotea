@@ -28,7 +28,10 @@ class CheckoutConfig implements Arrayable
     /**
      * The Checkout a Page starts with, and the one every existing Page was
      * backfilled to: the four details the form has always asked for, in the
-     * order it has always asked them, every one of them required.
+     * order it has always asked them, every one of them on and required.
+     *
+     * Email is in the list too and switched off, so a new Page holds a complete
+     * Config while rendering the form a Merchant already knows.
      */
     public static function default(): self
     {
@@ -75,6 +78,21 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
+     * The fields a visitor is actually asked, in order.
+     *
+     * The one list both renderings are built from, so a question the Merchant
+     * switched off is gone from the form and gone from the rules together. A
+     * field that is off still exists — it keeps its wording and its rules in
+     * `fields` for the day it is switched back on — it is simply not asked.
+     *
+     * @return list<CheckoutField>
+     */
+    public function enabledFields(): array
+    {
+        return array_values(array_filter($this->fields, fn (CheckoutField $field): bool => $field->enabled));
+    }
+
+    /**
      * The server side of the one definition.
      *
      * @return array<string, list<mixed>>
@@ -83,7 +101,7 @@ class CheckoutConfig implements Arrayable
     {
         $rules = [];
 
-        foreach ($this->fields as $field) {
+        foreach ($this->enabledFields() as $field) {
             $rules[$field->key()] = $field->rules();
         }
 
@@ -97,7 +115,7 @@ class CheckoutConfig implements Arrayable
     {
         $messages = [];
 
-        foreach ($this->fields as $field) {
+        foreach ($this->enabledFields() as $field) {
             $messages = [...$messages, ...$field->messages()];
         }
 
@@ -105,7 +123,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array{key: string, label: string, required: bool, placeholder: string|null, help: string|null}>}
+     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>}
      */
     public function toArray(): array
     {
@@ -117,7 +135,7 @@ class CheckoutConfig implements Arrayable
      * tab edits a row at a time. Named so the admin can ask for it without
      * knowing which key it is filed under here.
      *
-     * @return list<array{key: string, label: string, required: bool, placeholder: string|null, help: string|null}>
+     * @return list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>
      */
     public function fieldsToArray(): array
     {

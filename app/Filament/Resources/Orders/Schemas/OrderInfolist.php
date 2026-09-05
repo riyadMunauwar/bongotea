@@ -60,10 +60,16 @@ class OrderInfolist
                             ->label('Ordered from'),
                     ]),
 
+                /**
+                 * Every detail here but the phone is a question the Page's
+                 * Checkout may not have asked, so each says so in its own place
+                 * rather than reading as an Order someone filled in badly.
+                 */
                 Section::make('Deliver to')
                     ->schema([
                         TextEntry::make('customer_name')
-                            ->label('Name'),
+                            ->label('Name')
+                            ->placeholder(OrderDocument::NOT_ASKED),
 
                         TextEntry::make('customer_phone')
                             ->label('Phone')
@@ -73,11 +79,18 @@ class OrderInfolist
                                 tooltip: 'The number to call to confirm this order, in its canonical form. A customer is their phone number, so correcting it on the edit screen moves this order to a different customer.',
                             ),
 
+                        TextEntry::make('customer_email')
+                            ->label('Email')
+                            ->copyable()
+                            ->placeholder(OrderDocument::NOT_ASKED),
+
                         TextEntry::make('customer_district')
-                            ->label('District'),
+                            ->label('District')
+                            ->placeholder(OrderDocument::NOT_ASKED),
 
                         TextEntry::make('customer_address')
-                            ->label('Address'),
+                            ->label('Address')
+                            ->placeholder(OrderDocument::NOT_ASKED),
                     ]),
 
                 Section::make('Items')

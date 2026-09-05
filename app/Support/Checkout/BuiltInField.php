@@ -17,23 +17,69 @@ use Illuminate\Validation\Rule;
  * controls on the Checkout tab, and why none of them can be deleted. See
  * ADR-0006.
  *
- * Case order is the order a Checkout asks in by default, and it reproduces the
- * form exactly as it stood before any of this was configurable.
+ * A Config also decides whether a field is asked at all — with one exception,
+ * kept here rather than in the admin so no route to a Config can get around it.
+ *
+ * Case order is the order a Checkout asks in by default. Email sits where it
+ * belongs among the questions rather than at the end, and starts switched off,
+ * so the rendered form is still exactly the one that stood here before any of
+ * this was configurable.
  */
 enum BuiltInField: string
 {
     case Name = 'name';
     case Phone = 'phone';
+    case Email = 'email';
     case District = 'district';
     case Address = 'address';
 
     public function type(): CheckoutFieldType
     {
         return match ($this) {
-            self::Name, self::Phone => CheckoutFieldType::Text,
+            self::Name, self::Phone, self::Email => CheckoutFieldType::Text,
             self::District => CheckoutFieldType::Select,
             self::Address => CheckoutFieldType::Textarea,
         };
+    }
+
+    /**
+     * Whether a Checkout may stop asking this at all.
+     *
+     * Phone alone may not. A Customer *is* their phone number — it is the
+     * identity every Order is filed under — and a cash-on-delivery Order nobody
+     * can call is not a fulfillable Order, it is a lead. So the switch is
+     * refused here rather than only hidden in the admin, because a Config is
+     * editable by other routes than the Checkout tab. See ADR-0006.
+     */
+    public function isMandatory(): bool
+    {
+        return $this === self::Phone;
+    }
+
+    /**
+     * Whether a new Page asks this to begin with.
+     *
+     * The four the form has always asked for stay on, so a Merchant who never
+     * opens the Checkout tab sees no change. Email is the one addition, and it
+     * arrives off: adding a question to every live campaign's form is not
+     * something a deployment gets to do on a Merchant's behalf.
+     */
+    public function defaultsToEnabled(): bool
+    {
+        return $this !== self::Email;
+    }
+
+    /**
+     * Whether an answer is compulsory to begin with, on the day the field is
+     * switched on.
+     *
+     * Independent of whether it is asked at all: a Merchant switching Email on
+     * gets an optional box, because a COD buyer who has no email address must
+     * still be able to order. Compulsory is theirs to decide afterwards.
+     */
+    public function defaultsToRequired(): bool
+    {
+        return $this !== self::Email;
     }
 
     /**
@@ -45,6 +91,7 @@ enum BuiltInField: string
         return match ($this) {
             self::Name => 'Your name',
             self::Phone => 'Phone number',
+            self::Email => 'Email address',
             self::District => 'District',
             self::Address => 'Delivery address',
         };
@@ -97,6 +144,7 @@ enum BuiltInField: string
         return match ($this) {
             self::Name => ['type' => 'text', 'autocomplete' => 'name', 'maxlength' => '255'],
             self::Phone => ['type' => 'tel', 'autocomplete' => 'tel', 'inputmode' => 'tel', 'maxlength' => '32'],
+            self::Email => ['type' => 'email', 'autocomplete' => 'email', 'inputmode' => 'email', 'maxlength' => '255'],
             self::District => [],
             self::Address => ['rows' => '3', 'autocomplete' => 'street-address', 'maxlength' => '1000'],
         };
@@ -123,6 +171,14 @@ enum BuiltInField: string
                 ? null
                 : $fail('Please enter a valid phone number we can call you on.')],
 
+            /**
+             * Checked for shape only, never for deliverability: a Merchant who
+             * asks for an email wants a receipt address, and refusing a real
+             * buyer at the one moment they are ready to order costs more than a
+             * mistyped address does.
+             */
+            self::Email => ['string', 'email:filter', 'max:255'],
+
             self::District => ['string', Rule::in($this->options())],
             self::Address => ['string', 'max:1000'],
         };
@@ -137,6 +193,10 @@ enum BuiltInField: string
         return match ($this) {
             self::Name => [$this->value.'.required' => 'Please enter your name.'],
             self::Phone => [$this->value.'.required' => 'Please enter a phone number we can call you on.'],
+            self::Email => [
+                $this->value.'.required' => 'Please enter your email address.',
+                $this->value.'.email' => 'Please enter an email address we can reach you at.',
+            ],
             self::District => [
                 $this->value.'.required' => 'Please choose your district.',
                 $this->value.'.in' => 'Please choose your district from the list.',

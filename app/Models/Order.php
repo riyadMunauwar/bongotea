@@ -31,6 +31,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'page_slug',
     'customer_name',
     'customer_phone',
+    'customer_email',
     'customer_address',
     'customer_district',
     'delivery_charge',

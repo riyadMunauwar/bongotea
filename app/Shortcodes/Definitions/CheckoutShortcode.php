@@ -69,13 +69,23 @@ class CheckoutShortcode implements ShortcodeDefinition
             'products' => $products,
 
             /**
-             * What this Page asks for, in its own words and its own order. The
-             * same list compiles into the rules the Capture is checked against,
-             * so the form and the server cannot disagree.
+             * What this Page asks for, in its own words and its own order —
+             * and only what it asks: a field the Merchant switched off is not
+             * rendered at all. The same list compiles into the rules the
+             * Capture is checked against, so the form and the server cannot
+             * disagree about which questions exist.
              */
-            'fields' => $page->checkout_config->fields,
+            'fields' => $page->checkout_config->enabledFields(),
 
             'deliveryCharges' => $this->deliveryCharge->byDistrict(),
+
+            /**
+             * What a Capture from this Page will be charged when it names no
+             * District — which is every Capture, once the Merchant switches
+             * that question off. Sent from the same place Capture reads it, so
+             * the island cannot quote a total the door disagrees with.
+             */
+            'defaultDeliveryCharge' => $this->deliveryCharge->forDistrict(null),
             'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
         ])->render();
     }

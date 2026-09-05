@@ -23,7 +23,12 @@ class OrderCapture
     public function __construct(private readonly DeliveryCharge $deliveryCharge) {}
 
     /**
-     * @param  array{name: string, phone: string, address: string, district: string, quantities: array<int, int>}  $details
+     * A detail this Page's Checkout does not ask for arrives null and is stored
+     * null, which is why every column but the phone is nullable: an Order taken
+     * on a form with no address box records that it has no address, rather than
+     * a blank that reads as a Customer who declined to give one.
+     *
+     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
@@ -64,6 +69,7 @@ class OrderCapture
                  */
                 'customer_phone' => $customer->phone,
 
+                'customer_email' => $details['email'],
                 'customer_address' => $details['address'],
                 'customer_district' => $details['district'],
                 'delivery_charge' => $this->deliveryCharge->forDistrict($details['district']),

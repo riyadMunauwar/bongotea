@@ -87,12 +87,20 @@ class OrderForm
                             ->state(fn (?Order $record): ?string => $record?->page_slug),
                     ]),
 
+                /**
+                 * Only the phone is compulsory here. Every other detail is a
+                 * question the Page's Checkout may never have asked, and an
+                 * editor that refused to save without one would make a
+                 * perfectly good Order unworkable — the operator would have to
+                 * invent an address to correct a quantity.
+                 */
                 Section::make('Deliver to')
                     ->schema([
                         TextInput::make('customer_name')
                             ->label('Name')
-                            ->required()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->placeholder(OrderDocument::NOT_ASKED),
 
                         /**
                          * Editable, and the one field on this screen that
@@ -119,21 +127,29 @@ class OrderForm
                                 tooltip: 'A customer is their phone number, so changing this moves the order to a different customer. Correct a wrong number here; cancel the order if no number reaches anyone.',
                             ),
 
+                        TextInput::make('customer_email')
+                            ->label('Email')
+                            ->email()
+                            ->maxLength(255)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->placeholder(OrderDocument::NOT_ASKED),
+
                         Select::make('customer_district')
                             ->label('District')
                             ->options(fn (): array => array_combine(
                                 config('giopages.districts'),
                                 config('giopages.districts'),
                             ))
-                            ->required()
                             ->searchable()
-                            ->native(false),
+                            ->native(false)
+                            ->placeholder(OrderDocument::NOT_ASKED),
 
                         Textarea::make('customer_address')
                             ->label('Address')
-                            ->required()
                             ->rows(3)
-                            ->maxLength(1000),
+                            ->maxLength(1000)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->placeholder(OrderDocument::NOT_ASKED),
                     ]),
 
                 Section::make('Items')
@@ -231,6 +247,18 @@ class OrderForm
                             )),
                     ]),
             ]);
+    }
+
+    /**
+     * Store nothing rather than a blank.
+     *
+     * An emptied box means the detail is gone, and gone is a null — the same
+     * value Capture writes for a question the Checkout never asked. A blank
+     * saved here would put a third state on a column that has two.
+     */
+    private static function nullWhenBlank(): Closure
+    {
+        return fn (?string $state): ?string => filled($state) ? $state : null;
     }
 
     /**

@@ -195,8 +195,15 @@ it('gives a new page a complete checkout nobody had to configure', function () {
      * this Page has been configured yet.
      */
     expect(array_map(fn (CheckoutField $field): string => $field->key(), $config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address'])
+        /**
+         * The form itself is unchanged: email is in the Config so the shape is
+         * complete, but switched off, because adding a question to every live
+         * campaign is not something a deployment does on a merchant's behalf.
+         */
+        ->and(array_map(fn (CheckoutField $field): string => $field->key(), $config->enabledFields()))
         ->toBe(['name', 'phone', 'district', 'address'])
-        ->and(array_filter($config->fields, fn (CheckoutField $field): bool => ! $field->required))
+        ->and(array_filter($config->enabledFields(), fn (CheckoutField $field): bool => ! $field->required))
         ->toBeEmpty();
 });
 
@@ -246,7 +253,71 @@ it('cannot lose a built-in field however the checkout tab is saved', function ()
     $fields = $page->refresh()->checkout_config->fields;
 
     expect(array_map(fn (CheckoutField $field): string => $field->key(), $fields))
-        ->toBe(['name', 'phone', 'district', 'address'])
+        ->toBe(['name', 'phone', 'email', 'district', 'address'])
         ->and($fields[0]->label)->toBe('The only question')
         ->and($fields[1]->label)->toBe('Phone number');
+});
+
+it('stops asking for a field the merchant switched off on the checkout tab', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    $fields = collect($page->checkout_config->fieldsToArray())
+        ->map(function (array $field): array {
+            if ($field['key'] === 'address') {
+                $field['enabled'] = false;
+            }
+
+            if ($field['key'] === 'email') {
+                $field['enabled'] = true;
+            }
+
+            return $field;
+        })
+        ->all();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $fields]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A form that asks different questions is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    $asked = array_map(
+        fn (CheckoutField $field): string => $field->key(),
+        $page->refresh()->checkout_config->enabledFields(),
+    );
+
+    expect($asked)->toBe(['name', 'phone', 'email', 'district']);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Email address')
+        ->assertDontSee('Delivery address');
+});
+
+it('will not let the checkout tab stop asking for a phone number', function () {
+    $page = Page::factory()->create();
+
+    /**
+     * The toggle is held shut on screen, so this is the shape only a tampered
+     * submission could send. A customer is their phone number: an order nobody
+     * can call cannot be fulfilled, and cannot be worth taking.
+     */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => [
+            ['key' => 'phone', 'label' => 'Phone number', 'enabled' => false, 'required' => false],
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $phone = collect($page->refresh()->checkout_config->fields)
+        ->firstWhere(fn (CheckoutField $field): bool => $field->key() === 'phone');
+
+    expect($phone->enabled)->toBeTrue()
+        ->and($phone->required)->toBeTrue();
 });

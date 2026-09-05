@@ -7,10 +7,14 @@ use Illuminate\View\ComponentAttributeBag;
 /**
  * One thing a Checkout asks a Customer for.
  *
- * A field is a built-in paired with what a Merchant decides about it: how it is
- * worded, what it hints at, what it explains, and whether an answer is
- * compulsory. Everything else — the key, the control, the rules — comes from
- * the built-in and cannot be configured away.
+ * A field is a built-in paired with what a Merchant decides about it: whether
+ * it is asked at all, how it is worded, what it hints at, what it explains, and
+ * whether an answer is compulsory. Everything else — the key, the control, the
+ * rules — comes from the built-in and cannot be configured away.
+ *
+ * Asked and compulsory are two flags, not one. A field switched off keeps its
+ * rules for when it comes back, and `required` on a field nobody is asked
+ * decides nothing.
  *
  * It answers for its built-in rather than handing it out, so a form and a rule
  * set are written against "a field" and not against what kind of field it
@@ -26,6 +30,7 @@ class CheckoutField
     public function __construct(
         public readonly BuiltInField $builtIn,
         public readonly string $label,
+        public readonly bool $enabled,
         public readonly bool $required,
         public readonly ?string $placeholder = null,
         public readonly ?string $help = null,
@@ -35,8 +40,9 @@ class CheckoutField
     {
         return new self(
             $builtIn,
-            $builtIn->defaultLabel(),
-            required: true,
+            label: $builtIn->defaultLabel(),
+            enabled: $builtIn->defaultsToEnabled(),
+            required: $builtIn->defaultsToRequired(),
             placeholder: $builtIn->defaultPlaceholder(),
         );
     }
@@ -51,18 +57,33 @@ class CheckoutField
         return new self(
             $builtIn,
             /** A blank label would render a form nobody can read. */
-            is_string($label) && trim($label) !== '' ? $label : $builtIn->defaultLabel(),
-            (bool) ($stored['required'] ?? true),
+            label: is_string($label) && trim($label) !== '' ? $label : $builtIn->defaultLabel(),
+            /**
+             * A mandatory field is on however it was stored. Phone has no
+             * off-switch on the Checkout tab, and this is what makes that true
+             * of a Config edited by any other route as well — a Checkout that
+             * stopped asking for a phone number would take Orders nobody could
+             * call. Absent means "written before the switch existed", which is
+             * the field's own default and not "off".
+             */
+            enabled: $builtIn->isMandatory() || (bool) ($stored['enabled'] ?? $builtIn->defaultsToEnabled()),
+            /**
+             * Independent of `enabled`, and kept across a switch off and back
+             * on: a Merchant trying a shorter form does not lose what they
+             * configured behind it. `required` on a field nobody is asked is
+             * simply inert.
+             */
+            required: $builtIn->isMandatory() || (bool) ($stored['required'] ?? $builtIn->defaultsToRequired()),
             /**
              * Absent and blank mean different things. A Config written before
              * placeholders were configurable has no such key, and must keep
              * rendering the wording the field has always carried; a Merchant who
              * empties the box means they want no hint at all.
              */
-            array_key_exists('placeholder', $stored)
+            placeholder: array_key_exists('placeholder', $stored)
                 ? self::wording($stored['placeholder'])
                 : $builtIn->defaultPlaceholder(),
-            self::wording($stored['help'] ?? null),
+            help: self::wording($stored['help'] ?? null),
         );
     }
 
@@ -129,13 +150,14 @@ class CheckoutField
     }
 
     /**
-     * @return array{key: string, label: string, required: bool, placeholder: string|null, help: string|null}
+     * @return array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}
      */
     public function toArray(): array
     {
         return [
             'key' => $this->key(),
             'label' => $this->label,
+            'enabled' => $this->enabled,
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,

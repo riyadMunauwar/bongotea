@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Pages\Schemas;
 
 use App\Enums\PageStatus;
 use App\Shortcodes\PageBodyValidator;
+use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
 use Closure;
 use Filament\Forms\Components\CodeEditor;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -110,16 +112,34 @@ class PageForm
                                  */
                                 Repeater::make('checkout_config.fields')
                                     ->label('Fields')
-                                    ->helperText('What this page\'s order form asks for, in the words it asks.')
+                                    ->helperText('What this page\'s order form asks for, in the words it asks. Switch one off and it disappears from the form and stops being checked — its wording waits here for the day it comes back.')
                                     ->default(fn (): array => CheckoutConfig::default()->fieldsToArray())
                                     ->addable(false)
                                     ->deletable(false)
                                     ->reorderable(false)
-                                    ->itemLabel(fn (array $state): string => (string) ($state['label'] ?? ''))
-                                    ->columns(3)
+                                    /** Says which questions this page has stopped asking without opening a row. */
+                                    ->itemLabel(fn (array $state): string => (string) ($state['label'] ?? '')
+                                        .(($state['enabled'] ?? true) ? '' : ' — not asked'))
+                                    ->columns(4)
                                     ->schema([
                                         Hidden::make('key'),
                                         Hidden::make('required'),
+
+                                        /**
+                                         * Phone's is held shut: a customer is their phone
+                                         * number, and a cash-on-delivery order nobody can
+                                         * call is not fulfillable. Disabled here and
+                                         * refused again in CheckoutField, because this tab
+                                         * is not the only way a Config gets written.
+                                         */
+                                        Toggle::make('enabled')
+                                            ->label('Ask for this')
+                                            ->default(true)
+                                            ->disabled(fn (Get $get): bool => self::isMandatory($get))
+                                            ->helperText(fn (Get $get): ?string => self::isMandatory($get)
+                                                ? 'Always asked. A cash-on-delivery order nobody can phone cannot be fulfilled.'
+                                                : null)
+                                            ->live(),
 
                                         TextInput::make('label')
                                             ->required()
@@ -194,5 +214,17 @@ class PageForm
                             ->seconds(false),
                     ]),
             ]);
+    }
+
+    /**
+     * Whether the repeater row being rendered holds a field a Checkout may not
+     * stop asking for.
+     *
+     * Read from the row's own hidden key rather than its position, because the
+     * rows are a stored list and nothing here may assume which one is which.
+     */
+    private static function isMandatory(Get $get): bool
+    {
+        return BuiltInField::tryFrom((string) $get('key'))?->isMandatory() ?? false;
     }
 }

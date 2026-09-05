@@ -17,8 +17,13 @@ class DeliveryCharge
 {
     /**
      * Minor units to charge for delivering to a District.
+     *
+     * Nullable because a Page may have switched the District question off, and
+     * a flat charge is a flat charge either way. The day this keys off a zone
+     * table is the day a Checkout with no District needs a default to fall back
+     * on, and that is a decision for then, not a null check now.
      */
-    public function forDistrict(string $district): int
+    public function forDistrict(?string $district): int
     {
         return Money::toMinorUnits(config('giopages.delivery.charge'));
     }
