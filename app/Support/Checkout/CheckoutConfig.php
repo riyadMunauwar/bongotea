@@ -105,12 +105,22 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array{key: string, label: string, required: bool}>}
+     * @return array{fields: list<array{key: string, label: string, required: bool, placeholder: string|null, help: string|null}>}
      */
     public function toArray(): array
     {
-        return [
-            'fields' => array_map(fn (CheckoutField $field): array => $field->toArray(), $this->fields),
-        ];
+        return ['fields' => $this->fieldsToArray()];
+    }
+
+    /**
+     * The field list in its stored shape, which is also the shape the Checkout
+     * tab edits a row at a time. Named so the admin can ask for it without
+     * knowing which key it is filed under here.
+     *
+     * @return list<array{key: string, label: string, required: bool, placeholder: string|null, help: string|null}>
+     */
+    public function fieldsToArray(): array
+    {
+        return array_map(fn (CheckoutField $field): array => $field->toArray(), $this->fields);
     }
 }

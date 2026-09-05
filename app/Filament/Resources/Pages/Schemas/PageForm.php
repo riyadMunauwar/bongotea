@@ -4,14 +4,18 @@ namespace App\Filament\Resources\Pages\Schemas;
 
 use App\Enums\PageStatus;
 use App\Shortcodes\PageBodyValidator;
+use App\Support\Checkout\CheckoutConfig;
 use Closure;
 use Filament\Forms\Components\CodeEditor;
 use Filament\Forms\Components\CodeEditor\Enums\Language;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -22,40 +26,19 @@ class PageForm
     public static function configure(Schema $schema): Schema
     {
         /**
-         * Five columns, not the two the resource hands out: the authoring stack
-         * takes four and Publishing takes one. The Grid is what makes Publishing
-         * a sidebar spanning both sections rather than a box beside the lower
-         * one. Every Section states its own columns because the default is
-         * invisible in the PHP — see .ai/rules/resources.md.
+         * Five columns, not the two the resource hands out: the authoring tabs
+         * take four and Publishing takes the fifth, so the sidebar runs the
+         * full height beside whichever tab is open. Every Tab and Section
+         * states its own columns because the default is invisible in the PHP —
+         * see .ai/rules/resources.md.
          */
         return $schema
             ->columns(5)
             ->components([
-                Grid::make(1)
+                Tabs::make()
                     ->columnSpan(4)
-                    ->schema([
-                        /**
-                         * Collapsible but never persisted: Filament does not
-                         * reopen a collapsed Section to show a validation error,
-                         * and the body linter's "link exactly one product" is
-                         * raised on `body`, in the section below this one. A
-                         * remembered collapse would hide the field that fixes an
-                         * error the operator can see.
-                         */
-                        Section::make('Checkout')
-                            ->collapsible()
-                            ->columns(1)
-                            ->schema([
-                                Select::make('products')
-                                    ->relationship('products', 'name')
-                                    ->multiple()
-                                    ->preload()
-                                    ->searchable()
-                                    ->helperText('[checkout] sells exactly one product, so link exactly one.'),
-                            ]),
-
-                        Section::make('Page')
-                            ->description('The body is a complete HTML document. Nothing is wrapped around it and no stylesheet of ours is injected — what you paste is what a visitor receives.')
+                    ->tabs([
+                        Tab::make('Page')
                             ->columns(1)
                             ->schema([
                                 TextInput::make('title')
@@ -87,40 +70,61 @@ class PageForm
                                     ->language(Language::Html)
                                     ->required()
                                     ->columnSpanFull()
-                                    ->helperText('Write [checkout] where the order form should appear.')
-                                    ->rules([
-                                        /**
-                                         * Publishing is what puts a Page in front of paid
-                                         * traffic, so that is where the linter blocks. A
-                                         * draft may hold a half-written shortcode.
-                                         */
-                                        fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                            /**
-                                             * The status arrives as a raw string on create and as
-                                             * a cast enum on edit, so neither comparison is safe
-                                             * on its own.
-                                             */
-                                            $status = $get('status');
-                                            $status = $status instanceof PageStatus
-                                                ? $status
-                                                : PageStatus::tryFrom((string) $status);
+                                    ->helperText('A complete HTML document. Nothing is wrapped around it and no stylesheet of ours is injected — what you paste is what a visitor receives. Write [checkout] where the order form should appear.'),
+                            ]),
 
-                                            if ($status !== PageStatus::Published) {
-                                                return;
-                                            }
+                        Tab::make('Checkout')
+                            ->columns(1)
+                            ->schema([
+                                Select::make('products')
+                                    ->relationship('products', 'name')
+                                    ->multiple()
+                                    ->preload()
+                                    ->searchable()
+                                    ->helperText('[checkout] sells exactly one product, so link exactly one.'),
 
-                                            /**
-                                             * `products` lives in the Checkout section, but Get
-                                             * resolves against the whole schema, so the linter
-                                             * reads it from here unchanged.
-                                             */
-                                            $errors = app(PageBodyValidator::class)
-                                                ->errors((string) $value, count($get('products') ?? []));
+                                /**
+                                 * The built-in fields, and only them. A key and a type
+                                 * are what a column is waiting for, so neither is
+                                 * offered as a control and no row can be added, removed
+                                 * or reordered: a merchant words a question here, they
+                                 * do not invent one. Both ride along hidden — with the
+                                 * required flag, which has no control of its own yet —
+                                 * so a Config comes back the shape it went in.
+                                 *
+                                 * The default is what puts rows on the create screen,
+                                 * where there is no record to read them from. It calls
+                                 * the same `CheckoutConfig::default()` PageObserver
+                                 * seeds with, so the two cannot disagree; the observer
+                                 * still covers every Page that never passes through
+                                 * this form.
+                                 */
+                                Repeater::make('checkout_config.fields')
+                                    ->label('Fields')
+                                    ->helperText('What this page\'s order form asks for, in the words it asks.')
+                                    ->default(fn (): array => CheckoutConfig::default()->fieldsToArray())
+                                    ->addable(false)
+                                    ->deletable(false)
+                                    ->reorderable(false)
+                                    ->itemLabel(fn (array $state): string => (string) ($state['label'] ?? ''))
+                                    ->columns(3)
+                                    ->schema([
+                                        Hidden::make('key'),
+                                        Hidden::make('required'),
 
-                                            foreach ($errors as $error) {
-                                                $fail($error);
-                                            }
-                                        },
+                                        TextInput::make('label')
+                                            ->required()
+                                            ->maxLength(255)
+                                            ->helperText('What the customer is asked.'),
+
+                                        TextInput::make('placeholder')
+                                            ->maxLength(255)
+                                            ->helperText('Greyed-out hint inside the box. Leave it empty for none.'),
+
+                                        TextInput::make('help')
+                                            ->label('Help text')
+                                            ->maxLength(255)
+                                            ->helperText('A line under the question, for anything that needs explaining.'),
                                     ]),
                             ]),
                     ]),
@@ -134,7 +138,42 @@ class PageForm
                             ->default(PageStatus::Draft->value)
                             ->required()
                             ->live()
-                            ->helperText('Only a published page is reachable at its slug.'),
+                            ->helperText('Only a published page is reachable at its slug.')
+                            ->rules([
+                                /**
+                                 * Why this page cannot go live is asked and answered in
+                                 * the same place. The body and the linked products sit
+                                 * in different tabs, so an error raised on either is
+                                 * invisible from the other; this sidebar is on screen
+                                 * whichever tab is open.
+                                 *
+                                 * Publishing is what puts a Page in front of paid
+                                 * traffic, so that is where the linter blocks. A draft
+                                 * may hold a half-written shortcode.
+                                 */
+                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                    /**
+                                     * The status arrives as a raw string on create and as
+                                     * a cast enum on edit, so neither comparison is safe
+                                     * on its own.
+                                     */
+                                    $status = $value instanceof PageStatus
+                                        ? $value
+                                        : PageStatus::tryFrom((string) $value);
+
+                                    if ($status !== PageStatus::Published) {
+                                        return;
+                                    }
+
+                                    /** Get resolves against the whole schema, so a tab is no barrier. */
+                                    $errors = app(PageBodyValidator::class)
+                                        ->errors((string) $get('body'), count($get('products') ?? []));
+
+                                    foreach ($errors as $error) {
+                                        $fail($error);
+                                    }
+                                },
+                            ]),
 
                         /**
                          * Filled automatically the first time a Page is published

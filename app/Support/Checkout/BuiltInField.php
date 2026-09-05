@@ -13,7 +13,9 @@ use Illuminate\Validation\Rule;
  * server checks the answer against. A Page's Checkout Config decides how each
  * is worded and whether an answer is compulsory; it can never decide what a
  * `phone` is, because a column is waiting for the answer and nothing else may
- * be written there. See ADR-0006.
+ * be written there. That is why a built-in's key and type never appear as
+ * controls on the Checkout tab, and why none of them can be deleted. See
+ * ADR-0006.
  *
  * Case order is the order a Checkout asks in by default, and it reproduces the
  * form exactly as it stood before any of this was configurable.
@@ -49,9 +51,13 @@ enum BuiltInField: string
     }
 
     /**
-     * The unselectable first option of a Select, and null for anything else.
+     * The hint a Page starts with: the unselectable first option of a Select,
+     * and nothing at all for anything else.
+     *
+     * A default rather than a fixture. A Merchant may reword it or empty it
+     * from the Checkout tab, and what they leave is what renders.
      */
-    public function placeholder(): ?string
+    public function defaultPlaceholder(): ?string
     {
         return match ($this) {
             self::District => 'Choose your district',
@@ -79,6 +85,10 @@ enum BuiltInField: string
     /**
      * HTML the control always carries: the autofill hint, the keyboard a phone
      * should open, and the length the server enforces anyway.
+     *
+     * Never a `placeholder`. That word is the Merchant's, and CheckoutField
+     * merges theirs in as a default — one declared here would outrank it and
+     * could not be reworded from the Checkout tab.
      *
      * @return array<string, string>
      */

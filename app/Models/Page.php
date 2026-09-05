@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * served at its own flat slug.
  */
 #[ObservedBy(PageObserver::class)]
-#[Fillable(['title', 'slug', 'body', 'status', 'published_at'])]
+#[Fillable(['title', 'slug', 'body', 'status', 'published_at', 'checkout_config'])]
 class Page extends Model
 {
     /** @use HasFactory<PageFactory> */

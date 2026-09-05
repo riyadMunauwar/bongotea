@@ -54,7 +54,7 @@ it('refuses to publish a page whose checkout has no product to sell', function (
             'products' => [],
         ])
         ->call('create')
-        ->assertHasFormErrors(['body']);
+        ->assertHasFormErrors(['status']);
 });
 
 it('refuses to publish a page that links more than one product', function () {
@@ -73,7 +73,7 @@ it('refuses to publish a page that links more than one product', function () {
             'products' => $products->pluck('id')->all(),
         ])
         ->call('create')
-        ->assertHasFormErrors(['body']);
+        ->assertHasFormErrors(['status']);
 });
 
 it('lets a draft hold a shortcode it could not be published with', function () {
@@ -158,4 +158,55 @@ it('gives a new page a complete checkout nobody had to configure', function () {
         ->toBe(['name', 'phone', 'district', 'address'])
         ->and(array_filter($config->fields, fn (CheckoutField $field): bool => ! $field->required))
         ->toBeEmpty();
+});
+
+it('serves a checkout in the wording the merchant gave it', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    $fields = $page->checkout_config->toArray()['fields'];
+    $fields[0]['label'] = 'Who are we delivering to?';
+    $fields[0]['placeholder'] = 'Your full name';
+    $fields[0]['help'] = 'As it is written on your NID.';
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $fields]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A rewording changes what visitors receive, so the HTML written before it has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Who are we delivering to?')
+        ->assertSee('Your full name')
+        ->assertSee('As it is written on your NID.');
+});
+
+it('cannot lose a built-in field however the checkout tab is saved', function () {
+    $page = Page::factory()->create();
+
+    /**
+     * No control on the tab adds, removes or reorders a row, so this is the
+     * shape only a tampered submission could send. A Config short of a built-in
+     * is completed as it is read, so the form can never stop asking for a phone
+     * number nobody could then call.
+     */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => [
+            ['key' => 'name', 'label' => 'The only question', 'required' => true],
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $fields = $page->refresh()->checkout_config->fields;
+
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $fields))
+        ->toBe(['name', 'phone', 'district', 'address'])
+        ->and($fields[0]->label)->toBe('The only question')
+        ->and($fields[1]->label)->toBe('Phone number');
 });

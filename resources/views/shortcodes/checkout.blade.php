@@ -32,6 +32,7 @@
         .gio-checkout-form { margin: 1rem 0 0; }
         .gio-checkout-field { margin: 0 0 .75rem; }
         .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125rem; font-weight: 600; }
+        .gio-checkout-help { margin: 0 0 .375rem; font-size: .75rem; line-height: 1.4; opacity: .75; }
         .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-family: inherit; font-size: 1rem; background: #fff; color: inherit; }
         .gio-checkout-input:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
         .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125rem; color: #b91c1c; }
@@ -82,20 +83,38 @@
             Capture would have accepted.
         --}}
         @foreach ($fields as $field)
+            @php
+                $id = 'gio-'.$field->key();
+
+                /** The id is the view's to invent, so it is the view that ties the two together. */
+                $control = $field->controlAttributes()->merge(array_filter([
+                    'aria-describedby' => $field->help === null ? null : $id.'-help',
+                ]));
+            @endphp
+
             <div class="gio-checkout-field">
-                <label class="gio-checkout-label" for="gio-{{ $field->key() }}">{{ $field->label }}</label>
+                <label class="gio-checkout-label" for="{{ $id }}">{{ $field->label }}</label>
+
+                @if ($field->help !== null)
+                    <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                @endif
 
                 @switch ($field->type())
                     @case (CheckoutFieldType::Textarea)
-                        <textarea class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
-                                  {{ $field->controlAttributes() }} @required($field->required)></textarea>
+                        <textarea class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                  {{ $control }} @required($field->required)></textarea>
                         @break
 
                     @case (CheckoutFieldType::Select)
-                        <select class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
-                                {{ $field->controlAttributes() }} @required($field->required)>
-                            {{-- Unpickable only where an answer is compulsory, so a browser can submit what the server would accept. --}}
-                            <option value="" selected @disabled($field->required)>{{ $field->placeholder() }}</option>
+                        <select class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                {{ $control }} @required($field->required)>
+                            {{--
+                                Unpickable only where an answer is compulsory, so a browser can
+                                submit what the server would accept. It is rendered even with no
+                                placeholder to word it: a required select has to be able to start
+                                on nothing chosen, rather than on whichever district sorts first.
+                            --}}
+                            <option value="" selected @disabled($field->required)>{{ $field->placeholder }}</option>
                             @foreach ($field->options() as $option)
                                 <option value="{{ $option }}">{{ $option }}</option>
                             @endforeach
@@ -103,8 +122,8 @@
                         @break
 
                     @default
-                        <input class="gio-checkout-input" id="gio-{{ $field->key() }}" name="{{ $field->key() }}"
-                               {{ $field->controlAttributes() }} @required($field->required)>
+                        <input class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                               {{ $control }} @required($field->required)>
                 @endswitch
 
                 <p class="gio-checkout-error" data-gio-error-for="{{ $field->key() }}"></p>
