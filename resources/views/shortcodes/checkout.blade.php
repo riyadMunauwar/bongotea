@@ -72,7 +72,7 @@
         .gio-checkout-help { margin: 0 0 .375rem; font-size: .75rem; line-height: 1.4; opacity: .75; }
         .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-family: inherit; font-size: 1rem; background: #fff; color: inherit; }
         .gio-checkout-input:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
-        .gio-checkout-delivery { margin: 0; padding: 0; border: 0; }
+        .gio-checkout-delivery, .gio-checkout-choices { margin: 0; padding: 0; border: 0; }
         .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-size: .9375rem; cursor: pointer; }
         .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
         .gio-checkout-choice-label { flex: 1; }
@@ -204,6 +204,11 @@
             own Checkout Config — the same list the server compiles its rules
             from, so a visitor is never blocked from typing something the
             Capture would have accepted.
+
+            One loop for both kinds of field. A question the merchant added of
+            their own is drawn by its type exactly as a built-in of that type
+            is, and sits wherever the list puts it, including between two
+            built-ins (ADR-0006).
         --}}
         @foreach ($fields as $field)
             @php
@@ -216,38 +221,78 @@
             @endphp
 
             <div class="gio-checkout-field">
-                <label class="gio-checkout-label" for="{{ $id }}">{{ $field->label }}</label>
+                {{--
+                    A radio group and a checkbox carry their own wording — a
+                    legend over the choices, and the text beside the box — so
+                    neither takes the label block above it. Labelling both would
+                    ask the same question twice, and a stray <label> pointing at
+                    nothing is worse than no label at all.
+                --}}
+                @if ($field->type() === CheckoutFieldType::Radio)
+                    <fieldset class="gio-checkout-choices">
+                        <legend class="gio-checkout-label">{{ $field->label }}</legend>
 
-                @if ($field->help !== null)
-                    <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                        @if ($field->help !== null)
+                            <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                        @endif
+
+                        {{--
+                            Nothing chosen to begin with, even where an answer is
+                            compulsory: a pre-ticked answer is one the customer
+                            never gave. The browser's own check asks for one, and
+                            the server refuses a value the list does not hold.
+                        --}}
+                        @foreach ($field->options() as $option)
+                            <label class="gio-checkout-choice">
+                                <input name="{{ $field->key() }}" value="{{ $option->value }}"
+                                       {{ $control }} @required($field->required)>
+                                <span class="gio-checkout-choice-label">{{ $option->label }}</span>
+                            </label>
+                        @endforeach
+                    </fieldset>
+                @elseif ($field->type() === CheckoutFieldType::Checkbox)
+                    @if ($field->help !== null)
+                        <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                    @endif
+
+                    <label class="gio-checkout-choice">
+                        <input name="{{ $field->key() }}" {{ $control }} @required($field->required)>
+                        <span class="gio-checkout-choice-label">{{ $field->label }}</span>
+                    </label>
+                @else
+                    <label class="gio-checkout-label" for="{{ $id }}">{{ $field->label }}</label>
+
+                    @if ($field->help !== null)
+                        <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                    @endif
+
+                    @switch ($field->type())
+                        @case (CheckoutFieldType::Textarea)
+                            <textarea class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                      {{ $control }} @required($field->required)></textarea>
+                            @break
+
+                        @case (CheckoutFieldType::Select)
+                            <select class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                    {{ $control }} @required($field->required)>
+                                {{--
+                                    Unpickable only where an answer is compulsory, so a browser can
+                                    submit what the server would accept. It is rendered even with no
+                                    placeholder to word it: a required select has to be able to start
+                                    on nothing chosen, rather than on whichever district sorts first.
+                                --}}
+                                <option value="" selected @disabled($field->required)>{{ $field->placeholder }}</option>
+                                @foreach ($field->options() as $option)
+                                    <option value="{{ $option->value }}">{{ $option->label }}</option>
+                                @endforeach
+                            </select>
+                            @break
+
+                        @default
+                            <input class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                   {{ $control }} @required($field->required)>
+                    @endswitch
                 @endif
-
-                @switch ($field->type())
-                    @case (CheckoutFieldType::Textarea)
-                        <textarea class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                                  {{ $control }} @required($field->required)></textarea>
-                        @break
-
-                    @case (CheckoutFieldType::Select)
-                        <select class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                                {{ $control }} @required($field->required)>
-                            {{--
-                                Unpickable only where an answer is compulsory, so a browser can
-                                submit what the server would accept. It is rendered even with no
-                                placeholder to word it: a required select has to be able to start
-                                on nothing chosen, rather than on whichever district sorts first.
-                            --}}
-                            <option value="" selected @disabled($field->required)>{{ $field->placeholder }}</option>
-                            @foreach ($field->options() as $option)
-                                <option value="{{ $option }}">{{ $option }}</option>
-                            @endforeach
-                        </select>
-                        @break
-
-                    @default
-                        <input class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                               {{ $control }} @required($field->required)>
-                @endswitch
 
                 <p class="gio-checkout-error" data-gio-error-for="{{ $field->key() }}"></p>
             </div>

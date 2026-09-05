@@ -27,7 +27,7 @@ class OrderCapture
      * on a form with no address box records that it has no address, rather than
      * a blank that reads as a Customer who declined to give one.
      *
-     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}  $details
+     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
@@ -84,6 +84,15 @@ class OrderCapture
                 'customer_email' => $details['email'],
                 'customer_address' => $details['address'],
                 'customer_district' => $details['district'],
+
+                /**
+                 * The questions this Page's Merchant added of their own, each
+                 * recorded with the wording and the control it was asked with.
+                 * Snapshotted like a Product's name and price, and for the same
+                 * reason: rewording the question next month, or deleting it,
+                 * must not rewrite what this Customer answered today.
+                 */
+                'answers' => $details['answers'],
 
                 /**
                  * The arrangement in the Merchant's own words, beside what it

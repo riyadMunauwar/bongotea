@@ -117,14 +117,19 @@ enum BuiltInField: string
      *
      * District's choices are installation configuration rather than part of the
      * Config: they are not data a Merchant manages, and a Merchant outside
-     * Bangladesh replaces the list wholesale.
+     * Bangladesh replaces the list wholesale. Each is its own wording, which is
+     * why they are made rather than read as a value and a label — a district is
+     * chosen by its name, and there is no second name to record.
      *
-     * @return list<string>
+     * @return list<FieldOption>
      */
     public function options(): array
     {
         return match ($this) {
-            self::District => array_values((array) config('giopages.districts')),
+            self::District => array_map(
+                fn (string $district): FieldOption => FieldOption::of($district),
+                array_values((array) config('giopages.districts')),
+            ),
             default => [],
         };
     }
@@ -179,7 +184,10 @@ enum BuiltInField: string
              */
             self::Email => ['string', 'email:filter', 'max:255'],
 
-            self::District => ['string', Rule::in($this->options())],
+            self::District => [
+                'string',
+                Rule::in(array_map(fn (FieldOption $option): string => $option->value, $this->options())),
+            ],
             self::Address => ['string', 'max:1000'],
         };
     }

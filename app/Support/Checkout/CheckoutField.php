@@ -2,33 +2,35 @@
 
 namespace App\Support\Checkout;
 
+use App\Support\Orders\CapturedAnswer;
 use Illuminate\View\ComponentAttributeBag;
 
 /**
  * One thing a Checkout asks a Customer for.
  *
- * A field is a built-in paired with what a Merchant decides about it: whether
- * it is asked at all, how it is worded, what it hints at, what it explains, and
- * whether an answer is compulsory. Everything else — the key, the control, the
- * rules — comes from the built-in and cannot be configured away.
+ * A field is whatever it is asked about paired with what a Merchant decides
+ * about it: whether it is asked at all, how it is worded, what it hints at,
+ * what it explains, and whether an answer is compulsory. The built-ins the
+ * system knows by name and the Merchant's own are both this, sit in one ordered
+ * list, and are presented and validated alike (ADR-0006).
  *
  * Asked and compulsory are two flags, not one. A field switched off keeps its
  * rules for when it comes back, and `required` on a field nobody is asked
  * decides nothing.
  *
- * It answers for its built-in rather than handing it out, so a form and a rule
- * set are written against "a field" and not against what kind of field it
- * happens to be. That is what lets the Merchant's own fields join this list
- * later without either caller learning about the difference (ADR-0006).
+ * One property differs between the two kinds, and it is the only one a caller
+ * ever needs: where the answer goes. A built-in's goes to the column that has
+ * always held it; a Merchant's own goes to the Order's snapshot, with its label
+ * and type recorded beside the value. `snapshotsAnswer()` is that property, and
+ * nothing else here branches on which kind of field it is holding.
  *
- * What the Merchant decided is a property; what the built-in dictates is a
+ * What the Merchant decided is a property; what the kind of field dictates is a
  * method. Reading `$field->label` and calling `$field->options()` in one breath
  * is that split, not an inconsistency.
  */
-class CheckoutField
+abstract class CheckoutField
 {
     public function __construct(
-        public readonly BuiltInField $builtIn,
         public readonly string $label,
         public readonly bool $enabled,
         public readonly bool $required,
@@ -36,132 +38,157 @@ class CheckoutField
         public readonly ?string $help = null,
     ) {}
 
-    public static function default(BuiltInField $builtIn): self
-    {
-        return new self(
-            $builtIn,
-            label: $builtIn->defaultLabel(),
-            enabled: $builtIn->defaultsToEnabled(),
-            required: $builtIn->defaultsToRequired(),
-            placeholder: $builtIn->defaultPlaceholder(),
-        );
-    }
-
     /**
-     * @param  array<string, mixed>  $stored
+     * What the answer is named in the submission, and — for a built-in — the
+     * column it is written to.
      */
-    public static function fromArray(BuiltInField $builtIn, array $stored): self
-    {
-        $label = $stored['label'] ?? null;
+    abstract public function key(): string;
 
-        return new self(
-            $builtIn,
-            /** A blank label would render a form nobody can read. */
-            label: is_string($label) && trim($label) !== '' ? $label : $builtIn->defaultLabel(),
-            /**
-             * A mandatory field is on however it was stored. Phone has no
-             * off-switch on the Checkout tab, and this is what makes that true
-             * of a Config edited by any other route as well — a Checkout that
-             * stopped asking for a phone number would take Orders nobody could
-             * call. Absent means "written before the switch existed", which is
-             * the field's own default and not "off".
-             */
-            enabled: $builtIn->isMandatory() || (bool) ($stored['enabled'] ?? $builtIn->defaultsToEnabled()),
-            /**
-             * Independent of `enabled`, and kept across a switch off and back
-             * on: a Merchant trying a shorter form does not lose what they
-             * configured behind it. `required` on a field nobody is asked is
-             * simply inert.
-             */
-            required: $builtIn->isMandatory() || (bool) ($stored['required'] ?? $builtIn->defaultsToRequired()),
-            /**
-             * Absent and blank mean different things. A Config written before
-             * placeholders were configurable has no such key, and must keep
-             * rendering the wording the field has always carried; a Merchant who
-             * empties the box means they want no hint at all.
-             */
-            placeholder: array_key_exists('placeholder', $stored)
-                ? self::wording($stored['placeholder'])
-                : $builtIn->defaultPlaceholder(),
-            help: self::wording($stored['help'] ?? null),
-        );
-    }
-
-    public function key(): string
-    {
-        return $this->builtIn->value;
-    }
-
-    public function type(): CheckoutFieldType
-    {
-        return $this->builtIn->type();
-    }
+    abstract public function type(): CheckoutFieldType;
 
     /**
-     * @return list<string>
-     */
-    public function options(): array
-    {
-        return $this->builtIn->options();
-    }
-
-    /**
-     * The HTML the control carries: what the built-in always says, plus the
-     * merchant's hint wherever the control is one that can show a hint.
+     * What a choice is made between, empty for a control that is not a choice.
      *
-     * A Select spends its placeholder on its unpickable first option instead,
-     * so it must never also carry the attribute — a browser ignores it on a
-     * closed list and the merchant would have written the same hint twice. That
-     * decision lives here rather than in the view for the same reason the rules
-     * do: a caller writes against "a field" and never learns what kind of field
-     * it is.
+     * @return list<FieldOption>
+     */
+    abstract public function options(): array;
+
+    /**
+     * Whether this field's answer goes to the Order's snapshot rather than to a
+     * column of its own. See ADR-0006: storage is a property of a field, not a
+     * second system with its own list.
+     */
+    abstract public function snapshotsAnswer(): bool;
+
+    /**
+     * @return array<string, string>
+     */
+    abstract public function messages(): array;
+
+    /**
+     * @return array<string, mixed>
+     */
+    abstract public function toArray(): array;
+
+    /**
+     * What an answer must look like beyond whether it was given at all, which
+     * `rules()` decides in front of this.
+     *
+     * @return list<mixed>
+     */
+    abstract protected function answerRules(): array;
+
+    /**
+     * HTML the control always carries, whatever a Merchant worded around it.
+     *
+     * @return array<string, string>
+     */
+    abstract protected function controlHtml(): array;
+
+    /**
+     * @return list<mixed>
+     */
+    final public function rules(): array
+    {
+        return [...$this->presenceRules(), ...$this->answerRules()];
+    }
+
+    /**
+     * The HTML the control carries: what the kind of field always says, plus
+     * the merchant's hint wherever the control is one that carries the hint as
+     * an attribute. A Select renders theirs as its first option instead, which
+     * is the view's to do.
      *
      * Merged in rather than constructed with, because merging is what escapes:
      * the bag's own `__toString` does not, and this is the one attribute here a
      * merchant types.
      */
-    public function controlAttributes(): ComponentAttributeBag
+    final public function controlAttributes(): ComponentAttributeBag
     {
-        return (new ComponentAttributeBag($this->builtIn->controlAttributes()))
+        return (new ComponentAttributeBag($this->controlHtml()))
             ->merge(array_filter([
-                'placeholder' => $this->type() === CheckoutFieldType::Select ? null : $this->placeholder,
+                'placeholder' => $this->type()->carriesPlaceholderAttribute() ? $this->placeholder : null,
             ]));
     }
 
     /**
-     * @return list<mixed>
+     * What the visitor said, in the shape it is stored in.
+     *
+     * A blank is a null throughout, because "we never asked" and "they had
+     * nothing to say" are the two states worth telling apart and a blank is
+     * neither. A checkbox is the exception: it is absent from a form post when
+     * it is not ticked, so an untouched box is a false rather than a nothing.
      */
-    public function rules(): array
+    final public function answerFrom(mixed $raw): string|bool|null
     {
-        /**
-         * `nullable` rather than simply leaving the rules off: a blank answer
-         * reaches validation as null, and without it an optional District left
-         * alone would be checked for membership of a list it is not in.
-         */
-        return [$this->required ? 'required' : 'nullable', ...$this->builtIn->rules()];
+        if ($this->type() === CheckoutFieldType::Checkbox) {
+            return filter_var($raw, FILTER_VALIDATE_BOOL);
+        }
+
+        $answer = is_scalar($raw) ? trim((string) $raw) : '';
+
+        return $answer === '' ? null : $answer;
     }
 
     /**
-     * @return array<string, string>
+     * The answer as an Order records it: the question as it was worded and the
+     * control it was asked with, beside what was said.
+     *
+     * Everything the Order needs to be read afterwards is copied in here, so
+     * relabelling the field, deleting it or force-deleting the Page changes
+     * nothing about what a past Order says.
      */
-    public function messages(): array
+    final public function capture(string|bool|null $answer): CapturedAnswer
     {
-        return $this->builtIn->messages();
+        return new CapturedAnswer(
+            key: $this->key(),
+            label: $this->label,
+            type: $this->type(),
+            value: $answer,
+            optionLabel: $this->optionLabelFor($answer),
+        );
     }
 
     /**
-     * @return array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}
+     * Whether an answer was given at all.
+     *
+     * A compulsory checkbox is `accepted` rather than `required`: an unticked
+     * box is absent from a form post, so `required` would pass for a box the
+     * Customer refused. Both rules are implicit, so both fire on an answer that
+     * never arrived.
+     *
+     * `nullable` rather than simply leaving the rules off: a blank answer
+     * reaches validation as null, and without it an optional District left
+     * alone would be checked for membership of a list it is not in.
+     *
+     * @return list<string>
      */
-    public function toArray(): array
+    private function presenceRules(): array
     {
-        return [
-            'key' => $this->key(),
-            'label' => $this->label,
-            'enabled' => $this->enabled,
-            'required' => $this->required,
-            'placeholder' => $this->placeholder,
-            'help' => $this->help,
-        ];
+        if ($this->type() === CheckoutFieldType::Checkbox) {
+            return [$this->required ? 'accepted' : 'nullable'];
+        }
+
+        return [$this->required ? 'required' : 'nullable'];
+    }
+
+    /**
+     * The wording the chosen option carried at Capture, where the answer was a
+     * choice between listed ones.
+     */
+    private function optionLabelFor(string|bool|null $answer): ?string
+    {
+        if (! $this->type()->hasOptions() || ! is_string($answer)) {
+            return null;
+        }
+
+        foreach ($this->options() as $option) {
+            if ($option->value === $answer) {
+                return $option->label;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -170,7 +197,7 @@ class CheckoutField
      * Whitespace collapses to null so an accidental space does not render an
      * empty help paragraph or a hint made of one blank character.
      */
-    private static function wording(mixed $value): ?string
+    protected static function wording(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }

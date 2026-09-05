@@ -62,6 +62,10 @@ _Avoid_: purchase, transaction, sale, lead
 One Product's worth of an Order, recording what was sold, at what unit price, and in what quantity, as agreed at Capture. A Product is a reference from an Order Line, never a source of truth for it.
 _Avoid_: line item, order item, cart item
 
+**Answer**:
+What a Customer said to one of the Checkout Fields a Merchant added of their own, as an Order records it: the field's key, the wording it was asked in, the control it was asked with, the value, and for a choice the wording of the option picked. A built-in field's answer is not this — it goes to the column that has always held it. A question asked and left alone is recorded with nothing for a value, which is a different thing from a question that was never asked.
+_Avoid_: custom field, meta, extra data, attribute
+
 **Capture**:
 The moment a visitor submits the Checkout and an Order comes into existence. What was agreed at Capture — the products, their prices, and the totals — is fixed from then on.
 _Avoid_: conversion, submission

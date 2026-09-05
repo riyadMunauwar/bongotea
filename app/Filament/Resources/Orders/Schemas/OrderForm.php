@@ -152,6 +152,8 @@ class OrderForm
                             ->placeholder(OrderDocument::NOT_ASKED),
                     ]),
 
+                ...OrderDocument::answers(),
+
                 Section::make('Items')
                     ->columnSpanFull()
                     ->schema([

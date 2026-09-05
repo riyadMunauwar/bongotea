@@ -9,6 +9,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Checkout\CheckoutField;
+use App\Support\Checkout\FieldOption;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -548,4 +549,176 @@ it('keeps the delivery options and the questions a page had when the picker is s
         ->and($config->deliveryOptionsToArray())->toBe([['label' => 'Inside Dhaka', 'amount' => 6000]])
         ->and(array_map(fn (CheckoutField $field): string => $field->key(), $config->fields))
         ->toBe(['name', 'phone', 'email', 'district', 'address']);
+});
+
+/**
+ * One of the merchant's own questions, in the shape the Checkout tab fills a
+ * row in: every control on the row, whether or not it has anything in it.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function questionRow(string $key, array $overrides = []): array
+{
+    return array_merge([
+        'key' => $key,
+        'label' => 'Gift note',
+        'type' => 'text',
+        'enabled' => true,
+        'required' => false,
+        'placeholder' => null,
+        'help' => null,
+        'options' => [],
+    ], $overrides);
+}
+
+/**
+ * The field rows this Page already has, with the merchant's own placed after a
+ * named built-in rather than at the end.
+ *
+ * One list holds both kinds, so adding a question is inserting a row rather
+ * than filling in a second form (ADR-0006).
+ *
+ * @param  list<array<string, mixed>>  $questions
+ * @return array<string, mixed>
+ */
+function fieldRows(Page $page, array $questions, string $after = 'phone'): array
+{
+    $rows = [];
+
+    foreach ($page->checkout_config->fieldsToArray() as $row) {
+        $rows[] = $row;
+
+        if ($row['key'] === $after) {
+            $rows = [...$rows, ...$questions];
+        }
+    }
+
+    return ['checkout_config' => ['fields' => $rows]];
+}
+
+it('lets a merchant add a question of their own between two built-in ones', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('gift_note', [
+                'label' => 'Anything we should write on the card?',
+                'type' => 'textarea',
+                'help' => 'We will copy it out by hand.',
+            ]),
+        ], after: 'phone'))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A form asking a question more is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    /**
+     * Where the merchant put it, not appended after the built-ins. A question
+     * that can only go last is a question the merchant cannot really place.
+     */
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
+        ->toBe(['name', 'phone', 'gift_note', 'email', 'district', 'address']);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Anything we should write on the card?')
+        ->assertSee('We will copy it out by hand.');
+});
+
+it('lets a merchant author the options one of their own questions offers', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('colour', [
+                'label' => 'Which colour?',
+                'type' => 'select',
+                'placeholder' => 'Choose a colour',
+                'options' => [
+                    ['value' => 'sky', 'label' => 'Sky blue'],
+                    /** No wording of its own, so the value is what the customer reads. */
+                    ['value' => 'Moss green', 'label' => null],
+                ],
+            ]),
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $colour = collect($page->refresh()->checkout_config->fields)
+        ->firstWhere(fn (CheckoutField $field): bool => $field->key() === 'colour');
+
+    expect(array_map(fn (FieldOption $option): array => $option->toArray(), $colour->options()))
+        ->toBe([
+            ['value' => 'sky', 'label' => 'Sky blue'],
+            ['value' => 'Moss green', 'label' => 'Moss green'],
+        ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('<option value="sky">Sky blue</option>', false);
+});
+
+it('refuses a question of the merchant that nothing could answer', function (array $questions) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, $questions))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * Named against the row that is wrong rather than against the repeater, so
+     * a merchant with a dozen questions is told which one to fix. The key the
+     * repeater invents per item is in the middle of the path, so the ends are
+     * what there is to assert on.
+     */
+    expect(array_keys($component->errors()->messages()))
+        ->each->toStartWith('data.checkout_config.fields');
+
+    /**
+     * Refused at save rather than tidied up on read: a question a merchant
+     * thinks their page asks and does not is a campaign collecting less than
+     * they believe it is.
+     */
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address']);
+})->with([
+    'two questions under one key' => [[
+        questionRow('gift_note'),
+        questionRow('gift_note', ['label' => 'A second note']),
+    ]],
+    'a key one of the built-in questions holds' => [[questionRow('district', ['label' => 'Which district?'])]],
+    'a key the order form already uses' => [[questionRow('page', ['label' => 'Which page?'])]],
+    'a key no form input could carry' => [[questionRow('Gift Note!')]],
+    'a dropdown with nothing to choose between' => [[questionRow('colour', ['type' => 'select', 'options' => []])]],
+    'radio buttons with nothing to choose between' => [[questionRow('colour', ['type' => 'radio', 'options' => []])]],
+]);
+
+it('refuses a duplicated key on the row that holds it', function () {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('gift_note'),
+            questionRow('gift_note', ['label' => 'A second note']),
+        ]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * On the key box itself, which is the control the merchant has to change.
+     * Both rows are named, because either one of the pair could be the one that
+     * was meant to be something else.
+     */
+    expect(array_keys($component->errors()->messages()))
+        ->toHaveCount(2)
+        ->each->toEndWith('.key');
 });

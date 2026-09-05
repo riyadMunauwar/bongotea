@@ -32,3 +32,15 @@ Filament builds column search as `LIKE "%term%"` (vendor/filament/tables/src/Col
 Slow search is fixed by changing the query shape, not the schema — prefix matching (`LIKE 'term%'`), or a fulltext index if MySQL is ever settled on as the deployment target. Note `.env.example` still defaults to SQLite, so fulltext is not currently available.
 
 Decided to leave Orders search unindexed and unchanged: it is one User on one screen, tolerable far longer than the navigation badge's per-request `count()` was. That count is a different case and IS indexed — see `orders_status_created_at_index`, which is equality-tested and therefore index-serviceable.
+
+## `Repeater::getItemState()` validates the row it reads — use `getRawItemState()` in a render-time closure
+`Schema::getState()` calls `$this->validate()` (vendor/filament/schemas/src/Concerns/HasState.php), and `Repeater::getItemState()` goes through it. So reading a row's state while the page is being *drawn* — a per-item `deleteAction()`/`visible()` closure, an `itemLabel()`, an extra item action — raises that row's validation failure as an uncaught `ValidationException`, which surfaces as a `ViewException` from `filament/resources/views/pages/page.blade.php` rather than as a form error. It fires on every render once one row is incomplete, so the merchant cannot even reach the box they have to fix.
+
+`getRawItemState()` uses `getStateSnapshot()` and does not validate. PageForm's fields repeater hides the delete button on the five built-in rows that way. Reach for `getItemState()` only from something that already runs at save time.
+
+## A cast that hands out objects breaks form hydration unless it implements `SerializesCastableAttributes`
+`Model::attributesToArray()` leaves a custom cast's value alone unless the cast implements `Illuminate\Contracts\Database\Eloquent\SerializesCastableAttributes` or the value itself is `Arrayable` (`HasAttributes::addCastAttributesToArray`). Filament fills an edit form from `attributesToArray()`, then `data_set()`s into that data as it hydrates — so a cast returning a list of objects fails with "Cannot modify readonly property" the moment the record is opened for editing, even when nothing on screen edits the attribute.
+
+`AsCapturedAnswers` implements `serialize()` for exactly that reason: `Order::answers` reads as `list<CapturedAnswer>` in the app and as plain arrays wherever the Order is read as an array, which is also what keeps the activity trail readable. `Page::checkout_config` needs nothing extra because `CheckoutConfig` is `Arrayable`.
+
+Note this is unrelated to whether the attribute is displayed: an infolist entry inside a form (`OrderDocument::answers()`) never dehydrates, but the record's data is hydrated regardless.

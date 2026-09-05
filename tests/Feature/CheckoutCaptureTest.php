@@ -6,6 +6,8 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
+use App\Support\Orders\CapturedAnswer;
+use Illuminate\Support\Str;
 
 /**
  * A published Page selling whatever Products it is handed. One is the shape
@@ -1108,4 +1110,361 @@ it('refuses a tick that names nothing this page could sell', function () {
         ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
 
     expect(Order::count())->toBe(0);
+});
+
+/**
+ * One question a Merchant added of their own, in the shape the Checkout tab
+ * saves a row in.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function question(string $key, string $type = 'text', array $overrides = []): array
+{
+    return array_merge([
+        'key' => $key,
+        'label' => Str::headline($key),
+        'type' => $type,
+        'enabled' => true,
+        'required' => false,
+    ], $overrides);
+}
+
+/**
+ * The same Page's Checkout, asking its built-in questions and the Merchant's
+ * own — with theirs placed straight after one of the built-ins rather than
+ * appended, because where a question sits is the point of one field list.
+ *
+ * Written through `fieldsToArray()` and read back through `fromArray()`, which
+ * is the round trip the Checkout tab performs on save.
+ *
+ * @param  list<array<string, mixed>>  $questions
+ */
+function checkoutAlsoAsking(Page $page, array $questions, string $after = 'phone'): Page
+{
+    $fields = [];
+
+    foreach ($page->checkout_config->fieldsToArray() as $field) {
+        $fields[] = $field;
+
+        if ($field['key'] === $after) {
+            $fields = [...$fields, ...$questions];
+        }
+    }
+
+    return checkoutOf($page, $fields);
+}
+
+/**
+ * The same Page's Checkout with exactly these fields, in this order.
+ *
+ * @param  list<array<string, mixed>>  $fields
+ */
+function checkoutOf(Page $page, array $fields): Page
+{
+    $page->checkout_config = CheckoutConfig::fromArray([
+        'fields' => $fields,
+
+        /** Carried through untouched, the way the Checkout tab submits both. */
+        'delivery_options' => $page->checkout_config->deliveryOptionsToArray(),
+    ]);
+
+    $page->save();
+
+    return $page->refresh();
+}
+
+/**
+ * What an Order recorded for the Merchant's own questions, in its stored shape.
+ *
+ * @return list<array<string, mixed>>
+ */
+function snapshotOf(Order $order): array
+{
+    return array_map(fn (CapturedAnswer $answer): array => $answer->toArray(), $order->answers);
+}
+
+it('asks a question the merchant added in the place they put it', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('gift_note')], after: 'phone');
+
+    /**
+     * One ordered list, both kinds of field. A question a merchant added is not
+     * pushed to the end of the form because it arrived last (ADR-0006).
+     */
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->checkout_config->enabledFields()))
+        ->toBe(['name', 'phone', 'gift_note', 'district', 'address']);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect(strpos($html, 'name="gift_note"'))
+        ->toBeGreaterThan(strpos($html, 'name="phone"'))
+        ->toBeLessThan(strpos($html, 'name="address"'));
+});
+
+it('draws a question the merchant added with the control its type names', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    checkoutAlsoAsking($page, [
+        question('gift_note', 'text'),
+        question('directions', 'textarea'),
+        question('floor', 'number'),
+        question('colour', 'select', ['options' => [['value' => 'sky', 'label' => 'Sky blue']]]),
+        question('wrapping', 'radio', ['options' => [['value' => 'paper', 'label' => 'Brown paper']]]),
+        question('terms', 'checkbox', ['label' => 'I agree to the terms']),
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)
+        ->toMatch('/<input[^>]*name="gift_note"[^>]*type="text"/')
+        ->toMatch('/<textarea[^>]*name="directions"/')
+        ->toMatch('/<input[^>]*name="floor"[^>]*type="number"/')
+        ->toContain('<option value="sky">Sky blue</option>')
+        ->toMatch('/<input name="wrapping" value="paper"[^>]*type="radio"/')
+        ->toContain('Brown paper')
+        /** A checkbox is worded beside the box rather than above it. */
+        ->toMatch('/<input name="terms"[^>]*type="checkbox"[^>]*value="1"/')
+        ->toContain('I agree to the terms');
+});
+
+it('records an answer with the question it was asked', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('colour', 'select', [
+            'label' => 'Which colour?',
+            'options' => [
+                ['value' => 'sky', 'label' => 'Sky blue'],
+                ['value' => 'moss', 'label' => 'Moss green'],
+            ],
+        ]),
+        question('gift_note', 'text', ['label' => 'Gift note']),
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'colour' => 'moss',
+        'gift_note' => '  Happy birthday  ',
+    ]))->assertCreated();
+
+    /**
+     * The key, the wording, the control and the value, in the order they were
+     * asked — and for a choice, the wording of the option picked as well as the
+     * value submitted. An Order records everything it needs to be read without
+     * consulting anything else.
+     */
+    expect(snapshotOf(Order::sole()))->toBe([
+        ['key' => 'colour', 'label' => 'Which colour?', 'type' => 'select', 'value' => 'moss', 'option_label' => 'Moss green'],
+        ['key' => 'gift_note', 'label' => 'Gift note', 'type' => 'text', 'value' => 'Happy birthday', 'option_label' => null],
+    ]);
+});
+
+it('leaves a past order reading as it did once the question changes or goes', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('colour', 'select', [
+            'label' => 'Which colour?',
+            'options' => [['value' => 'moss', 'label' => 'Moss green']],
+        ]),
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['colour' => 'moss']))
+        ->assertCreated();
+
+    /** Reworded across a campaign, which is what a landing-page system is for. */
+    $page = checkoutAlsoAsking($page, [
+        question('colour', 'select', [
+            'label' => 'Pick a shade',
+            'options' => [['value' => 'moss', 'label' => 'Forest green']],
+        ]),
+    ]);
+
+    /** Then dropped from the form altogether, and then the Page itself. */
+    $page = checkoutOf($page, array_values(array_filter(
+        $page->checkout_config->fieldsToArray(),
+        fn (array $field): bool => $field['key'] !== 'colour',
+    )));
+
+    $page->products()->detach();
+    $page->forceDelete();
+
+    expect(snapshotOf(Order::sole()))->toBe([
+        ['key' => 'colour', 'label' => 'Which colour?', 'type' => 'select', 'value' => 'moss', 'option_label' => 'Moss green'],
+    ]);
+});
+
+it('refuses an answer to a choice that was never offered', function (string $type) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('colour', $type, ['options' => [['value' => 'moss', 'label' => 'Moss green']]]),
+    ]);
+
+    /**
+     * A stale form, or a hand-made post. The list is what the answer is checked
+     * against, so a value outside it is refused rather than recorded as an
+     * answer nobody was ever offered.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['colour' => 'crimson']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.colour.0', 'Please choose one of the options listed.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['colour' => 'moss']))
+        ->assertCreated();
+
+    expect(Order::sole()->answers[0]->value)->toBe('moss');
+})->with(['select', 'radio']);
+
+it('records a question this checkout asked and nobody answered', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('gift_note', 'text', ['label' => 'Gift note'])]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['gift_note' => '   ']))
+        ->assertCreated();
+
+    /**
+     * Asked and left blank, which is worth telling from never asked at all: the
+     * first is a customer who had nothing to say and the second is a question
+     * this page does not put. Only one of the two is worth a phone call.
+     */
+    expect(snapshotOf(Order::sole()))->toBe([
+        ['key' => 'gift_note', 'label' => 'Gift note', 'type' => 'text', 'value' => null, 'option_label' => null],
+    ]);
+});
+
+it('records nothing for a question the page has stopped asking', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('gift_note', 'text', ['enabled' => false, 'required' => true]),
+    ]);
+
+    /**
+     * The payload carries an answer regardless — a stale form, or a hand-made
+     * post. It was not asked for, so it is not checked and not recorded.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['gift_note' => 'Happy birthday']))
+        ->assertCreated();
+
+    expect(Order::sole()->answers)->toBe([]);
+});
+
+it('refuses an order that leaves a compulsory question from the merchant unanswered', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('gift_note', 'text', ['label' => 'Gift note', 'required' => true]),
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['gift_note' => '']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.gift_note.0', 'Please answer this question.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('tells a ticked box from one nobody touched', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('gift_wrap', 'checkbox', ['label' => 'Gift wrap this']),
+    ]);
+
+    /**
+     * An unticked checkbox is absent from a form post, so nothing arrives for
+     * it at all — and "no" is what that means, rather than an answer missing.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['gift_wrap' => '1']))
+        ->assertCreated();
+
+    expect(Order::orderBy('id')->get()
+        ->map(fn (Order $order): array => [$order->answers[0]->value, $order->answers[0]->display])
+        ->all())
+        ->toBe([[false, 'No'], [true, 'Yes']]);
+});
+
+it('refuses an order that leaves a compulsory box unticked', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [
+        question('terms', 'checkbox', ['label' => 'I agree to the terms', 'required' => true]),
+    ]);
+
+    /**
+     * `required` would pass for a box the customer refused, because an unticked
+     * one sends nothing and an absent value is what a missing answer looks like
+     * too. A compulsory box has to be ticked, not merely present.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.terms.0', 'Please tick this to continue.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['terms' => '1']))
+        ->assertCreated();
+});
+
+it('refuses an answer that is not a number to a question asked as one', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('floor', 'number', ['label' => 'Which floor?'])]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['floor' => 'the top one']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.floor.0', 'Please answer with a number.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['floor' => '4']))
+        ->assertCreated();
+
+    expect(Order::sole()->answers[0]->value)->toBe('4');
+});
+
+it('drops a question the merchant added that nothing could answer', function (array $stored) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [$stored]);
+
+    /**
+     * The shape only a Config written by some other route could hold: every one
+     * of these is refused on the Checkout tab. Dropped rather than thrown over,
+     * because a landing page answering paid traffic with a 500 costs more than
+     * one asking a merchant a question fewer than they meant.
+     */
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->checkout_config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address']);
+
+    $this->get('/promo')->assertOk();
+})->with([
+    'a choice between nothing' => [['key' => 'colour', 'label' => 'Colour', 'type' => 'select', 'options' => []]],
+    'a control nothing renders' => [['key' => 'colour', 'label' => 'Colour', 'type' => 'colour-wheel']],
+    'a key a built-in holds' => [['key' => 'phone', 'label' => 'Second phone', 'type' => 'text']],
+    'a key the order form uses' => [['key' => 'quantities', 'label' => 'How many', 'type' => 'number']],
+    'a key no input could carry' => [['key' => 'gift note!', 'label' => 'Gift note', 'type' => 'text']],
+]);
+
+it('takes no answer to a question the page being ordered from does not ask', function () {
+    $product = Product::factory()->create();
+
+    $asks = checkoutAlsoAsking(sellingPage($product, 'asks'), [
+        question('gift_note', 'text', ['label' => 'Gift note', 'required' => true]),
+    ]);
+
+    $doesNotAsk = sellingPage($product, 'does-not');
+
+    /**
+     * A Checkout Config is self-contained and per Page (ADR-0008), and the
+     * questions in it are no exception: one payload, two pages, two answers.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($asks, ['gift_note' => '']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.gift_note.0', 'Please answer this question.');
+
+    $this->postJson(route('checkout.store'), capturePayload($doesNotAsk, ['gift_note' => 'Happy birthday']))
+        ->assertCreated();
+
+    expect(Order::sole()->answers)->toBe([]);
 });

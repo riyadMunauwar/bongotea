@@ -5,14 +5,90 @@ namespace App\Support\Checkout;
 /**
  * The control a Checkout Field is asked with.
  *
- * Three cases rather than the six the field system is headed for: a type is
- * only real once something renders it and compiles rules for it, and the
- * built-in fields — the only fields that exist so far — ask in exactly these
- * three ways.
+ * The six a Merchant may reach for, and the three the built-ins use, are one
+ * list: a field is presented and validated by its type, never by whose field it
+ * is (ADR-0006). What differs between a built-in Select and a Merchant's own is
+ * where the choices come from, not how the control behaves.
  */
 enum CheckoutFieldType: string
 {
     case Text = 'text';
     case Textarea = 'textarea';
+    case Number = 'number';
     case Select = 'select';
+    case Radio = 'radio';
+    case Checkbox = 'checkbox';
+
+    /**
+     * Whether this control is a choice between listed options.
+     *
+     * The two that are carry a list a Customer may not answer outside of, and
+     * are the two whose answers snapshot the chosen option's wording beside the
+     * value submitted — a value alone stops meaning anything the moment the
+     * Merchant rewords the option.
+     */
+    public function hasOptions(): bool
+    {
+        return match ($this) {
+            self::Select, self::Radio => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Whether a hint of the Merchant's is worth asking for at all.
+     *
+     * A radio group and a checkbox have nowhere to put one: every choice is on
+     * screen already, and a greyed-out hint has no box to sit inside of.
+     */
+    public function showsPlaceholder(): bool
+    {
+        return match ($this) {
+            self::Radio, self::Checkbox => false,
+            default => true,
+        };
+    }
+
+    /**
+     * Whether the control shows that hint as an HTML `placeholder`.
+     *
+     * A Select spends it on its unpickable first option instead, so it must
+     * never also carry the attribute — a browser ignores it on a closed list
+     * and the Merchant would have written the same hint twice.
+     */
+    public function carriesPlaceholderAttribute(): bool
+    {
+        return $this->showsPlaceholder() && $this !== self::Select;
+    }
+
+    /**
+     * Whether the control labels itself.
+     *
+     * A radio group is worded by its legend and a checkbox by the text beside
+     * the box, so a label block above either would ask the same question twice.
+     */
+    public function labelsItself(): bool
+    {
+        return match ($this) {
+            self::Radio, self::Checkbox => true,
+            default => false,
+        };
+    }
+
+    /**
+     * How the Checkout tab words the type in the list a Merchant picks from.
+     *
+     * @return array<string, string>
+     */
+    public static function options(): array
+    {
+        return [
+            self::Text->value => 'Single line',
+            self::Textarea->value => 'Paragraph',
+            self::Number->value => 'Number',
+            self::Select->value => 'Dropdown',
+            self::Radio->value => 'Radio buttons',
+            self::Checkbox->value => 'Checkbox',
+        ];
+    }
 }

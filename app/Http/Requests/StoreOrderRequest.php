@@ -6,6 +6,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Orders\CapturedAnswer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -176,6 +177,17 @@ class StoreOrderRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * What a refusal calls a question this Page's Merchant worded themselves,
+     * where no message of ours words the refusal itself.
+     *
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return $this->checkoutConfig()->validationAttributes();
     }
 
     /**
@@ -383,12 +395,13 @@ class StoreOrderRequest extends FormRequest
      * posted for a field that is switched off is dropped here rather than
      * stored: it was never asked for and never checked.
      *
-     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}
+     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}
      */
     public function details(): array
     {
         return [
             ...$this->answers(),
+            'answers' => $this->capturedAnswers(),
             'delivery_option' => $this->deliveryOption(),
             'selected' => $this->selected(),
             'quantities' => $this->quantities(),
@@ -430,7 +443,12 @@ class StoreOrderRequest extends FormRequest
     }
 
     /**
-     * What the visitor typed into the questions this Page actually asked.
+     * What the visitor typed into the questions this Page actually asked that
+     * an Order has a column for.
+     *
+     * A question the Merchant added of their own is not one of them; its answer
+     * goes to the snapshot instead, which is the one property that differs
+     * between the two kinds of field (ADR-0006).
      *
      * @return array<string, string|null>
      */
@@ -443,9 +461,40 @@ class StoreOrderRequest extends FormRequest
         }
 
         foreach ($this->checkoutConfig()->enabledFields() as $field) {
-            $answer = $this->string($field->key())->trim()->toString();
+            if ($field->snapshotsAnswer()) {
+                continue;
+            }
 
-            $answers[$field->key()] = $answer === '' ? null : $answer;
+            $answers[$field->key()] = $field->answerFrom($this->input($field->key()));
+        }
+
+        return $answers;
+    }
+
+    /**
+     * The answers to the Merchant's own questions, in the order they were
+     * asked, each carrying the question with it.
+     *
+     * Every question this Checkout asked is recorded, including one the visitor
+     * left blank: an Order that says "we asked and they said nothing" is worth
+     * telling from one that never asked, and only the first is worth a call.
+     *
+     * Compiled from the Config that rendered the form and checked the answers,
+     * so nothing a stale form or a hand-made post volunteers for a question
+     * this Page has stopped asking can reach an Order.
+     *
+     * @return list<CapturedAnswer>
+     */
+    private function capturedAnswers(): array
+    {
+        $answers = [];
+
+        foreach ($this->checkoutConfig()->enabledFields() as $field) {
+            if (! $field->snapshotsAnswer()) {
+                continue;
+            }
+
+            $answers[] = $field->capture($field->answerFrom($this->input($field->key())));
         }
 
         return $answers;

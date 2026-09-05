@@ -4,6 +4,7 @@ namespace App\Support\Checkout;
 
 use App\Support\Money;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Str;
 
 /**
  * Everything one Page decides about its own Checkout.
@@ -51,7 +52,7 @@ class CheckoutConfig implements Arrayable
     public static function default(): self
     {
         return new self(
-            array_map(CheckoutField::default(...), BuiltInField::cases()),
+            array_map(BuiltInCheckoutField::default(...), BuiltInField::cases()),
             [self::seededDeliveryOption()],
 
             /**
@@ -82,11 +83,18 @@ class CheckoutConfig implements Arrayable
     /**
      * Rebuild a Config from its stored shape.
      *
-     * Total on purpose: an unrecognised key is dropped, a built-in the stored
+     * Total on purpose: an unusable field is dropped, a built-in the stored
      * shape never mentioned is appended with its defaults, and something
      * unreadable yields the default Config. A Checkout asking one question more
      * than a Merchant meant is fixed at their desk; a Checkout that throws is a
      * landing page answering paid traffic with a 500.
+     *
+     * The stored order is the order asked in, whichever kind of field holds a
+     * position: what makes a Merchant's own question sit between phone and
+     * address is that it was written between them, and nothing here sorts the
+     * built-ins back to the front. Only a built-in the stored shape is missing
+     * is appended, because it has to exist somewhere and the end is the one
+     * place that moves nothing else.
      *
      * @param  array<string, mixed>  $stored
      */
@@ -101,18 +109,24 @@ class CheckoutConfig implements Arrayable
 
             $key = $field['key'] ?? null;
 
-            $builtIn = is_string($key) ? BuiltInField::tryFrom($key) : null;
-
             /** A key twice over would ask twice and store once. */
-            if ($builtIn === null || isset($fields[$builtIn->value])) {
+            if (! is_string($key) || isset($fields[$key])) {
                 continue;
             }
 
-            $fields[$builtIn->value] = CheckoutField::fromArray($builtIn, $field);
+            $builtIn = BuiltInField::tryFrom($key);
+
+            $field = $builtIn !== null
+                ? BuiltInCheckoutField::fromArray($builtIn, $field)
+                : CustomCheckoutField::fromArray($key, $field);
+
+            if ($field !== null) {
+                $fields[$key] = $field;
+            }
         }
 
         foreach (BuiltInField::cases() as $builtIn) {
-            $fields[$builtIn->value] ??= CheckoutField::default($builtIn);
+            $fields[$builtIn->value] ??= BuiltInCheckoutField::default($builtIn);
         }
 
         return new self(
@@ -282,7 +296,27 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>, delivery_options: list<array{label: string, amount: int}>, product_picker: bool}
+     * What a refusal calls each question when no message of ours words it.
+     *
+     * The Merchant's own wording rather than the key they filed it under, so a
+     * Customer is never told that "the gift_wrap field" is wrong. Lower-cased
+     * because Laravel drops the name mid-sentence.
+     *
+     * @return array<string, string>
+     */
+    public function validationAttributes(): array
+    {
+        $attributes = [];
+
+        foreach ($this->enabledFields() as $field) {
+            $attributes[$field->key()] = Str::lower($field->label);
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, product_picker: bool}
      */
     public function toArray(): array
     {
@@ -298,7 +332,7 @@ class CheckoutConfig implements Arrayable
      * tab edits a row at a time. Named so the admin can ask for it without
      * knowing which key it is filed under here.
      *
-     * @return list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>
+     * @return list<array<string, mixed>>
      */
     public function fieldsToArray(): array
     {

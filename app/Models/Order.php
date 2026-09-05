@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\OrderStatus;
 use App\Observers\OrderObserver;
+use App\Support\Orders\AsCapturedAnswers;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -34,6 +35,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'customer_email',
     'customer_address',
     'customer_district',
+    'answers',
     'delivery_label',
     'delivery_charge',
     'status',
@@ -74,6 +76,15 @@ class Order extends Model
     {
         return [
             'status' => OrderStatus::class,
+
+            /**
+             * The answers to the questions this Page's Merchant added of their
+             * own, each carrying the wording and the control it was asked with.
+             * Read as an empty list where a Checkout asked none, so a screen
+             * never branches on whether an Order has a snapshot.
+             */
+            'answers' => AsCapturedAnswers::class,
+
             'subtotal' => 'integer',
             'delivery_charge' => 'integer',
             'total' => 'integer',
