@@ -15,8 +15,9 @@ use Illuminate\Support\Facades\Route;
 | byte-identical to what a live render returns. A GET is never blocked by CSRF
 | anyway.
 |
-| On a warm cache nginx answers these paths from disk and none of this code
-| runs. It executes only to fill the cache.
+| On a warm cache these paths are answered from disk — by the webserver where
+| it is configured to, and otherwise by the fallback reader — and none of this
+| code runs. It executes only to fill the cache.
 |
 | This is the application's catch-all, so it must be registered last.
 |

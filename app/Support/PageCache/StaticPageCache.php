@@ -119,8 +119,9 @@ class StaticPageCache
     }
 
     /**
-     * Absolute path of the cached HTML for a slug. Exposed for assertions and
-     * for the artisan command; callers should not derive this themselves.
+     * Absolute path of the cached HTML for a slug. Exposed so the suite can
+     * assert against the file the writer produced; callers should not derive
+     * this themselves.
      */
     public function htmlPath(string $slug): string
     {
@@ -130,21 +131,6 @@ class StaticPageCache
     public function gzipPath(string $slug): string
     {
         return $this->htmlPath($slug).'.gz';
-    }
-
-    /**
-     * @return list<string> Every slug currently held in the cache.
-     */
-    public function cachedSlugs(): array
-    {
-        if (! $this->files->isDirectory($this->directory)) {
-            return [];
-        }
-
-        return array_values(array_map(
-            fn (string $path): string => basename($path, '.html'),
-            $this->files->glob($this->directory.DIRECTORY_SEPARATOR.'*.html') ?: [],
-        ));
     }
 
     private function assertValidSlug(string $slug): void

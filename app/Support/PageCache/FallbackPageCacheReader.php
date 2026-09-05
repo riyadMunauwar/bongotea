@@ -53,7 +53,10 @@ namespace App\Support\PageCache;
  * `StaticPageCache::htmlPath()`. Borrowing them would mean referencing that
  * class, and this one may reference nothing. The webserver configurations
  * spell the same two suffixes out a third time, which is the company this is
- * in — the pairing is pinned by the three-way identity assertion in the suite.
+ * in. The pairing is pinned by `tests/Feature/StaticPageCacheTest.php`, which
+ * holds the writer to both files and one mtime, and by the gzip cases in
+ * `tests/Feature/FallbackPageCacheReaderTest.php`, which hold this reader to
+ * the `.gz` sibling it negotiates for.
  *
  * The request URI is deliberately **not** URL-decoded. A legal slug is
  * lowercase alphanumeric and hyphens and never needs decoding, so leaving the

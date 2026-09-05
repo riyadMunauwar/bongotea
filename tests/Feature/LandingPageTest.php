@@ -225,7 +225,7 @@ it('serves a page whose shortcode threw, but refuses to freeze it onto disk', fu
 
     /**
      * Fail-soft *plus* caching would freeze a broken page onto disk, where
-     * nginx serves it to everyone until someone happens to save something.
+     * it is served to everyone until someone happens to save something.
      * Skipping the write costs a boot per request instead — recoverable.
      */
     $this->get('/promo')

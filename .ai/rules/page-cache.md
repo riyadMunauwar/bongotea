@@ -2,6 +2,8 @@
 paths:
   - 'app/Support/PageCache/**'
   - 'public/index.php'
+  - 'public/.htaccess'
+  - 'public/robots.txt'
   - 'deploy/**'
 ---
 
@@ -15,7 +17,9 @@ The two lines in the front controller are the whole wiring, and a framework upgr
 ## Existence is the contract between the writer and every reader
 `StaticPageCache` validates the slug; nothing that reads the cache does. A reader builds a candidate path, confirms containment in the cache directory, confirms the file is there, and serves it — the file exists only because the writer already accepted the slug that made it. Do not add slug validation to a reader, and do not add a lookup that is not existence-based (a reserved key, a magic name, a URL-to-filename translation). Removing the last one of those is what #23 was for.
 
-The filename shape — `<slug>.html` plus a `.gz` sibling with a matching mtime — is the one thing knowingly spelled out in more than one place: the writer, the fallback reader, and each webserver configuration. Change it in all of them, and lean on the three-way byte identity in `tests/Feature/LandingPageTest.php`.
+The filename shape — `<slug>.html` plus a `.gz` sibling with a matching mtime — is the one thing knowingly spelled out in more than one place: the writer, the fallback reader, `public/.htaccess`, and each webserver configuration under `deploy/`. Change it in all of them. Two tests pin the pairing and will fail if you miss one of the PHP halves: `tests/Feature/StaticPageCacheTest.php` holds the writer to producing both files, stamping them from one reading of the clock, and removing them together; the gzip cases in `tests/Feature/FallbackPageCacheReaderTest.php` hold the reader to finding the `.gz` sibling for a client that accepts it and falling back to the plain file when it is gone. Nothing in the suite reads the webserver configurations, so those are yours to change by hand.
+
+The three-way byte identity in `tests/Feature/LandingPageTest.php` is a different guarantee and not a pin on the filename shape: it says the visitor, the disk and the fallback reader ship the same bytes. It resolves with an empty `Accept-Encoding`, so it never touches the `.gz` sibling, and a suffix change leaves it green.
 
 ## One header names the serving path, and the fast path sets nothing
 `X-GioPages-Cache: fallback` from the fallback reader, `X-GioPages-Cache: miss` from a full render in `LandingPageController`, and no header at all when the webserver served the file itself. Absence is the marker for the fast path because Apache cannot reliably stamp a header onto a static file, so there is no marker it could set everywhere. Anything diagnosing the cache reads it that way round: absence is the healthy case.

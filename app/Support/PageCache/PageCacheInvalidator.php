@@ -22,8 +22,10 @@ class PageCacheInvalidator
         $this->cache->forget($page->slug);
 
         /**
-         * A renamed page leaves its old file behind, which nginx would keep
-         * serving on the retired URL forever with no model pointing at it.
+         * A renamed page leaves its old file behind, and whichever path is
+         * serving the cache — the webserver, or the fallback reader — keeps
+         * answering the retired URL from it forever, with no model pointing
+         * at it.
          */
         if ($page->wasChanged('slug') && is_string($original = $page->getOriginal('slug'))) {
             $this->cache->forget($original);

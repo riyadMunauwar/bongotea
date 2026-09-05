@@ -76,7 +76,7 @@ it('invalidates the old url when a page changes slug', function () {
 
     /**
      * Without this the old file survives with no model pointing at it, and
-     * nginx serves the retired URL forever.
+     * whichever path is serving the cache answers the retired URL forever.
      */
     expect($this->cache->has('promo'))->toBeFalse();
 });
