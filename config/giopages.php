@@ -59,11 +59,14 @@ return [
     | Delivery
     |--------------------------------------------------------------------------
     |
-    | A flat charge for v1, in major units. Whether this eventually becomes a
-    | per-page setting or a district-keyed table is an open question — but the
-    | Order snapshots whatever figure was agreed at Capture, so answering it
-    | later changes nothing historical. See App\Support\Orders\DeliveryCharge,
-    | the one place that decides what an Order is charged.
+    | The one Delivery Option a Page is born with, in major units — a single
+    | arrangement named "Delivery", added to the total with no question asked.
+    |
+    | A starting point and not the answer: delivery is priced per Page from
+    | here on, as Delivery Options the Merchant names and prices themselves
+    | (ADR-0005). Changing this changes what the *next* Page starts from and
+    | nothing that already exists, which is the point — an installation-wide
+    | figure reaching every live campaign at once is what that ADR ended.
     |
     */
 
@@ -76,10 +79,11 @@ return [
     | Districts
     |--------------------------------------------------------------------------
     |
-    | The coarse location signal delivery pricing keys off, and the field
-    | courier APIs want. A config list rather than a table: it is not data the
-    | merchant manages, and it must be swappable per installation — a merchant
-    | outside Bangladesh replaces this list wholesale.
+    | The structured region courier APIs want. It settles nothing about what an
+    | Order costs — Delivery Options do that (ADR-0005) — and a Page may switch
+    | the question off entirely. A config list rather than a table: it is not
+    | data the merchant manages, and it must be swappable per installation — a
+    | merchant outside Bangladesh replaces this list wholesale.
     |
     | Structure cannot be recovered from free text later: "Mirpur 10, Dhaka"
     | and "Dhaka-1216" will not sort into buckets a year on. That is why this

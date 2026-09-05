@@ -429,6 +429,9 @@ function checkoutAsking(Page $page, array $changes): Page
             fn (array $field): array => array_merge($field, $changes[$field['key']] ?? []),
             $page->checkout_config->fieldsToArray(),
         ),
+
+        /** Carried through untouched, the way the Checkout tab submits both. */
+        'delivery_options' => $page->checkout_config->deliveryOptionsToArray(),
     ]);
 
     $page->save();
@@ -555,26 +558,286 @@ it('keeps what a field was configured with across a switch off and back on', fun
         ->and($district->enabled)->toBeTrue();
 });
 
-it('quotes the delivery charge that a page with no district question will collect', function () {
+/**
+ * The same Page's Checkout offering the Delivery Options given, replacing
+ * whatever it offered before.
+ *
+ * Written and read back through the Config the way the Checkout tab does, so a
+ * test can never store a shape the admin could not have produced.
+ *
+ * @param  list<array{label: string, amount: int}>  $options
+ */
+function deliveringBy(Page $page, array $options): Page
+{
+    $page->checkout_config = CheckoutConfig::fromArray([
+        'fields' => $page->checkout_config->fieldsToArray(),
+        'delivery_options' => $options,
+    ]);
+
+    $page->save();
+
+    return $page->refresh();
+}
+
+it('starts every page off charging what the installation charged', function () {
     $page = sellingPage(Product::factory()->create());
 
-    checkoutAsking($page, ['district' => ['enabled' => false]]);
+    /**
+     * One option, added with no question asked, is exactly what a Page did
+     * before it could price its own delivery — so a Merchant who never opens
+     * the Checkout tab sees no change at all. The same shape the backfill
+     * wrote onto every Page that already existed.
+     */
+    expect($page->checkout_config->deliveryOptionsToArray())
+        ->toBe([['label' => 'Delivery', 'amount' => 6000]]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('data-delivery-amount="6000"', escape: false)
+        ->assertDontSee('name="delivery_option"', escape: false);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->delivery_charge)->toBe(6000);
+});
+
+it('reads a config written before delivery could be priced as the charge it was priced by', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /** The shape stored before this column knew about Delivery Options. */
+    $page->checkout_config = CheckoutConfig::fromArray([
+        'fields' => $page->checkout_config->fieldsToArray(),
+    ]);
+
+    expect($page->checkout_config->deliveryOptionsToArray())
+        ->toBe([['label' => 'Delivery', 'amount' => 6000]]);
+});
+
+it('adds a single delivery option to the total without asking anything', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Home delivery', 'amount' => 8000],
+    ]);
+
+    /** Nothing to choose between is nothing to ask about. */
+    $this->get('/promo')
+        ->assertOk()
+        ->assertDontSee('name="delivery_option"', escape: false)
+        ->assertSee('Home delivery');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->delivery_label)->toBe('Home delivery')
+        ->and($order->delivery_charge)->toBe(8000)
+        ->and($order->total)->toBe(107000);
+});
+
+it('charges nothing and shows no delivery row for a page that offers no delivery', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), []);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
-    preg_match('/data-delivery-charge-default="(\d+)"/', $html, $quoted);
+    expect($html)->not->toContain('data-gio-delivery-label')
+        ->and($html)->toContain('data-delivery-amount="0"');
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
     $order = Order::sole();
 
     /**
-     * With no district to price against, the flat charge is the only figure the
-     * island can show — and it has to be the one Capture adds. A form that
-     * totals up to less than the courier asks for at the door is a refused
-     * parcel and a fee in both directions.
+     * No arrangement was agreed, so there is no name to record — which is a
+     * different thing from an arrangement that happened to be free.
      */
-    expect($order->customer_district)->toBeNull()
-        ->and((int) ($quoted[1] ?? 0))->toBe($order->delivery_charge)
+    expect($order->delivery_label)->toBeNull()
+        ->and($order->delivery_charge)->toBe(0)
+        ->and($order->total)->toBe(99000);
+});
+
+it('lets the customer choose between the arrangements a page offers', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('name="delivery_option"', escape: false)
+        ->assertSee('Inside Dhaka')
+        ->assertSee('Outside Dhaka');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Outside Dhaka',
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->delivery_label)->toBe('Outside Dhaka')
+        ->and($order->delivery_charge)->toBe(12000)
+        ->and($order->total)->toBe(111000);
+});
+
+it('quotes the delivery amount that a capture from the same page will collect', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match('/value="Outside Dhaka"[^>]*data-amount="(\d+)"/', $html, $quoted);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Outside Dhaka',
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    /**
+     * The one place the form and the door can be shown to agree. A form
+     * totalling up to less than the courier collects is a refused parcel and a
+     * fee in both directions.
+     */
+    expect((int) ($quoted[1] ?? 0))->toBe($order->delivery_charge)
         ->and($order->total)->toBe($order->subtotal + $order->delivery_charge);
+});
+
+it('takes no delivery figure from the visitor', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Inside Dhaka',
+
+        /** Every spelling a hand-made post might reach for. */
+        'delivery_charge' => 0,
+        'delivery_amount' => 0,
+        'amount' => 0,
+    ]))->assertCreated();
+
+    /** A name arrives; the amount against it is read off the Page. */
+    expect(Order::sole()->delivery_charge)->toBe(6000);
+});
+
+it('refuses a capture naming an arrangement the page does not offer', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Free',
+    ]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.delivery_option.0', 'Please choose one of the delivery options listed.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.delivery_option.0', 'Please choose how you would like it delivered.');
+
+    /**
+     * Charging one of them anyway is the outcome this refusal exists to
+     * prevent: in COD an amount nobody agreed to is a parcel refused at the
+     * door and a courier fee in both directions.
+     */
+    expect(Order::count())->toBe(0);
+});
+
+it('ignores a delivery choice sent to a page that offers none to make', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Home delivery', 'amount' => 8000],
+    ]);
+
+    /** A form written to disk while the Page still offered two. */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Outside Dhaka',
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->delivery_label)->toBe('Home delivery')
+        ->and($order->delivery_charge)->toBe(8000);
+});
+
+it('holds the arrangement captured even after it is renamed and repriced', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'delivery_option' => 'Inside Dhaka',
+    ]))->assertCreated();
+
+    deliveringBy($page, [
+        ['label' => 'City delivery', 'amount' => 9000],
+        ['label' => 'Outside Dhaka', 'amount' => 15000],
+    ]);
+
+    /**
+     * Snapshotted like a Product's name and price, and for the same reason:
+     * what was agreed at Capture is what gets collected, and a User explaining
+     * the figure on the confirmation call needs the words the Customer saw.
+     */
+    $order = Order::sole();
+
+    expect($order->delivery_label)->toBe('Inside Dhaka')
+        ->and($order->delivery_charge)->toBe(6000);
+});
+
+it('prices delivery the same whatever district the parcel is going to', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Flat rate', 'amount' => 7000],
+    ]);
+
+    foreach (['Dhaka', 'Sylhet', 'Rangamati'] as $district) {
+        $this->postJson(route('checkout.store'), capturePayload($page, ['district' => $district]))
+            ->assertCreated();
+    }
+
+    /**
+     * District settles nothing about what an Order costs. It is kept as
+     * fulfilment data a courier API wants and cannot recover from a free-text
+     * address later (ADR-0005).
+     */
+    expect(Order::pluck('delivery_charge')->all())->toBe([7000, 7000, 7000])
+        ->and(Order::pluck('customer_district')->all())->toBe(['Dhaka', 'Sylhet', 'Rangamati']);
+});
+
+it('prices delivery the same with the district question switched off', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create()), [
+        ['label' => 'Flat rate', 'amount' => 7000],
+    ]);
+
+    $page = checkoutAsking($page, ['district' => ['enabled' => false]]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->customer_district)->toBeNull()
+        ->and($order->delivery_charge)->toBe(7000)
+        ->and($order->total)->toBe($order->subtotal + 7000);
+});
+
+it('drops a delivery option nothing could be chosen by', function () {
+    $config = CheckoutConfig::fromArray(['delivery_options' => [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+
+        /** Nameless: a radio button nobody can tell apart or agree to. */
+        ['label' => '  ', 'amount' => 9000],
+
+        /** A second option under one name is a choice that decides nothing. */
+        ['label' => 'Inside Dhaka', 'amount' => 20000],
+
+        /** Below nothing is a column the amount could not be stored in. */
+        ['label' => 'Refunded delivery', 'amount' => -500],
+    ]]);
+
+    expect($config->deliveryOptionsToArray())->toBe([
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Refunded delivery', 'amount' => 0],
+    ]);
 });

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Models\Order;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -151,9 +152,17 @@ class OrderInfolist
                             ->alignment(Alignment::End)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),
 
+                        /**
+                         * Hinted with the arrangement agreed at Capture, in the
+                         * words the Customer chose it by. Whoever makes the
+                         * confirmation call has to be able to say what the
+                         * figure is for, and "Inside Dhaka" is an answer where
+                         * a bare amount is not.
+                         */
                         TextEntry::make('delivery_charge')
                             ->label('Delivery')
                             ->alignment(Alignment::End)
+                            ->hint(fn (?Order $record): ?string => $record?->delivery_label)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),
 
                         /** Includes delivery, so nobody does arithmetic against a cash payment. */

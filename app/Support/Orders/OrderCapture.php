@@ -14,26 +14,38 @@ use Illuminate\Support\Facades\DB;
  *
  * What is agreed here is fixed from here — the products, their prices and the
  * totals. The one rule this class exists to enforce is that *nothing priced
- * comes from the request*: the visitor sends a Page, a quantity per item and
- * their delivery details, and every figure on the resulting Order is derived
- * server-side from the Page's own Products.
+ * comes from the request*: the visitor sends a Page, a quantity per item, the
+ * name of the delivery arrangement they chose and their own details, and every
+ * figure on the resulting Order is derived server-side from the Page's own
+ * Products and its own Delivery Options.
  */
 class OrderCapture
 {
-    public function __construct(private readonly DeliveryCharge $deliveryCharge) {}
-
     /**
      * A detail this Page's Checkout does not ask for arrives null and is stored
      * null, which is why every column but the phone is nullable: an Order taken
      * on a form with no address box records that it has no address, rather than
      * a blank that reads as a Customer who declined to give one.
      *
-     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, quantities: array<int, int>}  $details
+     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
         if ($page->products->isEmpty()) {
             throw new CheckoutUnavailable("Page [{$page->slug}] has nothing left to sell.");
+        }
+
+        /**
+         * A name arrives; the amount against it is read from the Page. What the
+         * submission cannot do is carry a figure — a delivery charge accepted
+         * from the request is a courier collecting whatever the visitor typed.
+         */
+        $delivery = $page->checkout_config->deliveryFor($details['delivery_option']);
+
+        if ($delivery === null && $page->checkout_config->offersDelivery()) {
+            throw new CheckoutUnavailable(
+                "Page [{$page->slug}] was captured without one of the delivery options it offers."
+            );
         }
 
         /**
@@ -52,7 +64,7 @@ class OrderCapture
          */
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($page, $customer, $details, $lines): Order {
+        return DB::transaction(function () use ($page, $customer, $details, $delivery, $lines): Order {
             $order = $customer->orders()->create([
                 'page_id' => $page->getKey(),
 
@@ -72,7 +84,18 @@ class OrderCapture
                 'customer_email' => $details['email'],
                 'customer_address' => $details['address'],
                 'customer_district' => $details['district'],
-                'delivery_charge' => $this->deliveryCharge->forDistrict($details['district']),
+
+                /**
+                 * The arrangement in the Merchant's own words, beside what it
+                 * cost. Snapshotted like a Product's name and price, and for
+                 * the same reason: renaming or repricing "Inside Dhaka" next
+                 * month must not rewrite what this Customer agreed to today.
+                 *
+                 * Null and zero where the Page offers no delivery at all, which
+                 * is the Merchant saying there is nothing to charge for.
+                 */
+                'delivery_label' => $delivery?->label,
+                'delivery_charge' => $delivery?->amount ?? 0,
             ]);
 
             foreach ($lines as $line) {

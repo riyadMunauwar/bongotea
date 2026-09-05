@@ -2,6 +2,7 @@
 
 namespace App\Support\Checkout;
 
+use App\Support\Money;
 use Illuminate\Contracts\Support\Arrayable;
 
 /**
@@ -22,20 +23,43 @@ class CheckoutConfig implements Arrayable
 {
     /**
      * @param  list<CheckoutField>  $fields
+     * @param  list<DeliveryOption>  $deliveryOptions
      */
-    private function __construct(public readonly array $fields) {}
+    private function __construct(
+        public readonly array $fields,
+        public readonly array $deliveryOptions,
+    ) {}
 
     /**
      * The Checkout a Page starts with, and the one every existing Page was
      * backfilled to: the four details the form has always asked for, in the
-     * order it has always asked them, every one of them on and required.
+     * order it has always asked them, every one of them on and required, and a
+     * single Delivery Option carrying the installation's charge.
      *
      * Email is in the list too and switched off, so a new Page holds a complete
      * Config while rendering the form a Merchant already knows.
      */
     public static function default(): self
     {
-        return new self(array_map(CheckoutField::default(...), BuiltInField::cases()));
+        return new self(
+            array_map(CheckoutField::default(...), BuiltInField::cases()),
+            [self::seededDeliveryOption()],
+        );
+    }
+
+    /**
+     * The one Delivery Option a Page is born with.
+     *
+     * One option is exactly today's behaviour — an amount added to the total
+     * with no question asked — so a Merchant who never opens the Checkout tab
+     * sees no change (ADR-0008). The figure comes from installation config
+     * because that is where the single global charge lived; from here on it is
+     * a starting point rather than the answer, and a Page that edits it is
+     * unaffected by anyone changing it.
+     */
+    private static function seededDeliveryOption(): DeliveryOption
+    {
+        return new DeliveryOption('Delivery', Money::toMinorUnits(config('giopages.delivery.charge')));
     }
 
     /**
@@ -74,7 +98,45 @@ class CheckoutConfig implements Arrayable
             $fields[$builtIn->value] ??= CheckoutField::default($builtIn);
         }
 
-        return new self(array_values($fields));
+        return new self(array_values($fields), self::deliveryOptionsFromArray($stored));
+    }
+
+    /**
+     * The Delivery Options of a stored Config.
+     *
+     * Absent and empty say different things, so they are told apart. A Config
+     * written before a Page could price its own delivery has no such key and
+     * keeps charging what it always charged; a Merchant who deleted every row
+     * on the Checkout tab means a Page that charges nothing for delivery, and
+     * an empty list is how they say so.
+     *
+     * @param  array<string, mixed>  $stored
+     * @return list<DeliveryOption>
+     */
+    private static function deliveryOptionsFromArray(array $stored): array
+    {
+        if (! array_key_exists('delivery_options', $stored)) {
+            return [self::seededDeliveryOption()];
+        }
+
+        $options = [];
+
+        foreach ((array) $stored['delivery_options'] as $option) {
+            if (! is_array($option)) {
+                continue;
+            }
+
+            $option = DeliveryOption::fromArray($option);
+
+            /** A label twice over would offer a choice that decides nothing. */
+            if ($option === null || isset($options[$option->label])) {
+                continue;
+            }
+
+            $options[$option->label] = $option;
+        }
+
+        return array_values($options);
     }
 
     /**
@@ -90,6 +152,76 @@ class CheckoutConfig implements Arrayable
     public function enabledFields(): array
     {
         return array_values(array_filter($this->fields, fn (CheckoutField $field): bool => $field->enabled));
+    }
+
+    /**
+     * Whether this Page delivers at a price at all.
+     *
+     * False only where the Merchant offers no arrangement whatsoever, which is
+     * them saying there is nothing to charge for. An arrangement that happens
+     * to cost nothing is not this: it is an option priced at zero, agreed to
+     * like any other and recorded on the Order by name.
+     */
+    public function offersDelivery(): bool
+    {
+        return $this->deliveryOptions !== [];
+    }
+
+    /**
+     * Whether this Page asks the Customer how they want it delivered.
+     *
+     * Only a Page offering more than one arrangement has anything to ask. None
+     * charges nothing and one is added straight to the total, and in neither
+     * case is there a question worth putting in front of a Customer whose only
+     * possible answer is the one they would be given.
+     */
+    public function offersDeliveryChoice(): bool
+    {
+        return count($this->deliveryOptions) > 1;
+    }
+
+    /**
+     * The arrangements a choice is made between, by name.
+     *
+     * @return list<string>
+     */
+    public function deliveryLabels(): array
+    {
+        return array_map(fn (DeliveryOption $option): string => $option->label, $this->deliveryOptions);
+    }
+
+    /**
+     * The Delivery Option a Capture is charged for, given what the Customer
+     * chose — or nothing, where this Page charges for no delivery at all.
+     *
+     * This is the whole of "the delivery charge is derived from the Page and
+     * never accepted from the request": what arrives is a name, and the amount
+     * against it is read here. A Page offering one arrangement charges it
+     * whatever the submission says, because there was no choice to make and a
+     * form claiming otherwise is a form nobody was shown.
+     *
+     * Null where two or more are offered and the name matches none of them.
+     * The request is refused before it reaches a Capture, so that is the shape
+     * of a Merchant renaming an option under a visitor mid-form — a refusal,
+     * never a Customer charged for an arrangement they never picked.
+     */
+    public function deliveryFor(?string $label): ?DeliveryOption
+    {
+        if (! $this->offersDelivery()) {
+            return null;
+        }
+
+        if (! $this->offersDeliveryChoice()) {
+            return $this->deliveryOptions[0];
+        }
+
+        foreach ($this->deliveryOptions as $option) {
+            if ($option->label === $label) {
+                return $option;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -123,11 +255,14 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>}
+     * @return array{fields: list<array{key: string, label: string, enabled: bool, required: bool, placeholder: string|null, help: string|null}>, delivery_options: list<array{label: string, amount: int}>}
      */
     public function toArray(): array
     {
-        return ['fields' => $this->fieldsToArray()];
+        return [
+            'fields' => $this->fieldsToArray(),
+            'delivery_options' => $this->deliveryOptionsToArray(),
+        ];
     }
 
     /**
@@ -140,5 +275,16 @@ class CheckoutConfig implements Arrayable
     public function fieldsToArray(): array
     {
         return array_map(fn (CheckoutField $field): array => $field->toArray(), $this->fields);
+    }
+
+    /**
+     * The Delivery Options in their stored shape, which is also the shape the
+     * Checkout tab edits a row at a time.
+     *
+     * @return list<array{label: string, amount: int}>
+     */
+    public function deliveryOptionsToArray(): array
+    {
+        return array_map(fn (DeliveryOption $option): array => $option->toArray(), $this->deliveryOptions);
     }
 }

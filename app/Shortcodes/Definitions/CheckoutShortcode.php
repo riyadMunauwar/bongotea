@@ -6,7 +6,6 @@ use App\Models\Page;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
-use App\Support\Orders\DeliveryCharge;
 
 /**
  * The only shortcode v1 registers.
@@ -22,8 +21,6 @@ use App\Support\Orders\DeliveryCharge;
 class CheckoutShortcode implements ShortcodeDefinition
 {
     public const NAME = 'checkout';
-
-    public function __construct(private readonly DeliveryCharge $deliveryCharge) {}
 
     public function name(): string
     {
@@ -77,15 +74,18 @@ class CheckoutShortcode implements ShortcodeDefinition
              */
             'fields' => $page->checkout_config->enabledFields(),
 
-            'deliveryCharges' => $this->deliveryCharge->byDistrict(),
-
             /**
-             * What a Capture from this Page will be charged when it names no
-             * District — which is every Capture, once the Merchant switches
-             * that question off. Sent from the same place Capture reads it, so
-             * the island cannot quote a total the door disagrees with.
+             * What this Page charges to get the parcel to the door, in the
+             * Merchant's own words. None means no delivery row and nothing
+             * added; one is added with no question asked; two or more are a
+             * choice the Customer makes.
+             *
+             * Read from the same place a Capture reads it, so the island cannot
+             * quote a total the door disagrees with — a form totalling less
+             * than the courier collects is a refused parcel and a fee in both
+             * directions.
              */
-            'defaultDeliveryCharge' => $this->deliveryCharge->forDistrict(null),
+            'deliveryOptions' => $page->checkout_config->deliveryOptions,
             'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
         ])->render();
     }

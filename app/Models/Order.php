@@ -34,6 +34,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'customer_email',
     'customer_address',
     'customer_district',
+    'delivery_label',
     'delivery_charge',
     'status',
 ])]

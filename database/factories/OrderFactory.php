@@ -28,6 +28,7 @@ class OrderFactory extends Factory
             'customer_phone' => fn (array $attributes): string => Customer::find($attributes['customer_id'])->phone,
             'customer_address' => fake()->streetAddress(),
             'customer_district' => fake()->randomElement(config('giopages.districts')),
+            'delivery_label' => 'Delivery',
             'delivery_charge' => 6000,
             'status' => OrderStatus::New,
         ];

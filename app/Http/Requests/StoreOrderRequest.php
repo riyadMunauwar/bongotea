@@ -17,8 +17,9 @@ use Illuminate\Validation\Validator;
  * The visitor submits from a page that may have been cached on disk for days,
  * so everything the request asserts about that page is re-checked here against
  * the database rather than trusted from the payload. Nothing priced is
- * accepted at all: the request carries a slug and a quantity per item, and the
- * prices come from the Page's own Products.
+ * accepted at all: the request carries a slug, a quantity per item and the name
+ * of a delivery arrangement, and every figure comes from the Page's own
+ * Products and Delivery Options.
  *
  * The details it asks about are not listed here either. They are compiled from
  * the Checkout Config of the Page being ordered from — the same list that
@@ -60,7 +61,37 @@ class StoreOrderRequest extends FormRequest
             /** Whatever this Page's Checkout asks for, checked as it asks it. */
             ...$this->checkoutConfig()->rules(),
 
+            ...$this->deliveryRules(),
+
             ...$this->quantityRules(),
+        ];
+    }
+
+    /**
+     * The delivery arrangement, where this Page offers a choice of them.
+     *
+     * A name and never an amount. What it costs is read off the Page at
+     * Capture, so a submission naming an arrangement it was never offered is
+     * refused here rather than priced at whatever it claims.
+     *
+     * No rule at all where there is nothing to choose between: a Page with one
+     * arrangement charges it and a Page with none charges nothing, and in both
+     * cases whatever a stale form posts is ignored rather than checked.
+     *
+     * @return array<string, list<mixed>>
+     */
+    private function deliveryRules(): array
+    {
+        if (! $this->checkoutConfig()->offersDeliveryChoice()) {
+            return [];
+        }
+
+        return [
+            'delivery_option' => [
+                'required',
+                'string',
+                Rule::in($this->checkoutConfig()->deliveryLabels()),
+            ],
         ];
     }
 
@@ -104,6 +135,14 @@ class StoreOrderRequest extends FormRequest
         return [
             'page.exists' => 'This page is no longer taking orders.',
             ...$this->checkoutConfig()->messages(),
+
+            /**
+             * The second reads as a stale form rather than as a mistake,
+             * because that is what it is: nothing on screen offers an
+             * arrangement the Page does not.
+             */
+            'delivery_option.required' => 'Please choose how you would like it delivered.',
+            'delivery_option.in' => 'Please choose one of the delivery options listed.',
 
             /**
              * Wildcards rather than a message per Product: the keys are ids,
@@ -222,14 +261,33 @@ class StoreOrderRequest extends FormRequest
      * posted for a field that is switched off is dropped here rather than
      * stored: it was never asked for and never checked.
      *
-     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, quantities: array<int, int>}
+     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, delivery_option: string|null, quantities: array<int, int>}
      */
     public function details(): array
     {
         return [
             ...$this->answers(),
+            'delivery_option' => $this->deliveryOption(),
             'quantities' => $this->quantities(),
         ];
+    }
+
+    /**
+     * The delivery arrangement the visitor named, where they were given a
+     * choice of them.
+     *
+     * Null everywhere else, and null rather than whatever a stale form posted:
+     * a Page offering one arrangement charges that one, so a name in the
+     * payload would decide nothing and carrying it forward would only invite a
+     * reader to think it might.
+     */
+    private function deliveryOption(): ?string
+    {
+        if (! $this->checkoutConfig()->offersDeliveryChoice()) {
+            return null;
+        }
+
+        return $this->string('delivery_option')->trim()->toString();
     }
 
     /**

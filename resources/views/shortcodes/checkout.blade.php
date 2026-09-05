@@ -20,6 +20,17 @@
 @php
     $currencySymbol = config('giopages.currency.symbol');
     $currencyDecimals = (int) config('giopages.currency.decimals');
+
+    /**
+     * The arrangement this form opens on, which is the first the merchant
+     * listed — the one charged outright where there is no choice to make, and
+     * the radio already ticked where there is. Nothing at all where the page
+     * offers no delivery, and then no delivery row is drawn and nothing added.
+     *
+     * Opening on one rather than on nothing is what keeps the total truthful
+     * before the visitor touches anything.
+     */
+    $preselected = $deliveryOptions[0] ?? null;
 @endphp
 <div class="gio-checkout" data-gio-checkout data-page-slug="{{ $page->slug }}">
     <style>
@@ -39,6 +50,11 @@
         .gio-checkout-help { margin: 0 0 .375rem; font-size: .75rem; line-height: 1.4; opacity: .75; }
         .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-family: inherit; font-size: 1rem; background: #fff; color: inherit; }
         .gio-checkout-input:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
+        .gio-checkout-delivery { margin: 0; padding: 0; border: 0; }
+        .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-size: .9375rem; cursor: pointer; }
+        .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
+        .gio-checkout-choice-label { flex: 1; }
+        .gio-checkout-choice-amount { font-weight: 600; }
         .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125rem; color: #b91c1c; }
         .gio-checkout-error[data-shown] { display: block; }
         .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: 1px solid #e5e7eb; font-size: .875rem; }
@@ -60,14 +76,13 @@
           data-gio-checkout-form
           data-currency-symbol="{{ $currencySymbol }}"
           data-currency-decimals="{{ $currencyDecimals }}"
-          data-delivery-charges="{{ json_encode($deliveryCharges) }}"
           {{--
-              What delivery costs when this Page never asks which district the
-              parcel is going to. The server charges it either way, so the
-              figure on screen has to be the figure collected at the door — a
-              total that reads low by the delivery charge is a refused parcel.
+              What delivery costs when there is nothing to choose between. The
+              server charges it either way, so the figure on screen has to be
+              the figure collected at the door — a total that reads low by the
+              delivery charge is a refused parcel.
           --}}
-          data-delivery-charge-default="{{ $defaultDeliveryCharge }}"
+          data-delivery-amount="{{ $preselected?->amount ?? 0 }}"
           data-token-url="{{ route('checkout.token') }}">
         <input type="hidden" name="page" value="{{ $page->slug }}">
 
@@ -176,11 +191,48 @@
         @endforeach
 
         {{--
-            One of everything, which is what the quantity boxes above start on.
-            The script keeps these truthful as the visitor changes them; a
-            visitor whose scripts never run reads the figures the page was
-            rendered with, and the confirmation page after Capture is where they
-            see what they actually owe.
+            How the parcel gets to the door, in the merchant's own words and at
+            their own prices. Rendered only where there is a decision to make: a
+            page offering one arrangement charges it, and a page offering none
+            charges nothing, and neither is a question worth putting in front of
+            a customer whose only possible answer is the one they would be given.
+
+            Radios rather than a select, because the amounts have to be readable
+            without opening anything — the choice is a price as much as it is a
+            delivery method. The first is already chosen so the total below is
+            truthful from the first paint; the server refuses a submission that
+            names none of them regardless.
+        --}}
+        @if (count($deliveryOptions) > 1)
+            <div class="gio-checkout-field">
+                <fieldset class="gio-checkout-delivery">
+                    <legend class="gio-checkout-label">Delivery</legend>
+
+                    @foreach ($deliveryOptions as $index => $option)
+                        <label class="gio-checkout-choice">
+                            <input type="radio"
+                                   name="delivery_option"
+                                   value="{{ $option->label }}"
+                                   data-gio-delivery-option
+                                   data-amount="{{ $option->amount }}"
+                                   @checked($index === 0) required>
+                            <span class="gio-checkout-choice-label">{{ $option->label }}</span>
+                            <span class="gio-checkout-choice-amount">{{ \App\Support\Money::format($option->amount) }}</span>
+                        </label>
+                    @endforeach
+                </fieldset>
+
+                <p class="gio-checkout-error" data-gio-error-for="delivery_option"></p>
+            </div>
+        @endif
+
+        {{--
+            One of everything, which is what the quantity boxes above start on,
+            plus the delivery arrangement that is already selected. The script
+            keeps these truthful as the visitor changes them; a visitor whose
+            scripts never run reads the figures the page was rendered with, and
+            the confirmation page after Capture is where they see what they
+            actually owe.
         --}}
         @php($subtotal = (int) $products->sum('price'))
 
@@ -189,13 +241,23 @@
                 <span>Subtotal</span>
                 <span data-gio-subtotal>{{ \App\Support\Money::format($subtotal) }}</span>
             </p>
-            <p class="gio-checkout-row">
-                <span>Delivery</span>
-                <span data-gio-delivery>&mdash;</span>
-            </p>
+
+            {{--
+                Named after the arrangement rather than after the word
+                "delivery": the customer agreed to "Inside Dhaka", and that is
+                what the row they are asked to pay should say. Nothing at all
+                where the page charges for no delivery.
+            --}}
+            @if ($preselected !== null)
+                <p class="gio-checkout-row">
+                    <span data-gio-delivery-label>{{ $preselected->label }}</span>
+                    <span data-gio-delivery>{{ \App\Support\Money::format($preselected->amount) }}</span>
+                </p>
+            @endif
+
             <p class="gio-checkout-row gio-checkout-total">
                 <span>Total</span>
-                <span data-gio-total>{{ \App\Support\Money::format($subtotal) }}</span>
+                <span data-gio-total>{{ \App\Support\Money::format($subtotal + ($preselected?->amount ?? 0)) }}</span>
             </p>
         </div>
 
@@ -226,27 +288,22 @@
         return form.dataset.currencySymbol + value.toFixed(decimals);
     }
 
+    /*
+     * The delivery arrangement this form is currently on: whichever radio is
+     * chosen, or — where the page offers no choice — the single amount it
+     * charges, which is nothing at all when it charges for no delivery.
+     *
+     * Never a dash. The server adds this figure either way, so a total on
+     * screen that reads low by it is a parcel refused at the door.
+     */
     function deliveryFor(form) {
-        /*
-         * A form with no district question is not a form waiting for an answer:
-         * the merchant switched that question off, and the server charges the
-         * flat figure regardless. Showing a dash there would quote the customer
-         * a total lower than the one the courier collects, which in COD is a
-         * parcel refused at the door.
-         */
-        if (!form.elements.district) {
-            var flat = parseInt(form.dataset.deliveryChargeDefault, 10);
-            return isNaN(flat) ? null : flat;
+        var picked = form.querySelector('[data-gio-delivery-option]:checked');
+
+        if (picked) {
+            return { label: picked.value, amount: parseInt(picked.dataset.amount, 10) || 0 };
         }
 
-        var district = form.elements.district.value;
-        if (!district) { return null; }
-        try {
-            var charges = JSON.parse(form.dataset.deliveryCharges);
-            return typeof charges[district] === 'number' ? charges[district] : null;
-        } catch (e) {
-            return null;
-        }
+        return { label: null, amount: parseInt(form.dataset.deliveryAmount, 10) || 0 };
     }
 
     /*
@@ -278,8 +335,11 @@
         };
 
         set('subtotal', money(form, subtotal));
-        set('delivery', delivery === null ? '—' : money(form, delivery));
-        set('total', money(form, subtotal + (delivery || 0)));
+        set('delivery', money(form, delivery.amount));
+        set('total', money(form, subtotal + delivery.amount));
+
+        /* The row is named after the arrangement the customer just chose. */
+        if (delivery.label !== null) { set('delivery-label', delivery.label); }
     }
 
     function clearErrors(form) {

@@ -321,3 +321,162 @@ it('will not let the checkout tab stop asking for a phone number', function () {
     expect($phone->enabled)->toBeTrue()
         ->and($phone->required)->toBeTrue();
 });
+
+/**
+ * The Delivery Options a Page offers, in the shape the Checkout tab fills in:
+ * a name, and an amount typed in major units the way a merchant types money.
+ *
+ * @param  list<array{label: string, amount: string}>  $options
+ * @return array<string, mixed>
+ */
+function deliveryOptionRows(array $options): array
+{
+    return ['checkout_config' => ['delivery_options' => $options]];
+}
+
+it('starts a new page off offering the delivery the installation charged for', function () {
+    Livewire::test(CreatePage::class)
+        ->fillForm([
+            'title' => 'Winter Promo',
+            'slug' => 'winter-promo',
+            'body' => '<!doctype html><html><body>[checkout]</body></html>',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    /**
+     * One option, added with no question asked, is what a Page charged before
+     * it could price its own delivery — so the create screen has to arrive
+     * holding it rather than empty, which would silently make every new Page
+     * deliver for free.
+     */
+    expect(Page::where('slug', 'winter-promo')->sole()->checkout_config->deliveryOptionsToArray())
+        ->toBe([['label' => 'Delivery', 'amount' => 6000]]);
+});
+
+it('lets a merchant author the delivery options a page offers', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([
+            ['label' => 'Inside Dhaka', 'amount' => '60'],
+            ['label' => 'Outside Dhaka', 'amount' => '120'],
+            ['label' => 'Free', 'amount' => '0'],
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A form quoting different figures is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    expect($page->refresh()->checkout_config->deliveryOptionsToArray())->toBe([
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ['label' => 'Free', 'amount' => 0],
+    ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Inside Dhaka')
+        ->assertSee('Outside Dhaka')
+        ->assertSee('Free');
+});
+
+it('renames, reprices, reorders and deletes a delivery option', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([
+            ['label' => 'Inside Dhaka', 'amount' => '60'],
+            ['label' => 'Outside Dhaka', 'amount' => '120'],
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->deliveryLabels())
+        ->toBe(['Inside Dhaka', 'Outside Dhaka']);
+
+    /**
+     * Reordered, renamed, repriced and one of them dropped, all in one save.
+     * The order is the order the customer reads them in and the first is the
+     * one already chosen when the form is drawn, so moving one changes what a
+     * page sells rather than how it looks.
+     */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([
+            ['label' => 'Outside Dhaka', 'amount' => '150'],
+            ['label' => 'Dhaka city', 'amount' => '60'],
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->deliveryOptionsToArray())->toBe([
+        ['label' => 'Outside Dhaka', 'amount' => 15000],
+        ['label' => 'Dhaka city', 'amount' => 6000],
+    ]);
+});
+
+it('lets a page charge for no delivery at all', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Emptied on purpose, and stored as emptied. A page collecting at a counter
+     * charges nothing to deliver, and an empty list is how a merchant says so —
+     * distinct from a config that never mentioned delivery at all, which keeps
+     * charging what it always charged.
+     */
+    expect($page->refresh()->checkout_config->deliveryOptions)->toBe([]);
+});
+
+it('refuses a delivery option nobody could choose or be charged', function (array $options) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows($options))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * Named against the delivery options and nothing else. A row-level refusal
+     * lands under a key the repeater invents per item, so there is no one key
+     * to assert — but "the save was refused, and refused over this" is what the
+     * test is actually for, and a refusal hung on an unrelated field would pass
+     * without it.
+     */
+    expect(array_keys($component->errors()->messages()))
+        ->each->toStartWith('data.checkout_config.delivery_options');
+
+    /**
+     * Refused at save rather than tidied up on read: what a page charges is
+     * collected in cash at a customer's door, so a merchant has to be told
+     * their page does not say what they think it says.
+     */
+    expect($page->refresh()->checkout_config->deliveryOptionsToArray())
+        ->toBe([['label' => 'Delivery', 'amount' => 6000]]);
+})->with([
+    'a blank name' => [[['label' => '  ', 'amount' => '60']]],
+    'an amount below nothing' => [[['label' => 'Inside Dhaka', 'amount' => '-60']]],
+    'two options under one name' => [[
+        ['label' => 'Inside Dhaka', 'amount' => '60'],
+        ['label' => 'Inside Dhaka', 'amount' => '120'],
+    ]],
+
+    /**
+     * A name a merchant may perfectly well give an option, and the one a
+     * carelessly written uniqueness check drops before comparing anything:
+     * both rows would save, and reading them back would silently leave one.
+     */
+    'two options under one name that reads as nothing' => [[
+        ['label' => '0', 'amount' => '60'],
+        ['label' => '0', 'amount' => '120'],
+    ]],
+]);

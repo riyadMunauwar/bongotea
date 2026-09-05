@@ -76,10 +76,24 @@
                 <span>Subtotal</span>
                 <span>{{ \App\Support\Money::format($order->subtotal) }}</span>
             </p>
-            <p class="row">
-                <span>Delivery</span>
-                <span>{{ \App\Support\Money::format($order->delivery_charge) }}</span>
-            </p>
+            {{--
+                Named after the arrangement that was agreed, in the words the
+                customer chose it by. Absent altogether where the page charged
+                for no delivery: a "৳0.00" row invites a question about a figure
+                that was never part of the order.
+
+                Read off the Order rather than off the Page it came from, which
+                is why the test is not the island's. An Order taken before
+                delivery was an arrangement carries a charge and no name to put
+                against it, and the row it is owed says "Delivery" — the word
+                that stood there on the day.
+            --}}
+            @if ($order->delivery_label !== null || $order->delivery_charge > 0)
+                <p class="row">
+                    <span>{{ $order->delivery_label ?? 'Delivery' }}</span>
+                    <span>{{ \App\Support\Money::format($order->delivery_charge) }}</span>
+                </p>
+            @endif
             <p class="row grand">
                 <span>Pay on delivery</span>
                 <span>{{ \App\Support\Money::format($order->total) }}</span>

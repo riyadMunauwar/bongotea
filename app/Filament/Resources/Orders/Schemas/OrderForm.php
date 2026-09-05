@@ -222,12 +222,19 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->state(fn (Get $get): string => Money::format(self::subtotal($get))),
 
+                        /**
+                         * Hinted with the arrangement agreed at Capture, which
+                         * is fixed the way a Product's name is: the amount can
+                         * be corrected on the call, but what the Customer chose
+                         * is history.
+                         */
                         TextInput::make('delivery_charge')
                             ->label('Delivery')
                             ->required()
                             ->numeric()
                             ->minValue(0)
                             ->prefix(config('giopages.currency.symbol'))
+                            ->hint(fn (?Order $record): ?string => $record?->delivery_label)
                             ->live(debounce: self::RECOMPUTE_DEBOUNCE)
                             ->hintIcon(
                                 Heroicon::OutlinedQuestionMarkCircle,
