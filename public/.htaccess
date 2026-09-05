@@ -14,12 +14,81 @@
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
     # Redirect Trailing Slashes If Not A Folder...
+    #
+    # This also canonicalises for the cache lookup below: entries are keyed on
+    # the path alone, so /promo/ would look up "page-cache/promo/.html" and miss
+    # forever. One key, reached by one address.
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
+
+    # Serve The Static Page Cache...
+    #
+    # A published landing page is answered by Apache — or by LiteSpeed, which
+    # reads this same file — reading one file off disk. PHP is not contacted;
+    # Laravel only *writes* the file on a miss and *deletes* it on a save. See
+    # app/Support/PageCache, and deploy/nginx/giopages.conf for the same three
+    # rules expressed as one try_files.
+    #
+    # These rules ship configured rather than as a snippet to merge, because
+    # under the supported layouts (deploy/README.md) this is the file the
+    # webserver actually reads: a merchant on shared hosting deploys and the
+    # cache works with no step they can forget.
+
+    # The cache lives inside the document root, so every cached page is also
+    # reachable at /page-cache/<slug>.html. Nothing may enter that way — a
+    # second indexable address for a page splits the ranking of the one the
+    # merchant's ad creatives point at.
+    #
+    # The condition reads the unmodified HTTP request line, which is what the
+    # client sent and which the internal rewrite below never touches. That is
+    # the exact translation of nginx's `internal`: it distinguishes "the client
+    # asked for this" from "we rewrote to this", so the lock and the rewrite
+    # target can be the same path. A nested .htaccess with a Require directive
+    # would not do — authorization applies to internal redirects too, so it
+    # would refuse our own rewrite as well as the visitor's.
+    RewriteCond %{THE_REQUEST} \s/+page-cache[/?\s] [NC]
+    RewriteRule ^ - [F,L]
+
+    # A real file — an asset, or the front controller itself — is served as it
+    # is and never reaches the cache lookup. A directory stops here too, which
+    # is how the site root falls through to index.php: it has no slug to be
+    # keyed on and is never cached.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # The cache lookup. The key is the path with no query string attached, so
+    # /promo, /promo?fbclid=... and /promo?utm_source=fb all resolve to one
+    # cached file — which is the entire point, since every ad click arrives
+    # with a tracking parameter.
+    #
+    # Only the methods a static file can honestly answer: without the method
+    # check, POST /checkout would be served the cached /checkout.html and the
+    # order would never reach the application.
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{DOCUMENT_ROOT}/page-cache/$1.html -f
+    RewriteRule ^(.+)$ page-cache/$1.html [L]
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+# Compression happens on the fly here, on a cached page as on any other
+# response. The pre-compressed .html.gz sibling the cache writes is read by
+# nginx and by the fallback reader, and deliberately not by Apache: serving it
+# needs optional modules, needs override permissions not every shared host
+# grants, and collides with LiteSpeed's own compression layer — exposure not
+# worth 1–3% of payload on the default path. deploy/README.md documents it as
+# opt-in for a merchant who controls their host.
+#
+# Only text/html: a cached page is what this configuration is here to serve,
+# and compressing the rest of the document root is a separate decision nobody
+# has made. A merchant who wants their assets compressed too adds the types.
+<IfModule mod_deflate.c>
+    <IfModule mod_filter.c>
+        AddOutputFilterByType DEFLATE text/html
+    </IfModule>
 </IfModule>

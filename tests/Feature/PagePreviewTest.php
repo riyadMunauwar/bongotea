@@ -34,7 +34,7 @@ it('never writes the preview to the static cache', function () {
         ->assertOk();
 
     /**
-     * public/page-cache is served by nginx publish-blind, so anything written
+     * public/page-cache is served by the webserver publish-blind, so anything
      * there is public. A draft must never reach it.
      */
     expect($this->cache->has('promo'))->toBeFalse();

@@ -26,8 +26,8 @@ pest()->extend(TestCase::class)
 |--------------------------------------------------------------------------
 |
 | The static cache is pointed at a scratch directory for every feature test.
-| public/page-cache is served by nginx publish-blind, so a file left there by
-| the suite would be real content on a real site.
+| public/page-cache is served by the webserver publish-blind, so a file left
+| there by the suite would be real content on a real site.
 |
 */
 

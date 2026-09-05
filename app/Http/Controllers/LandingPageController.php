@@ -34,10 +34,11 @@ class LandingPageController extends Controller
         $rendered = $this->expander->expand($page);
 
         /**
-         * public/page-cache/<slug>.html is served by nginx publish-blind, so
-         * only a published Page may ever be written there — and only when
-         * every shortcode on it rendered. A page that failed is served live and
-         * left out of the cache rather than frozen onto disk for everyone.
+         * public/page-cache/<slug>.html is served by the webserver
+         * publish-blind, so only a published Page may ever be written there —
+         * and only when every shortcode on it rendered. A page that failed is
+         * served live and left out of the cache rather than frozen onto disk
+         * for everyone.
          */
         if ($rendered->cacheable) {
             $this->cache->put($page->slug, $rendered->html);
