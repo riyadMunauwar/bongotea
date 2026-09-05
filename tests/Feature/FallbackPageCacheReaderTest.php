@@ -211,7 +211,14 @@ it('is consulted before the framework is loaded', function () {
      */
     $autoloader = strpos($frontController, 'vendor/autoload.php');
 
+    /**
+     * Presence is asserted for both lines before either position is, because
+     * `strpos` answers a missing needle with `false` and PHP reads `false` as
+     * lower than any offset — so a position check alone passes for a line that
+     * an upgrade deleted outright, which is the failure being guarded against.
+     */
     expect($frontController)->toContain("require_once __DIR__.'/../app/Support/PageCache/FallbackPageCacheReader.php';")
+        ->toContain('->serve($_SERVER)')
         ->and(strpos($frontController, 'FallbackPageCacheReader.php'))->toBeLessThan($autoloader)
         ->and(strpos($frontController, '->serve($_SERVER)'))->toBeLessThan($autoloader);
 });
