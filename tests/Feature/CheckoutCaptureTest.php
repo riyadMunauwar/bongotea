@@ -1493,8 +1493,26 @@ it('drops a question the merchant added that nothing could answer', function (ar
     'a control nothing renders' => [['key' => 'colour', 'label' => 'Colour', 'type' => 'colour-wheel']],
     'a key a built-in holds' => [['key' => 'phone', 'label' => 'Second phone', 'type' => 'text']],
     'a key the order form uses' => [['key' => 'quantities', 'label' => 'How many', 'type' => 'number']],
+    'the key the pricing hash arrives under' => [['key' => 'fingerprint', 'label' => 'Fingerprint', 'type' => 'text']],
     'a key no input could carry' => [['key' => 'gift note!', 'label' => 'Gift note', 'type' => 'text']],
 ]);
+
+it('takes no question of the merchant that would arrive in place of the pricing hash', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [['key' => 'fingerprint', 'label' => 'Fingerprint', 'type' => 'text']]);
+
+    /**
+     * Two inputs of a name arrive as the last of the pair, so this question
+     * would post what the customer typed where the hash the form was drawn
+     * with is read from. Nothing would say so: every order on a page that is
+     * spending money would be turned away as stale, and the merchant would
+     * see a conversion rate at zero rather than an error.
+     */
+    expect(substr_count($this->get('/promo')->assertOk()->getContent(), 'name="fingerprint"'))->toBe(1);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+});
 
 it('keeps every built-in whichever side of one a stray row claiming its key sits', function () {
     $page = sellingPage(Product::factory()->create());

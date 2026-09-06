@@ -707,6 +707,13 @@ it('refuses a question of the merchant that nothing could answer', function (arr
         questionRow('gift_note', ['label' => 'A second note']),
     ]],
     'a key the order form already uses' => [[questionRow('page', ['label' => 'Which page?'])]],
+    /**
+     * The key the label box derives on its own, so this is the one a merchant
+     * reaches by typing an ordinary question rather than by inventing a name.
+     * Saved, it would post the customer's answer in place of the pricing hash
+     * and every order on the page would be turned away as stale.
+     */
+    'the key the pricing hash arrives under' => [[questionRow('fingerprint', ['label' => 'Fingerprint'])]],
     'a key no form input could carry' => [[questionRow('Gift Note!')]],
     'a dropdown with nothing to choose between' => [[questionRow('colour', ['type' => 'select', 'options' => []])]],
     'radio buttons with nothing to choose between' => [[questionRow('colour', ['type' => 'radio', 'options' => []])]],

@@ -37,8 +37,20 @@ class CustomCheckoutField extends CheckoutField
      * refuses these the way it refuses a built-in's key. They are listed here
      * beside the pattern rather than in the admin, because a Config is editable
      * by other routes than the Checkout tab.
+     *
+     * This is every name the island's form posts, and it has to stay every one
+     * of them: two inputs of a name arrive as the last of the pair, so a
+     * question sharing one does not sit beside what it collides with — it
+     * replaces it. `fingerprint` is the worst of them and the reason to check
+     * this list against `checkout.blade.php` when a name is added there. A
+     * Customer's typed answer arriving in place of the pricing hash fails
+     * `PricingFingerprint::matches()` every time, so every Order on a Page
+     * that is spending money is turned away as stale, with nothing on the
+     * Checkout tab saying why (ADR-0007). Note the Merchant is steered
+     * straight at it: the key is derived from the label, so a question
+     * labelled "Fingerprint" asks for exactly this.
      */
-    private const RESERVED_KEYS = ['page', 'selected', 'quantities', 'delivery_option'];
+    private const RESERVED_KEYS = ['page', 'fingerprint', 'selected', 'quantities', 'delivery_option'];
 
     /**
      * What the Merchant said an answer has to be, from the bounded vocabulary
