@@ -121,7 +121,7 @@ class BuiltInCheckoutField extends CheckoutField
     /**
      * @return array<string, string>
      */
-    public function messages(): array
+    protected function answerMessages(): array
     {
         return $this->builtIn->messages();
     }
@@ -132,9 +132,10 @@ class BuiltInCheckoutField extends CheckoutField
      * and `options` are both here — the first stating what the built-in
      * dictates and the Config ignores, the second always empty, because a
      * District's choices are installation configuration and no built-in has
-     * choices a Merchant may author.
+     * choices a Merchant may author. `constraints` is here and always empty for
+     * the same reason: what a column will take is the built-in's to say.
      *
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -148,6 +149,7 @@ class BuiltInCheckoutField extends CheckoutField
             'placeholder' => $this->placeholder,
             'help' => $this->help,
             'style_tokens' => $this->styleTokens->toArray(),
+            'constraints' => [],
             'options' => [],
         ];
     }

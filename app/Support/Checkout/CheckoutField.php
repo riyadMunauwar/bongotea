@@ -92,7 +92,7 @@ abstract class CheckoutField
     /**
      * @return array<string, string>
      */
-    abstract public function messages(): array;
+    abstract protected function answerMessages(): array;
 
     /**
      * What an answer must look like beyond whether it was given at all, which
@@ -110,26 +110,74 @@ abstract class CheckoutField
     abstract protected function controlHtml(): array;
 
     /**
+     * What a Merchant has said an answer must be, beyond what the control it is
+     * asked with already dictates.
+     *
+     * Nothing, unless the field overrides it. A built-in constrains nothing:
+     * its rules are the column's, and the Config decides its wording and its
+     * two flags and no more (ADR-0006).
+     */
+    protected function constraints(): FieldConstraints
+    {
+        return FieldConstraints::none();
+    }
+
+    /**
+     * The longest answer this field will take whatever a Merchant asks for, or
+     * nothing where the field states its own length in its rules.
+     */
+    protected function lengthCeiling(): ?int
+    {
+        return null;
+    }
+
+    /**
      * @return list<mixed>
      */
     final public function rules(): array
     {
-        return [...$this->presenceRules(), ...$this->answerRules()];
+        return [
+            ...$this->presenceRules(),
+            ...$this->answerRules(),
+            ...$this->constraints()->rulesFor($this->type(), $this->lengthCeiling()),
+        ];
     }
 
     /**
-     * The HTML the control carries: what the kind of field always says, plus
-     * the merchant's hint wherever the control is one that carries the hint as
-     * an attribute. A Select renders theirs as its first option instead, which
-     * is the view's to do.
+     * What a Customer is told when their answer is refused: what the kind of
+     * field says, and what the Merchant's own constraints say on top of it.
      *
-     * Merged in rather than constructed with, because merging is what escapes:
-     * the bag's own `__toString` does not, and this is the one attribute here a
-     * merchant types.
+     * @return array<string, string>
+     */
+    final public function messages(): array
+    {
+        return [
+            ...$this->answerMessages(),
+            ...$this->constraints()->messagesFor($this->key(), $this->type(), $this->lengthCeiling()),
+        ];
+    }
+
+    /**
+     * The HTML the control carries: what the kind of field always says, what
+     * the merchant constrained an answer to, and their hint wherever the
+     * control is one that carries the hint as an attribute. A Select renders
+     * theirs as its first option instead, which is the view's to do.
+     *
+     * The constraints are spread over the top rather than merged under,
+     * because they are the half of one definition the browser enforces and the
+     * rules are the other: a stepping the Merchant asked for has to beat the
+     * one the control was drawn with, or the two sides stop agreeing.
+     *
+     * The hint is merged in rather than constructed with, because merging is
+     * what escapes: the bag's own `__toString` does not, and this is the one
+     * attribute here a merchant types.
      */
     final public function controlAttributes(): ComponentAttributeBag
     {
-        return (new ComponentAttributeBag($this->controlHtml()))
+        return (new ComponentAttributeBag([
+            ...$this->controlHtml(),
+            ...$this->constraints()->htmlFor($this->type(), $this->lengthCeiling()),
+        ]))
             ->merge(array_filter([
                 'placeholder' => $this->type()->carriesPlaceholderAttribute() ? $this->placeholder : null,
             ]));

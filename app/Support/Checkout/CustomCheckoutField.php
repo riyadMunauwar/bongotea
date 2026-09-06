@@ -41,6 +41,12 @@ class CustomCheckoutField extends CheckoutField
     private const RESERVED_KEYS = ['page', 'selected', 'quantities', 'delivery_option'];
 
     /**
+     * What the Merchant said an answer has to be, from the bounded vocabulary
+     * and never from a rule of their own writing.
+     */
+    private readonly FieldConstraints $fieldConstraints;
+
+    /**
      * @param  list<FieldOption>  $fieldOptions
      */
     public function __construct(
@@ -53,7 +59,10 @@ class CustomCheckoutField extends CheckoutField
         ?string $placeholder = null,
         ?string $help = null,
         ?StyleTokens $styleTokens = null,
+        ?FieldConstraints $constraints = null,
     ) {
+        $this->fieldConstraints = $constraints ?? FieldConstraints::none();
+
         parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens);
     }
 
@@ -107,6 +116,7 @@ class CustomCheckoutField extends CheckoutField
             placeholder: self::wording($stored['placeholder'] ?? null),
             help: self::wording($stored['help'] ?? null),
             styleTokens: StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
+            constraints: FieldConstraints::fromArray((array) ($stored['constraints'] ?? [])),
         );
     }
 
@@ -179,7 +189,7 @@ class CustomCheckoutField extends CheckoutField
     /**
      * @return array<string, string>
      */
-    public function messages(): array
+    protected function answerMessages(): array
     {
         /** Keyed off the field's own key, so a message cannot outlive it. */
         return match ($this->fieldType) {
@@ -194,15 +204,32 @@ class CustomCheckoutField extends CheckoutField
                 $this->fieldKey.'.required' => 'Please answer this question.',
                 $this->fieldKey.'.numeric' => 'Please answer with a number.',
             ],
+            /**
+             * The two written controls. What a length or a shape refuses is
+             * worded by `FieldConstraints`, which is what sets them.
+             */
             default => [
                 $this->fieldKey.'.required' => 'Please answer this question.',
-                $this->fieldKey.'.max' => 'That answer is longer than we can take.',
             ],
         };
     }
 
     /**
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, options: list<array{value: string, label: string}>}
+     * A Merchant's own question is the one place the bounded vocabulary
+     * applies: a built-in answers to the column waiting for it (ADR-0006).
+     */
+    protected function constraints(): FieldConstraints
+    {
+        return $this->fieldConstraints;
+    }
+
+    protected function lengthCeiling(): ?int
+    {
+        return $this->fieldType->lengthCeiling();
+    }
+
+    /**
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -216,6 +243,7 @@ class CustomCheckoutField extends CheckoutField
             'placeholder' => $this->placeholder,
             'help' => $this->help,
             'style_tokens' => $this->styleTokens->toArray(),
+            'constraints' => $this->fieldConstraints->toArray(),
             'options' => array_map(fn (FieldOption $option): array => $option->toArray(), $this->fieldOptions),
         ];
     }
@@ -227,13 +255,17 @@ class CustomCheckoutField extends CheckoutField
      * is refused rather than snapshotted as an answer nobody was offered — the
      * same treatment a delivery arrangement the Page does not offer gets.
      *
+     * How long a written answer may be is not here. That is one figure serving
+     * an attribute and a rule together, and `FieldConstraints` is where it is
+     * stated — capped at the control's ceiling whether or not the Merchant
+     * asked for anything.
+     *
      * @return list<mixed>
      */
     protected function answerRules(): array
     {
         return match ($this->fieldType) {
-            CheckoutFieldType::Text => ['string', 'max:255'],
-            CheckoutFieldType::Textarea => ['string', 'max:1000'],
+            CheckoutFieldType::Text, CheckoutFieldType::Textarea => ['string'],
             CheckoutFieldType::Number => ['numeric'],
             CheckoutFieldType::Select, CheckoutFieldType::Radio => [
                 'string',
@@ -247,6 +279,10 @@ class CustomCheckoutField extends CheckoutField
      * Never a `placeholder`. That word is the Merchant's, and CheckoutField
      * merges theirs in wherever the control can show one.
      *
+     * Never a length or a shape either: those are the browser's half of what
+     * `FieldConstraints` resolves, and CheckoutField writes them over the top
+     * of this so that one figure reaches the attribute and the rule alike.
+     *
      * The checkbox carries a value of its own because an unticked box sends
      * nothing and a ticked one would otherwise send `on`, which is not
      * something the `boolean` rule accepts.
@@ -256,8 +292,8 @@ class CustomCheckoutField extends CheckoutField
     protected function controlHtml(): array
     {
         return match ($this->fieldType) {
-            CheckoutFieldType::Text => ['type' => 'text', 'maxlength' => '255'],
-            CheckoutFieldType::Textarea => ['rows' => '3', 'maxlength' => '1000'],
+            CheckoutFieldType::Text => ['type' => 'text'],
+            CheckoutFieldType::Textarea => ['rows' => '3'],
             CheckoutFieldType::Number => ['type' => 'number', 'inputmode' => 'decimal', 'step' => 'any'],
             CheckoutFieldType::Select => [],
             CheckoutFieldType::Radio => ['type' => 'radio'],

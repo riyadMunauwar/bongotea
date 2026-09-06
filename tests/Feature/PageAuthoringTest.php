@@ -575,6 +575,7 @@ function questionRow(string $key, array $overrides = []): array
         'required' => false,
         'placeholder' => null,
         'help' => null,
+        'constraints' => [],
         'options' => [],
     ], $overrides);
 }
@@ -748,6 +749,177 @@ it('refuses a built-in key on the row that typed it and not on the built-in', fu
         ->and(array_key_first($component->errors()->messages()))->toEndWith('.key')
         ->and(array_values($component->errors()->messages())[0][0])
         ->toBe('This checkout already asks a question under that key. Give yours one of its own.');
+});
+
+it('lets a merchant bound what one of their own questions accepts', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('nickname', [
+                'label' => 'What should we call you?',
+                'type' => 'text',
+                'constraints' => ['min_length' => 3, 'max_length' => 40, 'pattern' => 'letters'],
+            ]),
+            questionRow('floor', [
+                'label' => 'Which floor?',
+                'type' => 'number',
+                'constraints' => ['min' => '1', 'max' => '20', 'whole_numbers' => true],
+            ]),
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A form that refuses more than it did is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    $stored = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key');
+
+    expect($stored['nickname']['constraints'])
+        ->toBe(['min_length' => 3, 'max_length' => 40, 'pattern' => 'letters'])
+        ->and($stored['floor']['constraints'])
+        ->toBe(['min' => '1', 'max' => '20', 'whole_numbers' => true]);
+
+    /** And out the other side, on the form a customer is served. */
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)
+        ->toMatch('/<input[^>]*name="nickname"[^>]*minlength="3"/')
+        ->toMatch('/<input[^>]*name="floor"[^>]*max="20"/');
+});
+
+it('keeps a bound the merchant left empty out of the stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('gift_note', ['constraints' => ['max_length' => 200]])]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $stored = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key');
+
+    /**
+     * Sparse, like the style tokens: a box left empty is the question taking
+     * whatever it is given, which is not a figure to store.
+     */
+    expect($stored['gift_note']['constraints'])->toBe(['max_length' => 200]);
+});
+
+it('refuses a bound nothing could satisfy on the row that holds it', function (array $constraints, string $box, string $message) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('detail', [
+            'type' => isset($constraints['min']) ? 'number' : 'text',
+            'constraints' => $constraints,
+        ])]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * On the smaller figure's own box, which is the control that has to come
+     * down — and on the offending row, so a merchant with a dozen questions is
+     * told which one to fix rather than that something somewhere is wrong.
+     *
+     * Worded by what the pair bounds, the way a customer's refusal is: a box
+     * labelled "Shortest answer" told it is larger than the largest is being
+     * told about a control it is not.
+     */
+    expect($component->errors()->messages())
+        ->toHaveCount(1)
+        ->and(array_key_first($component->errors()->messages()))->toEndWith($box)
+        ->and(array_values($component->errors()->messages())[0][0])
+        ->toBe($message);
+
+    expect($page->refresh()->checkout_config->fields)->toHaveCount(5);
+})->with([
+    'a shortest above the longest' => [
+        ['min_length' => 40, 'max_length' => 10],
+        '.constraints.min_length',
+        'A shortest answer longer than the longest is a question nobody can answer.',
+    ],
+    'a smallest above the largest' => [
+        ['min' => '20', 'max' => '2'],
+        '.constraints.min',
+        'A smallest larger than the largest is a question nobody can answer.',
+    ],
+]);
+
+it('refuses a longest above what the kind of question will hold', function (string $type, int $beyond) {
+    $page = Page::factory()->create();
+
+    /**
+     * Refused with a message rather than quietly capped at save: there is a
+     * merchant here to tell, and a form that silently takes less than they
+     * asked for is one they find out about from a support call.
+     */
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('detail', [
+            'type' => $type,
+            'constraints' => ['max_length' => $beyond],
+        ])]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    expect(array_keys($component->errors()->messages()))
+        ->each->toEndWith('.constraints.max_length');
+})->with([
+    'a single line' => ['text', 256],
+    'a paragraph' => ['textarea', 1001],
+]);
+
+it('offers no box anywhere that takes a rule the merchant wrote themselves', function (string $pattern) {
+    $page = Page::factory()->create();
+
+    /**
+     * The shape is picked from a closed list, so an expression typed into it by
+     * anything driving this form is refused rather than compiled. A malformed
+     * rule would not show up in the admin as an error — it would show up as a
+     * conversion rate going to zero on a page that is spending money.
+     */
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('gift_note', ['constraints' => ['pattern' => $pattern]])]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    expect(array_keys($component->errors()->messages()))
+        ->each->toEndWith('.constraints.pattern');
+
+    expect($page->refresh()->checkout_config->fields)->toHaveCount(5);
+})->with([
+    'an expression of their own' => ['^[a-z]+$'],
+    'a rule string' => ['regex:/^[a-z]+$/'],
+    'a shape by a name nothing knows' => ['postcode'],
+]);
+
+it('asks nothing about bounds on a question there is nothing to bound', function () {
+    $page = Page::factory()->create();
+
+    /**
+     * A choice is answered by picking and the list is the only bound worth
+     * having; a built-in answers to the column waiting for it (ADR-0006). So a
+     * bound typed onto either row is not saved, and there is no control on
+     * screen that could have typed it.
+     */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('colour', [
+                'type' => 'select',
+                'options' => [['value' => 'sky', 'label' => 'Sky blue']],
+                'constraints' => ['min_length' => 8],
+            ]),
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $stored = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key');
+
+    expect($stored['colour']['constraints'])->toBe([])
+        ->and($stored['name']['constraints'])->toBe([]);
 });
 
 it('restyles a checkout from the checkout tab', function () {

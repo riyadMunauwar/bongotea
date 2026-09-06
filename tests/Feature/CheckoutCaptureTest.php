@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
+use App\Support\Checkout\FieldPattern;
 use App\Support\Orders\CapturedAnswer;
 use Illuminate\Support\Str;
 
@@ -1501,4 +1502,320 @@ it('takes no answer to a question the page being ordered from does not ask', fun
         ->assertCreated();
 
     expect(Order::sole()->answers)->toBe([]);
+});
+
+/**
+ * The attributes one control of the rendered form carries, read back out of the
+ * HTML the visitor was served.
+ *
+ * This is what makes the composed tests below say anything: the browser's half
+ * of a rule is never restated in the test, it is taken out of the form and
+ * posted against.
+ *
+ * @return array<string, string>
+ */
+function controlOf(string $html, string $key): array
+{
+    $control = '/<(?:input|textarea)[^>]*name="'.preg_quote($key, '/').'"[^>]*>/';
+
+    expect($html)->toMatch($control);
+
+    preg_match($control, $html, $matched);
+    preg_match_all('/([a-z]+)="([^"]*)"/', $matched[0], $attributes, PREG_SET_ORDER);
+
+    return array_column($attributes, 2, 1);
+}
+
+it('tells the browser the lengths and the shape the merchant chose', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    checkoutAlsoAsking($page, [
+        question('nickname', 'text', ['constraints' => [
+            'min_length' => 3,
+            'max_length' => 40,
+            'pattern' => 'letters',
+        ]]),
+    ]);
+
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'nickname'))
+        ->toHaveKey('minlength', '3')
+        ->toHaveKey('maxlength', '40')
+        /** The vocabulary's own expression, never one the merchant wrote. */
+        ->toHaveKey('pattern', FieldPattern::Letters->attribute());
+});
+
+it('tells the browser the bounds and the stepping a number question was given', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    checkoutAlsoAsking($page, [
+        question('floor', 'number', ['constraints' => [
+            'min' => '1',
+            'max' => '20',
+            'whole_numbers' => true,
+        ]]),
+    ]);
+
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'floor'))
+        ->toHaveKey('min', '1')
+        ->toHaveKey('max', '20')
+        /** A question that takes no decimal point does not open one on a phone. */
+        ->toHaveKey('step', '1')
+        ->toHaveKey('inputmode', 'numeric');
+});
+
+it('refuses at capture exactly what the rendered form told the browser to refuse', function (array $constraints, string $type, string $attribute, callable $blocked) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('detail', $type, ['constraints' => $constraints])]);
+
+    /**
+     * The only place the "one definition, two renderings" property is
+     * observable at all: the figure is read out of the form the visitor was
+     * served, and an answer that figure would have blocked is then posted
+     * straight past the browser.
+     */
+    $control = controlOf($this->get('/promo')->assertOk()->getContent(), 'detail');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'detail' => $blocked($control[$attribute]),
+    ]))->assertUnprocessable()->assertJsonStructure(['errors' => ['detail']]);
+
+    expect(Order::count())->toBe(0);
+})->with([
+    'longer than the longest' => [
+        ['max_length' => 20], 'text', 'maxlength',
+        fn (string $maxlength): string => str_repeat('a', (int) $maxlength + 1),
+    ],
+    'shorter than the shortest' => [
+        ['min_length' => 8], 'text', 'minlength',
+        fn (string $minlength): string => str_repeat('a', (int) $minlength - 1),
+    ],
+    'the wrong shape' => [
+        ['pattern' => 'digits'], 'text', 'pattern',
+        fn (): string => 'the fourth floor',
+    ],
+    'below the smallest' => [
+        ['min' => '1'], 'number', 'min',
+        fn (string $min): string => (string) ((int) $min - 1),
+    ],
+    'above the largest' => [
+        ['max' => '20'], 'number', 'max',
+        fn (string $max): string => (string) ((int) $max + 1),
+    ],
+    'not a whole number' => [
+        ['whole_numbers' => true], 'number', 'step',
+        fn (): string => '2.5',
+    ],
+]);
+
+it('takes the answer the merchant said it would', function (string $type, array $constraints, string $answer) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('detail', $type, ['constraints' => $constraints])]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['detail' => $answer]))
+        ->assertCreated();
+
+    expect(Order::sole()->answers[0]->value)->toBe($answer);
+})->with([
+    'writing of the right length' => ['text', ['min_length' => 3, 'max_length' => 40], 'Rahim'],
+    'writing of the right shape' => ['text', ['pattern' => 'letters'], 'Nur-e-Alam'],
+    /** The ordinary case here, not the exception: a shape that refused it would be refusing customers. */
+    'a name written in bangla' => ['text', ['pattern' => 'letters'], 'রহিম উদ্দিন'],
+    'digits where digits were asked for' => ['text', ['pattern' => 'digits'], '01712345678'],
+    'a number inside its bounds' => ['number', ['min' => '1', 'max' => '20'], '14'],
+    'a whole number where one was asked for' => ['number', ['whole_numbers' => true], '4'],
+    'a paragraph of the right length' => ['textarea', ['min_length' => 5, 'max_length' => 500], 'Leave it with the guard.'],
+]);
+
+it('words a refusal by what the merchant bounded', function (string $type, array $constraints, string $answer, string $message) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('detail', $type, ['constraints' => $constraints])]);
+
+    /**
+     * A customer mid-purchase on a phone needs the next move rather than a
+     * diagnosis, and a longest on writing means something different from a
+     * largest on a number — telling them the wrong one of those is worse than
+     * telling them nothing.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['detail' => $answer]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.detail.0', $message);
+})->with([
+    'too short' => ['text', ['min_length' => 8], 'four', 'Please write at least 8 characters.'],
+    'too long' => ['text', ['max_length' => 4], 'far too long', 'That answer is longer than we can take.'],
+    'not letters' => ['text', ['pattern' => 'letters'], 'Flat 4B', 'Please answer with letters only.'],
+    'not digits' => ['text', ['pattern' => 'digits'], 'Flat 4B', 'Please answer with digits only.'],
+    'punctuated' => ['text', ['pattern' => 'letters_and_digits'], 'Flat 4B, ring twice', 'Please answer with letters and digits only.'],
+    'below the smallest' => ['number', ['min' => '2'], '1', 'Please answer with 2 or more.'],
+    'above the largest' => ['number', ['max' => '20'], '21', 'Please answer with 20 or less.'],
+    'not whole' => ['number', ['whole_numbers' => true], '2.5', 'Please answer with a whole number.'],
+]);
+
+it('checks a paragraph against its shape even where the browser has no attribute for one', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('directions', 'textarea', ['constraints' => ['pattern' => 'letters']])]);
+
+    /**
+     * HTML has no `pattern` on a textarea, so the asymmetry is the browser
+     * stopping nothing rather than stopping the wrong thing. The answer is
+     * still refused at capture, against the question that earned it.
+     */
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'directions'))
+        ->not->toHaveKey('pattern');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, ['directions' => 'Flat 4B']))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.directions.0', 'Please answer with letters only.');
+});
+
+it('caps a written answer at what the control will hold however the config was written', function (string $type, int $ceiling) {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A longest above the ceiling is refused on the Checkout tab, so it can
+     * only arrive from some other route. Capped rather than honoured: the
+     * figure the attribute carries and the figure the rule enforces are one,
+     * and neither may promise more than the answer can be stored in.
+     */
+    $page = checkoutAlsoAsking($page, [
+        question('detail', $type, ['constraints' => ['max_length' => 9000]]),
+    ]);
+
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'detail'))
+        ->toHaveKey('maxlength', (string) $ceiling);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'detail' => str_repeat('a', $ceiling + 1),
+    ]))->assertUnprocessable()->assertJsonPath('errors.detail.0', 'That answer is longer than we can take.');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'detail' => str_repeat('a', $ceiling),
+    ]))->assertCreated();
+})->with([
+    'a single line' => ['text', 255],
+    'a paragraph' => ['textarea', 1000],
+]);
+
+it('caps a written answer even where the merchant bounded nothing', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('gift_note')]);
+
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'gift_note'))
+        ->toHaveKey('maxlength', '255');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'gift_note' => str_repeat('a', 256),
+    ]))->assertUnprocessable();
+});
+
+it('takes no rule the merchant wrote themselves however the config was written', function (array $constraints) {
+    $page = sellingPage(Product::factory()->create());
+
+    $page = checkoutAlsoAsking($page, [question('gift_note', 'text', ['constraints' => $constraints])]);
+
+    /**
+     * The vocabulary is closed. An expression, a rule string, or a shape by a
+     * name nothing knows is dropped on the way in rather than compiled and run
+     * on a public endpoint the merchant could never have tested against.
+     */
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'gift_note'))
+        ->not->toHaveKey('pattern');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'gift_note' => 'Anything at all, 4B, ring twice',
+    ]))->assertCreated();
+})->with([
+    'an expression of their own' => [['pattern' => '^[a-z]+$']],
+    'a rule string' => [['pattern' => 'regex:/^[a-z]+$/']],
+    'a shape by a name nothing knows' => [['pattern' => 'postcode']],
+    'a rule under a key nothing reads' => [['rules' => ['regex:/^[a-z]+$/'], 'regex' => '.*']],
+]);
+
+it('drops a bound nothing could satisfy rather than asking the impossible', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * The pair the Checkout tab refuses outright, so it can only arrive from
+     * some other route. The choice there is between a question nobody can
+     * answer — a form that cannot be submitted at all, on a page spending money
+     * — and one that takes a little more than was intended.
+     */
+    $page = checkoutAlsoAsking($page, [
+        question('nickname', 'text', ['constraints' => ['min_length' => 40, 'max_length' => 10]]),
+        question('floor', 'number', ['constraints' => ['min' => '20', 'max' => '2']]),
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect(controlOf($html, 'nickname'))
+        ->not->toHaveKey('minlength')
+        ->toHaveKey('maxlength', '10')
+        ->and(controlOf($html, 'floor'))
+        ->not->toHaveKey('min')
+        ->toHaveKey('max', '2');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'nickname' => 'Rahim',
+        'floor' => '1',
+    ]))->assertCreated();
+});
+
+it('drops a bound belonging to a control the question is no longer asked with', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * What a merchant leaves behind by bounding a question and then changing
+     * how it is asked. A length counts characters and a smallest compares
+     * figures; neither means anything on the other, and enforcing one against
+     * the wrong control refuses answers for a reason nothing on screen gave.
+     */
+    $page = checkoutAlsoAsking($page, [
+        question('floor', 'number', ['constraints' => ['min_length' => 8, 'pattern' => 'letters']]),
+        question('nickname', 'text', ['constraints' => ['min' => '100', 'whole_numbers' => true]]),
+        question('colour', 'select', [
+            'options' => [['value' => 'sky', 'label' => 'Sky blue']],
+            'constraints' => ['min_length' => 8, 'max' => '2'],
+        ]),
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect(controlOf($html, 'floor'))
+        ->not->toHaveKey('minlength')
+        ->not->toHaveKey('pattern')
+        ->and(controlOf($html, 'nickname'))
+        ->not->toHaveKey('min')
+        ->not->toHaveKey('step');
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'floor' => '4',
+        'nickname' => 'Rahim',
+        'colour' => 'sky',
+    ]))->assertCreated();
+});
+
+it('leaves a field the system knows by name bounded by its own column', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A built-in takes its wording and its two flags from a Config and nothing
+     * else (ADR-0006): what its column will hold is the built-in's to say, so a
+     * constraint written onto its row by some other route decides nothing.
+     */
+    $page = checkoutOf($page, array_map(
+        fn (array $field): array => [...$field, 'constraints' => ['min_length' => 200, 'pattern' => 'digits']],
+        $page->checkout_config->fieldsToArray(),
+    ));
+
+    expect(controlOf($this->get('/promo')->assertOk()->getContent(), 'name'))
+        ->not->toHaveKey('minlength')
+        ->not->toHaveKey('pattern')
+        /** Its own ceiling, exactly as it always was. */
+        ->toHaveKey('maxlength', '255');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 });

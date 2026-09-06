@@ -40,6 +40,10 @@ _Avoid_: cart, add-on, bundle, upsell toggle
 One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
 _Avoid_: input, form field, custom field, attribute
 
+**Field Constraints**:
+What a Merchant has said an answer to one of their own Checkout Fields must be, chosen from a fixed vocabulary: a shortest and a longest for writing, a smallest and a largest for a number, whole numbers, and a shape picked from a named list. There is no rule a Merchant writes themselves anywhere, because a malformed one shows up as a conversion rate rather than as an error. One definition compiles into what the browser enforces and what the server checks, so the two can never disagree. A built-in field has none: what its column will hold is the built-in's to say.
+_Avoid_: validation rules, rule string, regex, pattern string, constraints list
+
 **Switched off**:
 Said of a Checkout Field its Page has stopped asking for. It is absent from the form and from what the server checks, and an Order taken without it records nothing rather than a blank. It keeps its wording and its rules meanwhile, so switching it back on restores the question as it was — switched off and not compulsory are separate things, and a compulsory field that is switched off is simply inert. Phone is the one field that cannot be switched off, because a Customer is their phone number.
 _Avoid_: disabled, hidden, removed, deleted, inactive, optional

@@ -8,6 +8,8 @@ use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Checkout\CustomCheckoutField;
+use App\Support\Checkout\FieldConstraints;
+use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\Money;
@@ -321,6 +323,148 @@ class PageForm
                                                     ->label('Shown to the customer')
                                                     ->maxLength(255)
                                                     ->helperText('Leave it empty to show the value itself.'),
+                                            ]),
+
+                                        /**
+                                         * What this question will take, from a
+                                         * vocabulary rather than from a box a
+                                         * merchant writes a rule into.
+                                         *
+                                         * Every control here is a number or a
+                                         * list to pick from, and there is
+                                         * nowhere to type a rule string or an
+                                         * expression of their own — see
+                                         * `FieldConstraints`. A malformed rule
+                                         * would not show up here as an error,
+                                         * it would show up as a conversion rate
+                                         * going to zero on a page that is
+                                         * spending money.
+                                         *
+                                         * Only the merchant's own questions get
+                                         * this. What a built-in will take is
+                                         * the column's to say, and a Config
+                                         * decides its wording and its two flags
+                                         * and no more (ADR-0006).
+                                         *
+                                         * Collapsed for the reason Appearance
+                                         * is: nearly every question takes any
+                                         * answer it is given. A refusal inside
+                                         * cannot be one nobody sees — the pair
+                                         * that raises it has to be typed with
+                                         * the section open, and nothing
+                                         * collapses it again on a failed save
+                                         * (see .ai/rules/resources.md).
+                                         */
+                                        Section::make('Answers')
+                                            ->description('What this question will accept. Anything left empty is a bound it does not have.')
+                                            ->collapsible()
+                                            ->collapsed()
+                                            ->columnSpanFull()
+                                            ->columns(3)
+                                            ->visible(fn (Get $get): bool => self::rowTakesConstraints($get))
+                                            ->schema([
+                                                /**
+                                                 * Refused against the longest,
+                                                 * and raised on the shortest's
+                                                 * own box: it is the box on the
+                                                 * offending row that the
+                                                 * merchant can bring down, and
+                                                 * naming the row alone would
+                                                 * leave them looking for which
+                                                 * of two figures is the wrong
+                                                 * one. Asked of
+                                                 * `FieldConstraints` so the tab
+                                                 * and the read cannot disagree
+                                                 * about which pairs are
+                                                 * impossible.
+                                                 */
+                                                TextInput::make('constraints.min_length')
+                                                    ->label('Shortest answer')
+                                                    ->integer()
+                                                    ->minValue(1)
+                                                    ->visible(self::rowConstrainsWriting(...))
+                                                    ->helperText('Characters. Empty accepts an answer of any length.')
+                                                    ->rules([
+                                                        fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                                            $refusal = FieldConstraints::lengthRefusal($value, $get('constraints.max_length'));
+
+                                                            if ($refusal !== null) {
+                                                                $fail($refusal);
+                                                            }
+                                                        },
+                                                    ]),
+
+                                                TextInput::make('constraints.max_length')
+                                                    ->label('Longest answer')
+                                                    ->integer()
+                                                    ->minValue(1)
+                                                    /**
+                                                     * The control's own ceiling
+                                                     * is the most it will ever
+                                                     * take, so a figure above it
+                                                     * is refused here rather
+                                                     * than quietly capped at
+                                                     * save.
+                                                     */
+                                                    ->maxValue(fn (Get $get): ?int => self::rowType($get)?->lengthCeiling())
+                                                    ->visible(self::rowConstrainsWriting(...))
+                                                    ->helperText(fn (Get $get): string => 'Characters, up to '
+                                                        .(self::rowType($get)?->lengthCeiling() ?? 0)
+                                                        .'. Empty takes the most this kind of question will hold.'),
+
+                                                /**
+                                                 * A closed list. A paragraph is
+                                                 * offered one too, and it is
+                                                 * checked at capture — HTML has
+                                                 * no `pattern` on a textarea, so
+                                                 * the browser simply stops
+                                                 * nothing rather than stopping
+                                                 * the wrong thing.
+                                                 *
+                                                 * Said on the box rather than
+                                                 * left for the merchant to
+                                                 * discover, because "the
+                                                 * customer is told as they
+                                                 * type" and "the customer is
+                                                 * told when they submit" are
+                                                 * different forms and they are
+                                                 * choosing between them.
+                                                 */
+                                                Select::make('constraints.pattern')
+                                                    ->label('Answer shape')
+                                                    ->options(FieldPattern::labels())
+                                                    ->placeholder('Anything')
+                                                    ->visible(self::rowConstrainsWriting(...))
+                                                    ->helperText(fn (Get $get): string => 'What the answer may be made of.'
+                                                        .(self::rowType($get)?->carriesPatternAttribute() === false
+                                                            ? ' On a paragraph this is checked when the customer submits, not as they type.'
+                                                            : '')),
+
+                                                TextInput::make('constraints.min')
+                                                    ->label('Smallest')
+                                                    ->numeric()
+                                                    ->visible(self::rowConstrainsNumber(...))
+                                                    ->helperText('The lowest number that will be accepted.')
+                                                    ->rules([
+                                                        fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                                            $refusal = FieldConstraints::boundsRefusal($value, $get('constraints.max'));
+
+                                                            if ($refusal !== null) {
+                                                                $fail($refusal);
+                                                            }
+                                                        },
+                                                    ]),
+
+                                                TextInput::make('constraints.max')
+                                                    ->label('Largest')
+                                                    ->numeric()
+                                                    ->visible(self::rowConstrainsNumber(...))
+                                                    ->helperText('The highest number that will be accepted.'),
+
+                                                Toggle::make('constraints.whole_numbers')
+                                                    ->label('Whole numbers only')
+                                                    ->visible(self::rowConstrainsNumber(...))
+                                                    ->helperText('A floor number is a whole number; a weight is not.'),
                                             ]),
 
                                         /**
@@ -639,6 +783,38 @@ class PageForm
     private static function rowOffersOptions(Get $get): bool
     {
         return ! self::isBuiltIn($get) && (self::rowType($get)?->hasOptions() ?? false);
+    }
+
+    /**
+     * Whether this row is a merchant's own question that there is anything to
+     * constrain about.
+     *
+     * A choice and a box are answered by picking, so the list they offer is the
+     * only bound worth having and it is not configurable. A built-in is
+     * excluded whatever it is asked with: what its column will take is the
+     * built-in's to state (ADR-0006).
+     */
+    private static function rowTakesConstraints(Get $get): bool
+    {
+        return self::rowConstrainsWriting($get) || self::rowConstrainsNumber($get);
+    }
+
+    /**
+     * Whether this row is a merchant's own question answered by writing
+     * something, which is what a length and a shape bound.
+     */
+    private static function rowConstrainsWriting(Get $get): bool
+    {
+        return ! self::isBuiltIn($get) && (self::rowType($get)?->holdsWriting() ?? false);
+    }
+
+    /**
+     * Whether this row is a merchant's own question answered with a number,
+     * which is what a smallest, a largest and whole numbers bound.
+     */
+    private static function rowConstrainsNumber(Get $get): bool
+    {
+        return ! self::isBuiltIn($get) && (self::rowType($get)?->holdsNumber() ?? false);
     }
 
     /**

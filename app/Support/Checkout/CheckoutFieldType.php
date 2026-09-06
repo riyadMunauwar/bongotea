@@ -36,6 +36,55 @@ enum CheckoutFieldType: string
     }
 
     /**
+     * Whether this control is answered by writing something.
+     *
+     * The two that are take a length and a shape from `FieldConstraints`. A
+     * number is measured rather than counted and is bounded by its own pair,
+     * and a choice or a box is answered by picking, where the only constraint
+     * that means anything is the list itself.
+     */
+    public function holdsWriting(): bool
+    {
+        return match ($this) {
+            self::Text, self::Textarea => true,
+            default => false,
+        };
+    }
+
+    public function holdsNumber(): bool
+    {
+        return $this === self::Number;
+    }
+
+    /**
+     * The longest answer this control will take whatever a Merchant asks for.
+     *
+     * A ceiling rather than a default: a Merchant may cap a question further
+     * down, never further up. It is stated once here so that the attribute the
+     * browser is given and the rule a Capture checks come off one figure.
+     */
+    public function lengthCeiling(): ?int
+    {
+        return match ($this) {
+            self::Text => 255,
+            self::Textarea => 1000,
+            default => null,
+        };
+    }
+
+    /**
+     * Whether the control can carry a shape as an HTML `pattern`.
+     *
+     * A textarea cannot: HTML has no such attribute on one. The shape is still
+     * checked at Capture, which fails in the safe direction — the browser stops
+     * nothing the server would have taken.
+     */
+    public function carriesPatternAttribute(): bool
+    {
+        return $this === self::Text;
+    }
+
+    /**
      * Whether a hint of the Merchant's is worth asking for at all.
      *
      * A radio group and a checkbox have nowhere to put one: every choice is on
