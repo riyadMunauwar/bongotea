@@ -1141,6 +1141,32 @@ it('refuses a form drawn before the picker was switched on', function () {
     expect(Order::count())->toBe(0);
 });
 
+it('sells only what was ticked on a form drawn before the picker was switched off', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = picking(sellingPage([$jacket, $boots]));
+
+    /** Written to disk while the page still asked the customer to tick. */
+    $payload = capturePayload($page, ['selected' => [$jacket->getKey()]]);
+
+    picking($page, picker: false);
+
+    /**
+     * Nothing priced moved, so the fingerprint has nothing to turn this away
+     * for — and should not: the customer ticked one item and read a total for
+     * one item. Reading the merchant's switch as it stands now and ignoring
+     * the ticks the older form sent would sell them both, which is an item
+     * nobody chose in a cash-on-delivery parcel and a refusal at the door.
+     */
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines->pluck('product_name')->all())->toBe(['Winter Jacket'])
+        ->and($order->subtotal)->toBe(99000);
+});
+
 it('refuses a tick that names nothing this page could sell', function () {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
     $boots = Product::factory()->create(['name' => 'Hiking Boots']);

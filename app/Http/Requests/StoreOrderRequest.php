@@ -95,8 +95,9 @@ class StoreOrderRequest extends FormRequest
      * gets — the Page is what decides, not the payload.
      *
      * Required, because an Order for nothing is not an Order. A submission that
-     * was never asked to choose — the picker switched off, or one Product on
-     * offer — carries no such rule and ignores whatever a stale form posts.
+     * was never asked to choose — no picker on either side of the wait, or one
+     * Product on offer — carries no such rule and ignores whatever a stale
+     * form posts.
      *
      * @return array<string, list<mixed>>
      */
@@ -122,6 +123,21 @@ class StoreOrderRequest extends FormRequest
      * Merchant switching to form-only with the picker left on would have every
      * Order refused for a box no Customer was shown.
      *
+     * The Config cannot be the whole of it, because it says what the Page asks
+     * now and this form was drawn earlier. A tick list arriving at all is the
+     * submission's own word that it drew one, and it is taken: switching the
+     * picker off does not reach the copy already on someone's phone, and
+     * reading only the Config there would take a Customer's ticks for nothing
+     * and sell them everything the Page links — a cash-on-delivery parcel
+     * holding items they never ticked, at a total above the summary they read.
+     * The fingerprint cannot turn that one away, because no price moved.
+     *
+     * Both halves, and neither alone. A Customer who ticked nothing posts no
+     * `selected` at all — an unticked checkbox is simply absent — so the
+     * Config's half is what tells a form that drew a tick list from one that
+     * never did, and the payload's half is what tells a form drawn before the
+     * Merchant's edit from one drawn after.
+     *
      * Counted from the submission rather than from the Page for the same reason
      * the quantities are keyed by id: the Page may have changed since these
      * bytes were written. A Page whose second Product was deleted mid-form
@@ -131,7 +147,8 @@ class StoreOrderRequest extends FormRequest
      */
     private function wasAskedToChoose(): bool
     {
-        return $this->checkoutConfig()->picksProducts() && count($this->quantities()) > 1;
+        return ($this->checkoutConfig()->picksProducts() || $this->has('selected'))
+            && count($this->quantities()) > 1;
     }
 
     /**
