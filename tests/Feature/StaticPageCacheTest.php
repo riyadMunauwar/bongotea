@@ -171,7 +171,7 @@ it('refuses to report a clean flush when an entry survived it', function () {
      */
     $refusingToDelete = new class extends Filesystem
     {
-        public function cleanDirectory($directory)
+        public function delete($paths)
         {
             return false;
         }
@@ -180,5 +180,41 @@ it('refuses to report a clean flush when an entry survived it', function () {
     $cache = new StaticPageCache($refusingToDelete, $this->cacheDirectory);
 
     expect(fn () => $cache->flush())->toThrow(RuntimeException::class)
+        ->and($this->cache->has('promo'))->toBeTrue();
+});
+
+it('reports a clean flush over an entry a request cached while it ran', function () {
+    $this->cache->put('promo', '<h1>Winter</h1>');
+
+    /**
+     * The release runs this against a live site, so a cache miss served while
+     * the flush is working writes a fresh entry behind it. That is the cache
+     * doing its job, and a flush that read the directory afterwards could not
+     * tell it from a file it had failed to unlink — so a release script would
+     * stop on a permissions error that is not one.
+     */
+    $servingWhileFlushed = new class extends Filesystem
+    {
+        public string $rewrites = '';
+
+        public function delete($paths)
+        {
+            $deleted = parent::delete($paths);
+
+            parent::put($this->rewrites, '<h1>Rendered mid-flush</h1>');
+
+            return $deleted;
+        }
+    };
+
+    $servingWhileFlushed->rewrites = $this->cacheDirectory.DIRECTORY_SEPARATOR.'promo.html';
+
+    $cache = new StaticPageCache($servingWhileFlushed, $this->cacheDirectory);
+
+    /**
+     * Counted from what it removed rather than from what is there afterwards,
+     * which is the whole of the difference.
+     */
+    expect($cache->flush())->toBe(1)
         ->and($this->cache->has('promo'))->toBeTrue();
 });

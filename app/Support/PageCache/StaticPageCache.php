@@ -110,15 +110,23 @@ class StaticPageCache
      * Page of their own, and the count is read by an operator checking that a
      * release cleared what they expected it to.
      *
-     * The directory is re-read afterwards rather than the count being reported
-     * from what was there beforehand. On shared hosting the release runs as a
+     * Counted and refused from what each unlink reported rather than from a
+     * second reading of the directory. On shared hosting the release runs as a
      * different user from the one PHP-FPM wrote the files as, so an unlink can
      * fail; reporting a clean flush over a surviving file would leave the
      * webserver answering ad clicks from the previous version's HTML with the
      * operator told the opposite.
      *
+     * A file the flush is told it could not remove is the only thing that is
+     * a failure. This runs against a live site — `deploy/README.md` has it in
+     * the release — so a cache miss served while it is working writes a fresh
+     * entry behind it, and a directory read afterwards cannot tell that from
+     * one of PHP-FPM's the release user could not touch. Reporting the healthy
+     * case as a permissions problem would stop the release script on the one
+     * sign the cache is doing its job.
+     *
      * @throws RuntimeException if the cache could not be read, or if anything
-     *                          survived the flush.
+     *                          could not be removed.
      */
     public function flush(): int
     {
@@ -126,15 +134,26 @@ class StaticPageCache
             return 0;
         }
 
-        $removed = count($this->entriesMatching($this->htmlPath('*')));
-
-        $this->files->cleanDirectory($this->directory);
-
         /**
          * Every entry, not just the HTML: a `.gz` outliving its `.html` is
          * served as stale content with no error anywhere.
          */
-        $survivors = $this->entriesMatching($this->directory.DIRECTORY_SEPARATOR.'*');
+        $entries = $this->entriesMatching($this->directory.DIRECTORY_SEPARATOR.'*');
+
+        $removed = 0;
+        $survivors = [];
+
+        foreach ($entries as $entry) {
+            if (! $this->files->delete($entry)) {
+                $survivors[] = $entry;
+
+                continue;
+            }
+
+            if (str_ends_with($entry, '.html')) {
+                $removed++;
+            }
+        }
 
         if ($survivors !== []) {
             throw new RuntimeException(sprintf(
