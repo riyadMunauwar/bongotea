@@ -63,3 +63,10 @@ Note what follows from Products being in it by id: soft-deleting one refuses the
 `PricingFingerprint::for()` takes a Page, and everything reads the figures through it — the view is handed one, and `matches()` recomputes one — because the form and the check reading two different sources is exactly the drift it exists to prevent. Do not compute one from `$page->products` or the Delivery Options directly.
 
 Note the two halves are fingerprinted differently on purpose. Products go in by id, sorted, so a reorder in the admin costs nothing. Delivery amounts go in by position, because with the labels left out there is nothing else tying an amount to the arrangement it belongs to — a bare set could not tell a reorder from the Merchant swapping 60 and 120 between "Inside Dhaka" and "Outside Dhaka", which is a repricing of both.
+
+## The Checkout tab is one class per concern, and CheckoutTab owns the order
+`Schemas/Checkout/` holds one class per concern — LayoutChoice, Products, Questions, DeliveryOptions, Appearance — each returning its own component (`Select`, `Toggle`, `Repeater`, `Section`), never a list. `CheckoutTab::make()` holds the arrangement and nothing else; PageForm knows only that the tab exists. Add a setting to the concern that owns it, not to PageForm.
+
+Two seams cross a concern, both deliberate. `LayoutChoice::selected()` is how anything reads the chosen layout — Products gates the picker on it rather than reading `checkout_config.layout` itself, so the tab and a stored Config cannot disagree. `Appearance::controls()` builds the token controls for both the checkout-wide section and the per-question override section inside a Questions row; the row's own section stays in Questions, because what is being restyled there is the question.
+
+The layout control sits *between* the two Products controls, which is why Products contributes `sold()` and `picker()` separately. It gates whether the picker can be asked about at all, so a merchant meets the cause before the effect. Keep that order if you rearrange.
