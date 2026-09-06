@@ -87,7 +87,6 @@
         .gio-checkout-price { margin: 0; font-size: 1.125em; font-weight: 700; }
         .gio-checkout-description { margin: .5rem 0 0; font-size: .875em; line-height: 1.5; }
         .gio-checkout-quantity { margin: .75rem 0 0; }
-        .gio-checkout-quantity-input { width: 7rem; }
         .gio-checkout-form { margin: 0; }
         {{--
             The three inherited properties are declared here as well as on the
@@ -108,6 +107,18 @@
         --}}
         .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625em .75em; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: calc(1em * var(--gio-input-size)); background: var(--gio-background); color: inherit; }
         .gio-checkout-input:focus { outline: 2px solid var(--gio-accent); outline-offset: -1px; }
+        {{--
+            Below the rule it narrows, and that is the whole of what makes it
+            work: the stepper carries both classes, both selectors are one
+            class, so the later declaration is the one that applies. It sat
+            above and has never had any effect — a stepper for a quantity of one
+            has been running the full width of the form since it was written.
+
+            Sized off the same scale as the box it is, so a form asked for at
+            Large does not get a wider stepper's worth of type in a box that
+            stayed where it was.
+        --}}
+        .gio-checkout-quantity-input { width: calc(7rem * var(--gio-input-size)); }
         .gio-checkout-delivery, .gio-checkout-choices { margin: 0; padding: 0; border: 0; }
         {{--
             A row a customer taps is a box like any other, so the same scale

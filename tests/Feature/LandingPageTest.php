@@ -655,3 +655,18 @@ it('sizes the rows a customer picks from off the same scale as the boxes', funct
     expect($choice[1])->toContain('var(--gio-input-size)')
         ->and(substr_count($choice[1], 'var(--gio-input-size)'))->toBe(3);
 });
+
+it('draws the quantity stepper narrow rather than the width of the form', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->getContent());
+
+    /**
+     * The stepper carries both classes and both selectors are one class, so the
+     * later declaration is the one that applies. Order is the only thing
+     * holding this up — raising the specificity of either would be the escape
+     * hatch a merchant's own stylesheet needs, spent on ourselves.
+     */
+    expect(strpos($styles, '.gio-checkout-quantity-input {'))
+        ->toBeGreaterThan(strpos($styles, '.gio-checkout-input {'));
+});
