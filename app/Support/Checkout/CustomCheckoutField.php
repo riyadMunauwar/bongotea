@@ -60,10 +60,11 @@ class CustomCheckoutField extends CheckoutField
         ?string $help = null,
         ?StyleTokens $styleTokens = null,
         ?FieldConstraints $constraints = null,
+        ?FieldWidth $width = null,
     ) {
         $this->fieldConstraints = $constraints ?? FieldConstraints::none();
 
-        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens);
+        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens, $width);
     }
 
     /**
@@ -117,6 +118,8 @@ class CustomCheckoutField extends CheckoutField
             help: self::wording($stored['help'] ?? null),
             styleTokens: StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
             constraints: FieldConstraints::fromArray((array) ($stored['constraints'] ?? [])),
+            /** Absent is the full row every question had before one could sit beside another. */
+            width: FieldWidth::fromStored($stored['width'] ?? null),
         );
     }
 
@@ -229,7 +232,7 @@ class CustomCheckoutField extends CheckoutField
     }
 
     /**
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, width: string, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -242,6 +245,7 @@ class CustomCheckoutField extends CheckoutField
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,
+            'width' => $this->width->value,
             'style_tokens' => $this->styleTokens->toArray(),
             'constraints' => $this->fieldConstraints->toArray(),
             'options' => array_map(fn (FieldOption $option): array => $option->toArray(), $this->fieldOptions),

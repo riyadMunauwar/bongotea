@@ -41,6 +41,19 @@ abstract class CheckoutField
      */
     public readonly StyleTokens $styleTokens;
 
+    /**
+     * How much of a row this question takes on a wide screen.
+     *
+     * Not a style token, because it is not a property anything declares: the
+     * form is a grid and this says how many of its columns one question spans,
+     * which the base stylesheet already has a flat class for. Nothing is
+     * generated per field here either.
+     *
+     * A promise about wide screens only — below the breakpoint every question
+     * is full width and there is no way to say otherwise. See `FieldWidth`.
+     */
+    public readonly FieldWidth $width;
+
     public function __construct(
         public readonly string $label,
         public readonly bool $enabled,
@@ -48,8 +61,10 @@ abstract class CheckoutField
         public readonly ?string $placeholder = null,
         public readonly ?string $help = null,
         ?StyleTokens $styleTokens = null,
+        ?FieldWidth $width = null,
     ) {
         $this->styleTokens = $styleTokens ?? StyleTokens::none();
+        $this->width = $width ?? FieldWidth::Full;
     }
 
     /**

@@ -40,11 +40,20 @@ class CheckoutConfig implements Arrayable
         /**
          * Whether the Customer chooses which of this Page's Products to buy.
          *
-         * The Merchant's switch and nothing more. Whether a Checkout actually
-         * asks the question depends on how many Products the Page still sells,
-         * which is Page's to answer — see `Page::offersProductChoice()`.
+         * The Merchant's switch and nothing more. What a Checkout actually
+         * asks needs the layout as well, which is `picksProducts()`, and then
+         * how many Products the Page still sells, which is Page's to answer —
+         * see `Page::offersProductChoice()`.
          */
         public readonly bool $productPicker,
+
+        /**
+         * How the Checkout is arranged.
+         *
+         * A rendering decision only: it changes what the island draws and
+         * nothing about what it asks for, what it charges or how it is styled.
+         */
+        public readonly CheckoutLayout $layout,
     ) {}
 
     /**
@@ -76,6 +85,12 @@ class CheckoutConfig implements Arrayable
              * between paid traffic and an order nobody asked us to change.
              */
             productPicker: false,
+
+            /**
+             * The arrangement the Checkout has always had, so a Merchant who
+             * never opens the Checkout tab sees the form they already know.
+             */
+            layout: CheckoutLayout::Stacked,
         );
     }
 
@@ -154,6 +169,9 @@ class CheckoutConfig implements Arrayable
              * everything they link.
              */
             productPicker: (bool) ($stored['product_picker'] ?? false),
+
+            /** Absent, or a name nothing draws, is the arrangement it has always had. */
+            layout: CheckoutLayout::fromStored($stored['layout'] ?? null),
         );
     }
 
@@ -208,6 +226,25 @@ class CheckoutConfig implements Arrayable
     public function enabledFields(): array
     {
         return array_values(array_filter($this->fields, fn (CheckoutField $field): bool => $field->enabled));
+    }
+
+    /**
+     * Whether this Checkout asks the Customer which Products to buy, as far as
+     * the Config alone can say.
+     *
+     * The Merchant's switch and their layout together. A form-only Checkout
+     * draws no Products, so it has nothing to put a tick box beside — and a
+     * Config that let the switch stand regardless would compile a rule
+     * demanding a choice the form never offered, which is every Order on a live
+     * Page refused for a box no Customer can find.
+     *
+     * How many Products the Page still sells is the other half, and it is not
+     * the Config's: see `Page::offersProductChoice()` for the rendering side
+     * and `StoreOrderRequest::wasAskedToChoose()` for the Capture's.
+     */
+    public function picksProducts(): bool
+    {
+        return $this->productPicker && $this->layout->showsProducts();
     }
 
     /**
@@ -331,7 +368,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, layout: string}
      */
     public function toArray(): array
     {
@@ -340,6 +377,7 @@ class CheckoutConfig implements Arrayable
             'delivery_options' => $this->deliveryOptionsToArray(),
             'style_tokens' => $this->styleTokens->toArray(),
             'product_picker' => $this->productPicker,
+            'layout' => $this->layout->value,
         ];
     }
 

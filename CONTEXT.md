@@ -32,8 +32,16 @@ _Avoid_: cart, basket, funnel
 Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else.
 _Avoid_: settings, preset, theme, template
 
+**Checkout Layout**:
+How a Checkout is arranged: what it draws, and nothing about what it asks for or what it charges. Two to begin with — the stacked form, and a form-only one with no product panel, for a Page whose own markup has already sold the Product above the fold. Every question, the delivery choice, the summary and the failure slots are drawn by both, and a form-only Checkout captures the same complete Order: it sells everything the Page sells, one of each.
+_Avoid_: template, theme, skin, variant
+
+**Field Width**:
+How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized.
+_Avoid_: column, span, size, grid
+
 **Product Picker**:
-Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. Nothing is picked to begin with, because on a cash-on-delivery Page an extra nobody chose is not a larger sale, it is a refused parcel. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice.
+Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. Nothing is picked to begin with, because on a cash-on-delivery Page an extra nobody chose is not a larger sale, it is a refused parcel. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout Layout that draws no Products to pick between.
 _Avoid_: cart, add-on, bundle, upsell toggle
 
 **Checkout Field**:

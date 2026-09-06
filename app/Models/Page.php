@@ -62,11 +62,12 @@ class Page extends Model
      * Whether this Page, as it stands now, asks the Customer which of its
      * Products to buy.
      *
-     * The Merchant's switch and the Page's own Products, together: a picker is
-     * only a question where there is more than one thing to pick between. A
-     * Page down to its last Product — linked that way, or left that way by a
-     * soft delete — sells it implicitly rather than putting a box the Customer
-     * has to find between them and the order.
+     * What the Config alone can say — the Merchant's switch and their layout,
+     * which is `CheckoutConfig::picksProducts()` — and the Page's own Products
+     * on top of it: a picker is only a question where there is more than one
+     * thing to pick between. A Page down to its last Product — linked that way,
+     * or left that way by a soft delete — sells it implicitly rather than
+     * putting a box the Customer has to find between them and the order.
      *
      * This is the rendering side of the question, and only that. A Capture
      * arrives from a form that may have been written to disk before any of this
@@ -75,7 +76,7 @@ class Page extends Model
      */
     public function offersProductChoice(): bool
     {
-        return $this->checkout_config->productPicker && $this->products->count() > 1;
+        return $this->checkout_config->picksProducts() && $this->products->count() > 1;
     }
 
     /**

@@ -24,8 +24,9 @@ class BuiltInCheckoutField extends CheckoutField
         ?string $placeholder = null,
         ?string $help = null,
         ?StyleTokens $styleTokens = null,
+        ?FieldWidth $width = null,
     ) {
-        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens);
+        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens, $width);
     }
 
     public static function default(BuiltInField $builtIn): self
@@ -83,6 +84,13 @@ class BuiltInCheckoutField extends CheckoutField
              * phone number they are not allowed to switch off.
              */
             styleTokens: StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
+            /**
+             * How wide a built-in sits is the Merchant's like any other
+             * question's. Where the answer goes is what a built-in has no say
+             * over; name and phone side by side is not that, and it is the
+             * pairing a Merchant reaches for first.
+             */
+            width: FieldWidth::fromStored($stored['width'] ?? null),
         );
     }
 
@@ -135,7 +143,7 @@ class BuiltInCheckoutField extends CheckoutField
      * choices a Merchant may author. `constraints` is here and always empty for
      * the same reason: what a column will take is the built-in's to say.
      *
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, width: string, style_tokens: array<string, string>, constraints: array<string, mixed>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -148,6 +156,7 @@ class BuiltInCheckoutField extends CheckoutField
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,
+            'width' => $this->width->value,
             'style_tokens' => $this->styleTokens->toArray(),
             'constraints' => [],
             'options' => [],

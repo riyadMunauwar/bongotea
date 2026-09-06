@@ -7,9 +7,11 @@ use App\Shortcodes\PageBodyValidator;
 use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutFieldType;
+use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\CustomCheckoutField;
 use App\Support\Checkout\FieldConstraints;
 use App\Support\Checkout\FieldPattern;
+use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\Money;
@@ -105,6 +107,37 @@ class PageForm
                                     ->helperText('[checkout] sells everything linked here, each with its own quantity, unless you let the customer choose below. Link at least one to publish.'),
 
                                 /**
+                                 * How the checkout is arranged. It changes what
+                                 * the form draws and nothing about what it asks
+                                 * for, what it charges or how it is styled —
+                                 * every question, the delivery choice, the
+                                 * summary and the error slots are rendered by
+                                 * both.
+                                 *
+                                 * Above the picker rather than below it,
+                                 * because it is what decides whether the picker
+                                 * can be asked about at all: a form-only
+                                 * checkout draws no products, so a merchant
+                                 * reading downwards meets the cause before the
+                                 * effect.
+                                 */
+                                Select::make('checkout_config.layout')
+                                    ->label('Layout')
+                                    ->options(CheckoutLayout::labels())
+                                    ->default(CheckoutLayout::Stacked->value)
+                                    /**
+                                     * Not `required`, for the reason a
+                                     * question's width is not: the list has no
+                                     * empty option to pick, and a Config that
+                                     * arrives without one is read as the
+                                     * arrangement the checkout has always had.
+                                     */
+                                    ->selectablePlaceholder(false)
+                                    ->live()
+                                    /** The chosen layout describes itself, so what it does reads without saving to find out. */
+                                    ->helperText(fn (Get $get): string => self::layout($get)->helperText()),
+
+                                /**
                                  * Whether the customer chooses which of them to
                                  * buy. Off, so linking a second product sells
                                  * both together the way this page always has,
@@ -116,11 +149,27 @@ class PageForm
                                  * choice worth asking about: a page down to one
                                  * sells it implicitly, which `Page` answers for
                                  * the form and the capture together.
+                                 *
+                                 * Held shut on a form-only page, which draws no
+                                 * products and so has nothing to put a checkbox
+                                 * beside. Held shut rather than hidden, and
+                                 * dehydrated so the switch survives: a merchant
+                                 * trying the other layout gets their picker back
+                                 * when they switch away from it. The same
+                                 * refusal is made again as the Config is read,
+                                 * because a picker left standing there would
+                                 * compile a rule demanding a choice the form
+                                 * never offered — every order on a live page
+                                 * refused for a box no customer can find.
                                  */
                                 Toggle::make('checkout_config.product_picker')
                                     ->label('Let the customer choose')
                                     ->default(false)
-                                    ->helperText('Each product gets a checkbox, unticked, and its quantity appears only once it is ticked. A page selling one product asks nothing and sells it.'),
+                                    ->disabled(fn (Get $get): bool => ! self::layout($get)->showsProducts())
+                                    ->dehydrated()
+                                    ->helperText(fn (Get $get): string => self::layout($get)->showsProducts()
+                                        ? 'Each product gets a checkbox, unticked, and its quantity appears only once it is ticked. A page selling one product asks nothing and sells it.'
+                                        : 'Not on a form-only page: there are no products on screen to tick. The order is for everything the page sells. Your setting is kept for when you switch back.'),
 
                                 /**
                                  * One list, both kinds of field. The built-ins the
@@ -244,6 +293,39 @@ class PageForm
                                             ->dehydrated()
                                             ->live()
                                             ->helperText('How the question is asked.'),
+
+                                        /**
+                                         * How much of a row the question takes,
+                                         * chosen from two rather than typed as
+                                         * a figure: the form is a grid of two
+                                         * columns, and a number would have to
+                                         * resolve against a container nobody
+                                         * here knows the width of.
+                                         *
+                                         * Offered on a built-in as well. Where
+                                         * an answer goes is what a built-in has
+                                         * no say over; name and phone side by
+                                         * side is not that, and it is the
+                                         * pairing a merchant reaches for first.
+                                         */
+                                        Select::make('width')
+                                            ->label('Width')
+                                            ->options(FieldWidth::labels())
+                                            ->default(FieldWidth::Full->value)
+                                            /**
+                                             * Not `required`. The list has no
+                                             * empty option to pick, so nothing
+                                             * on screen can leave it blank —
+                                             * and a row that arrives without
+                                             * one from some other route is a
+                                             * full-width question, the way
+                                             * every question was before one
+                                             * could sit beside another. A
+                                             * refusal here would only be a
+                                             * refusal the Config does not make.
+                                             */
+                                            ->selectablePlaceholder(false)
+                                            ->helperText('Two half-width questions in a row sit side by side on a wide screen. On a phone every question is full width, whichever you pick.'),
 
                                         /**
                                          * Phone's is held shut: a customer is their phone
@@ -713,7 +795,8 @@ class PageForm
     {
         $control = match ($token->kind()) {
             StyleTokenKind::Colour => ColorPicker::make($statePath.$token->value)->hex(),
-            StyleTokenKind::Length => TextInput::make($statePath.$token->value)->maxLength(20),
+            /** A width is typed like a length, and refused like one — against its own units. */
+            StyleTokenKind::Length, StyleTokenKind::Width => TextInput::make($statePath.$token->value)->maxLength(20),
             StyleTokenKind::Scale => Select::make($statePath.$token->value)->options($token->options()),
         };
 
@@ -731,6 +814,18 @@ class PageForm
                     }
                 },
             ]);
+    }
+
+    /**
+     * The layout the Checkout tab is currently set to.
+     *
+     * Read through the same total read a stored Config goes through, so a
+     * half-filled create screen and a Config written by another route answer
+     * the same way rather than the tab having a fallback of its own.
+     */
+    private static function layout(Get $get): CheckoutLayout
+    {
+        return CheckoutLayout::fromStored($get('checkout_config.layout'));
     }
 
     /**

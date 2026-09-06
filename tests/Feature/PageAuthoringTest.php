@@ -9,7 +9,9 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Checkout\CheckoutField;
+use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
+use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
 use Livewire\Livewire;
 
@@ -575,6 +577,7 @@ function questionRow(string $key, array $overrides = []): array
         'required' => false,
         'placeholder' => null,
         'help' => null,
+        'width' => 'full',
         'constraints' => [],
         'options' => [],
     ], $overrides);
@@ -987,6 +990,9 @@ it('refuses a style value on the box that holds it', function (string $token, st
     'a length that is not a length' => ['border_width', 'thin'],
     'a negative length' => ['font_size', '-1rem'],
     'a size nobody was offered' => ['input_size', '9'],
+    /** A width the form would escape the merchant's own layout with. */
+    'a width measured against the phone' => ['max_width', '100vw'],
+    'a width that is not a width' => ['max_width', 'full'],
 ]);
 
 it('lets every style box be left empty', function () {
@@ -1071,14 +1077,16 @@ it('restyles one question in the checkout tab and serves it that way', function 
 it('asks a question about no token nothing inside it reads', function () {
     /**
      * A question holds no order button, so the three tokens that dress one are
-     * not offered on a field row. A control that provably does nothing is worse
-     * than no control: a merchant would set the button colour on a question,
-     * see no change, and have nothing to tell them why.
+     * not offered on a field row — nor is the width, which for a question is
+     * the grid's to decide and is chosen from two rather than typed. A control
+     * that provably does nothing is worse than no control: a merchant would set
+     * the button colour on a question, see no change, and have nothing to tell
+     * them why.
      */
     $inert = array_filter(StyleToken::cases(), fn (StyleToken $token): bool => ! $token->appliesToOneField());
 
     expect(array_map(fn (StyleToken $token): string => $token->value, array_values($inert)))
-        ->toBe(['button_background', 'button_text', 'button_radius']);
+        ->toBe(['max_width', 'button_background', 'button_text', 'button_radius']);
 
     $page = Page::factory()->create();
 
@@ -1092,4 +1100,134 @@ it('asks a question about no token nothing inside it reads', function () {
      */
     expect(substr_count($rendered, 'style_tokens.border'))
         ->toBeGreaterThan(substr_count($rendered, 'style_tokens.button_background'));
+});
+
+it('lets a merchant arrange the checkout without its product panel', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A different arrangement is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse()
+        ->and($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::FormOnly);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The page's own markup sold the jacket above the fold. The checkout stops
+     * repeating it and still takes the order.
+     */
+    expect($html)->not->toContain('Winter Jacket')
+        ->and($html)->toContain('gio-checkout-form-only')
+        ->and($html)->toContain('name="quantities['.$product->getKey().']" value="1"');
+});
+
+it('keeps the picker a merchant set while the layout has nothing to tick', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['product_picker' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * The switch survives the layout that has nowhere to draw it, so switching
+     * back restores the page the merchant configured. What it must not do
+     * meanwhile is stand: a picker on a form-only page compiles a rule
+     * demanding a choice the form never offered, and every order on a live page
+     * is refused for a box no customer can find.
+     */
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->productPicker)->toBeTrue()
+        ->and($config->layout)->toBe(CheckoutLayout::FormOnly)
+        ->and($config->picksProducts())->toBeFalse();
+});
+
+it('keeps the questions and the delivery options a page had when the layout changes', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([['label' => 'Inside Dhaka', 'amount' => '60']]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * One Checkout Config, edited a control at a time. A layout saved on the
+     * Checkout tab must not take the rest of the tab down with it — and a
+     * layout decides what is drawn around the form, never what it asks for or
+     * what it charges.
+     */
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->deliveryOptionsToArray())->toBe([['label' => 'Inside Dhaka', 'amount' => 6000]])
+        ->and(array_map(fn (CheckoutField $field): string => $field->key(), $config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address']);
+});
+
+it('lets a merchant sit two short questions side by side', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $rows = $page->checkout_config->fieldsToArray();
+    $rows[0]['width'] = FieldWidth::Half->value;
+    $rows[1]['width'] = FieldWidth::Half->value;
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $rows]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Offered on a built-in like any other question: name beside phone is the
+     * pairing a merchant reaches for first, and where an answer goes is what a
+     * built-in has no say over — how wide the question sits is not that.
+     */
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->fields[0]->width)->toBe(FieldWidth::Half)
+        ->and($config->fields[1]->width)->toBe(FieldWidth::Half)
+        ->and($config->fields[2]->width)->toBe(FieldWidth::Full);
+
+    expect(substr_count(
+        $this->get('/promo')->assertOk()->getContent(),
+        'class="gio-checkout-field gio-checkout-field-half"',
+    ))->toBe(2);
+});
+
+it('boxes a checkout at the width typed on the checkout tab', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['style_tokens' => ['max_width' => '100%']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Width is a token like the colours beside it, so it is typed in the same
+     * section, refused by the same closure and emitted as the same kind of
+     * declaration. A percentage resolves against the element the merchant put
+     * [checkout] in, which is what full width means here.
+     */
+    expect($this->get('/promo')->assertOk()->getContent())->toContain('--gio-max-width: 100%;');
 });

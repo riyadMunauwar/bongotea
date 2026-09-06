@@ -670,3 +670,316 @@ it('draws the quantity stepper narrow rather than the width of the form', functi
     expect(strpos($styles, '.gio-checkout-quantity-input {'))
         ->toBeGreaterThan(strpos($styles, '.gio-checkout-input {'));
 });
+
+/*
+|--------------------------------------------------------------------------
+| Layouts and width
+|--------------------------------------------------------------------------
+|
+| How the Checkout is arranged and how wide it sits. Two layouts drawn from one
+| stylesheet, questions that pair up on a wide screen and never on a phone, and
+| a width that is a token rather than a third layout.
+|
+*/
+
+/**
+ * The island's markup, without the stylesheet and the script it ships beside
+ * it.
+ *
+ * Both of those name every class and every data attribute the markup can carry,
+ * so a test asking whether something was *drawn* has to read the markup alone —
+ * otherwise it passes on a page that draws nothing at all.
+ */
+function checkoutMarkup(string $html): string
+{
+    return (string) preg_replace('/<(style|script)>.*?<\/\1>/s', '', $html);
+}
+
+it('draws the products in the stacked layout and omits the panel in the form-only one', function () {
+    pageStyled([], slug: 'stacked');
+    pageStyled(['layout' => 'form_only'], slug: 'bare');
+
+    $stacked = checkoutMarkup($this->get('/stacked')->assertOk()->getContent());
+    $bare = checkoutMarkup($this->get('/bare')->assertOk()->getContent());
+
+    /**
+     * A form-only page sold the product in its own markup above the fold, so
+     * the panel is gone entirely rather than hidden: nothing is drawn, no
+     * picture is fetched, and none of those bytes are written into the cached
+     * page.
+     */
+    expect($stacked)->toContain('class="gio-checkout-products"')
+        ->and($bare)->not->toContain('class="gio-checkout-products"')
+        ->and($bare)->not->toContain('gio-checkout-product-head')
+        ->and($bare)->not->toContain('data-gio-quantity');
+});
+
+it('posts one of everything a form-only checkout sells', function () {
+    $page = pageStyled(['layout' => 'form_only']);
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The panel is what goes; the Order is not. Every product the page sells
+     * still posts a quantity, keyed by product id like the stepper it stands in
+     * for, so the Capture checks and writes exactly what it would from the
+     * stacked form.
+     */
+    foreach ($page->refresh()->products as $product) {
+        expect($html)->toContain('name="quantities['.$product->getKey().']" value="1"');
+    }
+
+    expect($page->products)->toHaveCount(2);
+});
+
+it('totals a form-only checkout off the same line markers as a stacked one', function () {
+    $page = pageStyled(['layout' => 'form_only']);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The script totals what it finds, and what it finds is the same in both
+     * layouts. A layout the island had to branch on would be a second summary
+     * to keep truthful, and a total reading low by anything is a parcel refused
+     * at the door.
+     */
+    expect(substr_count(checkoutMarkup($html), 'data-gio-line'))->toBe($page->products->count())
+        ->and($html)->toContain('data-unit-price="'.$page->products->first()->price.'"')
+        ->and($html)->toContain('data-gio-subtotal')
+        ->and($html)->toContain('data-gio-total');
+});
+
+it('draws every question, the delivery choice, the summary and the error slots in both layouts', function (string $layout) {
+    $page = pageStyled([
+        'layout' => $layout,
+        'fields' => [
+            ['key' => 'phone', 'label' => 'Phone number'],
+            ['key' => 'district', 'label' => 'District'],
+            ['key' => 'note', 'label' => 'Gift note', 'type' => 'textarea'],
+            ['key' => 'floor', 'label' => 'Floor', 'type' => 'number'],
+            ['key' => 'size', 'label' => 'Size', 'type' => 'radio', 'options' => [['value' => 's'], ['value' => 'm']]],
+            ['key' => 'wrap', 'label' => 'Gift wrap it', 'type' => 'checkbox'],
+        ],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * A layout decides what is drawn around the form and nothing about the form
+     * itself. Adding one must not quietly cost a page its radio buttons or its
+     * delivery prices — the failure a second template would invite, and which
+     * one loop for both layouts is what prevents.
+     */
+    expect($html)->toContain('type="tel"')
+        ->and($html)->toContain('<textarea')
+        ->and($html)->toContain('type="number"')
+        ->and($html)->toContain('<select')
+        ->and($html)->toContain('type="radio"')
+        ->and($html)->toContain('type="checkbox"')
+        ->and($html)->toContain('Inside Dhaka')
+        ->and($html)->toContain('data-gio-delivery-option')
+        ->and($html)->toContain('data-gio-subtotal')
+        ->and($html)->toContain('data-gio-total')
+        ->and($html)->toContain('data-gio-error-for="delivery_option"')
+        ->and($html)->toContain('data-gio-error-for="page"');
+
+    foreach ($page->checkout_config->enabledFields() as $field) {
+        expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
+    }
+})->with(['stacked', 'form_only']);
+
+it('ships one stylesheet whichever layout the page is arranged in', function () {
+    pageStyled([], slug: 'stacked');
+    pageStyled(['layout' => 'form_only'], slug: 'bare');
+
+    /**
+     * Byte for byte. These styles ride inside every cached page, so a layout
+     * carrying a sheet of its own would charge every visitor for an arrangement
+     * their page is not using — and a third layout would charge them twice.
+     */
+    expect(styleBlock($this->get('/bare')->getContent()))
+        ->toBe(styleBlock($this->get('/stacked')->getContent()));
+});
+
+it('names the layout on the checkout root in both layouts', function (string $layout, string $class) {
+    pageStyled(['layout' => $layout]);
+
+    /**
+     * A modifier beside the base class, always emitted, so a merchant writing
+     * their own CSS has a stable thing to hang it on and a layout added later
+     * is a rule rather than a copy.
+     */
+    expect($this->get('/promo')->getContent())->toContain('class="gio-checkout '.$class.'"');
+})->with([
+    'stacked' => ['stacked', 'gio-checkout-stacked'],
+    'form only' => ['form_only', 'gio-checkout-form-only'],
+]);
+
+it('reads a layout it cannot draw as the one the checkout has always had', function () {
+    pageStyled(['layout' => 'carousel']);
+
+    /**
+     * Total, like everything a Config is read from. A landing page answering
+     * paid traffic with a 500 costs more than one drawn in the arrangement it
+     * started in.
+     */
+    expect($this->get('/promo')->assertOk()->getContent())->toContain('gio-checkout-stacked');
+});
+
+it('never asks a form-only checkout which products to buy', function () {
+    $page = pageStyled(['layout' => 'form_only', 'product_picker' => true]);
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * There is nothing on screen to tick, so there is no question. The merchant
+     * keeps their switch for the day they go back to the stacked layout; what
+     * it must never do meanwhile is draw a checkbox nobody can find, or — worse
+     * — leave a rule standing that demands a choice the form never offered.
+     */
+    expect($html)->not->toContain('name="selected[]"')
+        ->and($page->checkout_config->productPicker)->toBeTrue()
+        ->and($page->checkout_config->picksProducts())->toBeFalse()
+        ->and($page->refresh()->offersProductChoice())->toBeFalse();
+});
+
+it('marks a half-width question with one flat class and generates nothing for it', function () {
+    pageStyled([
+        'fields' => [
+            ['key' => 'name', 'label' => 'Your name', 'width' => 'half'],
+            ['key' => 'phone', 'label' => 'Phone number', 'width' => 'half'],
+        ],
+    ], slug: 'paired');
+
+    pageStyled([], slug: 'plain');
+
+    $html = $this->get('/paired')->assertOk()->getContent();
+
+    /**
+     * A width is a class the sheet already carries and never a rule of its own,
+     * so pairing every question on a page costs the same bytes as pairing none
+     * — and a merchant's own stylesheet still beats us at the specificity it
+     * always did.
+     */
+    expect(substr_count(checkoutMarkup($html), 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
+        ->and(styleBlock($html))->toBe(styleBlock($this->get('/plain')->getContent()));
+});
+
+it('leaves a question at full width when the page says nothing about it', function () {
+    pageStyled([]);
+
+    /**
+     * Absent is the full row every question had before one could sit beside
+     * another, and the markup is the markup those pages already carry.
+     */
+    expect(checkoutMarkup($this->get('/promo')->getContent()))
+        ->toContain('<div class="gio-checkout-field">')
+        ->not->toContain('gio-checkout-field-half');
+});
+
+it('pairs half-width questions above the breakpoint and nowhere else', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->getContent());
+
+    preg_match('/@media \(min-width: [^)]+\) \{.*?\} \}/s', $styles, $wide);
+
+    $narrow = str_replace($wide[0] ?? '', '', $styles);
+
+    /**
+     * The second column exists inside the media query and nowhere else, so
+     * below the breakpoint the grid is one column and every question fills it
+     * whatever the merchant chose. This traffic is overwhelmingly phone-sized:
+     * a control whose only use is breaking the form for most of the people who
+     * will see it is not a control worth having, and there is nothing here to
+     * override.
+     */
+    expect($wide[0] ?? '')->toContain('.gio-checkout-field-half')
+        ->and($wide[0])->toContain('grid-template-columns: 1fr 1fr;')
+        ->and($narrow)->not->toContain('gio-checkout-field-half')
+        ->and($narrow)->toContain('.gio-checkout-fields { display: grid; grid-template-columns: 1fr;');
+});
+
+it('lets the half-width rule win by order rather than by specificity', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->getContent());
+
+    /**
+     * Both selectors are one class, so the later declaration is the one that
+     * applies. Raising either would spend the escape hatch a merchant's own
+     * stylesheet needs on ourselves — the same trade the quantity stepper makes.
+     */
+    expect(strpos($styles, '.gio-checkout-field-half { grid-column'))
+        ->toBeGreaterThan(strpos($styles, '.gio-checkout-field { grid-column'));
+});
+
+it('boxes the checkout at the width the page asks for', function () {
+    pageStyled(['style_tokens' => ['max_width' => '48rem']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Width is a token read by the rule that was already there, not a layout
+     * and not a class. That is what makes "boxed at a maximum" and "full width"
+     * the same declaration carrying a different value.
+     */
+    expect($styles)->toContain('--gio-max-width: 48rem;')
+        ->and($styles)->toContain('max-width: var(--gio-max-width)');
+});
+
+it('fills the element the shortcode sits in when the width says so', function () {
+    pageStyled(['style_tokens' => ['max_width' => '100%']]);
+
+    /**
+     * A percentage resolves against the element the merchant put [checkout] in,
+     * which is exactly what full width means here: the form fills what it was
+     * placed in and stops there.
+     */
+    expect(styleBlock($this->get('/promo')->getContent()))->toContain('--gio-max-width: 100%;');
+});
+
+it('refuses a width that would escape the element the shortcode sits in', function (string $width) {
+    pageStyled(['style_tokens' => ['max_width' => $width]]);
+
+    /**
+     * A viewport unit is the width of the phone rather than of the container,
+     * so a checkout dropped into a padded column would break out of the column
+     * and out of the merchant's design. Refused on the Checkout tab with a
+     * message and dropped again here without one, so the block is safe
+     * whichever route wrote the Config.
+     */
+    expect(styleBlock($this->get('/promo')->assertOk()->getContent()))
+        ->toContain('--gio-max-width: '.StyleToken::MaxWidth->defaultValue().';');
+})->with([
+    'the whole viewport' => '100vw',
+    'the taller side of it' => '80vh',
+    'a form no wider than nothing' => '0',
+    'a value that would close the declaration' => '30rem; } body { display: none } .x {',
+]);
+
+it('lets a paired question be narrower than the box it types in', function () {
+    pageStyled(['style_tokens' => ['max_width' => '20rem']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-field \{([^}]*)\}/', $styles, $field);
+
+    /**
+     * A grid item's `min-width` is `auto`, which is its content's min-content
+     * width — and an input's is about twenty characters however wide we draw
+     * it. Two columns narrower than that would push the grid past the checkout
+     * and out of the element the merchant put the shortcode in, which is the
+     * one thing the island must never do. It is reachable by boxing the form
+     * narrow and opening it on a desktop, so the floor is removed rather than
+     * argued with.
+     */
+    expect($field[1])->toContain('min-width: 0;')
+        ->and($styles)->toContain('--gio-max-width: 20rem;');
+});

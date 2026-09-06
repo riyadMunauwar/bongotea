@@ -77,6 +77,17 @@ class CheckoutShortcode implements ShortcodeDefinition
             'picksProducts' => $page->offersProductChoice(),
 
             /**
+             * How the island is arranged: the stacked form the Checkout has
+             * always drawn, or the form on its own for a Page whose own markup
+             * already sold the Product above the fold.
+             *
+             * The enum rather than a boolean, because the view needs both what
+             * it draws and the class it puts on the root — and a third layout
+             * is then a case here rather than a second flag threaded through.
+             */
+            'layout' => $page->checkout_config->layout,
+
+            /**
              * What this Page asks for, in its own words and its own order —
              * and only what it asks: a field the Merchant switched off is not
              * rendered at all. The same list compiles into the rules the

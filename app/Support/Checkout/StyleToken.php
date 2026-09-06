@@ -24,6 +24,17 @@ namespace App\Support\Checkout;
  */
 enum StyleToken: string
 {
+    /**
+     * How wide the Checkout sits, which is a token and not a layout.
+     *
+     * Boxed at whatever maximum the Merchant names, or `100%` to fill the
+     * element they dropped the shortcode into. Both are the same declaration
+     * reading the same property, which is why choosing between them adds no
+     * rule, no class and no bytes — and why a Page arranged either way is
+     * styled by the same sheet.
+     */
+    case MaxWidth = 'max_width';
+
     case Accent = 'accent';
     case Text = 'text';
     case Border = 'border';
@@ -85,6 +96,9 @@ enum StyleToken: string
     public function defaultValue(): string
     {
         return match ($this) {
+            /** The width the card has been boxed at since it was written. */
+            self::MaxWidth => '30rem',
+
             self::Accent => '#2563eb',
 
             /** The Page's own text colour, which is what the form has always taken. */
@@ -112,6 +126,8 @@ enum StyleToken: string
             self::ButtonRadius => StyleTokenKind::Length,
 
             self::InputSize => StyleTokenKind::Scale,
+
+            self::MaxWidth => StyleTokenKind::Width,
         };
     }
 
@@ -119,9 +135,11 @@ enum StyleToken: string
      * Whether one field can be styled with this token on its own.
      *
      * True of every token something inside a field wrapper reads. False of the
-     * three that dress the order button, because a field holds no button —
-     * redeclaring one on a question would emit a declaration nothing consumes,
-     * and a control that provably does nothing is worse than no control.
+     * three that dress the order button, because a field holds no button, and
+     * false of the width, because a field's own is the grid's to decide and is
+     * chosen from two — see `FieldWidth`. Redeclaring any of the four on a
+     * question would emit a declaration nothing consumes, and a control that
+     * provably does nothing is worse than no control.
      *
      * This is a statement about what a wrapper contains, not a restriction: the
      * cascade is what confines an override, and nothing here generates a
@@ -130,7 +148,7 @@ enum StyleToken: string
      */
     public function appliesToOneField(): bool
     {
-        return ! in_array($this, [self::ButtonBackground, self::ButtonText, self::ButtonRadius], true);
+        return ! in_array($this, [self::MaxWidth, self::ButtonBackground, self::ButtonText, self::ButtonRadius], true);
     }
 
     /**
@@ -170,6 +188,7 @@ enum StyleToken: string
     public function label(): string
     {
         return match ($this) {
+            self::MaxWidth => 'Width',
             self::Accent => 'Accent colour',
             self::Text => 'Text colour',
             self::Border => 'Border colour',
@@ -190,6 +209,7 @@ enum StyleToken: string
     public function helperText(): string
     {
         return match ($this) {
+            self::MaxWidth => 'The widest the form gets before it stops growing, centred in whatever you put [checkout] inside. Use 100% to fill that element completely.',
             self::Accent => 'The outline on the box being typed in, and the tick in a checkbox or radio.',
             self::Text => 'Every word in the form. Left empty it takes the page\'s own.',
             self::Border => 'Every line the form draws — around the boxes, and between the rows.',

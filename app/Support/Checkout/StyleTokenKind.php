@@ -19,6 +19,7 @@ enum StyleTokenKind
     case Colour;
     case Length;
     case Scale;
+    case Width;
 
     /**
      * The units a length may carry.
@@ -47,6 +48,27 @@ enum StyleTokenKind
     private const KEYWORDS = ['inherit', 'transparent', 'currentcolor'];
 
     /**
+     * The units a width may carry.
+     *
+     * The three lengths, plus the one relative unit that resolves against the
+     * element the Merchant put the shortcode in rather than against something
+     * else: a percentage. `100%` is how a Checkout is asked to fill whatever it
+     * was placed in.
+     *
+     * A viewport unit is refused because it resolves against neither. `100vw`
+     * is the width of the phone, so a Checkout dropped into a padded column
+     * would break out of the column and out of the Merchant's design.
+     *
+     * That refusal is half of "full width never escapes the element the
+     * shortcode sits in". The other half is not stated here and is not this
+     * pattern's to state: the island is an auto-width block, so it is already
+     * no wider than what it sits in, and a `max-width` only ever narrows it. A
+     * figure above 100% is accepted for that reason rather than refused — it is
+     * a real value that simply never applies.
+     */
+    private const WIDTH_UNITS = ['px', 'rem', 'em', '%'];
+
+    /**
      * Said of a size chosen from a list rather than typed.
      *
      * Worded here beside the other refusals, and said by `StyleToken`, which is
@@ -69,6 +91,7 @@ enum StyleTokenKind
         return match ($this) {
             self::Colour => self::colourRefusal($value),
             self::Length => self::lengthRefusal($value),
+            self::Width => self::widthRefusal($value),
 
             /**
              * Never reached: a scale is chosen from a list, so the token itself
@@ -123,10 +146,44 @@ enum StyleTokenKind
             return null;
         }
 
-        if (preg_match('/^(?:\d+|\d*\.\d+)(?:'.implode('|', self::UNITS).')$/', $value) === 1) {
-            return null;
-        }
+        return self::unitRefusal(
+            $value,
+            self::UNITS,
+            'Use a length like 8px, .5rem or 0. Units: '.implode(', ', self::UNITS).'.',
+        );
+    }
 
-        return 'Use a length like 8px, .5rem or 0. Units: '.implode(', ', self::UNITS).'.';
+    /**
+     * A width is a length, or a percentage of whatever the Checkout was placed
+     * in, and never anything that resolves against the phone.
+     *
+     * A bare zero is not among them, unlike a length. There is no reason to ask
+     * for a form no wider than nothing, and a Merchant who typed it would be
+     * looking at an invisible Checkout with nothing to tell them why.
+     */
+    private static function widthRefusal(string $value): ?string
+    {
+        return self::unitRefusal(
+            $value,
+            self::WIDTH_UNITS,
+            'Use a width like 30rem or 640px, or 100% to fill whatever the shortcode sits in. Viewport units are refused: the form never escapes the element it was placed in.',
+        );
+    }
+
+    /**
+     * A number carrying one of the units listed, or the refusal given.
+     *
+     * The one shape both sizes are read with, so a kind differs by the units it
+     * accepts and the words it refuses in — never by a second copy of the
+     * pattern. What survives it is digits and a unit, which is what keeps a
+     * stored value from ending the declaration it is written into.
+     *
+     * @param  list<string>  $units
+     */
+    private static function unitRefusal(string $value, array $units, string $refusal): ?string
+    {
+        $units = implode('|', array_map(preg_quote(...), $units));
+
+        return preg_match('/^(?:\d+|\d*\.\d+)(?:'.$units.')$/', $value) === 1 ? null : $refusal;
     }
 }

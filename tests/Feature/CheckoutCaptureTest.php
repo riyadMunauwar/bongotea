@@ -1819,3 +1819,53 @@ it('leaves a field the system knows by name bounded by its own column', function
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 });
+
+it('captures a complete order from a checkout that draws no products', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 25000]);
+
+    $page = sellingPage([$jacket, $scarf]);
+    $page->update(['checkout_config' => CheckoutConfig::fromArray(['layout' => 'form_only'])]);
+
+    $response = $this->postJson(route('checkout.store'), capturePayload($page));
+
+    $response->assertCreated();
+
+    /**
+     * The panel is what a form-only layout drops, never the Order. Everything
+     * the Page sells is on it, at the Page's own prices, with delivery charged
+     * exactly as it would be from the stacked form — a layout decides what is
+     * drawn and nothing about what is collected at the door.
+     */
+    $order = Order::sole();
+
+    expect($order->lines)->toHaveCount(2)
+        ->and($order->subtotal)->toBe(124000)
+        ->and($order->delivery_charge)->toBe(6000)
+        ->and($order->total)->toBe(130000);
+});
+
+it('sells everything a form-only page offers however its picker is set', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $scarf = Product::factory()->create(['price' => 25000]);
+
+    $page = sellingPage([$jacket, $scarf]);
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        'layout' => 'form_only',
+        'product_picker' => true,
+    ])]);
+
+    /**
+     * The form drew no checkboxes, so the submission names nothing ticked. A
+     * picker left standing on a layout that cannot draw one would refuse this
+     * for having chosen nothing — every order on a live page turned away over a
+     * box no customer was ever shown. The layout is read here for exactly that
+     * reason.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines)->toHaveCount(2)
+        ->and($order->subtotal)->toBe(124000);
+});

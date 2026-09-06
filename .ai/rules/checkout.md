@@ -22,6 +22,15 @@ Four consequences worth knowing before editing the block.
 
 **A field's overrides go in an inline `style` attribute, which does outrank a merchant's stylesheet — for those tokens only.** Accepted, because the alternative is the generated selector this whole rule exists to avoid, and it is narrow: the merchant still wins by setting the resolved property (`.gio-checkout-input { border-color: … }`), which is the control the promise above is actually about. Don't "fix" it by raising the checkout's own specificity to match.
 
+## A fixed modifier class is not the generated rule the token set exists to avoid
+The rule above says an appearance setting becomes a token rather than a rule. Two things are deliberately not tokens, and neither breaks it.
+
+**A layout is a class on the root, and both layouts ship one stylesheet.** Form-only differs by what the view draws — the product panel is omitted, not hidden — so `.gio-checkout-form-only` currently carries no declarations at all: it is a stable hook for a merchant's own CSS, and the place a layout's rules would go if one ever needed any. Put them in the shared sheet when that day comes. The block rides inside every cached page, so a layout with its own copy would charge every visitor for an arrangement their page is not using, which is why `LandingPageTest` pins the emitted styles byte-identical between the two.
+
+**A field's width is a flat class too, and its breakpoint cannot be a token.** `.gio-checkout-field-half` is in the base sheet whether or not any question uses it, so pairing every question costs the same bytes as pairing none, and it beats `.gio-checkout-field` by order rather than by specificity — the same trade the quantity stepper makes. The two-column grid exists only inside the media query, which is the whole of "the collapse on a phone cannot be overridden": there is nothing to override, because no per-page value reaches it. A custom property cannot be read in a media-query prelude, so a per-page breakpoint would have to be a generated rule — the thing the token set exists not to do.
+
+Note the layout is read where the picker is decided, not only where the form is drawn. `CheckoutConfig::picksProducts()` gates the merchant's switch on the layout, and `Page::offersProductChoice()` and `StoreOrderRequest::wasAskedToChoose()` both go through it. A picker left standing on a form-only page compiles a rule demanding a choice the form never drew — every order on a live page refused for a box no customer can find. The switch itself is kept, so switching back restores the page the merchant configured.
+
 ## Validation is a bounded vocabulary, and never a rule a merchant wrote
 There is no box anywhere — not on the Checkout tab, not in a stored Config — that takes a rule string or a regular expression of the merchant's. What a question will accept is a length, a bound, a switch, and a shape chosen from `FieldPattern`. That is the whole of it, and it is a deliberate refusal rather than a feature nobody got round to.
 
