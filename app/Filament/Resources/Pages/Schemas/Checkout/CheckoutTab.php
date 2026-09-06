@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 
 /**
@@ -15,7 +16,10 @@ use Filament\Schemas\Components\Tabs\Tab;
  * order they are met.
  *
  * A Checkout Config is one thing a Page decides, which is why these stay inside
- * one tab rather than being promoted alongside the Page itself.
+ * one tab rather than being promoted alongside the Page itself. What the
+ * concerns get instead is a nested tab each, so one is on screen at a time and
+ * the appearance controls are reachable without scrolling past every question
+ * the merchant has ever authored.
  */
 class CheckoutTab
 {
@@ -25,23 +29,55 @@ class CheckoutTab
         return Tab::make('Checkout')
             ->columns(1)
             ->schema([
-                Products::sold(),
-
                 /**
-                 * Between the two product controls rather than after both:
-                 * the layout is what decides whether the picker can be
-                 * asked about at all, so a merchant reading downwards
-                 * meets the cause before the effect.
+                 * Not contained, because the tab it sits in is
+                 * already a card: a second one around the same
+                 * content would draw a border for a nesting the
+                 * merchant can already see in the two rows of
+                 * tabs.
                  */
-                LayoutChoice::control(),
+                Tabs::make()
+                    ->contained(false)
+                    ->tabs([
+                        /**
+                         * First, and before the picker it gates:
+                         * the layout is what decides whether
+                         * products can be picked from at all, so
+                         * a merchant reading left to right meets
+                         * the cause before the effect.
+                         */
+                        Tab::make('Layout')
+                            ->columns(1)
+                            ->schema([
+                                LayoutChoice::control(),
+                            ]),
 
-                Products::picker(),
+                        Tab::make('Products')
+                            ->columns(1)
+                            ->schema([
+                                Products::sold(),
 
-                Questions::asked(),
+                                Products::picker(),
+                            ]),
 
-                DeliveryOptions::offered(),
+                        Tab::make('Questions')
+                            ->columns(1)
+                            ->schema([
+                                Questions::asked(),
+                            ]),
 
-                Appearance::section(),
+                        Tab::make('Delivery')
+                            ->columns(1)
+                            ->schema([
+                                DeliveryOptions::offered(),
+                            ]),
+
+                        Tab::make('Appearance')
+                            ->columns(1)
+                            ->schema([
+                                Appearance::section(),
+                            ]),
+                    ]),
             ]);
     }
 }

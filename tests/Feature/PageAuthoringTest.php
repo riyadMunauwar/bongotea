@@ -8,11 +8,19 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
+use Filament\Forms\Components\Field;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -1267,4 +1275,203 @@ it('boxes a checkout at the width typed on the checkout tab', function () {
      * [checkout] in, which is what full width means here.
      */
     expect($this->get('/promo')->assertOk()->getContent())->toContain('--gio-max-width: 100%;');
+});
+
+/**
+ * The tabs directly inside a schema or a component, in the order a merchant
+ * meets them.
+ *
+ * A `Tabs` is transparent here: it is the arrangement, not a thing on screen,
+ * so asking a Tab what tabs are inside it answers with the nested ones rather
+ * than with the container that holds them.
+ *
+ * @return list<Tab>
+ */
+function tabsInside(Schema|Component $node): array
+{
+    $schema = $node instanceof Schema ? $node : $node->getChildSchema();
+
+    $tabs = [];
+
+    foreach ($schema?->getComponents(withHidden: true) ?? [] as $component) {
+        if ($component instanceof Tabs) {
+            $tabs = [...$tabs, ...tabsInside($component)];
+
+            continue;
+        }
+
+        if ($component instanceof Tab) {
+            $tabs[] = $component;
+        }
+    }
+
+    return $tabs;
+}
+
+/**
+ * Every state path a merchant can type into somewhere under this component,
+ * however deeply it is nested.
+ *
+ * Read without the form's own root, so a path here is the one the Config is
+ * written at rather than the Livewire property the panel happens to hold the
+ * whole form in.
+ *
+ * @return list<string>
+ */
+function statePathsInside(Schema|Component $node): array
+{
+    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
+
+    $paths = [];
+
+    foreach ($schemas as $schema) {
+        foreach ($schema->getComponents(withHidden: true) as $component) {
+            if ($component instanceof Field) {
+                $paths[] = Str::after(
+                    $component->getStatePath(),
+                    $component->getRootContainer()->getStatePath().'.',
+                );
+            }
+
+            $paths = [...$paths, ...statePathsInside($component)];
+        }
+    }
+
+    return $paths;
+}
+
+/**
+ * The form a merchant is actually served on the edit screen, rather than the
+ * schema classes that build it — so what is asserted is what they open.
+ */
+function editFormOf(Page $page): Schema
+{
+    return Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->instance()
+        ->getSchema('form');
+}
+
+/**
+ * The nested tabs the Checkout tab is split into, by their label.
+ *
+ * @return Collection<string, Tab>
+ */
+function checkoutTabsOf(Page $page): Collection
+{
+    $checkout = collect(tabsInside(editFormOf($page)))
+        /** Exactly one, so a Checkout tab that went missing fails here rather than further down. */
+        ->sole(fn (Tab $tab): bool => (string) $tab->getLabel() === 'Checkout');
+
+    return collect(tabsInside($checkout))
+        ->keyBy(fn (Tab $tab): string => (string) $tab->getLabel());
+}
+
+it('splits the checkout tab into one nested tab per concern', function () {
+    /**
+     * One concern on screen at a time, in the order a merchant reads them: the
+     * layout is what decides whether products can be picked from at all, so it
+     * is met before the picker it gates.
+     */
+    expect(checkoutTabsOf(Page::factory()->create())->keys()->all())
+        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Appearance']);
+});
+
+it('keeps everything the checkout decides inside the checkout tab', function () {
+    /**
+     * A Checkout Config is one thing a Page decides, so splitting it up inside
+     * the tab must not promote its parts to sit beside the Page itself.
+     */
+    expect(array_map(
+        fn (Tab $tab): string => (string) $tab->getLabel(),
+        tabsInside(editFormOf(Page::factory()->create())),
+    ))->toBe(['Page', 'Checkout']);
+});
+
+it('reaches and saves a setting on every nested checkout tab', function (string $tab) {
+    $page = Page::factory()->create();
+
+    $questions = $page->checkout_config->fieldsToArray();
+    $questions[0]['label'] = 'Your full name';
+
+    /**
+     * One setting per concern: where it is asked, what is typed into it, and
+     * what the Config holds afterwards, kept together so a tab cannot be
+     * checked against the wrong box.
+     *
+     * @var array{control: string, typed: array<string, mixed>, saved: Closure(CheckoutConfig): mixed, expected: mixed} $setting
+     */
+    $setting = match ($tab) {
+        'Layout' => [
+            'control' => 'checkout_config.layout',
+            'typed' => ['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]],
+            'saved' => fn (CheckoutConfig $config): CheckoutLayout => $config->layout,
+            'expected' => CheckoutLayout::FormOnly,
+        ],
+        'Products' => [
+            'control' => 'checkout_config.product_picker',
+            'typed' => ['checkout_config' => ['product_picker' => true]],
+            'saved' => fn (CheckoutConfig $config): bool => $config->productPicker,
+            'expected' => true,
+        ],
+        'Questions' => [
+            'control' => 'checkout_config.fields',
+            'typed' => ['checkout_config' => ['fields' => $questions]],
+            'saved' => fn (CheckoutConfig $config): string => $config->fields[0]->label,
+            'expected' => 'Your full name',
+        ],
+        'Delivery' => [
+            'control' => 'checkout_config.delivery_options',
+            'typed' => deliveryOptionRows([['label' => 'Next day', 'amount' => '90']]),
+            'saved' => fn (CheckoutConfig $config): array => $config->deliveryOptionsToArray(),
+            'expected' => [['label' => 'Next day', 'amount' => 9000]],
+        ],
+        'Appearance' => [
+            'control' => 'checkout_config.style_tokens.accent',
+            'typed' => ['checkout_config' => ['style_tokens' => ['accent' => '#ff0000']]],
+            'saved' => fn (CheckoutConfig $config): ?string => $config->styleTokens->value(StyleToken::Accent),
+            'expected' => '#ff0000',
+        ],
+    };
+
+    /**
+     * Reached first, and on this tab rather than anywhere on the form: filling
+     * a form writes Livewire state straight through, so a test that only saved
+     * would pass just as well with all five settings back on one scroll.
+     */
+    expect(statePathsInside(checkoutTabsOf($page)[$tab]))->toContain($setting['control']);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm($setting['typed'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** And still written where it always was: no stored Config changed shape. */
+    expect(($setting['saved'])($page->refresh()->checkout_config))->toBe($setting['expected']);
+})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Appearance']);
+
+it('puts the checkout-wide appearance controls where no question stands in front of them', function () {
+    $tabs = checkoutTabsOf(Page::factory()->create());
+
+    $appearance = statePathsInside($tabs['Appearance']);
+    $questions = statePathsInside($tabs['Questions']);
+
+    /**
+     * The whole named token set, on a tab of its own — so a merchant changing
+     * a colour no longer scrolls past every question they have ever authored
+     * to reach it.
+     */
+    expect($appearance)->toContain('checkout_config.style_tokens.accent')
+        ->and($appearance)->toContain('checkout_config.style_tokens.button_background');
+
+    /**
+     * A question's own overrides stay in the question's row, because what is
+     * being restyled there is the question. So the questions tab holds style
+     * boxes too — none of them the checkout's.
+     */
+    expect(array_filter($questions, fn (string $path): bool => str_starts_with($path, 'checkout_config.style_tokens.')))
+        ->toBeEmpty()
+        ->and(array_filter($questions, fn (string $path): bool => (bool) preg_match(
+            '/^checkout_config\.fields\..+\.style_tokens\.border$/',
+            $path,
+        )))->not->toBeEmpty();
 });

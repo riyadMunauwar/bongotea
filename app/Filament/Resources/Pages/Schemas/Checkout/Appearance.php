@@ -32,8 +32,15 @@ class Appearance
          * either: what this emits is a redeclaration at
          * the specificity their own stylesheet already
          * beats.
+         *
+         * No heading of its own: the nested tab that holds it is
+         * already headed Appearance, and a card repeating the
+         * word underneath it says nothing the merchant has not
+         * just clicked. The description is what is worth
+         * keeping, which is why the section stays rather than
+         * the controls being handed to the tab loose.
          */
-        return Section::make('Appearance')
+        return Section::make()
             ->description('Colours, corners and sizes for this page\'s order form. Anything left empty keeps the checkout\'s own.')
             ->columns(3)
             ->schema(self::controls('checkout_config.style_tokens.', overridesOneField: false));

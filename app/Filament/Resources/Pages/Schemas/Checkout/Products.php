@@ -9,8 +9,11 @@ use Filament\Schemas\Components\Utilities\Get;
 /**
  * What this Page sells, and whether the customer chooses between them.
  *
- * The two controls are contributed separately because the layout is asked
- * about between them — see `CheckoutTab`, which is where that order is decided.
+ * The two controls are contributed separately because a concern hands over one
+ * component at a time and never a list — not because anything is interleaved
+ * between them. The layout is met before either, on its own nested tab, so a
+ * merchant reaches the picker having already decided the thing that gates it;
+ * `CheckoutTab` is where that order lives.
  */
 class Products
 {
