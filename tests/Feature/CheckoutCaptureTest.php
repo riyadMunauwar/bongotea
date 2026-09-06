@@ -8,6 +8,7 @@ use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Checkout\FieldPattern;
+use App\Support\Checkout\PricingFingerprint;
 use App\Support\Orders\CapturedAnswer;
 use Illuminate\Support\Str;
 
@@ -33,12 +34,17 @@ function sellingPage(Product|iterable $products, string $slug = 'promo'): Page
  * Quantities are keyed by Product id, the way the rendered form names them, so
  * a test never has to know what order the admin arranged them in.
  *
+ * The fingerprint is taken as the payload is built, which is where a rendered
+ * form takes it: a test that changes a price or a Product afterwards is a test
+ * about a visitor holding bytes that went stale under them.
+ *
  * @return array<string, mixed>
  */
 function capturePayload(Page $page, array $overrides = []): array
 {
     return array_merge([
         'page' => $page->slug,
+        'fingerprint' => PricingFingerprint::for($page),
         'name' => 'Rahim Uddin',
         'phone' => '01712345678',
         'address' => 'House 4, Road 12, Banani',
@@ -250,18 +256,32 @@ it('keeps selling the rest when one of several products is deleted', function ()
 
     $page = sellingPage([$jacket, $boots]);
 
-    $payload = capturePayload($page, [
+    /** A form written to disk while the page still offered both. */
+    $stale = capturePayload($page, [
         'quantities' => [$jacket->getKey() => 1, $boots->getKey() => 1],
     ]);
 
-    /**
-     * The visitor is holding a form that offered both. Taking the page off the
-     * air over a deleted upsell turns a merchandising slip into dead ad spend;
-     * the jacket is still exactly what it was, at the price it was.
-     */
     $boots->delete();
 
-    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+    /**
+     * That visitor is holding a form quoting 2,480 for the pair. Selling them
+     * the jacket alone collects 1,050 at a door where they agreed to something
+     * else, so their submission is turned away with a reload rather than
+     * silently re-priced (ADR-0007).
+     */
+    $this->postJson(route('checkout.store'), $stale)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    /**
+     * The page itself is not off the air, which is what the refusal above costs
+     * and all it costs. Taking it down over a deleted upsell would turn a
+     * merchandising slip into dead ad spend; the jacket is still exactly what
+     * it was, at the price it was, and the next visitor buys it.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page->refresh(), [
+        'quantities' => [$jacket->getKey() => 1],
+    ]))->assertCreated();
 
     $order = Order::sole();
 
@@ -285,11 +305,36 @@ it('refuses to sell a product the submission never offered', function () {
      * cash-on-delivery parcel, which is refused at the door and costs the
      * merchant courier fees in both directions — on the jacket too.
      *
-     * The visitor is told to reload rather than to fix a field, because the
-     * form on their screen has no box for the scarf to complain about. ADR-0007
-     * keeps a refusal nobody can edit their way out of in the page-level slot.
+     * Linking a product changes what the page would collect, so this is the
+     * fingerprint's refusal. The visitor is told to reload rather than to fix a
+     * field, because the form on their screen has no box for the scarf to
+     * complain about: ADR-0007 keeps a refusal nobody can edit their way out of
+     * in the page-level slot.
      */
     $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('refuses a submission that leaves out a product the page sells', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf']);
+
+    $page = sellingPage([$jacket, $scarf]);
+
+    /**
+     * A hand-made post rather than a form that went stale: the fingerprint is
+     * this page's current one, and the scarf is simply missing from it. That is
+     * the case `unofferedProducts()` is kept for now that the fingerprint turns
+     * a stale form away first — without it the refusal would land on
+     * `quantities.<id>` and read to the visitor as "please order at least one"
+     * of something their screen never showed.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$jacket->getKey() => 1],
+    ]))
         ->assertUnprocessable()
         ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
 
@@ -995,8 +1040,11 @@ it('tells the visitor to reload when everything they ticked has gone', function 
     /**
      * The page still sells the jacket, so it is not off the air — but nothing
      * the customer agreed to buy is left, and an Order with no lines is a
-     * courier collecting a delivery charge for an empty parcel. ADR-0007 keeps
-     * a refusal nobody can edit their way out of in the page-level slot.
+     * courier collecting a delivery charge for an empty parcel. Losing a
+     * product moves the fingerprint, so this is refused there; the hand-made
+     * post that reaches `nothingChosenIsOnSale()` with a current fingerprint is
+     * pinned further down. Either way ADR-0007 keeps a refusal nobody can edit
+     * their way out of in the page-level slot.
      */
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
@@ -1868,4 +1916,203 @@ it('sells everything a form-only page offers however its picker is set', functio
 
     expect($order->lines)->toHaveCount(2)
         ->and($order->subtotal)->toBe(124000);
+});
+
+/**
+ * The fingerprint a rendered form actually carries, read back out of the HTML
+ * a visitor was served.
+ *
+ * Every other test here builds a payload from the Page. This reads it from the
+ * bytes, which is the only way the form and the check can be shown to agree
+ * rather than merely be written to.
+ */
+function renderedFingerprint(string $html): string
+{
+    preg_match('/name="fingerprint" value="([^"]+)"/', $html, $carried);
+
+    return $carried[1] ?? '';
+}
+
+it('captures an order from the fingerprint the rendered form carries', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The one place the form and the server can be shown to agree about what
+     * the courier collects: these bytes went to a visitor, and this is the
+     * value their browser would post back.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'fingerprint' => renderedFingerprint($html),
+    ]))->assertCreated();
+
+    expect(Order::sole()->total)->toBe(105000);
+});
+
+it('refuses a submission that carries no fingerprint at all', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $payload = capturePayload($page);
+    unset($payload['fingerprint']);
+
+    /**
+     * Which is what every page cached before this check existed will post, and
+     * what a hand-made post that never looked at the form sends. Neither can be
+     * shown to have agreed to anything, so neither is captured.
+     */
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('refuses a submission drawn before the product was repriced', function () {
+    $product = Product::factory()->create(['price' => 99000]);
+    $page = sellingPage($product);
+
+    /** Written to disk while the page still said 990. */
+    $payload = capturePayload($page);
+
+    $product->update(['price' => 129000]);
+
+    /**
+     * Capturing this would be a courier collecting 1,290 at a door where the
+     * customer agreed to 990 — a refused parcel, a return fee on the whole
+     * order, and the defect this fingerprint exists to close (ADR-0007).
+     */
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('refuses a submission drawn before the delivery amount was changed', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $payload = capturePayload($page, ['delivery_option' => 'Outside Dhaka']);
+
+    /** Renamed nothing, so the choice still resolves; only the figure moved. */
+    deliveringBy($page, [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 20000],
+    ]);
+
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('refuses a submission drawn before two delivery amounts were swapped', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $payload = capturePayload($page, ['delivery_option' => 'Inside Dhaka']);
+
+    /**
+     * The same two figures, against the other arrangements. Both names still
+     * resolve, and the set of amounts the page charges has not moved — only
+     * which arrangement carries which. A customer who agreed to 60 inside Dhaka
+     * would be collected 120 at the door.
+     *
+     * This is why the delivery amounts are fingerprinted by position while the
+     * products are fingerprinted by id: without the labels, which ADR-0007
+     * keeps out, position is the only thing tying an amount to the arrangement
+     * it belongs to.
+     */
+    deliveringBy($page, [
+        ['label' => 'Inside Dhaka', 'amount' => 12000],
+        ['label' => 'Outside Dhaka', 'amount' => 6000],
+    ]);
+
+    $this->postJson(route('checkout.store'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+
+    expect(Order::count())->toBe(0);
+});
+
+it('takes an order from a form drawn before the questions were edited', function () {
+    $page = sellingPage(Product::factory()->create(['price' => 99000]));
+
+    $before = PricingFingerprint::for($page);
+    $payload = capturePayload($page);
+
+    /**
+     * Everything a merchant actually does to a live page at 9pm: a question
+     * added, one reworded, one switched off, and the whole thing repainted.
+     * None of it changes what the courier collects.
+     */
+    $page = checkoutAlsoAsking($page, [question('gift_note', 'text', ['required' => false])]);
+
+    $page = checkoutAsking($page, [
+        'name' => ['label' => 'Your full name'],
+        'district' => ['enabled' => false],
+    ]);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'style_tokens' => ['accent' => '#ff0000'],
+    ])]);
+
+    $page = $page->refresh();
+
+    /**
+     * Rejecting here would mean every save on the Checkout tab turned away the
+     * orders of everyone mid-form on traffic the merchant is paying for, and
+     * the refusal would read to the customer exactly like a price change. The
+     * blast radius has to bear some relation to the harm (ADR-0007).
+     */
+    expect(PricingFingerprint::for($page))->toBe($before);
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    /**
+     * Captured whole, and the answer to the question the merchant switched off
+     * simply dropped — the payload still carried a district, because the form
+     * on the visitor's screen still had a box for one.
+     */
+    $order = Order::sole();
+
+    expect($order->total)->toBe(105000)
+        ->and($order->customer_district)->toBeNull();
+});
+
+it('leaves the fingerprint alone when the products are only rearranged', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $boots = Product::factory()->create(['price' => 149000]);
+
+    $page = sellingPage([$jacket, $boots]);
+
+    $before = PricingFingerprint::for($page);
+    $payload = capturePayload($page);
+
+    /**
+     * A reorder in the admin changes which product is drawn first and nothing
+     * about what is collected, and nothing resolves a product by the position
+     * it sits at. Refusing over it would cost orders for a merchandising tidy-up.
+     */
+    $page->products()->sync([
+        $jacket->getKey() => ['position' => 1],
+        $boots->getKey() => ['position' => 0],
+    ]);
+
+    $page = $page->refresh();
+
+    expect(PricingFingerprint::for($page))->toBe($before);
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->subtotal)->toBe(248000);
 });

@@ -160,6 +160,13 @@ The same applies to any template, shortcode, or asset-URL change. If you are
 unsure whether a release touches rendered output, flush: the cost is one full
 render per Page on the next click.
 
+A Checkout form carries a fingerprint of what it quoted, and a Capture refuses
+any submission whose fingerprint is not the Page's current one (ADR-0007). HTML
+written by a release that predates the fingerprint carries none, so every order
+placed from an unflushed page is turned away with "please reload" — the flush is
+what stops a working release from reading, to a merchant, as a checkout that
+stopped taking orders.
+
 ## Verifying
 
 Request a published page and look at the response headers:

@@ -20,11 +20,11 @@ namespace App\Support\Checkout;
  * Page: their form names an arrangement it no longer offers, and being turned
  * away with a reload is the safe direction to fail in.
  *
- * Repricing one does not, and that is a live defect rather than a property of
- * this design. A visitor holding HTML written to disk before the change is
- * captured at the new amount having agreed to the old one — the same gap
- * repricing a Product already has, recorded in ADR-0007, and closed by the
- * fingerprint that is its own piece of work.
+ * Repricing one refuses them too, by a different route: the amount is part of
+ * what the courier collects, so it is in the fingerprint the form carries and
+ * the Capture re-checks (`PricingFingerprint`, ADR-0007). Without that a
+ * visitor holding HTML written to disk before the change would be captured at
+ * the new amount having agreed to the old one.
  */
 class DeliveryOption
 {

@@ -6,6 +6,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\PricingFingerprint;
 use App\Support\Orders\CapturedAnswer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
@@ -22,6 +23,11 @@ use Illuminate\Validation\Validator;
  * of a delivery arrangement, and every figure comes from the Page's own
  * Products and Delivery Options.
  *
+ * That leaves one thing the payload has to be believed about, which is what the
+ * form quoted. It carries a fingerprint of the figures it was drawn from, and a
+ * submission whose fingerprint is not the Page's current one is refused outright
+ * rather than captured at figures nobody was shown (ADR-0007).
+ *
  * The details it asks about are not listed here either. They are compiled from
  * the Checkout Config of the Page being ordered from — the same list that
  * rendered the form — so what the visitor was asked and what the server checks
@@ -29,6 +35,15 @@ use Illuminate\Validation\Validator;
  */
 class StoreOrderRequest extends FormRequest
 {
+    /**
+     * The one thing a visitor can do about a Page that has moved under them.
+     *
+     * Worded once and reported in the page-level slot, because none of the ways
+     * of getting here is a mistake the visitor made or can put right at a box
+     * — the form on their screen is simply out of date (ADR-0007).
+     */
+    private const PAGE_HAS_CHANGED = 'This page has changed since you opened it. Please reload and try again.';
+
     private ?Page $page = null;
 
     /**
@@ -154,12 +169,13 @@ class StoreOrderRequest extends FormRequest
      * form already on someone's phone at a different item.
      *
      * A key naming a Product this Page no longer sells carries no rule and is
-     * dropped at Capture — that is how a Product soft-deleted under a live
-     * campaign leaves a form written to disk before it went, while the rest
-     * keep selling. A Product with no quantity is refused rather than sold at
-     * one, because a COD parcel holding an item nobody chose is refused at the
-     * door; `after()` is what tells the visitor to reload, since their form has
-     * no box for that Product to complain about.
+     * dropped at Capture. That is not how a Product soft-deleted under a live
+     * campaign is handled — such a form quoted a total including it, so the
+     * fingerprint turns the submission away in `after()` before any of this
+     * decides anything. It is what keeps a hand-made post naming Products from
+     * elsewhere from selling them. A Product with no quantity is refused rather
+     * than sold at one, because a COD parcel holding an item nobody chose is
+     * refused at the door.
      *
      * Only what was ticked, where the Page asks the Customer to tick. The
      * stepper beside an unticked Product is hidden rather than removed, so its
@@ -268,6 +284,24 @@ class StoreOrderRequest extends FormRequest
                 }
 
                 /**
+                 * The figures this form quoted are not the figures the Page
+                 * would charge now — a Product repriced or gone, or a delivery
+                 * amount edited, since these bytes were written to disk.
+                 *
+                 * First, and ahead of anything the Customer could put right
+                 * themselves: an order they can fix at a box is still an order
+                 * captured at a price nobody showed them, and telling them to
+                 * correct a field would be telling them to finish a form that
+                 * is already wrong. Being turned away is the safe direction to
+                 * fail in (ADR-0007).
+                 */
+                if (! PricingFingerprint::matches($page, $this->input('fingerprint'))) {
+                    $validator->errors()->add('page', self::PAGE_HAS_CHANGED);
+
+                    return;
+                }
+
+                /**
                  * Already refused for having chosen nothing, which is the
                  * Customer's to fix at the boxes. What follows is about the
                  * Page having moved under them, and saying both would tell them
@@ -278,14 +312,14 @@ class StoreOrderRequest extends FormRequest
                 }
 
                 /**
-                 * Two ways for a form to have gone out of date under a visitor,
-                 * and one thing either of them can be told to do about it.
-                 * ADR-0007 keeps a refusal nobody can edit their way out of in
-                 * the page-level slot, ahead of the field error that has
-                 * nowhere to land.
+                 * What the fingerprint cannot speak for: a submission whose
+                 * prices are current but whose parcel is not this Page's, which
+                 * is a hand-made post rather than a form that went stale. Kept
+                 * because the refusal has to land somewhere a visitor can read
+                 * it, and neither has a box of its own to complain about.
                  */
                 if ($this->unofferedProducts()->isNotEmpty() || $this->nothingChosenIsOnSale()) {
-                    $validator->errors()->add('page', 'This page has changed since you opened it. Please reload and try again.');
+                    $validator->errors()->add('page', self::PAGE_HAS_CHANGED);
                 }
             },
         ];
@@ -294,14 +328,15 @@ class StoreOrderRequest extends FormRequest
     /**
      * Whether a submission that chose Products named nothing this Page sells.
      *
-     * Every one of them soft-deleted since the form was written, in practice.
-     * The Page is not off the air — it still sells whatever is left — but
-     * nothing the Customer agreed to buy survives, and an Order with no lines
-     * is a courier collecting a delivery charge for an empty parcel.
+     * A hand-made post naming Products from somewhere else, in practice, or one
+     * ticking something that is not a Product at all — refused here rather than
+     * left to fail as a Capture with nothing to sell. A form whose ticks were
+     * soft-deleted under the visitor arrives this shape too, but never reaches
+     * this far: losing a Product moves the fingerprint, and `after()` turns that
+     * submission away first.
      *
-     * It is also the shape of a hand-made post naming Products from somewhere
-     * else, which is refused here rather than left to fail as a Capture with
-     * nothing to sell.
+     * Either way an Order with no lines is a courier collecting a delivery
+     * charge for an empty parcel.
      *
      * Having chosen nothing at all is a different thing, refused on `selected`
      * where the boxes are; this one has no box to hang on.
@@ -350,9 +385,10 @@ class StoreOrderRequest extends FormRequest
     /**
      * The Products this Page sells that the submission never mentioned.
      *
-     * Empty for every form rendered from the Page as it stands. A Product
-     * appears here only when it was linked after the visitor's copy of the page
-     * was written to disk.
+     * Empty for every form rendered from the Page as it stands, and empty for a
+     * form written before a Product was linked too — that one is turned away by
+     * the fingerprint first, because linking a Product changes what the Page
+     * would collect. What is left is a hand-made post that leaves one out.
      *
      * @return Collection<int, Product>
      */

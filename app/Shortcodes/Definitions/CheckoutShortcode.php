@@ -6,6 +6,7 @@ use App\Models\Page;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
+use App\Support\Checkout\PricingFingerprint;
 
 /**
  * The only shortcode v1 registers.
@@ -120,6 +121,18 @@ class CheckoutShortcode implements ShortcodeDefinition
              * wrapper and are read off the field.
              */
             'styleTokens' => $page->checkout_config->styleTokens->completed(),
+
+            /**
+             * What the courier will collect, written into the form so a
+             * Capture can tell whether the figures on this visitor's screen are
+             * still the figures the server would charge.
+             *
+             * Taken from the Page these bytes are being drawn from, which is
+             * the same Page the Capture recomputes it from, so the form and the
+             * check cannot disagree about the prices (ADR-0007).
+             */
+            'fingerprint' => PricingFingerprint::for($page),
+
             'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
         ])->render();
     }

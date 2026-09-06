@@ -235,6 +235,20 @@
         <input type="hidden" name="page" value="{{ $page->slug }}">
 
         {{--
+            What this form quoted the customer, as a figure the server can check
+            back. These bytes may sit on disk for days, and a price or a delivery
+            amount edited in the meantime means the total on screen is not the
+            total the courier would collect — which in cash on delivery is a
+            refused parcel and a fee in both directions.
+
+            The capture refuses a submission whose fingerprint is not the page's
+            current one, and tells the visitor to reload. Nothing about the
+            questions or the styling is in it, so editing those never rejects an
+            order somebody has half-typed (ADR-0007).
+        --}}
+        <input type="hidden" name="fingerprint" value="{{ $fingerprint }}">
+
+        {{--
             Everything this Page sells, each with a quantity of its own.
 
             Quantities are keyed by Product id rather than by the position the

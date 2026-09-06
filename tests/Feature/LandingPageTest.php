@@ -355,9 +355,11 @@ it('asks in the wording and the order the page\'s own checkout config names', fu
          * The quantity boxes are absent from this list because they are named
          * `quantities[<id>]` — keyed by Product, which this pattern does not
          * match. What is being pinned here is the field list, and the fields
-         * are all of it.
+         * are all of it; `page` and `fingerprint` are the two hidden inputs
+         * that say which Page this is and what it quoted, and neither is
+         * something the merchant asked for.
          */
-        ->and($asked[1])->toBe(['page', 'phone', 'name', 'district', 'address']);
+        ->and($asked[1])->toBe(['page', 'fingerprint', 'phone', 'name', 'district', 'address']);
 });
 
 it('renders no box at all for a question the page has stopped asking', function () {
@@ -381,7 +383,7 @@ it('renders no box at all for a question the page has stopped asking', function 
      * still be posted by a browser and still be there to autofill, and the
      * merchant asked for a shorter form.
      */
-    expect($asked[1])->toBe(['page', 'phone', 'address'])
+    expect($asked[1])->toBe(['page', 'fingerprint', 'phone', 'address'])
         ->and($html)->not->toContain('Your name')
         ->and($html)->not->toContain('Choose your district');
 });
@@ -406,7 +408,7 @@ it('asks for an email address once the merchant switches one on', function () {
      */
     preg_match_all('/ name="([a-z]+)"/', $html, $asked);
 
-    expect($asked[1])->toBe(['page', 'email', 'name', 'phone', 'district', 'address'])
+    expect($asked[1])->toBe(['page', 'fingerprint', 'email', 'name', 'phone', 'district', 'address'])
         ->and($html)->toContain('Email address')
         /** The keyboard a phone opens for an address is not the one it opens for a name. */
         ->and($html)->toContain('type="email"')

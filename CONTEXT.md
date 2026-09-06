@@ -82,6 +82,10 @@ _Avoid_: custom field, meta, extra data, attribute
 The moment a visitor submits the Checkout and an Order comes into existence. What was agreed at Capture — the products, their prices, and the totals — is fixed from then on.
 _Avoid_: conversion, submission
 
+**Pricing Fingerprint**:
+What a Checkout quoted, reduced to a value the rendered form carries and a Capture checks back: the Products the Page sells, their prices, and what each Delivery Option costs. A submission whose fingerprint is not the Page's current one is refused outright and the Customer told to reload, because a visitor may be holding a Page rendered days ago and the figures on their screen would otherwise not be the figures collected at the door. Nothing else about a Checkout is in it — a question added, reworded or restyled since leaves it alone, so editing those never turns away an Order somebody has half-typed.
+_Avoid_: hash, checksum, nonce, version, signature
+
 **Customer**:
 A person identified by their phone number, and nothing else. A Customer holds no name and no address; those belong to each Order they placed, because a phone number is an identity, not a person.
 _Avoid_: user, account, buyer, client, lead
