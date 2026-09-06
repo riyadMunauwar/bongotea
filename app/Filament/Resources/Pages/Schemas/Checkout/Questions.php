@@ -30,6 +30,15 @@ use Illuminate\Support\Str;
  */
 class Questions
 {
+    /**
+     * The attribute the admin theme finds a switched-off row by.
+     *
+     * Carried by the "Ask for this" toggle, whose `aria-checked` Alpine keeps
+     * in step with the switch, so the row dims as it is thrown rather than on
+     * the next save. `forms.css` holds the rule; nothing else may use the name.
+     */
+    public const ASKED_MARKER = 'data-gp-question-asked';
+
     public static function asked(): Repeater
     {
         /**
@@ -77,9 +86,24 @@ class Questions
                 fn (array $arguments, Repeater $component): bool => ! ($component
                     ->getRawItemState($arguments['item'])['built_in'] ?? false),
             ))
-            /** Says which questions this page has stopped asking without opening a row. */
-            ->itemLabel(fn (array $state): string => (string) ($state['label'] ?? '')
-                .(($state['enabled'] ?? true) ? '' : ' — not asked'))
+            /**
+             * A checkout asking ten questions is ten lines to scan and
+             * reorder rather than a page to scroll. Everything a merchant
+             * chooses a question by — its wording, how it is asked, whether an
+             * answer is compulsory, how wide it sits — is in the row's summary,
+             * so opening one is a decision to edit it rather than the only way
+             * to find out what it is.
+             *
+             * A row carrying a refusal still opens itself: Filament walks up
+             * from the first `[data-validation-error]` on a failed save
+             * dispatching `expand`, which a repeater item listens for. That is
+             * a repeater item only — the `Answers` and `Appearance` sections
+             * inside one stay shut, which is why neither may raise a refusal a
+             * merchant cannot see (see .ai/rules/resources.md).
+             */
+            ->collapsible()
+            ->collapsed()
+            ->itemLabel(self::summarise(...))
             ->columns(4)
             ->schema([
                 /**
@@ -186,6 +210,8 @@ class Questions
                      * refusal the Config does not make.
                      */
                     ->selectablePlaceholder(false)
+                    /** Read by the row's summary, which has to say what the box says now. */
+                    ->live()
                     ->helperText('Two half-width questions in a row sit side by side on a wide screen. On a phone every question is full width, whichever you pick.'),
 
                 /**
@@ -198,7 +224,25 @@ class Questions
                 Toggle::make('enabled')
                     ->label('Ask for this')
                     ->default(true)
+                    /**
+                     * What dims the row around it. A question the page has
+                     * stopped asking has to look inert from the collapsed
+                     * list, or it is one a merchant can mistake for a live one
+                     * — and its wording is still here, so there is nothing
+                     * else on the row to tell them apart.
+                     */
+                    ->extraAttributes([self::ASKED_MARKER => 'true'])
                     ->disabled(fn (Get $get): bool => self::isMandatory($get))
+                    /**
+                     * Held shut on phone, and riding along dehydrated for
+                     * the reason the type does: a disabled control is
+                     * dropped from the row otherwise, and the row's own
+                     * summary would then read the absence as an answer and
+                     * call the field something it is not. What phone is
+                     * remains the built-in's to say, and the Config forces
+                     * it whatever arrives.
+                     */
+                    ->dehydrated()
                     ->helperText(fn (Get $get): ?string => self::isMandatory($get)
                         ? 'Always asked. A cash-on-delivery order nobody can phone cannot be fulfilled.'
                         : null)
@@ -215,6 +259,8 @@ class Questions
                     ->label('Must be answered')
                     ->default(false)
                     ->disabled(fn (Get $get): bool => self::isMandatory($get))
+                    /** Dehydrated for the reason the switch above it is. */
+                    ->dehydrated()
                     ->live(),
 
                 /**
@@ -442,6 +488,50 @@ class Questions
     }
 
     /**
+     * The one line a collapsed row says about the question inside it.
+     *
+     * Enough to pick a question out of ten without opening it, and no more:
+     * what the customer is asked, how they are asked it, whether they may
+     * leave it, and how much of the row it takes.
+     *
+     * Whether the page still asks it and whether an answer is compulsory are
+     * said separately and in different words, because they are different
+     * things — a switched-off question keeps whatever the merchant configured
+     * behind it, so "Not asked" and "Must be answered" are both true of a row
+     * that is waiting to come back. Collapsing the two into one word would
+     * lose the setting the merchant would find again on switching it on.
+     *
+     * Read from the row's state rather than from the field the Config would
+     * make of it: this runs while the form is being drawn, on whatever the
+     * merchant has typed so far, and a half-typed row is not a field yet. That
+     * is why every control the tab holds shut is `dehydrated()` — a row this
+     * reads has to be whole, and an absent switch is not an answer.
+     *
+     * Which is also why a part with nothing behind it is left out rather than
+     * guessed at. A merchant who has cleared the wording or the type is
+     * looking at the empty box that says so, two lines below, and cannot save
+     * past it; a summary filling the gap in with a default would be the line
+     * disagreeing with the box. Only the width is always said, because that is
+     * one of two and a row can never be between them.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    private static function summarise(array $state): string
+    {
+        $builtIn = self::builtInFrom($state['built_in'] ?? false, $state['key'] ?? '');
+
+        $type = self::typeFrom($builtIn, $state['type'] ?? '');
+
+        return implode(' · ', array_filter([
+            trim((string) ($state['label'] ?? '')),
+            ($state['enabled'] ?? true) ? null : 'Not asked',
+            $type?->label(),
+            ($state['required'] ?? false) ? 'Must be answered' : 'Optional',
+            FieldWidth::fromStored($state['width'] ?? null)->label(),
+        ]));
+    }
+
+    /**
      * Whether the row being rendered holds a field a Checkout may not stop
      * asking for.
      */
@@ -469,7 +559,21 @@ class Questions
 
     private static function builtIn(Get $get): ?BuiltInField
     {
-        return self::isBuiltIn($get) ? BuiltInField::tryFrom((string) $get('key')) : null;
+        return self::builtInFrom($get('built_in'), $get('key'));
+    }
+
+    /**
+     * Which of the fields the system knows by name wrote a row, from the two
+     * values the row carries.
+     *
+     * Taken as figures rather than through `Get` because `summarise()` is
+     * handed a plain array and the schema asks through a `Get` — one reading
+     * under both, so a row cannot be one thing to the controls inside it and
+     * another to the line above them.
+     */
+    private static function builtInFrom(mixed $isBuiltIn, mixed $key): ?BuiltInField
+    {
+        return $isBuiltIn ? BuiltInField::tryFrom((string) $key) : null;
     }
 
     /**
@@ -480,8 +584,13 @@ class Questions
      */
     private static function rowType(Get $get): ?CheckoutFieldType
     {
-        return self::builtIn($get)?->type()
-            ?? CheckoutFieldType::tryFrom((string) $get('type'));
+        return self::typeFrom(self::builtIn($get), $get('type'));
+    }
+
+    /** The same reading, for the summary that is handed a row rather than a `Get`. */
+    private static function typeFrom(?BuiltInField $builtIn, mixed $stored): ?CheckoutFieldType
+    {
+        return $builtIn?->type() ?? CheckoutFieldType::tryFrom((string) $stored);
     }
 
     /**

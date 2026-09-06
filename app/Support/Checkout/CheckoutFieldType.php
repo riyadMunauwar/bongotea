@@ -111,22 +111,41 @@ enum CheckoutFieldType: string
     }
 
     /**
-     * How the Checkout tab words each type in the list a Merchant picks from.
+     * How the Checkout tab words this type.
+     *
+     * One wording read from two places: the list a Merchant picks from, and
+     * the line a collapsed question row says about itself. A summary calling a
+     * question something other than what the picker inside it calls it is a
+     * summary the Merchant has to open the row to trust.
      *
      * Not `options()`: that word is a Checkout Field's own, and means the
      * choices a Customer answers between.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Text => 'Single line',
+            self::Textarea => 'Paragraph',
+            self::Number => 'Number',
+            self::Select => 'Dropdown',
+            self::Radio => 'Radio buttons',
+            self::Checkbox => 'Checkbox',
+        };
+    }
+
+    /**
+     * Every type, in the order a Merchant is offered them.
      *
      * @return array<string, string>
      */
     public static function labels(): array
     {
-        return [
-            self::Text->value => 'Single line',
-            self::Textarea->value => 'Paragraph',
-            self::Number->value => 'Number',
-            self::Select->value => 'Dropdown',
-            self::Radio->value => 'Radio buttons',
-            self::Checkbox->value => 'Checkbox',
-        ];
+        $labels = [];
+
+        foreach (self::cases() as $type) {
+            $labels[$type->value] = $type->label();
+        }
+
+        return $labels;
     }
 }

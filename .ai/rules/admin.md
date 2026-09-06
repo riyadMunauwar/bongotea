@@ -16,3 +16,6 @@ Every component rule draws its surfaces, borders and radii from the `--gp-*` pro
 The partials are imported unlayered while all of Filament's CSS sits in `@layer components`/`utilities`, so theme rules win on cascade layer, not specificity. Never reach for `!important` or selector padding to override Filament here.
 
 Shadows are banned on static surfaces. `components.css` clears `--tw-shadow` on `*` and hands it back only to a named list of things that float — dropdowns, modals, popovers, toasts. Add to that list rather than reintroducing a shadow locally, and separate anything static with a hairline instead. Clear `--tw-shadow`, not `box-shadow`: Tailwind composes rings and shadows into the same property, so clearing `box-shadow` would take the hairlines with it.
+
+## The one rule here that a PHP file has to agree with
+`forms.css` dims a switched-off question row on the Checkout tab by `:has([data-gp-question-asked][aria-checked='false'])`. That attribute is `Questions::ASKED_MARKER`, written onto one toggle in `app/Filament/Resources/Pages/Schemas/Checkout/Questions.php`, and `aria-checked` is Alpine's — nothing in the rendered HTML records that the two belong together. `PageAuthoringTest` pins the pair; if you rename or move either half, fix both. See `.ai/rules/checkout.md` for why the row needs saying at all.

@@ -4,6 +4,7 @@ use App\Enums\PageStatus;
 use App\Filament\Resources\Pages\Pages\CreatePage;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Filament\Resources\Pages\Pages\ListPages;
+use App\Filament\Resources\Pages\Schemas\Checkout\Questions;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Models\Page;
 use App\Models\Product;
@@ -14,13 +15,17 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
+use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -1474,4 +1479,189 @@ it('puts the checkout-wide appearance controls where no question stands in front
             '/^checkout_config\.fields\..+\.style_tokens\.border$/',
             $path,
         )))->not->toBeEmpty();
+});
+
+/**
+ * The questions repeater a merchant is actually served, taken off the live
+ * edit form rather than built from the schema class — so what is asserted is
+ * the control they open.
+ */
+function questionsRepeaterIn(Testable $livewire): Repeater
+{
+    return $livewire->instance()->getSchema('form')
+        ->getFlatComponents(withHidden: true)['checkout_config.fields'];
+}
+
+/**
+ * What each collapsed question row says about itself, filed under the key the
+ * question is stored as.
+ *
+ * @return array<string, string>
+ */
+function questionSummariesOf(Page $page): array
+{
+    $questions = questionsRepeaterIn(Livewire::test(EditPage::class, ['record' => $page->getKey()]));
+
+    $summaries = [];
+
+    foreach (array_keys($questions->getItems()) as $itemKey) {
+        $summaries[$questions->getRawItemState($itemKey)['key']] = (string) $questions->getItemLabel($itemKey);
+    }
+
+    return $summaries;
+}
+
+it('opens the questions tab with every row collapsed', function () {
+    /**
+     * Ten questions are ten lines to scan, not a page to scroll. Asserted on
+     * each row rather than on the repeater, because collapsed is decided per
+     * item and a merchant reads the rows one at a time.
+     */
+    $questions = questionsRepeaterIn(Livewire::test(EditPage::class, [
+        'record' => Page::factory()->create()->getKey(),
+    ]));
+
+    expect($questions->isCollapsible())->toBeTrue()
+        ->and($questions->getItems())->not->toBeEmpty();
+
+    foreach ($questions->getItems() as $item) {
+        expect($questions->isCollapsed($item))->toBeTrue();
+    }
+});
+
+it('opens a question the merchant has just added', function () {
+    /**
+     * Collapsing the rows must not make adding one slower. A row that arrived
+     * shut would cost a click before the first box the merchant came here to
+     * type in — every time, on a control whose whole purpose is to be typed
+     * into.
+     */
+    $livewire = Livewire::test(EditPage::class, ['record' => Page::factory()->create()->getKey()])
+        ->mountAction(TestAction::make('add')->schemaComponent('checkout_config.fields'));
+
+    $questions = questionsRepeaterIn($livewire);
+
+    expect($questions->getItems())->toHaveCount(6)
+        ->and($questions->isCollapsed())->toBeFalse();
+});
+
+it('says enough about a collapsed question to identify it without opening it', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('gift_note', [
+            'label' => 'Anything we should write on the card?',
+            'type' => 'textarea',
+            'required' => true,
+            'width' => 'half',
+        ])]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $summaries = questionSummariesOf($page->refresh());
+
+    /**
+     * Everything a merchant picks a question by: the words the customer reads,
+     * how they are asked, whether they may leave it, and how much of the row
+     * it takes. Pinned whole rather than by fragments, because the summary is
+     * one line a merchant scans and the order the parts arrive in is what
+     * makes ten of them scannable.
+     */
+    expect($summaries['gift_note'])
+        ->toBe('Anything we should write on the card? · Paragraph · Must be answered · Half width');
+
+    /**
+     * A built-in is summarised by the type its column decides rather than by
+     * whatever the row happens to carry — the same reading the row's own
+     * controls make.
+     */
+    expect($summaries['district'])->toBe('District · Dropdown · Must be answered · Full width')
+        ->and($summaries['address'])->toBe('Delivery address · Paragraph · Must be answered · Full width')
+        /**
+         * Phone's two switches are held shut, and a control a merchant cannot
+         * throw is one Filament drops from the row unless it is told
+         * otherwise. Left dropped, the summary would read the absence as an
+         * answer and call the one field a checkout may never stop asking for
+         * optional.
+         */
+        ->and($summaries['phone'])->toBe('Phone number · Single line · Must be answered · Full width');
+});
+
+it('says separately that a question is not asked and that its answer is compulsory', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [questionRow('gift_note', [
+            'label' => 'Gift note',
+            'enabled' => false,
+            'required' => true,
+        ])]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Two different things, and the summary must not spend one word on both. A
+     * switched-off question keeps what the merchant configured behind it, so a
+     * row can be one the page does not ask and one whose answer is compulsory
+     * on the day it comes back — and a merchant reading "Optional" there would
+     * switch it on to find a box they cannot get past.
+     */
+    $summaries = questionSummariesOf($page->refresh());
+
+    expect($summaries['gift_note'])->toBe('Gift note · Not asked · Single line · Must be answered · Full width')
+        /** Off and optional, which is where email starts, still reads as both. */
+        ->and($summaries['email'])->toBe('Email address · Not asked · Single line · Optional · Full width');
+});
+
+it('hangs the theme\'s dimming hook on the switch that stops a question being asked', function () {
+    /**
+     * A switched-off row is dimmed by `forms.css`, which finds it by this
+     * attribute on this one control — see `Questions::ASKED_MARKER`. Nothing
+     * in the rendered HTML says which rule matched it, so the pair is pinned
+     * here or it breaks silently and a merchant is left reading a dead
+     * question as a live one.
+     */
+    $questions = questionsRepeaterIn(Livewire::test(EditPage::class, [
+        'record' => Page::factory()->create()->getKey(),
+    ]));
+
+    $switches = [];
+
+    foreach (array_keys($questions->getItems()) as $itemKey) {
+        foreach ($questions->getChildSchema($itemKey)->getComponents(withHidden: true) as $component) {
+            if ($component instanceof Toggle && $component->getName() === 'enabled') {
+                $switches[] = $component->getExtraAttributes();
+            }
+        }
+    }
+
+    expect($switches)->toHaveCount(5)
+        ->each->toHaveKey(Questions::ASKED_MARKER);
+});
+
+it('reorders the questions while their rows are collapsed', function () {
+    $page = Page::factory()->create();
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
+
+    $questions = questionsRepeaterIn($livewire);
+    $rows = array_keys($questions->getItems());
+
+    /** Collapsed is the state a row is dragged in, so it is the state it is dragged from here. */
+    expect($questions->isCollapsed($questions->getChildSchema($rows[0])))->toBeTrue();
+
+    /**
+     * Called rather than mounted, because the handle is only drawn while the
+     * repeater is reorderable — so this asserts a merchant can reach the drag
+     * before it asserts the drag lands.
+     */
+    $livewire
+        ->callAction(
+            TestAction::make('reorder')->schemaComponent('checkout_config.fields'),
+            arguments: ['items' => [$rows[1], $rows[0], ...array_slice($rows, 2)]],
+        )
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
+        ->toBe(['phone', 'name', 'email', 'district', 'address']);
 });

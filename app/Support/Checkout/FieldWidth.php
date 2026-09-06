@@ -59,15 +59,33 @@ enum FieldWidth: string
     }
 
     /**
-     * What the Checkout tab calls each width.
+     * What the Checkout tab calls this width.
+     *
+     * One wording read from two places, like `CheckoutFieldType::label()`: the
+     * list a Merchant picks from, and the line a collapsed question row says
+     * about itself.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Full => 'Full width',
+            self::Half => 'Half width',
+        };
+    }
+
+    /**
+     * Both widths, in the order a Merchant is offered them.
      *
      * @return array<string, string>
      */
     public static function labels(): array
     {
-        return [
-            self::Full->value => 'Full width',
-            self::Half->value => 'Half width',
-        ];
+        $labels = [];
+
+        foreach (self::cases() as $width) {
+            $labels[$width->value] = $width->label();
+        }
+
+        return $labels;
     }
 }
