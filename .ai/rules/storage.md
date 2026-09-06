@@ -26,11 +26,31 @@ Three things hold this together. Do not remove one without the others.
 **Livewire's temporary uploads live on a disk of their own.** Every file an admin drags into any
 Filament upload passes through Livewire's staging directory, including files they cancel and never
 save. On a public root those are fetchable by anyone who learns the URL, and an unguessable name is
-not a permission. `config/livewire.php` pins them elsewhere; if that file goes, they land back on
-the default disk.
+not a permission. `config/livewire.php` pins them to the `staging` disk — which has no URL, no
+visibility and no link — and that one line is the only reason the file is published at all. If it
+goes, they land back on the default disk, which is the public one.
 
-**`'serve'` is off on the `local` disk.** The `public` disk's URL and the local disk's serve route
-both claim `/storage`. They are not both allowed to want it.
+Moving them left `storage/app/private/livewire-tmp` behind on every installation that predates the
+change: published by the link, and no longer swept, because Livewire's cleanup only walks the disk
+it is currently writing to. `deploy/README.md` deletes it before the link is made. Any future move
+of a directory off this disk carries the same obligation — the old copy stays public and stops
+being anybody's to tidy.
+
+**`'serve'` is off on the `local` disk, and `/storage` is the link's.** The `public` disk's URL and
+the local disk's serve route both claimed `/storage`. They are not both allowed to want it, so the
+route went and the address became a file the webserver reads: the `local` disk carries a `'url'`,
+and the one entry in `filesystems.links` points `public/storage` at that disk's root.
+
+There is no `public` disk any more, and putting Laravel's back is the trap. It is rooted at
+`storage/app/public` and addressed at `/storage` — including by the framework's fallback when the
+disk declares no URL at all — so a file written to it does not 404, it resolves to whatever the
+`local` disk has at that path, which is a Product's image. Serving the wrong picture is worse than
+serving none. Anything that wants a public address takes the `local` disk; `Storage::disk('public')`
+raises, which is the intended answer.
+
+This is also why `Product` names its disk on the collection rather than accepting a default: the
+panel's upload falls back to the framework's default disk and the media library's own falls back to
+`public`, and those two were agreeing by accident.
 
 **`public/.htaccess` carries `+FollowSymLinks`.** Without it Apache refuses to traverse
 `public/storage` and produces a second 403 that looks exactly like the first one and has nothing to

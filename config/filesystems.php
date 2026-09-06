@@ -30,23 +30,51 @@ return [
 
     'disks' => [
 
+        /*
+         * Publicly visible, on a root named "private". That is deliberate and
+         * it is written down: ADR-0011 and .ai/rules/storage.md. A Product's
+         * image lands here and is served straight off disk, so anything else
+         * put here is public from the moment it is written, with no error to
+         * say so. A model that needs to keep something takes a disk of its own.
+         *
+         * No 'serve'. The framework's serve route demands a signature this
+         * disk's images cannot carry — they are frozen into static pages that
+         * outlive any signature — and it would answer /storage, which the
+         * document-root link below already answers by reading the file.
+         */
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
-            'throw' => false,
-            'report' => false,
-        ],
-
-        'public' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
         ],
 
+        /*
+         * Where Livewire stages an upload before anything decides to keep it,
+         * including the files a merchant drags in and never saves. It exists
+         * to be somewhere the `local` disk is not: no URL, no link, no
+         * visibility. config/livewire.php points at it, and if that file goes
+         * the staging directory returns to the public disk above.
+         */
+        'staging' => [
+            'driver' => 'local',
+            'root' => storage_path('app/staging'),
+            'throw' => false,
+            'report' => false,
+        ],
+
+        /*
+         * There is no `public` disk. Laravel's ships rooted at
+         * storage/app/public and addressed at /storage, and /storage is the
+         * `local` disk's — so a file written to it would not 404, it would
+         * resolve to whatever the `local` disk happens to have at the same
+         * path, which is a Product's image. Silently serving the wrong
+         * picture is worse than serving none, so the disk is gone and
+         * `Storage::disk('public')` raises instead. Anything that wants a
+         * public address takes the `local` disk.
+         */
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
@@ -73,8 +101,17 @@ return [
     |
     */
 
+    /*
+     * One link, pointed at the directory the files actually occupy. /storage
+     * is the `local` disk's address, and this is what makes it one: without
+     * it the webserver finds no file there, falls through to the framework,
+     * and a Product image 404s on a page that is spending money on traffic.
+     *
+     * It is the only entry, and there is no second disk claiming /storage to
+     * be linked anywhere else — see the note where `public` used to be.
+     */
     'links' => [
-        public_path('storage') => storage_path('app/public'),
+        public_path('storage') => storage_path('app/private'),
     ],
 
 ];

@@ -8,6 +8,10 @@ use App\Shortcodes\ShortcodeRegistry;
 use App\Support\PageCache\StaticPageCache;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Pest\Expectation;
 use Tests\TestCase;
 
 /*
@@ -68,6 +72,44 @@ pest()->afterEach(function (): void {
 
 expect()->extend('toBeOne', function () {
     return $this->toBe(1);
+});
+
+/**
+ * Follow a URL the way a webserver does — to a file under the document root.
+ *
+ * A Product image is served straight off disk with no framework boot
+ * (ADR-0011), so nothing in the application answers its address. All that
+ * stands between a Customer and a missing picture is a document-root link
+ * pointing at the disk the file is on. This walks that route in order: the
+ * URL's path, the link that answers it, the disk that link exposes, the file.
+ *
+ * The links are read from configuration rather than from the filesystem, so
+ * this proves the same thing on a checkout where nobody has run
+ * `storage:link` — the failure it exists to catch is a URL and a disk that
+ * were never wired to each other, not a missing symlink on one machine.
+ */
+expect()->extend('toBeServedFromTheDocumentRoot', function (): Expectation {
+    $path = '/'.ltrim((string) parse_url($this->value, PHP_URL_PATH), '/');
+
+    /** @var Collection<string, string> $links Link target, keyed by the address it answers. */
+    $links = collect(config('filesystems.links'))
+        ->mapWithKeys(fn (string $target, string $link): array => [
+            str_replace('\\', '/', Str::after($link, public_path())) => $target,
+        ]);
+
+    $address = $links->keys()->first(fn (string $address): bool => Str::startsWith($path, $address.'/'));
+
+    expect($address)->not->toBeNull("No document-root link answers [{$path}].");
+
+    $disk = collect(config('filesystems.disks'))
+        ->search(fn (array $configuration): bool => ($configuration['root'] ?? null) === $links[$address]);
+
+    expect($disk)->not->toBeFalse("[{$address}] links to [{$links[$address]}], which is no disk's root.");
+
+    expect(Storage::disk($disk)->exists(Str::after($path, $address.'/')))
+        ->toBeTrue("[{$path}] resolves to nothing on the [{$disk}] disk.");
+
+    return $this;
 });
 
 /*

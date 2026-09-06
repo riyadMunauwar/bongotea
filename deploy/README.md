@@ -128,6 +128,51 @@ the warning at the top of that file. OpenLiteSpeed does not read `.htaccess` by
 default; the shortest route is to turn that on, and the file gives the explicit
 rules for operators who keep it off.
 
+## Product images
+
+An image a merchant uploads is served the same way a cached page is: the
+webserver reads a file and PHP never boots. That needs the storage link, which
+is not created by a checkout:
+
+```bash
+php artisan storage:link
+```
+
+It points `public/storage` at `storage/app/private`, which is where Product
+images are (ADR-0011 explains why a directory called `private` is publicly
+visible). Apache is told to follow that link by `public/.htaccess`; nginx
+follows symlinks by default and needs nothing. Without the link every image on
+every page 404s, silently — nothing logs it, because no request reaches PHP.
+
+### Upgrading an installation that predates this
+
+Three steps, and the first one is not optional — run it **before** the link
+exists, because it is the only moment at which those files are still private.
+
+```bash
+# 1. Delete the staged uploads stranded on what is now a public directory.
+#    Livewire used to write every file dragged into the panel here, including
+#    the ones nobody saved. It now writes to storage/app/staging instead — so
+#    nothing sweeps this directory any more, and every file in it would be
+#    fetchable at /storage/livewire-tmp/... the moment the link is made.
+rm -rf storage/app/private/livewire-tmp
+
+# 2. Repoint the link. It used to point at storage/app/public, and the command
+#    refuses a link that is already there unless told to replace it. Use
+#    --force rather than removing it by hand: `rm -rf public/storage/`, with
+#    the trailing slash, empties the directory it points at instead — which is
+#    every product image on the installation.
+php artisan storage:link --force
+
+# 3. Make the images already on disk readable. They were written with private
+#    permissions, which is a 403 rather than a 404 if your webserver runs as a
+#    different user from PHP-FPM. New uploads are written readable.
+chmod -R u=rwX,go=rX storage/app/private
+```
+
+Then flush the cache below — every page cached before the link was fixed has
+the broken URL frozen into it.
+
 ## Releasing
 
 Empty the cache as the last step of any release that changes how a Page

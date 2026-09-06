@@ -8,6 +8,7 @@ use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
 
@@ -223,7 +224,13 @@ it('renders every product the page sells, each with a quantity of its own', func
 });
 
 it('shows each product its own image', function () {
-    Storage::fake('public');
+    /**
+     * Faked with the disk's own configuration rather than with the bare
+     * defaults, because the address an image is served at is read off that
+     * configuration — a fake carrying none of it would answer for a disk this
+     * application does not have.
+     */
+    Storage::fake(Product::IMAGE_DISK, config('filesystems.disks.'.Product::IMAGE_DISK));
 
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
     $boots = Product::factory()->create(['name' => 'Hiking Boots']);
@@ -247,6 +254,24 @@ it('shows each product its own image', function () {
         ->and($html)->toContain('src="'.$boots->imageUrl().'"')
         ->and($html)->toContain('alt="Winter Jacket"')
         ->and($html)->toContain('alt="Hiking Boots"');
+
+    /**
+     * And the address in the markup is one a visitor can actually fetch. A
+     * page that names an image it cannot serve is the failure this is here
+     * for: it asked a Customer paying cash on delivery to commit to something
+     * they could not see, and it was invisible to every assertion that only
+     * read the markup.
+     */
+    expect($jacket->imageUrl())->toBeServedFromTheDocumentRoot()
+        ->and($boots->imageUrl())->toBeServedFromTheDocumentRoot();
+
+    /**
+     * Served by the webserver reading a file, and by nothing else. The
+     * framework's serve route is off this disk, so no route claims that
+     * address and PHP never boots for an image — which is the whole premise of
+     * a product whose Pages are static files.
+     */
+    expect(Route::has('storage.'.Product::IMAGE_DISK))->toBeFalse();
 });
 
 it('keeps selling the rest when one of several products is deleted', function () {

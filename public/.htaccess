@@ -1,6 +1,20 @@
 <IfModule mod_rewrite.c>
+    # Product images live on a disk outside the document root and are reached
+    # through the public/storage link (ADR-0011). Apache will not traverse a
+    # symlink unless told to, and refuses with a 403 that looks exactly like
+    # the one the disk's visibility used to cause and has nothing to do with
+    # it.
+    #
+    # -Indexes moved up here with it, out of the mod_negotiation guard it
+    # ships in. It never needed that guard — it is mod_autoindex's, not
+    # negotiation's — and now that a link into application storage is
+    # traversable, an install without mod_negotiation inheriting the common
+    # `Options Indexes FollowSymLinks` would answer /storage/ with a browsable
+    # listing of it. Only -MultiViews is left behind.
+    Options +FollowSymLinks -Indexes
+
     <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
+        Options -MultiViews
     </IfModule>
 
     RewriteEngine On

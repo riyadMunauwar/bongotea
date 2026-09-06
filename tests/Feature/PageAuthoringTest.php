@@ -179,6 +179,36 @@ it('stores a product price as integer minor units', function () {
     expect(Product::query()->sole()->price)->toBe(99050);
 });
 
+it('stages a file a merchant drags in where no visitor can reach it', function () {
+    /**
+     * Every file dropped into any upload in the panel is written to Livewire's
+     * staging directory before anything decides whether to keep it — including
+     * the ones a merchant drags in, thinks better of, and never saves. The
+     * disk Product images live on is publicly visible from the moment a file
+     * lands on it (ADR-0011), so staging cannot share it: an unguessable
+     * filename is not a permission, and nothing would report the exposure.
+     */
+    $staging = config('livewire.temporary_file_upload.disk');
+
+    expect($staging)->not->toBeNull('Livewire stages onto the default disk unless a disk is named.');
+
+    $disk = config("filesystems.disks.{$staging}");
+
+    /**
+     * Three ways a file becomes fetchable, and the disk must offer none of
+     * them. The root is asserted present first because a disk without one is
+     * a disk this cannot reason about, and a check that quietly passes on
+     * anything it does not understand is the failure it exists to prevent.
+     */
+    expect($disk['root'] ?? null)->not->toBeNull("The [{$staging}] disk has no root to place.")
+        ->and($disk['url'] ?? null)->toBeNull("The [{$staging}] disk publishes an address.")
+        ->and($disk['visibility'] ?? null)->not->toBe('public');
+
+    expect(collect(config('filesystems.links'))->contains(
+        fn (string $target): bool => str_starts_with($disk['root'], $target)
+    ))->toBeFalse("The [{$staging}] disk is reachable through a document-root link.");
+});
+
 it('gives a new page a complete checkout nobody had to configure', function () {
     Livewire::test(CreatePage::class)
         ->fillForm([

@@ -27,6 +27,19 @@ class Product extends Model implements HasMedia
 
     public const IMAGE_COLLECTION = 'image';
 
+    /**
+     * The disk a Product's image is stored on, and the one thing that says so.
+     *
+     * Named here rather than left to a default because two defaults were
+     * agreeing by accident: the panel's upload falls back to the framework's
+     * default disk, while the media library's own falls back to `public`. They
+     * happened to land on the same disk on this installation, and an
+     * environment variable was all that stood between them landing on two.
+     * The collection declares it, and the panel's upload reads the
+     * collection's declaration, so there is one answer.
+     */
+    public const IMAGE_DISK = 'local';
+
     protected function casts(): array
     {
         return [
@@ -44,7 +57,9 @@ class Product extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection(self::IMAGE_COLLECTION)->singleFile();
+        $this->addMediaCollection(self::IMAGE_COLLECTION)
+            ->useDisk(self::IMAGE_DISK)
+            ->singleFile();
     }
 
     public function imageUrl(): ?string
