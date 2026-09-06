@@ -33,16 +33,24 @@ Everything one Page decides about its own Checkout: what it asks for, what it ch
 _Avoid_: settings, preset, theme, template
 
 **Checkout Layout**:
-How a Checkout is arranged: what it draws, and nothing about what it asks for or what it charges. Two to begin with — the stacked form, and a form-only one with no product panel, for a Page whose own markup has already sold the Product above the fold. Every question, the delivery choice, the summary and the failure slots are drawn by both, and a form-only Checkout captures the same complete Order: it sells everything the Page sells, one of each.
+How a Checkout is arranged: what it draws, and nothing about what it asks for or what it charges. Five of them — stacked, split, compact, summary-first, and a form-only one with no product panel, for a Page whose own markup has already sold the Product above the fold. Every question, the delivery choice, the summary and the failure slots are drawn by all five, and a form-only Checkout captures the same complete Order: it sells everything the Page sells, one of each.
 _Avoid_: template, theme, skin, variant
 
 **Field Width**:
-How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized.
+How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized. A compact Checkout Layout fills the row at every width, because a Merchant choosing compact has already said what they want the form to do and paired questions work against it. A width is kept either way, so a Page moved off compact asks its questions the way it always did.
 _Avoid_: column, span, size, grid
 
+**Style Token**:
+One thing about a Checkout a Merchant can restyle — a colour, a length, a size. Every token is set once for the whole Checkout and may be overridden by a single Checkout Field, so a form is styled in one place and a question that must look different says only how it differs. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
+_Avoid_: theme, variable, style setting, CSS variable
+
 **Product Picker**:
-Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. Nothing is picked to begin with, because on a cash-on-delivery Page an extra nobody chose is not a larger sale, it is a refused parcel. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout Layout that draws no Products to pick between.
+Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. What it opens with is the Page's Default Selection. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout Layout that draws no Products to pick between.
 _Avoid_: cart, add-on, bundle, upsell toggle
+
+**Default Selection**:
+Which of a Page's Products its Product Picker opens ticked. None unless the Merchant says otherwise. One is a default the Customer sees a price from and then changes; several is a bundle the Merchant is asserting, and carries the risk the empty default exists to avoid — on a cash-on-delivery Page, an extra nobody chose is not a larger sale, it is a refused parcel. It settles nothing about what an Order costs; what was ticked at Capture does.
+_Avoid_: preselected, default cart, bundle, preset
 
 **Checkout Field**:
 One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
