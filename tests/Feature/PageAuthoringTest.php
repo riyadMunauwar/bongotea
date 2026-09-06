@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\FieldOption;
+use App\Support\Checkout\StyleToken;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -747,4 +748,176 @@ it('refuses a built-in key on the row that typed it and not on the built-in', fu
         ->and(array_key_first($component->errors()->messages()))->toEndWith('.key')
         ->and(array_values($component->errors()->messages())[0][0])
         ->toBe('This checkout already asks a question under that key. Give yours one of its own.');
+});
+
+it('restyles a checkout from the checkout tab', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['style_tokens' => [
+            'accent' => '#ff0000',
+            'button_background' => '#101010',
+            'radius' => '12px',
+            'input_size' => '1.125',
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A restyle changes what visitors receive, so the HTML written before it has to go. */
+    expect($this->cache->has('promo'))->toBeFalse();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)->toContain('--gio-accent: #ff0000;')
+        ->and($html)->toContain('--gio-button-background: #101010;')
+        ->and($html)->toContain('--gio-radius: 12px;')
+        ->and($html)->toContain('--gio-input-size: 1.125;');
+});
+
+it('keeps a token the merchant left alone out of the stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['style_tokens' => ['accent' => '#ff0000']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Only what was said. A default copied into every Page's Config would be a
+     * decision recorded where none was made, and would have to be migrated the
+     * next time one of them changes.
+     */
+    expect($page->refresh()->checkout_config->styleTokens->toArray())
+        ->toBe(['accent' => '#ff0000']);
+});
+
+it('refuses a style value on the box that holds it', function (string $token, string $value) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['style_tokens' => [$token => $value]]])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.style_tokens.'.$token]);
+
+    /**
+     * One refusal, on the control the merchant has to correct, rather than a
+     * page-level complaint about styling in general.
+     */
+    expect($component->errors()->messages())->toHaveCount(1);
+})->with([
+    'a colour that does not parse' => ['accent', 'reddish'],
+    'a colour that would close the declaration' => ['button_background', 'red; } body { display: none } .x {'],
+    'a length whose unit is not allowed' => ['radius', '4pt'],
+    'a length that is not a length' => ['border_width', 'thin'],
+    'a negative length' => ['font_size', '-1rem'],
+    'a size nobody was offered' => ['input_size', '9'],
+]);
+
+it('lets every style box be left empty', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['style_tokens' => array_fill_keys(
+            array_map(fn (StyleToken $token): string => $token->value, StyleToken::cases()),
+            null,
+        )]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Nothing said is not something to refuse; it is the checkout as it looks. */
+    expect($page->refresh()->checkout_config->styleTokens->isEmpty())->toBeTrue();
+});
+
+it('lets a merchant restyle one question on its own', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $rows = $page->checkout_config->fieldsToArray();
+    $rows[0]['style_tokens'] = ['border' => '#ff0000', 'border_width' => '2px'];
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $rows]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The one question the merchant wanted picked out, and nothing else. The
+     * override reaches that field alone through the cascade, so drawing
+     * attention to it costs a redeclaration and no selector.
+     */
+    expect($page->refresh()->checkout_config->fields[0]->styleTokens->toArray())
+        ->toBe(['border' => '#ff0000', 'border_width' => '2px'])
+        ->and(substr_count($html, '--gio-border: #ff0000;'))->toBe(1);
+});
+
+it('refuses a style value on the row of the question it was typed on', function () {
+    $page = Page::factory()->create();
+
+    $rows = $page->checkout_config->fieldsToArray();
+    $rows[1]['style_tokens'] = ['accent' => 'reddish'];
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $rows]])
+        ->call('save')
+        ->assertHasFormErrors();
+
+    expect($component->errors()->messages())
+        ->toHaveCount(1)
+        ->and(array_key_first($component->errors()->messages()))->toEndWith('.style_tokens.accent');
+});
+
+it('restyles one question in the checkout tab and serves it that way', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $rows = $page->checkout_config->fieldsToArray();
+    $rows[0]['style_tokens'] = ['text' => '#ff0000', 'input_size' => '1.125'];
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['fields' => $rows]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Text colour and size are the two a merchant reaches for to pick a
+     * question out, and both are inherited properties the root also declares —
+     * so this is the case that would silently do nothing if the field wrapper
+     * did not read the tokens itself.
+     */
+    expect($this->get('/promo')->assertOk()->getContent())
+        ->toContain('style="--gio-text: #ff0000; --gio-input-size: 1.125;"');
+});
+
+it('asks a question about no token nothing inside it reads', function () {
+    /**
+     * A question holds no order button, so the three tokens that dress one are
+     * not offered on a field row. A control that provably does nothing is worse
+     * than no control: a merchant would set the button colour on a question,
+     * see no change, and have nothing to tell them why.
+     */
+    $inert = array_filter(StyleToken::cases(), fn (StyleToken $token): bool => ! $token->appliesToOneField());
+
+    expect(array_map(fn (StyleToken $token): string => $token->value, array_values($inert)))
+        ->toBe(['button_background', 'button_text', 'button_radius']);
+
+    $page = Page::factory()->create();
+
+    $rendered = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+
+    /**
+     * A border colour is asked for once for the checkout and once on every one
+     * of the five questions; a button colour only for the checkout. Counting
+     * rather than matching a state path, because the path of a repeater row is
+     * a generated id and not something a test should know.
+     */
+    expect(substr_count($rendered, 'style_tokens.border'))
+        ->toBeGreaterThan(substr_count($rendered, 'style_tokens.button_background'));
 });

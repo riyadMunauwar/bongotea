@@ -97,6 +97,18 @@ class CheckoutShortcode implements ShortcodeDefinition
              * directions.
              */
             'deliveryOptions' => $page->checkout_config->deliveryOptions,
+
+            /**
+             * How this Page's Checkout looks: what the Merchant chose, and the
+             * default for every token they left alone.
+             *
+             * Completed here rather than in the view so the root always
+             * declares the whole named set, which is what lets every rule below
+             * it read a token instead of carrying a fallback of its own. A
+             * field's own overrides are not this — they ride on that field's
+             * wrapper and are read off the field.
+             */
+            'styleTokens' => $page->checkout_config->styleTokens->completed(),
             'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
         ])->render();
     }

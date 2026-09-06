@@ -52,8 +52,9 @@ class CustomCheckoutField extends CheckoutField
         bool $required,
         ?string $placeholder = null,
         ?string $help = null,
+        ?StyleTokens $styleTokens = null,
     ) {
-        parent::__construct($label, $enabled, $required, $placeholder, $help);
+        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens);
     }
 
     /**
@@ -105,6 +106,7 @@ class CustomCheckoutField extends CheckoutField
             required: (bool) ($stored['required'] ?? false),
             placeholder: self::wording($stored['placeholder'] ?? null),
             help: self::wording($stored['help'] ?? null),
+            styleTokens: StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
         );
     }
 
@@ -200,7 +202,7 @@ class CustomCheckoutField extends CheckoutField
     }
 
     /**
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -213,6 +215,7 @@ class CustomCheckoutField extends CheckoutField
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,
+            'style_tokens' => $this->styleTokens->toArray(),
             'options' => array_map(fn (FieldOption $option): array => $option->toArray(), $this->fieldOptions),
         ];
     }

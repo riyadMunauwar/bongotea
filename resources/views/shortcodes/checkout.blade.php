@@ -45,9 +45,24 @@
 @endphp
 <div class="gio-checkout" data-gio-checkout data-page-slug="{{ $page->slug }}">
     <style>
-        .gio-checkout { box-sizing: border-box; max-width: 30rem; margin: 1.5rem auto; padding: 1rem; border: 1px solid #e5e7eb; border-radius: .5rem; font-family: inherit; }
+        {{--
+            The named token set, declared once on the root and read by every
+            rule under it.
+
+            Restyling is a redeclaration of these and never a rule of our own
+            making. A generated rule would be more specific than the
+            hand-written one beside it on the same page, so the style editor
+            would start winning arguments it is supposed to lose — the merchant
+            who writes CSS keeps exactly the control they had before this
+            existed.
+
+            The same property is what a single field redeclares to differ from
+            the rest, on its own wrapper, so this block is the same length
+            whether the form asks two questions or twenty.
+        --}}
+        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: 30rem; margin: 1.5rem auto; padding: 1rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: var(--gio-font-size); color: var(--gio-text); accent-color: var(--gio-accent); }
         .gio-checkout-products { margin: 0 0 1.25rem; }
-        .gio-checkout-product + .gio-checkout-product { margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid #e5e7eb; }
+        .gio-checkout-product + .gio-checkout-product { margin: 1rem 0 0; padding: 1rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); }
         .gio-checkout-product-head { display: flex; gap: .75rem; align-items: center; }
         .gio-checkout-pickable { display: grid; grid-template-columns: auto 1fr; column-gap: .625rem; }
         .gio-checkout-pickable > * { grid-column: 2; }
@@ -60,31 +75,70 @@
             oldest webview that can render the form can also hide the stepper.
         --}}
         .gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }
-        .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: .375rem; flex: none; }
-        .gio-checkout-name { margin: 0 0 .25rem; font-size: 1rem; font-weight: 600; }
-        .gio-checkout-price { margin: 0; font-size: 1.125rem; font-weight: 700; }
-        .gio-checkout-description { margin: .5rem 0 0; font-size: .875rem; line-height: 1.5; }
+        .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: var(--gio-radius); flex: none; }
+        {{--
+            Every size below is an `em` against the root's own font size, which
+            is a token. That is what makes one control grow the whole form
+            proportionally instead of growing one paragraph and leaving the rest
+            where it was. Nothing between here and the root sets a font size, so
+            nothing compounds.
+        --}}
+        .gio-checkout-name { margin: 0 0 .25rem; font-size: 1em; font-weight: 600; }
+        .gio-checkout-price { margin: 0; font-size: 1.125em; font-weight: 700; }
+        .gio-checkout-description { margin: .5rem 0 0; font-size: .875em; line-height: 1.5; }
         .gio-checkout-quantity { margin: .75rem 0 0; }
         .gio-checkout-quantity-input { width: 7rem; }
         .gio-checkout-form { margin: 0; }
-        .gio-checkout-field { margin: 0 0 .75rem; }
-        .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125rem; font-weight: 600; }
-        .gio-checkout-help { margin: 0 0 .375rem; font-size: .75rem; line-height: 1.4; opacity: .75; }
-        .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-family: inherit; font-size: 1rem; background: #fff; color: inherit; }
-        .gio-checkout-input:focus { outline: 2px solid #2563eb; outline-offset: -1px; }
+        {{--
+            The three inherited properties are declared here as well as on the
+            root, and that repetition is what makes a per-field override work at
+            all. A wrapper redeclaring `--gio-text` cannot reach back and change
+            a `color` already computed on its ancestor; only a declaration on
+            the wrapper itself reads the value the wrapper carries. The values
+            are the root's, so a field that overrides nothing renders as it did.
+        --}}
+        .gio-checkout-field { margin: 0 0 .75rem; color: var(--gio-text); font-size: var(--gio-font-size); accent-color: var(--gio-accent); }
+        .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125em; font-weight: 600; }
+        .gio-checkout-help { margin: 0 0 .375rem; font-size: .75em; line-height: 1.4; opacity: .75; }
+        {{--
+            One scale, two declarations. The padding is stated in `em`, so it is
+            measured against the font size the same scale just set — a merchant
+            asking for a bigger box cannot end up with a bigger box full of type
+            too small to read back what they typed.
+        --}}
+        .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625em .75em; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: calc(1em * var(--gio-input-size)); background: var(--gio-background); color: inherit; }
+        .gio-checkout-input:focus { outline: 2px solid var(--gio-accent); outline-offset: -1px; }
         .gio-checkout-delivery, .gio-checkout-choices { margin: 0; padding: 0; border: 0; }
-        .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: .625rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; font-size: .9375rem; cursor: pointer; }
+        {{--
+            A row a customer taps is a box like any other, so the same scale
+            sizes it. Stated as two multiplications rather than in `em` off its
+            own font size, which is what the input above does: the row's text is
+            not the form's text size, so `em` padding here would not come out
+            where it has always been.
+
+            Not painted with the background token. The boxes a customer types
+            into have always been white and the rows have always been the page
+            showing through; painting them now would turn light text on a dark
+            page into light text on white on every checkout already published.
+        --}}
+        .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: calc(.625rem * var(--gio-input-size)) calc(.75rem * var(--gio-input-size)); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-size: calc(.9375em * var(--gio-input-size)); cursor: pointer; }
         .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
         .gio-checkout-choice-label { flex: 1; }
         .gio-checkout-choice-amount { font-weight: 600; }
-        .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125rem; color: #b91c1c; }
+        .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: #b91c1c; }
         .gio-checkout-error[data-shown] { display: block; }
-        .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: 1px solid #e5e7eb; font-size: .875rem; }
-        .gio-checkout-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0 0 .375rem; }
-        .gio-checkout-total { font-size: 1.0625rem; font-weight: 700; margin: 0; }
-        .gio-checkout-submit { display: block; width: 100%; padding: .875rem 1rem; border: 0; border-radius: .375rem; background: #16a34a; color: #fff; font-family: inherit; font-size: 1.0625rem; font-weight: 700; cursor: pointer; }
+        .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); }
+        {{--
+            The summary's own size, moved down onto its rows. It sat on the
+            container while the sizes were rem and nothing compounded; in `em`
+            it would multiply against the total's, which carries both classes
+            and is meant to be the larger figure, not a fraction of a fraction.
+        --}}
+        .gio-checkout-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0 0 .375rem; font-size: .875em; }
+        .gio-checkout-total { font-size: 1.0625em; font-weight: 700; margin: 0; }
+        .gio-checkout-submit { display: block; width: 100%; padding: .875rem 1rem; border: 0; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); font-family: inherit; font-size: 1.0625em; font-weight: 700; cursor: pointer; }
         .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; }
-        .gio-checkout-note { margin: .625rem 0 0; font-size: .75rem; text-align: center; opacity: .75; }
+        .gio-checkout-note { margin: .625rem 0 0; font-size: .75em; text-align: center; opacity: .75; }
     </style>
 
     {{--
@@ -220,7 +274,16 @@
                 ]));
             @endphp
 
-            <div class="gio-checkout-field">
+            {{--
+                What this one question looks like where the merchant wanted it
+                to differ from the rest, written onto its own wrapper.
+
+                A redeclaration of tokens the root already declares, so the
+                cascade confines it to this field and nothing has to be
+                generated to name it. Absent entirely where the merchant
+                overrode nothing, which is every field on almost every page.
+            --}}
+            <div class="gio-checkout-field"@if (! $field->styleTokens->isEmpty()) style="{{ $field->styleTokens->declarations() }}"@endif>
                 {{--
                     A radio group and a checkbox carry their own wording — a
                     legend over the choices, and the text beside the box — so

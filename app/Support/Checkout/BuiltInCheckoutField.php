@@ -23,8 +23,9 @@ class BuiltInCheckoutField extends CheckoutField
         bool $required,
         ?string $placeholder = null,
         ?string $help = null,
+        ?StyleTokens $styleTokens = null,
     ) {
-        parent::__construct($label, $enabled, $required, $placeholder, $help);
+        parent::__construct($label, $enabled, $required, $placeholder, $help, $styleTokens);
     }
 
     public static function default(BuiltInField $builtIn): self
@@ -75,6 +76,13 @@ class BuiltInCheckoutField extends CheckoutField
                 ? self::wording($stored['placeholder'])
                 : $builtIn->defaultPlaceholder(),
             help: self::wording($stored['help'] ?? null),
+            /**
+             * A built-in is restyled like any other field. Where an answer goes
+             * is what a built-in has no say over; how the question looks is not
+             * that, and the one a Merchant most often wants picked out is the
+             * phone number they are not allowed to switch off.
+             */
+            styleTokens: StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
         );
     }
 
@@ -126,7 +134,7 @@ class BuiltInCheckoutField extends CheckoutField
      * District's choices are installation configuration and no built-in has
      * choices a Merchant may author.
      *
-     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, options: list<array{value: string, label: string}>}
+     * @return array{key: string, label: string, type: string, built_in: bool, enabled: bool, required: bool, placeholder: string|null, help: string|null, style_tokens: array<string, string>, options: list<array{value: string, label: string}>}
      */
     public function toArray(): array
     {
@@ -139,6 +147,7 @@ class BuiltInCheckoutField extends CheckoutField
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,
+            'style_tokens' => $this->styleTokens->toArray(),
             'options' => [],
         ];
     }

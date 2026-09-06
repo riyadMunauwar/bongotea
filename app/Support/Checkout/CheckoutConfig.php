@@ -31,6 +31,13 @@ class CheckoutConfig implements Arrayable
         public readonly array $deliveryOptions,
 
         /**
+         * How this Checkout looks, as far as the Merchant has said anything
+         * about it. Sparse: what they left alone is filled in from the token
+         * set's own defaults at the point of emission, not stored here.
+         */
+        public readonly StyleTokens $styleTokens,
+
+        /**
          * Whether the Customer chooses which of this Page's Products to buy.
          *
          * The Merchant's switch and nothing more. Whether a Checkout actually
@@ -54,6 +61,13 @@ class CheckoutConfig implements Arrayable
         return new self(
             array_map(BuiltInCheckoutField::default(...), BuiltInField::cases()),
             [self::seededDeliveryOption()],
+
+            /**
+             * Nothing said about the appearance, which is the Checkout as it
+             * looked before a Merchant could restyle it: every token at the
+             * value its rule already carried.
+             */
+            StyleTokens::none(),
 
             /**
              * Off, so a Page sells everything it links the way it always has.
@@ -132,6 +146,7 @@ class CheckoutConfig implements Arrayable
         return new self(
             array_values($fields),
             self::deliveryOptionsFromArray($stored),
+            StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
 
             /**
              * Absent means off, which is what every Config written before the
@@ -316,13 +331,14 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, product_picker: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool}
      */
     public function toArray(): array
     {
         return [
             'fields' => $this->fieldsToArray(),
             'delivery_options' => $this->deliveryOptionsToArray(),
+            'style_tokens' => $this->styleTokens->toArray(),
             'product_picker' => $this->productPicker,
         ];
     }

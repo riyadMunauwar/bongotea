@@ -30,13 +30,27 @@ use Illuminate\View\ComponentAttributeBag;
  */
 abstract class CheckoutField
 {
+    /**
+     * What this one field looks like, where the Merchant wanted it to differ
+     * from the rest.
+     *
+     * Sparse: only the tokens they redeclared for it. The view writes them onto
+     * the field's own wrapper and the cascade confines them to it, so drawing
+     * attention to one question costs one redeclaration and no selector — see
+     * `StyleTokens`.
+     */
+    public readonly StyleTokens $styleTokens;
+
     public function __construct(
         public readonly string $label,
         public readonly bool $enabled,
         public readonly bool $required,
         public readonly ?string $placeholder = null,
         public readonly ?string $help = null,
-    ) {}
+        ?StyleTokens $styleTokens = null,
+    ) {
+        $this->styleTokens = $styleTokens ?? StyleTokens::none();
+    }
 
     /**
      * What the answer is named in the submission, and — for a built-in — the

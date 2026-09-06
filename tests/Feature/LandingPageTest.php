@@ -4,6 +4,8 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\StyleToken;
+use App\Support\Checkout\StyleTokenKind;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -451,4 +453,205 @@ it('hides a quantity behind the checkbox that reveals it', function () {
 
     /** Nothing is ticked, so nothing is being bought yet. */
     expect($html)->toContain('৳0.00');
+});
+
+/**
+ * The one <style> block a Checkout emits, without the markup around it.
+ *
+ * Read out of the served page rather than off a class, because what is being
+ * pinned is what a visitor's browser receives.
+ */
+function styleBlock(string $html): string
+{
+    preg_match('/<style>(.*?)<\/style>/s', $html, $block);
+
+    return $block[1] ?? '';
+}
+
+/**
+ * A published page selling one product, with the Checkout Config given.
+ *
+ * @param  array<string, mixed>  $config
+ */
+function pageStyled(array $config, string $slug = 'promo'): Page
+{
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => $slug,
+        'checkout_config' => CheckoutConfig::fromArray($config),
+    ]);
+
+    $page->products()->attach(Product::factory()->create());
+
+    return $page;
+}
+
+it('declares the whole token set on the checkout root', function () {
+    pageStyled([]);
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', styleBlock($this->get('/promo')->getContent()), $root);
+
+    /**
+     * Complete on a page nobody has styled, so every rule under it can read a
+     * token rather than carrying a fallback of its own — and so a merchant can
+     * see the whole vocabulary in the page they are looking at.
+     */
+    foreach (StyleToken::cases() as $token) {
+        expect($root[1] ?? '')->toContain($token->property().': ');
+    }
+});
+
+it('paints the checkout in the tokens the page carries', function () {
+    pageStyled(['style_tokens' => [
+        'accent' => '#ff0000',
+        'button_background' => '#101010',
+        'radius' => '12px',
+        'input_size' => '1.125',
+    ]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    expect($styles)->toContain('--gio-accent: #ff0000;')
+        ->and($styles)->toContain('--gio-button-background: #101010;')
+        ->and($styles)->toContain('--gio-radius: 12px;')
+        ->and($styles)->toContain('--gio-input-size: 1.125;')
+        /**
+         * Read by the rules that were already there rather than written into
+         * them, which is what makes one redeclaration restyle every use.
+         */
+        ->and($styles)->toContain('background: var(--gio-button-background)')
+        ->and($styles)->toContain('border-radius: var(--gio-radius)');
+});
+
+it('sizes an input\'s padding and its text off one scale', function () {
+    pageStyled([]);
+
+    preg_match('/\.gio-checkout-input \{([^}]*)\}/', styleBlock($this->get('/promo')->getContent()), $input);
+
+    /**
+     * The padding is measured against the font size the scale sets, so there is
+     * no way to ask for a bigger box and get type too small to read back what
+     * was typed into it.
+     */
+    expect($input[1])->toContain('var(--gio-input-size)')
+        ->and($input[1])->toMatch('/padding:[^;]*em/')
+        ->and(array_filter(
+            StyleToken::cases(),
+            fn (StyleToken $token): bool => $token->kind() === StyleTokenKind::Scale,
+        ))->toHaveCount(1);
+});
+
+it('restyles one question without generating a selector for it', function () {
+    pageStyled(['fields' => [
+        ['key' => 'name', 'label' => 'Your name', 'style_tokens' => ['border' => '#ff0000']],
+        ['key' => 'phone', 'label' => 'Phone number'],
+    ]]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The override rides on the field's own wrapper and the cascade keeps it
+     * there. Nothing names the field in the style block, which is what stops
+     * the style editor out-specifying the merchant's own stylesheet.
+     */
+    expect(styleBlock($html))->not->toContain('#ff0000')
+        ->and(substr_count($html, '--gio-border: #ff0000;'))->toBe(1);
+});
+
+it('keeps the emitted styles the same length however many questions are asked', function () {
+    pageStyled([], slug: 'plain');
+
+    $many = array_map(fn (int $index): array => [
+        'key' => 'question_'.$index,
+        'label' => 'Question '.$index,
+        'style_tokens' => ['border' => '#ff0000', 'radius' => '2px'],
+    ], range(1, 12));
+
+    pageStyled(['fields' => $many], slug: 'busy');
+
+    /**
+     * Byte for byte, whatever the form asks and however much of it is styled
+     * differently. A generated rule per field would grow this block with every
+     * question and change what a merchant's own stylesheet has to beat.
+     */
+    expect(styleBlock($this->get('/busy')->getContent()))
+        ->toBe(styleBlock($this->get('/plain')->getContent()));
+});
+
+it('leaves the checkout losable to a merchant\'s own stylesheet', function () {
+    pageStyled(['style_tokens' => ['accent' => '#ff0000']]);
+
+    $styles = styleBlock($this->get('/promo')->getContent());
+
+    preg_match_all('/(^|\})([^{}]+)\{/', $styles, $selectors);
+
+    /**
+     * The tokens are declared at one class, on the root, with nothing raising
+     * them — so a merchant redeclaring them, or simply setting the property
+     * outright, wins from their own stylesheet without escalating.
+     */
+    expect($styles)->not->toContain('!important');
+
+    foreach ($selectors[2] as $selector) {
+        expect(trim($selector))->not->toContain('#');
+    }
+
+    expect(array_filter($selectors[2], fn (string $selector): bool => trim($selector) === '.gio-checkout'))
+        ->not->toBeEmpty();
+});
+
+it('never lets a stored style value break out of the block it is written into', function () {
+    pageStyled(['style_tokens' => [
+        'accent' => 'red; } body { display: none } .x {',
+        'radius' => '4pt',
+        'input_size' => '9',
+    ]]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The Checkout tab refuses all three with a message. This is the same
+     * refusal made again as the Config is read, for the Config nobody typed
+     * on that tab — silent, and falling back to the default rather than
+     * rendering a page whose styling has been rewritten by its own data.
+     */
+    expect($html)->not->toContain('body {')
+        ->and(styleBlock($html))->toContain('--gio-accent: '.StyleToken::Accent->defaultValue().';')
+        ->and(styleBlock($html))->toContain('--gio-radius: '.StyleToken::Radius->defaultValue().';')
+        ->and(styleBlock($html))->toContain('--gio-input-size: '.StyleToken::InputSize->defaultValue().';');
+});
+
+it('lets a field override a token the checkout root also reads', function () {
+    pageStyled(['fields' => [
+        ['key' => 'name', 'label' => 'Your name', 'style_tokens' => ['text' => '#ff0000', 'font_size' => '2rem']],
+    ]]);
+
+    preg_match('/\.gio-checkout-field \{([^}]*)\}/', styleBlock($this->get('/promo')->getContent()), $field);
+
+    /**
+     * `color`, `font-size` and `accent-color` are inherited as computed values,
+     * so a wrapper redeclaring the token behind one cannot reach back and
+     * change what the root already worked out. Only a declaration on the
+     * wrapper itself reads what the wrapper carries — which is why these three
+     * are declared twice, and why overriding them on one question does
+     * anything at all.
+     */
+    expect($field[1])->toContain('color: var(--gio-text)')
+        ->and($field[1])->toContain('font-size: var(--gio-font-size)')
+        ->and($field[1])->toContain('accent-color: var(--gio-accent)');
+});
+
+it('sizes the rows a customer picks from off the same scale as the boxes', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->getContent());
+
+    preg_match('/\.gio-checkout-choice \{([^}]*)\}/', $styles, $choice);
+
+    /**
+     * A radio row is a box a thumb has to hit, so one size covers both. A form
+     * asked for at Large that grew its text boxes and left its delivery options
+     * where they were would be the mismatch the single scale exists to prevent.
+     */
+    expect($choice[1])->toContain('var(--gio-input-size)')
+        ->and(substr_count($choice[1], 'var(--gio-input-size)'))->toBe(3);
 });
