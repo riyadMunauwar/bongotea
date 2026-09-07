@@ -1009,7 +1009,7 @@ it('draws every question, the delivery choice, the summary and the error slots i
     foreach ($page->checkout_config->enabledFields() as $field) {
         expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
     }
-})->with(['stacked', 'compact', 'summary_first', 'form_only']);
+})->with(['stacked', 'split', 'compact', 'summary_first', 'form_only']);
 
 /**
  * The slug a page arranged in one layout is published at.
@@ -1178,6 +1178,7 @@ it('names the layout on the checkout root in every layout', function (string $la
     expect($this->get('/promo')->getContent())->toContain('class="gio-checkout '.$class.'"');
 })->with([
     'stacked' => ['stacked', 'gio-checkout-stacked'],
+    'split' => ['split', 'gio-checkout-split'],
     'compact' => ['compact', 'gio-checkout-compact'],
     'summary first' => ['summary_first', 'gio-checkout-summary-first'],
     'form only' => ['form_only', 'gio-checkout-form-only'],
@@ -1411,6 +1412,148 @@ it('never puts a summary-first total behind an interaction', function () {
      * And the arrangement asks for no script of its own: the island ships the
      * same bytes it ships to a stacked page, so a summary-first checkout on a
      * phone whose scripts never ran still leads with its total.
+     */
+    expect(checkoutScript($html))->toBe(checkoutScript($this->get('/stacked')->assertOk()->getContent()));
+});
+
+/**
+ * The rules a split page's sheet carries, keyed by the selector that opens
+ * each one.
+ *
+ * Read as a map rather than matched as bytes so that what a test pins is which
+ * column a thing lands in, rather than the order the declarations happen to be
+ * written in.
+ *
+ * @return array<string, string>
+ */
+function splitRules(string $styles): array
+{
+    preg_match_all('/(\.gio-checkout-split[^{]*)\{([^}]*)\}/', $styles, $rules, PREG_SET_ORDER);
+
+    return array_combine(
+        array_map(fn (array $rule): string => trim($rule[1]), $rules),
+        array_map(fn (array $rule): string => trim($rule[2]), $rules),
+    );
+}
+
+it('sets a split checkout\'s form beside what the customer is buying and keeps the total on screen', function () {
+    $page = pageStyled([
+        'layout' => 'split',
+        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
+    ]);
+
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $rules = splitRules(styleBlock($html));
+
+    /**
+     * The same island drawn by the same loop, and the bytes still in the order
+     * every other arrangement writes them: the products, the questions, then
+     * the summary. Two columns are made in the sheet — a second template would
+     * be a second total to keep truthful about a form that takes money, and
+     * this order is the one a customer whose stylesheet never arrives reads.
+     */
+    expect($markup)->toContain('class="gio-checkout-products"')
+        ->and($markup)->toContain($product->name)
+        ->and($markup)->toContain('name="phone"')
+        ->and(strpos($markup, 'class="gio-checkout-products"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-fields"'))
+        ->and(strpos($markup, 'class="gio-checkout-fields"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-summary"'));
+
+    expect($rules['.gio-checkout-split .gio-checkout-form'])->toContain('display: grid');
+
+    /**
+     * The form column first and everything a customer answers, is refused in,
+     * or taps kept in it. The failure slots are named outright rather than
+     * left to auto-placement: they are `display: none` until the island writes
+     * to them, so the first one a customer ever saw would be placed into
+     * whatever cell happened to be free — which is the panel.
+     */
+    foreach (['.gio-checkout-fields', '.gio-checkout-error', '.gio-checkout-submit', '.gio-checkout-note'] as $answered) {
+        expect($rules['.gio-checkout-split '.$answered])->toContain('grid-column: 1');
+    }
+
+    /**
+     * And the panel beside it, in the order the bytes are in: what is being
+     * bought above the figure it comes to, the summary opening directly under
+     * the products rather than as far down the page as the form is long.
+     */
+    expect($rules['.gio-checkout-split .gio-checkout-products'])->toContain('grid-column: 2')
+        ->and($rules['.gio-checkout-split .gio-checkout-products'])->toContain('grid-row: 1')
+        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('grid-column: 2')
+        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('grid-row: 2');
+
+    /**
+     * The pin, which is the whole reason for the arrangement: a customer
+     * working down the questions never loses sight of the figure they are
+     * agreeing to hand over in cash. It is on the summary rather than on the
+     * panel above it because a sticky box is bounded by its own area, and the
+     * area as tall as the form is the one the summary shares with it.
+     */
+    expect($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('position: sticky')
+        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('align-self: start');
+});
+
+it('sizes a split checkout by the form column the merchant asked for', function () {
+    pageStyled(['layout' => 'split', 'style_tokens' => ['max_width' => '24rem']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+    $rules = splitRules($styles);
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+
+    /**
+     * The width means here exactly what it means everywhere else: how wide the
+     * part the customer types into sits. So it sizes the form column, and the
+     * container is worked out from it rather than the other way round — a
+     * merchant who set a narrow form and then chose split would otherwise get
+     * that figure honoured as two columns too narrow to type in, with nothing
+     * failing and nothing to tell them why.
+     */
+    expect($root[1] ?? '')->toContain('--gio-max-width: 24rem')
+        ->and($rules['.gio-checkout-split .gio-checkout-form'])->toContain('minmax(0, var(--gio-max-width))')
+        ->and($rules['.gio-checkout-split'])->toContain('max-width: calc(var(--gio-max-width) +');
+
+    /**
+     * And the token is filled by the merchant and by nobody else. A layout
+     * that quietly redeclared it here would be a default the checkout tab does
+     * not show and the merchant cannot see they are fighting.
+     */
+    foreach ($rules as $declarations) {
+        expect($declarations)->not->toContain('--gio-max-width:');
+    }
+});
+
+it('draws a split checkout as the stacked one below the breakpoint', function () {
+    pageStyled(['layout' => 'split'], slug: 'split');
+    pageStyled([], slug: 'stacked');
+
+    $html = $this->get('/split')->assertOk()->getContent();
+    $styles = styleBlock($html);
+    $added = CheckoutLayout::Split->styleRules();
+
+    /**
+     * Every rule the arrangement adds is inside one media query, which is the
+     * whole of the fallback: below it there is nothing to apply, so a customer
+     * on a phone reads the products, the questions, the summary and the button
+     * exactly as the base sheet draws them. There is no second arrangement to
+     * maintain for the device most of this traffic arrives on.
+     */
+    preg_match('/^@media \(min-width: [^)]+\) \{(.+)\}$/s', trim($added), $inside);
+
+    expect($inside)->not->toBeEmpty();
+
+    foreach (array_filter(array_map(trim(...), explode('}', $inside[1]))) as $rule) {
+        expect($rule)->toContain('.gio-checkout-split');
+    }
+
+    /** Nothing of the arrangement outside that one block, in the sheet actually served. */
+    expect(str_replace($added, '', $styles))->not->toContain('gio-checkout-split');
+
+    /**
+     * And the arrangement asks for no script of its own, so a split page whose
+     * scripts never ran takes the same order the stacked one does.
      */
     expect(checkoutScript($html))->toBe(checkoutScript($this->get('/stacked')->assertOk()->getContent()));
 });

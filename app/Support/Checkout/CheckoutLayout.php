@@ -19,9 +19,86 @@ namespace App\Support\Checkout;
 enum CheckoutLayout: string
 {
     case Stacked = 'stacked';
+    case Split = 'split';
     case Compact = 'compact';
     case SummaryFirst = 'summary_first';
     case FormOnly = 'form_only';
+
+    /**
+     * What the split arrangement adds to the base sheet.
+     *
+     * All of it is inside one media query, and that is the whole of the
+     * fallback. Below the breakpoint nothing here applies, so a Customer on a
+     * phone is served the island the base sheet already draws — the products,
+     * the questions, the summary, the button, in the order the bytes are
+     * written in. Two columns are something only a wide screen ever sees,
+     * which is what keeps this an arrangement rather than a sixth one to
+     * maintain for the device most of this traffic arrives on.
+     *
+     * The width token sizes the form column and the container is worked out
+     * from it, never the other way round. `--gio-max-width` means one thing in
+     * every arrangement: how wide the part a Customer types into sits. Letting
+     * it widen the container here and the columns fall where they may would
+     * quietly turn it into something else — a Merchant who set a narrow form
+     * and then chose split would get that figure honoured as two columns too
+     * narrow to type in, and a setting that stops meaning what it says on one
+     * arrangement is the kind of thing nobody reports, because nothing failed.
+     * So the container is the form column plus the twenty rem around it — a
+     * sixteen rem panel, the two rem between them, and the rem of padding on
+     * each side — plus the border, both of which count against the figure
+     * because the root is `border-box`. The token itself is left exactly as
+     * the Merchant set it. It is not given a default of its own here: the
+     * token set is sparse and filled at emission so that a Merchant's value is
+     * the only value.
+     *
+     * The panel column is bounded below rather than above. A form column asked
+     * for `100%` would otherwise take the whole width and leave the panel
+     * beside it nothing, so the second track carries the floor and the first
+     * carries the ceiling — which is also what makes the arrangement survive
+     * being dropped into a column narrower than the breakpoint suggests.
+     *
+     * Two rows are stated, and the second is why either of them is. The
+     * questions span both, so that the first belongs to the products alone: a
+     * row the questions were measured into would be as tall as the form is
+     * long, and the summary — opening at the top of the row below it — would
+     * be pushed to the foot of the page, where the two halves of the panel
+     * stop being one column. A spanning item does not grow tracks it shares
+     * with a flexible one, which is what keeps the first row the products' own
+     * height while the second takes everything the questions have left. So the
+     * summary opens directly beneath the picture of what it totals. What comes
+     * after the questions falls into rows of its own, below both.
+     *
+     * That second row is also what the summary is pinned inside. A sticky box
+     * is bounded by its own area and by nothing larger, so the pin lands on
+     * the summary rather than on the panel above it — the products scroll past
+     * and the figure the Customer is agreeing to hand over in cash stays on
+     * screen for the whole length of the form. Pinning both is not available
+     * without wrapping them in an element of their own, and that element would
+     * have to reorder the bytes: the questions sit between them, and the order
+     * they are written in is the order a Customer whose stylesheet never
+     * arrives reads them in.
+     *
+     * Everything else keeps the column the form is in, said outright rather
+     * than left to auto-placement, which would otherwise drop the whole-form
+     * failure slot into the panel the first time a Customer saw one. The error
+     * slots are `display: none` until the island writes to them, so they are
+     * not items at all until they say something, and they take their place
+     * above the button in the order the bytes put them. The button carries the
+     * separation the summary used to be, exactly as it does where the summary
+     * moves.
+     */
+    private const SPLIT_RULES = <<<'CSS'
+        @media (min-width: 60rem) {
+        .gio-checkout-split { max-width: calc(var(--gio-max-width) + 20rem + var(--gio-border-width) * 2); }
+        .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, var(--gio-max-width)) minmax(12rem, 1fr); grid-template-rows: auto 1fr; column-gap: 2rem; }
+        .gio-checkout-split .gio-checkout-fields { grid-column: 1; grid-row: 1 / 3; }
+        .gio-checkout-split .gio-checkout-error { grid-column: 1; }
+        .gio-checkout-split .gio-checkout-submit { grid-column: 1; margin: 1rem 0 0; }
+        .gio-checkout-split .gio-checkout-note { grid-column: 1; }
+        .gio-checkout-split .gio-checkout-products { grid-column: 2; grid-row: 1; }
+        .gio-checkout-split .gio-checkout-summary { grid-column: 2; grid-row: 2; align-self: start; position: sticky; top: 1rem; margin: 0; }
+        }
+        CSS;
 
     /**
      * What the compact arrangement adds to the base sheet.
@@ -190,11 +267,13 @@ enum CheckoutLayout: string
      * is how a row is laid out, never whether a customer can see what they are
      * about to buy. Summary-first draws them too, and draws them first: the
      * lines a total is a total of are the one thing that may not be below it.
+     * Split is the arrangement chosen so that a Customer sees them beside the
+     * form rather than above it, so it draws them by definition.
      */
     public function showsProducts(): bool
     {
         return match ($this) {
-            self::Stacked, self::Compact, self::SummaryFirst => true,
+            self::Stacked, self::Split, self::Compact, self::SummaryFirst => true,
             self::FormOnly => false,
         };
     }
@@ -211,7 +290,7 @@ enum CheckoutLayout: string
     public function pairsQuestions(): bool
     {
         return match ($this) {
-            self::Stacked, self::SummaryFirst, self::FormOnly => true,
+            self::Stacked, self::Split, self::SummaryFirst, self::FormOnly => true,
             self::Compact => false,
         };
     }
@@ -228,6 +307,7 @@ enum CheckoutLayout: string
     {
         return match ($this) {
             self::Stacked => 'gio-checkout-stacked',
+            self::Split => 'gio-checkout-split',
             self::Compact => 'gio-checkout-compact',
             self::SummaryFirst => 'gio-checkout-summary-first',
             self::FormOnly => 'gio-checkout-form-only',
@@ -259,6 +339,7 @@ enum CheckoutLayout: string
     {
         return match ($this) {
             self::Stacked => '',
+            self::Split => self::SPLIT_RULES,
             self::Compact => self::COMPACT_RULES,
             self::SummaryFirst => self::SUMMARY_FIRST_RULES,
             self::FormOnly => '',
@@ -272,6 +353,7 @@ enum CheckoutLayout: string
     {
         return match ($this) {
             self::Stacked => 'What the checkout has always drawn: the products, then the questions, then the total.',
+            self::Split => 'Two columns on a wide screen: the form on the left, the products and the total beside it, with the total staying on screen as the customer works down the questions. The width you set is the form column, and the checkout is sized around it. On a phone it draws exactly as the stacked page does.',
             self::Compact => 'The same checkout in less height: every product one row with a small picture, its name and price beside it and the quantity on the right, descriptions left out, and every question filling its own row whatever width you gave it. The widths you set are kept for the day you move the page back.',
             self::SummaryFirst => 'The products and the total above the questions, for a page whose own copy has already sold the product: the customer meets the price first and the form is all that is left. The total is always in full and never behind a tap.',
             self::FormOnly => 'The questions and the total, with no product panel — for a page whose own markup already sold the product. The order is still for everything the page sells, so the customer is never asked to choose.',
@@ -287,6 +369,7 @@ enum CheckoutLayout: string
     {
         return [
             self::Stacked->value => 'Product and form',
+            self::Split->value => 'Split',
             self::Compact->value => 'Compact',
             self::SummaryFirst->value => 'Summary first',
             self::FormOnly->value => 'Form only',

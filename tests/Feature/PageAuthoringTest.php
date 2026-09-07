@@ -1207,6 +1207,33 @@ it('lets a merchant lead the checkout with the total', function () {
         ->and($html)->toContain('Winter Jacket');
 });
 
+it('lets a merchant put the checkout form beside what it sells', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach(Product::factory()->create(['name' => 'Winter Jacket']));
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Split->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A different arrangement is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse()
+        ->and($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::Split);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Picked from the same list as every other arrangement, and the jacket is
+     * still sold and still priced under a root naming what was chosen. Where
+     * the two columns land and what stays on screen is LandingPageTest's to
+     * pin; what is pinned here is that the choice reaches a visitor at all.
+     */
+    expect($html)->toContain('gio-checkout-split')
+        ->and($html)->toContain('Winter Jacket');
+});
+
 it('keeps the picker a merchant set while the layout has nothing to tick', function () {
     $page = Page::factory()->create();
 
