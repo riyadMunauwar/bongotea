@@ -1009,7 +1009,7 @@ it('draws every question, the delivery choice, the summary and the error slots i
     foreach ($page->checkout_config->enabledFields() as $field) {
         expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
     }
-})->with(['stacked', 'compact', 'form_only']);
+})->with(['stacked', 'compact', 'summary_first', 'form_only']);
 
 /**
  * The slug a page arranged in one layout is published at.
@@ -1179,6 +1179,7 @@ it('names the layout on the checkout root in every layout', function (string $la
 })->with([
     'stacked' => ['stacked', 'gio-checkout-stacked'],
     'compact' => ['compact', 'gio-checkout-compact'],
+    'summary first' => ['summary_first', 'gio-checkout-summary-first'],
     'form only' => ['form_only', 'gio-checkout-form-only'],
 ]);
 
@@ -1321,6 +1322,97 @@ it('fills every question\'s row on a compact checkout, at every width and whatev
      */
     expect(substr_count(checkoutMarkup($html), 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
         ->and($page->refresh()->checkout_config->fields[0]->width)->toBe(FieldWidth::Half);
+});
+
+/**
+ * The script the island ships beside its markup, from wherever in the page it
+ * was expanded.
+ *
+ * There is no Blade in it, so two pages differ here only if a layout put
+ * something there — which is the whole of what this is read for.
+ */
+function checkoutScript(string $html): string
+{
+    preg_match_all('/<script>(.*?)<\/script>/s', $html, $blocks);
+
+    return implode('', $blocks[1]);
+}
+
+it('leads a summary-first checkout with the total and leaves the questions beneath it', function () {
+    $page = pageStyled([
+        'layout' => 'summary_first',
+        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
+    ]);
+
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * The same island drawn by the same loop, and the bytes are still in the
+     * order every other arrangement writes them: the products, the questions,
+     * then the summary. What a summary-first page moves, it moves in the sheet
+     * — a second template would be a second total to keep truthful about a form
+     * that takes money, and the order the bytes are in is the order a customer
+     * whose stylesheet never arrives reads them in.
+     */
+    expect($markup)->toContain('class="gio-checkout-products"')
+        ->and($markup)->toContain($product->name)
+        ->and($markup)->toContain('name="phone"')
+        ->and($markup)->toContain('data-gio-total')
+        ->and(strpos($markup, 'class="gio-checkout-fields"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-summary"'));
+
+    /**
+     * The questions and the two things below them are what move, rather than
+     * the summary being pulled to the top: a total follows the lines it totals,
+     * and the rule the base draws above it is what sets it apart from them. So
+     * the products keep the top of the island, the summary keeps its place
+     * under them, and exactly three things are pushed below it — the questions,
+     * the button and the line beneath the button. A fourth carrying an order
+     * would be something drawn out of the place the arrangement puts it.
+     */
+    preg_match_all('/\.gio-checkout-summary-first (\.[a-z-]+) \{[^}]*order:/', $styles, $ordered);
+
+    expect($styles)->toContain('.gio-checkout-summary-first .gio-checkout-form { display: flex; flex-direction: column; }')
+        ->and($ordered[1])->toBe(['.gio-checkout-fields', '.gio-checkout-submit', '.gio-checkout-note']);
+});
+
+it('never puts a summary-first total behind an interaction', function () {
+    pageStyled(['layout' => 'summary_first'], slug: 'summary-first');
+    pageStyled([], slug: 'stacked');
+
+    $html = $this->get('/summary-first')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    preg_match_all('/\.gio-checkout-summary-first [^{]*\{[^}]*\}/', styleBlock($html), $rules);
+
+    /** Or the arrangement adds nothing, and what is read below goes unread. */
+    expect($rules[0])->not->toBeEmpty();
+
+    /**
+     * Expanded, always, and nothing anywhere to collapse it: no disclosure in
+     * the markup, and nothing in the block this arrangement adds that hides,
+     * clips or measures anything. A page arranged this way leads with the
+     * figure a customer is agreeing to hand over in cash at their door, and a
+     * disclosure would put that figure behind a tap — on the one arrangement
+     * chosen because the selling is already done.
+     */
+    expect($markup)->toContain('data-gio-subtotal')
+        ->and($markup)->toContain('data-gio-total')
+        ->and($markup)->not->toContain('<details')
+        ->and($markup)->not->toContain('<summary')
+        ->and(implode('', $rules[0]))->not->toContain('display: none')
+        ->and(implode('', $rules[0]))->not->toContain('max-height')
+        ->and(implode('', $rules[0]))->not->toContain('overflow');
+
+    /**
+     * And the arrangement asks for no script of its own: the island ships the
+     * same bytes it ships to a stacked page, so a summary-first checkout on a
+     * phone whose scripts never ran still leads with its total.
+     */
+    expect(checkoutScript($html))->toBe(checkoutScript($this->get('/stacked')->assertOk()->getContent()));
 });
 
 it('marks a half-width question with one flat class and generates nothing for it', function () {

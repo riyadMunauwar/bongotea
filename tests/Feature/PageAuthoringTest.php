@@ -1179,6 +1179,34 @@ it('lets a merchant arrange the checkout without its product panel', function ()
         ->and($html)->toContain('name="quantities['.$product->getKey().']" value="1"');
 });
 
+it('lets a merchant lead the checkout with the total', function () {
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach(Product::factory()->create(['name' => 'Winter Jacket']));
+
+    $this->cache->put('promo', '<h1>stale</h1>');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::SummaryFirst->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A different arrangement is different bytes, so the written HTML has to go. */
+    expect($this->cache->has('promo'))->toBeFalse()
+        ->and($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::SummaryFirst);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Picked from the same list as every other arrangement, and the page the
+     * merchant is served back is the one they picked: the jacket still sold and
+     * still priced, under a root naming the arrangement. What that arrangement
+     * then draws is LandingPageTest's to pin; what is pinned here is that a
+     * choice made on the tab reaches a visitor at all.
+     */
+    expect($html)->toContain('gio-checkout-summary-first')
+        ->and($html)->toContain('Winter Jacket');
+});
+
 it('keeps the picker a merchant set while the layout has nothing to tick', function () {
     $page = Page::factory()->create();
 

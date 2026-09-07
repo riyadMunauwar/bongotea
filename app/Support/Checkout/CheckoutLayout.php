@@ -20,6 +20,7 @@ enum CheckoutLayout: string
 {
     case Stacked = 'stacked';
     case Compact = 'compact';
+    case SummaryFirst = 'summary_first';
     case FormOnly = 'form_only';
 
     /**
@@ -104,6 +105,66 @@ enum CheckoutLayout: string
         CSS;
 
     /**
+     * What the summary-first arrangement adds to the base sheet.
+     *
+     * The whole of it is one reordering: the form becomes a column a rule can
+     * arrange, and the questions, the button and the line beneath the button
+     * are pushed below the summary. Everything else keeps the place it has —
+     * so a Page reads products, total, then form, which is the arrangement for
+     * a Page whose own copy has already done the selling and where the form is
+     * the only thing left.
+     *
+     * The questions move rather than the summary, and that is the decision
+     * worth reading twice. Pulling the summary to the top would put a total
+     * above the lines it totals, and the rule the base draws along the top of
+     * it — the thing that sets the figure apart from what is above it — would
+     * become a hairline across the top of the island separating nothing. So
+     * the products keep the top, the summary keeps its place under them, and
+     * what is below the summary is what moves.
+     *
+     * Three orders and no more, because everything left unnumbered stays where
+     * the bytes put it, in the bytes' own order. The slot where a whole Order
+     * is refused is one of those: it lands between the total and the questions
+     * here rather than above the button, and that is where a message about the
+     * whole form belongs. Nothing is lost by the move — that slot is written by
+     * the island's script or not at all, and the scroll that writes it takes
+     * the Customer to it wherever the arrangement put it.
+     *
+     * The delivery choice moves with the questions, because it is drawn as one
+     * — a priced row a customer picks from, spaced like every other thing the
+     * form asks. So a Page offering more than one arrangement does put its
+     * total above a control that changes it. That is the arrangement working
+     * as asked rather than a hole in it: the form opens on the first option
+     * with its amount already in the figure above, so the total is truthful
+     * before anything is touched, and the script retotals it on every touch
+     * after.
+     *
+     * Two margins go with the reordering, and both are the arrangement paying
+     * for what it moved. Flex items do not collapse their margins, so the
+     * products' bottom margin would add to the summary's top one and open a gap
+     * neither of them asks for — trimmed on the panel rather than on the
+     * summary, which keeps the spacing the summary has everywhere else and
+     * leaves the slot between them, where an order for nothing is refused,
+     * clear of the rule the summary draws along its top. And with the summary
+     * gone from between the last question and the button, the button has to
+     * carry the separation the summary used to be.
+     *
+     * What this does not do is reorder the bytes. A Customer whose stylesheet
+     * never arrives, and one listening to the page rather than looking at it,
+     * reads the stacked order — which is a truthful order and the one every
+     * other arrangement writes. Nothing in the summary can be focused, so
+     * nothing is reachable in one order and read in another; a control there
+     * would make this a different question.
+     */
+    private const SUMMARY_FIRST_RULES = <<<'CSS'
+        .gio-checkout-summary-first .gio-checkout-form { display: flex; flex-direction: column; }
+        .gio-checkout-summary-first .gio-checkout-products { margin: 0; }
+        .gio-checkout-summary-first .gio-checkout-fields { order: 1; }
+        .gio-checkout-summary-first .gio-checkout-submit { order: 2; margin: 1rem 0 0; }
+        .gio-checkout-summary-first .gio-checkout-note { order: 3; }
+        CSS;
+
+    /**
      * What a stored Config's layout is, whatever it happens to hold.
      *
      * Total, like everything a Config is read from: a name nothing renders and
@@ -127,12 +188,13 @@ enum CheckoutLayout: string
      *
      * Compact draws them like any arrangement that draws them. What it compacts
      * is how a row is laid out, never whether a customer can see what they are
-     * about to buy.
+     * about to buy. Summary-first draws them too, and draws them first: the
+     * lines a total is a total of are the one thing that may not be below it.
      */
     public function showsProducts(): bool
     {
         return match ($this) {
-            self::Stacked, self::Compact => true,
+            self::Stacked, self::Compact, self::SummaryFirst => true,
             self::FormOnly => false,
         };
     }
@@ -149,7 +211,7 @@ enum CheckoutLayout: string
     public function pairsQuestions(): bool
     {
         return match ($this) {
-            self::Stacked, self::FormOnly => true,
+            self::Stacked, self::SummaryFirst, self::FormOnly => true,
             self::Compact => false,
         };
     }
@@ -167,6 +229,7 @@ enum CheckoutLayout: string
         return match ($this) {
             self::Stacked => 'gio-checkout-stacked',
             self::Compact => 'gio-checkout-compact',
+            self::SummaryFirst => 'gio-checkout-summary-first',
             self::FormOnly => 'gio-checkout-form-only',
         };
     }
@@ -197,6 +260,7 @@ enum CheckoutLayout: string
         return match ($this) {
             self::Stacked => '',
             self::Compact => self::COMPACT_RULES,
+            self::SummaryFirst => self::SUMMARY_FIRST_RULES,
             self::FormOnly => '',
         };
     }
@@ -209,6 +273,7 @@ enum CheckoutLayout: string
         return match ($this) {
             self::Stacked => 'What the checkout has always drawn: the products, then the questions, then the total.',
             self::Compact => 'The same checkout in less height: every product one row with a small picture, its name and price beside it and the quantity on the right, descriptions left out, and every question filling its own row whatever width you gave it. The widths you set are kept for the day you move the page back.',
+            self::SummaryFirst => 'The products and the total above the questions, for a page whose own copy has already sold the product: the customer meets the price first and the form is all that is left. The total is always in full and never behind a tap.',
             self::FormOnly => 'The questions and the total, with no product panel — for a page whose own markup already sold the product. The order is still for everything the page sells, so the customer is never asked to choose.',
         };
     }
@@ -223,6 +288,7 @@ enum CheckoutLayout: string
         return [
             self::Stacked->value => 'Product and form',
             self::Compact->value => 'Compact',
+            self::SummaryFirst->value => 'Summary first',
             self::FormOnly->value => 'Form only',
         ];
     }
