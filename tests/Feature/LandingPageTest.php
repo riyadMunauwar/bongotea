@@ -1512,7 +1512,6 @@ it('sizes a split checkout by the form column the merchant asked for', function 
      * failing and nothing to tell them why.
      */
     expect($root[1] ?? '')->toContain('--gio-max-width: 24rem')
-        ->and($rules['.gio-checkout-split .gio-checkout-form'])->toContain('minmax(0, var(--gio-max-width))')
         ->and($rules['.gio-checkout-split'])->toContain('max-width: calc(var(--gio-max-width) +');
 
     /**
@@ -1523,6 +1522,41 @@ it('sizes a split checkout by the form column the merchant asked for', function 
     foreach ($rules as $declarations) {
         expect($declarations)->not->toContain('--gio-max-width:');
     }
+});
+
+it('reserves around a split checkout\'s form column exactly what it takes back out', function () {
+    pageStyled(['layout' => 'split', 'style_tokens' => ['max_width' => '50%']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+    $rules = splitRules($styles);
+
+    preg_match('/\.gio-checkout \{[^}]*padding: ([^;]+);/', $styles, $padding);
+    preg_match('/max-width: calc\(var\(--gio-max-width\) \+ (\d+)rem/', $rules['.gio-checkout-split'], $reserved);
+    preg_match('/minmax\(0, calc\(100% - (\d+)rem\)\)/', $rules['.gio-checkout-split .gio-checkout-form'], $taken);
+
+    /** Or the arithmetic below is read off nothing, and agrees with itself for that reason. */
+    expect($reserved)->not->toBeEmpty()
+        ->and($taken)->not->toBeEmpty();
+
+    /**
+     * The container is the merchant's figure plus what stands beside it, and
+     * the form column is the container's own box with that same thing taken
+     * back out — so the figure comes out as the form column whatever unit it
+     * was typed in. The width the merchant is offered may be a percentage, and
+     * a percentage written into the track instead would be measured against
+     * the container rather than against the element the shortcode sits in:
+     * half of a half, honoured with nothing failing and nothing to tell them.
+     */
+    expect($rules['.gio-checkout-split .gio-checkout-form'])->not->toContain('var(--gio-max-width)');
+
+    /**
+     * The two figures differ by the padding alone, and the padding is declared
+     * in the view rather than here. Read rather than assumed, because the file
+     * that would break this arrangement is not the file this arrangement is
+     * written in.
+     */
+    expect($padding[1] ?? '')->toBe('1rem')
+        ->and((int) $reserved[1] - (int) $taken[1])->toBe(2);
 });
 
 it('draws a split checkout as the stacked one below the breakpoint', function () {

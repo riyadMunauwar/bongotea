@@ -51,11 +51,26 @@ enum CheckoutLayout: string
      * token set is sparse and filled at emission so that a Merchant's value is
      * the only value.
      *
-     * The panel column is bounded below rather than above. A form column asked
-     * for `100%` would otherwise take the whole width and leave the panel
-     * beside it nothing, so the second track carries the floor and the first
-     * carries the ceiling — which is also what makes the arrangement survive
-     * being dropped into a column narrower than the breakpoint suggests.
+     * The track then takes eighteen of those twenty back out, and reads the
+     * Merchant's figure nowhere — which is what makes this hold for a width
+     * typed as a percentage as well as for one typed as a length. A percentage
+     * is measured against whatever box the declaration reading it sits on, and
+     * the container and the track are two different boxes: `50%` written into
+     * both would size the container against the element the shortcode sits in,
+     * as it promises, and then the form column against the container, which is
+     * half of a half and not what anybody asked for. Taken off the container
+     * instead, the arithmetic cancels — the container's content box is the
+     * Merchant's figure plus eighteen rem, so the form column comes out as the
+     * figure itself, in whatever unit it was typed. The two constants are one
+     * subtraction apart and the difference is the base sheet's own padding;
+     * `LandingPageTest` reads all three rather than assuming them, because
+     * they are declared in two different files.
+     *
+     * The panel is bounded below as well. A container squeezed into something
+     * narrower than the arrangement needs would otherwise take the panel down
+     * with the form column, so the second track carries a floor and the first
+     * gives way to it — the arrangement survives being dropped into a column
+     * narrower than the breakpoint suggests.
      *
      * Two rows are stated, and the second is why either of them is. The
      * questions span both, so that the first belongs to the products alone: a
@@ -90,7 +105,7 @@ enum CheckoutLayout: string
     private const SPLIT_RULES = <<<'CSS'
         @media (min-width: 60rem) {
         .gio-checkout-split { max-width: calc(var(--gio-max-width) + 20rem + var(--gio-border-width) * 2); }
-        .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, var(--gio-max-width)) minmax(12rem, 1fr); grid-template-rows: auto 1fr; column-gap: 2rem; }
+        .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, calc(100% - 18rem)) minmax(12rem, 1fr); grid-template-rows: auto 1fr; column-gap: 2rem; }
         .gio-checkout-split .gio-checkout-fields { grid-column: 1; grid-row: 1 / 3; }
         .gio-checkout-split .gio-checkout-error { grid-column: 1; }
         .gio-checkout-split .gio-checkout-submit { grid-column: 1; margin: 1rem 0 0; }
