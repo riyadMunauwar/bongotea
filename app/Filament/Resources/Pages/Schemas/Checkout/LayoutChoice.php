@@ -18,12 +18,13 @@ class LayoutChoice
     public static function control(): Select
     {
         /**
-         * How the checkout is arranged. It changes what
-         * the form draws and nothing about what it asks
-         * for, what it charges or how it is styled —
-         * every question, the delivery choice, the
-         * summary and the error slots are rendered by
-         * both.
+         * How the checkout is arranged. It changes how
+         * the form is drawn and nothing about what it
+         * asks for or what it charges — every question,
+         * the delivery choice, the summary and the error
+         * slots are rendered by every one of them, and
+         * the appearance tab is read the same way by all
+         * of them.
          */
         return Select::make('checkout_config.layout')
             ->label('Layout')

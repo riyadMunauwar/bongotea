@@ -101,3 +101,10 @@ So the subtotal is summed over the lines that open ticked, through `$opensTicked
 `preTicked()` is `live()` for its own reason: the over-one warning in its helper text counts what is ticked, and a warning that only appears after a save is a warning about a decision already made. It offers no select-all, because ticking everything is the expensive case ADR-0010 wants chosen knowingly and a one-click button reaches it past the warning that fires at two.
 
 It follows the picker in being `disabled()->dehydrated()` rather than hidden, for the same reason: the merchant's list survives a layout or a switch that cannot honour it, and `CheckoutConfig::opensTicked()` makes the refusal again on read. Its options come from the links as they stand in the form rather than from the saved Page, so linking and pre-ticking a product needs no save in between — and a tick naming a product the Page has stopped selling stays in the Config, because throwing it away here would lose it on any save made while that product sat in the bin.
+
+## A layout's additive block is the one place the sheet outranks a merchant at two classes
+Every rule in `CheckoutLayout::styleRules()` is `.gio-checkout-<layout> .gio-checkout-thing`, so it beats the base's one-class declaration by specificity rather than by order — unavoidable, since the block is what an arrangement differs by and it has to reach inside the root that names it.
+
+That is a real cost to the promise the flat sheet makes: a merchant restyling `.gio-checkout-description` or `.gio-checkout-image` at one class now loses on a page arranged in a layout that has an opinion about it, and has to name an ancestor of their own to win. Accepted, and it is the ceiling: two classes, never three, never an id, never `!important` — `leaves the checkout losable to a merchant's own stylesheet` runs on every arrangement and pins the last two.
+
+So keep a block to what the arrangement actually changes. A declaration that could sit in the base at one class belongs in the base, where the merchant still beats it.

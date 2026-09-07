@@ -387,7 +387,7 @@
                 is read where that question is answered (`picksProducts()`).
 
                 They carry the line markers too, so the summary below totals the
-                same way in both layouts rather than the script needing to know
+                same way in every layout rather than the script needing to know
                 which one it is looking at.
             --}}
             @foreach ($products as $product)

@@ -1362,6 +1362,76 @@ it('lets a merchant sit two short questions side by side', function () {
     ))->toBe(2);
 });
 
+it('says where the widths are set that a compact page will not pair them', function () {
+    $page = Page::factory()->create([
+        'checkout_config' => CheckoutConfig::fromArray(['layout' => CheckoutLayout::Compact->value]),
+    ]);
+
+    $compact = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([])]);
+
+    $paired = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+
+    /**
+     * A control a merchant can still see and set, on a page that has stopped
+     * drawing it, is the setting with no error this whole tab keeps guarding
+     * against. It is said where the widths are, rather than left on the layout
+     * tab the merchant has already moved on from — and it goes away again the
+     * moment the page is arranged in something that pairs.
+     */
+    expect($compact)->toContain('asks every question across the whole row')
+        ->and($paired)->not->toContain('asks every question across the whole row');
+});
+
+it('gives a compacted page back its pairing when the merchant moves it off compact', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $rows = $page->checkout_config->fieldsToArray();
+    $rows[0]['width'] = FieldWidth::Half->value;
+    $rows[1]['width'] = FieldWidth::Half->value;
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => [
+            'layout' => CheckoutLayout::Compact->value,
+            'fields' => $rows,
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * Compact asks every question across the whole row, and says nothing back
+     * to the config about it: a merchant who compacts a page has not thrown
+     * away the pairing they arranged, and the control they can still see on the
+     * questions tab still means what it says.
+     */
+    $compacted = $page->refresh()->checkout_config;
+
+    expect($compacted->layout)->toBe(CheckoutLayout::Compact)
+        ->and($compacted->fields[0]->width)->toBe(FieldWidth::Half)
+        ->and($compacted->fields[1]->width)->toBe(FieldWidth::Half);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Stacked->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * So moving back is one control: the two questions still carry the class
+     * that pairs them, and the block that was filling their rows is gone from
+     * the page rather than something a merchant has to undo question by
+     * question.
+     */
+    expect($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::Stacked);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect(substr_count($html, 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
+        ->and($html)->not->toContain('gio-checkout-compact');
+});
+
 it('boxes a checkout at the width typed on the checkout tab', function () {
     $product = Product::factory()->create();
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);

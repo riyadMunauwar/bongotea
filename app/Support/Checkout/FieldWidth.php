@@ -18,6 +18,12 @@ namespace App\Support\Checkout;
  * the pairing lives inside a media query in the one stylesheet and not in
  * anything a field emits — see the Checkout island.
  *
+ * It is a promise about arrangements that pair, too: a compact Checkout Layout
+ * fills every row at every screen size (`CheckoutLayout::pairsQuestions()`),
+ * which the Checkout tab says where the widths are set. The width is kept
+ * either way, so a Page arranged compact and then arranged back asks its
+ * questions paired again.
+ *
  * A screen and not a container, which is worth knowing before reading the
  * media query as more than it says: a Merchant who boxes the Checkout narrow
  * with `StyleToken::MaxWidth` and then opens it on a desktop gets two columns

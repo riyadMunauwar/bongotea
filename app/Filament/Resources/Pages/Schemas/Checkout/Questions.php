@@ -66,7 +66,19 @@ class Questions
          */
         return Repeater::make('checkout_config.fields')
             ->label('Fields')
-            ->helperText('What this page\'s order form asks for, in the words and the order it asks. Switch one off and it disappears from the form and stops being checked — its wording waits here for the day it comes back.')
+            /**
+             * The widths below are the one thing on this tab
+             * an arrangement can overrule, so the arrangement
+             * is said here rather than left for the merchant
+             * to find by publishing. Read through
+             * `LayoutChoice::selected()` like every other
+             * reading of the layout, so the tab and a stored
+             * Config cannot disagree about what is drawn.
+             */
+            ->helperText(fn (Get $get): string => 'What this page\'s order form asks for, in the words and the order it asks. Switch one off and it disappears from the form and stops being checked — its wording waits here for the day it comes back.'
+                .(LayoutChoice::selected($get)->pairsQuestions()
+                    ? ''
+                    : ' The layout this page is arranged in asks every question across the whole row, so a width set below is kept but not drawn until the page is arranged another way.'))
             ->default(fn (): array => CheckoutConfig::default()->fieldsToArray())
             ->addActionLabel('Add a question')
             ->reorderable()

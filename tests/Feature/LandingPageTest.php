@@ -5,6 +5,7 @@ use App\Models\Product;
 use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutLayout;
+use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\PageCache\FallbackPageCacheReader;
@@ -892,9 +893,10 @@ it('draws the quantity stepper narrow rather than the width of the form', functi
 | Layouts and width
 |--------------------------------------------------------------------------
 |
-| How the Checkout is arranged and how wide it sits. Two layouts drawn from one
-| stylesheet, questions that pair up on a wide screen and never on a phone, and
-| a width that is a token rather than a third layout.
+| How the Checkout is arranged and how wide it sits. Every layout drawn from one
+| stylesheet plus the block belonging to the one chosen, questions that pair up
+| on a wide screen and never on a phone — nor anywhere on a compact page — and a
+| width that is a token rather than a layout of its own.
 |
 */
 
@@ -966,7 +968,7 @@ it('totals a form-only checkout off the same line markers as a stacked one', fun
         ->and($html)->toContain('data-gio-total');
 });
 
-it('draws every question, the delivery choice, the summary and the error slots in both layouts', function (string $layout) {
+it('draws every question, the delivery choice, the summary and the error slots in every layout', function (string $layout) {
     $page = pageStyled([
         'layout' => $layout,
         'fields' => [
@@ -989,7 +991,7 @@ it('draws every question, the delivery choice, the summary and the error slots i
      * A layout decides what is drawn around the form and nothing about the form
      * itself. Adding one must not quietly cost a page its radio buttons or its
      * delivery prices — the failure a second template would invite, and which
-     * one loop for both layouts is what prevents.
+     * one loop for every layout is what prevents.
      */
     expect($html)->toContain('type="tel"')
         ->and($html)->toContain('<textarea')
@@ -1007,7 +1009,7 @@ it('draws every question, the delivery choice, the summary and the error slots i
     foreach ($page->checkout_config->enabledFields() as $field) {
         expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
     }
-})->with(['stacked', 'form_only']);
+})->with(['stacked', 'compact', 'form_only']);
 
 /**
  * The slug a page arranged in one layout is published at.
@@ -1165,7 +1167,7 @@ it('generates no selector for any layout', function () {
     }
 });
 
-it('names the layout on the checkout root in both layouts', function (string $layout, string $class) {
+it('names the layout on the checkout root in every layout', function (string $layout, string $class) {
     pageStyled(['layout' => $layout]);
 
     /**
@@ -1176,6 +1178,7 @@ it('names the layout on the checkout root in both layouts', function (string $la
     expect($this->get('/promo')->getContent())->toContain('class="gio-checkout '.$class.'"');
 })->with([
     'stacked' => ['stacked', 'gio-checkout-stacked'],
+    'compact' => ['compact', 'gio-checkout-compact'],
     'form only' => ['form_only', 'gio-checkout-form-only'],
 ]);
 
@@ -1206,6 +1209,118 @@ it('never asks a form-only checkout which products to buy', function () {
         ->and($page->checkout_config->productPicker)->toBeTrue()
         ->and($page->checkout_config->picksProducts())->toBeFalse()
         ->and($page->refresh()->offersProductChoice())->toBeFalse();
+});
+
+it('draws a compact checkout as one dense row per product', function () {
+    $page = pageStyled(['layout' => 'compact']);
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * Compact is an arrangement of the same markup and never a second template.
+     * The customer still meets a picture, a name, a price and a stepper of
+     * their own for every product the page sells — what a merchant chose is how
+     * that row is drawn, not whether they can see what they are about to buy.
+     */
+    expect($markup)->toContain('class="gio-checkout-products"')
+        ->and($markup)->toContain($product->name)
+        ->and($markup)->toContain('gio-checkout-product-head')
+        ->and($markup)->toContain('data-gio-quantity');
+
+    /**
+     * The density itself is the block, and the block is the whole of it: the
+     * row laid out along one line, the picture cut down, the name and the price
+     * beside each other, and the description out of the way. A second template
+     * would be a second thing to keep truthful about a form that takes money.
+     */
+    expect($styles)->toContain('.gio-checkout-compact .gio-checkout-product { display: flex;')
+        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-image {')
+        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-name, .gio-checkout-compact .gio-checkout-price { display: inline;')
+        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-description { display: none; }');
+});
+
+it('lets a compact page still ask which products to buy', function () {
+    $page = pageStyled(['layout' => 'compact', 'product_picker' => true]);
+
+    /** A choice of one is not a choice, so the page has to sell two before it asks. */
+    $page->products()->attach(Product::factory()->create());
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    /**
+     * Compact lays a product row out along one line rather than down a grid,
+     * and the tick has to survive the change of arrangement: the box is still
+     * drawn, still beside the row it picks, and the stepper it reveals is still
+     * revealed by it. The rule that does the revealing reads siblings, which is
+     * what makes it hold in a flex row as it did in the grid — a picker that
+     * quietly stopped hiding steppers would ask a customer how many of
+     * something they have not chosen.
+     */
+    expect($markup)->toContain('name="selected[]"')
+        ->and($markup)->toContain('class="gio-checkout-product gio-checkout-pickable"')
+        ->and(styleBlock($html))->toContain('.gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }')
+        ->and($page->refresh()->checkout_config->picksProducts())->toBeTrue();
+});
+
+it('puts the compact block after the base sheet in the page it serves', function () {
+    pageStyled(['layout' => 'compact']);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The half of "last inside the one sheet" that could not be read out of a
+     * served page while every block was empty, and can be now: compact narrows
+     * the root's own padding and margin at one class, exactly as the base
+     * declares them, so what makes it the one that applies is that it is
+     * written afterwards. A block emitted before the base would leave a
+     * compacted page drawn at the spacing it was compacted out of, with nothing
+     * failing.
+     */
+    expect(strpos($styles, '.gio-checkout-compact {'))
+        ->toBeGreaterThan(strpos($styles, '.gio-checkout-note {'))
+        ->and(strpos($styles, '.gio-checkout-compact {'))
+        ->toBeGreaterThan(strpos($styles, '.gio-checkout {'));
+});
+
+it('fills every question\'s row on a compact checkout, at every width and whatever the merchant chose', function () {
+    $page = pageStyled([
+        'layout' => 'compact',
+        'fields' => [
+            ['key' => 'name', 'label' => 'Your name', 'width' => 'half'],
+            ['key' => 'phone', 'label' => 'Phone number', 'width' => 'half'],
+        ],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $styles = styleBlock($html);
+
+    preg_match('/@media \(min-width: [^)]+\) \{.*?\} \}/s', $styles, $wide);
+
+    /** Or the sheet below is the whole sheet, and what it is read for goes unread. */
+    expect($wide)->not->toBeEmpty();
+
+    $narrow = str_replace($wide[0], '', $styles);
+
+    /**
+     * Both halves of the pairing undone, and undone outside the media query, so
+     * a compact page is one column at every screen size rather than at phone
+     * sizes only. The span goes with the second column: a question still told
+     * to cross two columns of a one-column grid would grow the second one back.
+     */
+    expect($narrow)->toContain('.gio-checkout-compact .gio-checkout-fields { grid-template-columns: 1fr;')
+        ->and($narrow)->toContain('.gio-checkout-compact .gio-checkout-field { grid-column: auto; }');
+
+    /**
+     * And the width the merchant set is still on the wrapper and still in the
+     * Config. Compact ignores it; it does not rewrite it — which is what a page
+     * moved back off compact reads to pair its questions the way it always did.
+     */
+    expect(substr_count(checkoutMarkup($html), 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
+        ->and($page->refresh()->checkout_config->fields[0]->width)->toBe(FieldWidth::Half);
 });
 
 it('marks a half-width question with one flat class and generates nothing for it', function () {
