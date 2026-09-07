@@ -4,6 +4,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\PageCache\FallbackPageCacheReader;
@@ -787,8 +788,8 @@ it('keeps the emitted styles the same length however many questions are asked', 
         ->toBe(styleBlock($this->get('/plain')->getContent()));
 });
 
-it('leaves the checkout losable to a merchant\'s own stylesheet', function () {
-    pageStyled(['style_tokens' => ['accent' => '#ff0000']]);
+it('leaves the checkout losable to a merchant\'s own stylesheet', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value, 'style_tokens' => ['accent' => '#ff0000']]);
 
     $styles = styleBlock($this->get('/promo')->getContent());
 
@@ -798,6 +799,11 @@ it('leaves the checkout losable to a merchant\'s own stylesheet', function () {
      * The tokens are declared at one class, on the root, with nothing raising
      * them — so a merchant redeclaring them, or simply setting the property
      * outright, wins from their own stylesheet without escalating.
+     *
+     * Read on every arrangement rather than only on the stacked one, because
+     * the sheet a page is served now ends with the block its own layout adds:
+     * a rule reaching for an id there would out-specify the merchant on that
+     * layout alone, and a check on one arrangement would never see it.
      */
     expect($styles)->not->toContain('!important');
 
@@ -807,7 +813,7 @@ it('leaves the checkout losable to a merchant\'s own stylesheet', function () {
 
     expect(array_filter($selectors[2], fn (string $selector): bool => trim($selector) === '.gio-checkout'))
         ->not->toBeEmpty();
-});
+})->with(fn () => CheckoutLayout::cases());
 
 it('never lets a stored style value break out of the block it is written into', function () {
     pageStyled(['style_tokens' => [
@@ -1003,17 +1009,160 @@ it('draws every question, the delivery choice, the summary and the error slots i
     }
 })->with(['stacked', 'form_only']);
 
-it('ships one stylesheet whichever layout the page is arranged in', function () {
-    pageStyled([], slug: 'stacked');
-    pageStyled(['layout' => 'form_only'], slug: 'bare');
+/**
+ * The slug a page arranged in one layout is published at.
+ *
+ * Hyphenated, because a stored layout is snake_case and a slug is one segment
+ * of a URL.
+ */
+function layoutSlug(CheckoutLayout $layout): string
+{
+    return str_replace('_', '-', $layout->value);
+}
+
+/**
+ * The sheet a page arranged in one layout serves, published and fetched.
+ */
+function emittedStylesFor(CheckoutLayout $layout): string
+{
+    pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
+
+    return styleBlock(test()->get('/'.layoutSlug($layout))->assertOk()->getContent());
+}
+
+/**
+ * What every arrangement ships in common: the emitted sheet with the block the
+ * chosen layout adds to the end of it taken back out.
+ *
+ * The last occurrence and only that one, because it is position rather than
+ * text that says which bytes belong to the layout. A block repeating a
+ * declaration the base already makes would otherwise be cut out of both, and
+ * two arrangements would then agree about a base neither of them ships.
+ */
+function baseSheet(string $styles, CheckoutLayout $layout): string
+{
+    $rules = $layout->styleRules();
+
+    if ($rules === '') {
+        return $styles;
+    }
+
+    $at = strrpos($styles, $rules);
+
+    expect($at)->not->toBeFalse();
+
+    return substr_replace($styles, '', (int) $at, strlen($rules));
+}
+
+it('ships the same base sheet whichever layout the page is arranged in', function () {
+    $bases = [];
+
+    foreach (CheckoutLayout::cases() as $layout) {
+        $bases[layoutSlug($layout)] = baseSheet(emittedStylesFor($layout), $layout);
+    }
 
     /**
-     * Byte for byte. These styles ride inside every cached page, so a layout
-     * carrying a sheet of its own would charge every visitor for an arrangement
-     * their page is not using — and a third layout would charge them twice.
+     * Byte for byte, and the whole of what "one sheet plus a modifier" means
+     * now that an arrangement may add rules: what differs between two pages is
+     * the block belonging to the layout each one draws, and nothing else. A
+     * layout carrying a sheet of its own would charge every visitor for the
+     * arrangements their page is not using.
+     *
+     * Pinned as a real sheet and not merely as agreement, because two pages
+     * emitting no styles at all would agree just as well.
      */
-    expect(styleBlock($this->get('/bare')->getContent()))
-        ->toBe(styleBlock($this->get('/stacked')->getContent()));
+    expect(array_unique($bases))->toHaveCount(1);
+
+    foreach ($bases as $base) {
+        expect($base)->toContain('.gio-checkout {')
+            ->and($base)->toContain('.gio-checkout-input {');
+    }
+});
+
+it('ships no other layout\'s rules to a page that does not draw them', function () {
+    foreach (CheckoutLayout::cases() as $layout) {
+        $styles = emittedStylesFor($layout);
+
+        /**
+         * The other half of the replaced byte-identity assertion, and the half
+         * that makes adding an arrangement cost only the pages that choose it.
+         * Rules are pinned through the modifier class as well as through their
+         * own text, because an arrangement whose rules did not name its own
+         * class would be styling every page that does not draw it.
+         *
+         * The guard is on the negative half alone: every string contains the
+         * empty one, so an arrangement adding nothing has nothing to look for.
+         * The positive half is left unguarded so that it starts holding the
+         * first block to an appearance the day one is written.
+         */
+        foreach (CheckoutLayout::cases() as $other) {
+            if ($other === $layout || $other->styleRules() === '') {
+                continue;
+            }
+
+            expect($styles)->not->toContain($other->styleRules());
+        }
+
+        foreach (CheckoutLayout::cases() as $other) {
+            if ($other !== $layout) {
+                expect($styles)->not->toContain($other->modifierClass());
+            }
+        }
+
+        expect($styles)->toContain($layout->styleRules());
+    }
+});
+
+it('writes the chosen layout\'s rules into the one sheet, last', function () {
+    $view = (string) file_get_contents(resource_path('views/shortcodes/checkout.blade.php'));
+
+    $emission = strpos($view, '{!! $layout->styleRules() !!}');
+
+    /**
+     * The one part of this that cannot be read out of a served page while no
+     * arrangement adds anything: with every block empty, a page that emits the
+     * chosen layout's rules and a page that has dropped the line are the same
+     * bytes. So the call is pinned where it is written until the first
+     * arrangement with rules of its own pins it in the output.
+     *
+     * Its position is pinned with it. Last inside the sheet is what lets a
+     * layout narrow a base rule by order rather than by specificity, and
+     * inside the one `<style>` is the difference between a block a layout adds
+     * and the sheet of its own it may never carry.
+     */
+    expect($emission)->not->toBeFalse()
+        ->and($emission)->toBeGreaterThan(strpos($view, '.gio-checkout-note {'))
+        ->and($emission)->toBeLessThan(strpos($view, '</style>'))
+        ->and(substr_count($view, '<style>'))->toBe(1);
+});
+
+it('generates no selector for any layout', function () {
+    $many = array_map(fn (int $index): array => [
+        'key' => 'question_'.$index,
+        'label' => 'Question '.$index,
+        'style_tokens' => ['border' => '#ff0000', 'radius' => '2px'],
+    ], range(1, 12));
+
+    foreach (CheckoutLayout::cases() as $layout) {
+        pageStyled(['layout' => $layout->value], slug: 'plain-'.layoutSlug($layout));
+
+        pageStyled([
+            'layout' => $layout->value,
+            'fields' => $many,
+        ], slug: 'busy-'.layoutSlug($layout));
+
+        /**
+         * Byte for byte within an arrangement, which is where the no-generated-
+         * selector promise moved to when the sheet stopped being identical
+         * across arrangements. A layout's block is picked from a fixed list and
+         * never built from a merchant's figures, so asking twelve more
+         * questions and restyling each of them leaves the sheet exactly where
+         * it was — and leaves a merchant's own stylesheet the same thing to
+         * beat, in every arrangement rather than only in the stacked one.
+         */
+        expect(styleBlock($this->get('/busy-'.layoutSlug($layout))->assertOk()->getContent()))
+            ->toBe(styleBlock($this->get('/plain-'.layoutSlug($layout))->assertOk()->getContent()));
+    }
 });
 
 it('names the layout on the checkout root in both layouts', function (string $layout, string $class) {

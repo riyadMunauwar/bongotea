@@ -54,11 +54,12 @@
     $opensTicked = fn (\App\Models\Product $product): bool => in_array($product->getKey(), $defaultSelection, true);
 @endphp
 {{--
-    The layout's class rides beside the base one, in both layouts, and the
-    stylesheet below is the same bytes either way. That is what "one base sheet
-    plus a modifier" buys: these styles ship inside every cached page, so a
-    layout with a sheet of its own would charge every visitor for an arrangement
-    their page is not using.
+    The layout's class rides beside the base one, in every layout, and the
+    stylesheet below is the base every arrangement shares plus that one
+    arrangement's own rules. That is what "one base sheet plus a modifier" buys:
+    these styles ship inside every cached page, so a layout with a sheet of its
+    own would charge every visitor for the arrangements their page is not using,
+    while a block emitted only where it applies charges nobody.
 --}}
 <div class="gio-checkout {{ $layout->modifierClass() }}" data-gio-checkout data-page-slug="{{ $page->slug }}">
     <style>
@@ -221,6 +222,21 @@
         .gio-checkout-submit { display: block; width: 100%; padding: .875rem 1rem; border: 0; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); font-family: inherit; font-size: 1.0625em; font-weight: 700; cursor: pointer; }
         .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; }
         .gio-checkout-note { margin: .625rem 0 0; font-size: .75em; text-align: center; opacity: .75; }
+        {{--
+            Everything above is the base, and it is the same bytes whichever
+            arrangement the merchant chose. This is the one block that is not:
+            the rules the chosen layout adds, and nothing of the arrangements
+            this page is not drawing (ADR-0009). It sits last so that what it
+            narrows it narrows by order rather than by specificity, the same
+            trade the half-width field and the quantity stepper make.
+
+            Unescaped because it is a hand-written block picked from a fixed
+            list, not a figure a merchant typed. The escaping above guards the
+            one string here that is — a layout's rules are code, and a layout
+            that wanted a merchant's value in them would be the generated rule
+            this sheet exists not to write.
+        --}}
+        {!! $layout->styleRules() !!}
     </style>
 
     {{--
