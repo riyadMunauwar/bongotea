@@ -42,6 +42,16 @@
      * page that asks no question.
      */
     $productHead = $picksProducts ? 'label' : 'div';
+
+    /**
+     * Whether one product's box opens ticked.
+     *
+     * Written once and read twice — by the box itself and by the subtotal
+     * beneath it. Two readings of the same list is how a figure and a tick
+     * come to disagree, and the disagreement would stand for a visitor whose
+     * scripts never run.
+     */
+    $opensTicked = fn (\App\Models\Product $product): bool => in_array($product->getKey(), $defaultSelection, true);
 @endphp
 {{--
     The layout's class rides beside the base one, in both layouts, and the
@@ -268,11 +278,21 @@
                          data-gio-line data-unit-price="{{ $product->price }}">
                         @if ($picksProducts)
                             {{--
-                                Unticked, every one of them. On a cash-on-delivery
-                                page a pre-ticked upsell is not a lost sale, it is a
-                                refused parcel and a courier fee in both directions
-                                on the whole order — including the item the customer
-                                actually wanted.
+                                Ticked where the merchant said so, and unticked
+                                otherwise, which is what a page says nothing about.
+                                A tick is a starting position and never an
+                                agreement: the server charges for what arrives
+                                ticked, so a customer who unticks one before
+                                ordering is charged for what is left.
+
+                                One ticked is a price the customer meets on load
+                                and then changes. Two or more is a bundle the
+                                merchant is asserting, and on a cash-on-delivery
+                                page it carries the risk the empty default existed
+                                to avoid — an extra nobody chose is a refused
+                                parcel and a courier fee in both directions. The
+                                Checkout tab warns them there; here it is honoured
+                                (ADR-0010).
 
                                 Labelled by the product's own name, so a screen
                                 reader hears what is being ticked rather than
@@ -283,7 +303,8 @@
                                    name="selected[]"
                                    value="{{ $product->getKey() }}"
                                    aria-labelledby="gio-product-{{ $product->getKey() }}"
-                                   type="checkbox" data-gio-pick>
+                                   type="checkbox" data-gio-pick
+                                   @checked($opensTicked($product))>
                         @endif
 
                         {{-- The `for` carries its own leading space, so a page that asks nothing renders the tag it always did. --}}
@@ -533,11 +554,16 @@
             the confirmation page after Capture is where they see what they
             actually owe.
 
-            Nothing at all where the customer picks: nothing is ticked, so
-            nothing is being bought yet, and a subtotal quoting the whole shelf
-            would be a figure no order could ever come to.
+            Where the customer picks, only what the form opens ticked: totalling
+            the whole shelf would quote a figure no order could ever come to,
+            and totalling nothing where a merchant has pre-ticked would put a
+            zero beside boxes that are visibly ticked. Read through the same
+            test the boxes were drawn from, so the figure and the ticks cannot
+            disagree. The script retotals on load and on every touch after it,
+            but a visitor whose scripts never run reads these bytes and orders
+            from them, which is what this figure has to be right for.
         --}}
-        @php($subtotal = $picksProducts ? 0 : (int) $products->sum('price'))
+        @php($subtotal = (int) ($picksProducts ? $products->filter($opensTicked) : $products)->sum('price'))
 
         <div class="gio-checkout-summary">
             <p class="gio-checkout-row">

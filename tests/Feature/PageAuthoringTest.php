@@ -1206,6 +1206,105 @@ it('keeps the picker a merchant set while the layout has nothing to tick', funct
         ->and($config->picksProducts())->toBeFalse();
 });
 
+it('pre-ticks the products a merchant chose, and offers only the ones the page links', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf']);
+    $unlinked = Product::factory()->create(['name' => 'Hiking Boots']);
+
+    /** Linked to nothing yet, so what is offered below can only have come from the form. */
+    $page = Page::factory()->create();
+
+    $edit = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm([
+            'products' => [$jacket->getKey(), $scarf->getKey()],
+            'checkout_config' => [
+                'product_picker' => true,
+                'default_selection' => [$jacket->getKey()],
+            ],
+        ]);
+
+    /**
+     * A merchant ticks among what this page sells, read off the links as they
+     * stand in the form rather than off the saved page — so a product linked
+     * and pre-ticked in one visit needs no save in between, and nothing offers
+     * a tick against something the page does not sell. Asserted before the
+     * save, which is the whole of what that claim means.
+     */
+    $ticks = fieldInside($edit->instance()->getSchema('form'), 'checkout_config.default_selection');
+
+    expect($ticks)->not->toBeNull()
+        ->and(array_keys($ticks->getOptions()))->toBe([$jacket->getKey(), $scarf->getKey()])
+        ->and(array_keys($ticks->getOptions()))->not->toContain($unlinked->getKey());
+
+    $edit->call('save')->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->defaultSelection)->toBe([$jacket->getKey()]);
+});
+
+it('keeps live every control the default selection reads', function () {
+    $page = Page::factory()->create();
+
+    /**
+     * The tick list builds its options from the links and holds itself shut on
+     * the picker and the layout, so all three have to report their state as it
+     * is changed. Left un-live, a merchant links a product and finds no box
+     * for it, or switches the picker on and finds the list still greyed out —
+     * with nothing failing and no error to act on. The layout is the one most
+     * easily dropped, because it is on another tab.
+     */
+    $tabs = checkoutTabsOf($page);
+
+    $reads = [
+        fieldInside($tabs['Products'], 'products'),
+        fieldInside($tabs['Products'], 'checkout_config.product_picker'),
+        fieldInside($tabs['Products'], 'checkout_config.default_selection'),
+        fieldInside($tabs['Layout'], 'checkout_config.layout'),
+    ];
+
+    foreach ($reads as $control) {
+        expect($control)->not->toBeNull()
+            ->and($control->isLive())->toBeTrue();
+    }
+
+    /**
+     * A control nothing reads, so this test fails for the reason it says it
+     * does rather than because every field in the panel reports live.
+     */
+    expect(fieldInside(tabsInside(editFormOf($page))[0], 'slug')->isLive())->toBeFalse();
+});
+
+it('keeps the products a merchant pre-ticked while nothing can be ticked', function () {
+    $jacket = Product::factory()->create();
+    $scarf = Product::factory()->create();
+
+    $page = Page::factory()->create();
+    $page->products()->attach([$jacket->getKey(), $scarf->getKey()]);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => [
+            'product_picker' => true,
+            'default_selection' => [$jacket->getKey()],
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * The list survives a layout with nowhere to draw it, exactly as the
+     * switch above it does, so switching back restores the page the merchant
+     * configured. What it must not do meanwhile is stand: a tick on a
+     * form-only page is a box nobody can see and nobody can untick.
+     */
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->defaultSelection)->toBe([$jacket->getKey()])
+        ->and($config->opensTicked())->toBe([]);
+});
+
 it('keeps the questions and the delivery options a page had when the layout changes', function () {
     $page = Page::factory()->create();
 
@@ -1343,6 +1442,36 @@ function statePathsInside(Schema|Component $node): array
     }
 
     return $paths;
+}
+
+/**
+ * One control a merchant types into, found by the path its value is written
+ * at.
+ *
+ * The same walk `statePathsInside()` makes, stopping at the field rather than
+ * collecting every path — so a test can ask what a control is *offering* and
+ * not only that it is on the right tab.
+ */
+function fieldInside(Schema|Component $node, string $path): ?Field
+{
+    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
+
+    foreach ($schemas as $schema) {
+        foreach ($schema->getComponents(withHidden: true) as $component) {
+            if ($component instanceof Field && Str::after(
+                $component->getStatePath(),
+                $component->getRootContainer()->getStatePath().'.',
+            ) === $path) {
+                return $component;
+            }
+
+            if ($found = fieldInside($component, $path)) {
+                return $found;
+            }
+        }
+    }
+
+    return null;
 }
 
 /**

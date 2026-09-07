@@ -48,6 +48,20 @@ class CheckoutConfig implements Arrayable
         public readonly bool $productPicker,
 
         /**
+         * Which of this Page's Products the Picker opens ticked, by id.
+         *
+         * The Merchant's list and nothing more, kept whole even where it
+         * cannot be honoured — like the switch above it, so a Merchant trying
+         * the other layout gets their ticks back when they switch away from it.
+         * What a form actually opens ticked needs the layout as well, which is
+         * `opensTicked()`, and then the Products the Page still sells, which is
+         * Page's to answer — see `Page::defaultSelection()`.
+         *
+         * @var list<int>
+         */
+        public readonly array $defaultSelection,
+
+        /**
          * How the Checkout is arranged.
          *
          * A rendering decision only: it changes what the island draws and
@@ -85,6 +99,15 @@ class CheckoutConfig implements Arrayable
              * between paid traffic and an order nobody asked us to change.
              */
             productPicker: false,
+
+            /**
+             * Nothing ticked, which is what a Picker opened with before a
+             * Merchant could say otherwise. A tick is a price a Customer meets
+             * before they have chosen anything, and on a cash-on-delivery Page
+             * that is a call about their own Products no default of ours is in
+             * a position to make for them (ADR-0010).
+             */
+            defaultSelection: [],
 
             /**
              * The arrangement the Checkout has always had, so a Merchant who
@@ -170,9 +193,45 @@ class CheckoutConfig implements Arrayable
              */
             productPicker: (bool) ($stored['product_picker'] ?? false),
 
+            /** Absent means nothing ticked, which is what every Config written before a Merchant could pre-tick holds. */
+            defaultSelection: self::defaultSelectionFromArray($stored),
+
             /** Absent, or a name nothing draws, is the arrangement it has always had. */
             layout: CheckoutLayout::fromStored($stored['layout'] ?? null),
         );
+    }
+
+    /**
+     * The Default Selection of a stored Config, as Product ids.
+     *
+     * Ids only, one tick each, in the order they were stored. Nothing here
+     * asks whether the Page still sells any of them: a Config knows what a
+     * Merchant ticked and not what is on the shelf, so a tick naming something
+     * gone is dropped where the Page is known rather than thrown away here,
+     * which would lose it on any save made while the Product sat in the bin.
+     *
+     * @param  array<string, mixed>  $stored
+     * @return list<int>
+     */
+    private static function defaultSelectionFromArray(array $stored): array
+    {
+        $selection = [];
+
+        foreach ((array) ($stored['default_selection'] ?? []) as $id) {
+            /** A key arrives as a string from a form and as an int from the database; both name the same Product. */
+            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
+                continue;
+            }
+
+            $id = (int) $id;
+
+            /** A tick twice over ticks one box. */
+            if ($id > 0 && ! in_array($id, $selection, true)) {
+                $selection[] = $id;
+            }
+        }
+
+        return $selection;
     }
 
     /**
@@ -245,6 +304,26 @@ class CheckoutConfig implements Arrayable
     public function picksProducts(): bool
     {
         return $this->productPicker && $this->layout->showsProducts();
+    }
+
+    /**
+     * Which Products the Picker opens ticked, as far as the Config alone can
+     * say.
+     *
+     * The same gate the Picker itself goes through, and for the same reason: a
+     * Product ticked by default on a layout that draws no Products is a tick
+     * nobody can see and nobody can untick, under a form that never asked.
+     * Dropped rather than enforced, like every other value a Config holds and
+     * cannot use.
+     *
+     * Which of these the Page still sells is the other half, and it is not the
+     * Config's — see `Page::defaultSelection()`.
+     *
+     * @return list<int>
+     */
+    public function opensTicked(): array
+    {
+        return $this->picksProducts() ? $this->defaultSelection : [];
     }
 
     /**
@@ -368,7 +447,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, layout: string}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string}
      */
     public function toArray(): array
     {
@@ -377,6 +456,7 @@ class CheckoutConfig implements Arrayable
             'delivery_options' => $this->deliveryOptionsToArray(),
             'style_tokens' => $this->styleTokens->toArray(),
             'product_picker' => $this->productPicker,
+            'default_selection' => $this->defaultSelection,
             'layout' => $this->layout->value,
         ];
     }

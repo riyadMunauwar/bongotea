@@ -1937,6 +1937,68 @@ it('captures a complete order from a checkout that draws no products', function 
         ->and($order->total)->toBe(130000);
 });
 
+it('charges for what the customer sent and not for what the form opened ticked', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $scarf = Product::factory()->create(['price' => 25000]);
+
+    $page = picking(sellingPage([$jacket, $scarf]));
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'default_selection' => [$jacket->getKey(), $scarf->getKey()],
+    ])]);
+
+    /**
+     * A pre-ticked box is a starting position and never an agreement: the
+     * customer unticked the scarf before ordering, so the scarf is not sold
+     * and not charged for. What an Order costs is settled by what was ticked
+     * at Capture, which is the whole of why a Default Selection may be as
+     * bold as a merchant likes.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page->refresh(), [
+        'selected' => [$jacket->getKey()],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->lines)->toHaveCount(1)
+        ->and($order->lines()->sole()->product_id)->toBe($jacket->getKey())
+        ->and($order->subtotal)->toBe(99000);
+});
+
+it('leaves the fingerprint alone when the products it opens ticked change', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $scarf = Product::factory()->create(['price' => 25000]);
+
+    $page = picking(sellingPage([$jacket, $scarf]));
+
+    $before = PricingFingerprint::for($page);
+
+    /** Written against the page as the visitor's screen has it, before the merchant changes their mind. */
+    $payload = capturePayload($page, ['selected' => [$jacket->getKey()]]);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'default_selection' => [$jacket->getKey(), $scarf->getKey()],
+    ])]);
+
+    $page = $page->refresh();
+
+    /**
+     * Which box opens ticked is configuration and not a figure handed over at
+     * the door. Fingerprinting it would turn away everyone mid-form every time
+     * a merchant changed their mind about a default, on traffic they are
+     * paying for, and the refusal would read to the customer exactly like a
+     * price change (ADR-0010).
+     */
+    expect(PricingFingerprint::for($page))->toBe($before)
+        ->and($page->checkout_config->defaultSelection)->toBe([$jacket->getKey(), $scarf->getKey()]);
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->subtotal)->toBe(99000);
+});
+
 it('sells everything a form-only page offers however its picker is set', function () {
     $jacket = Product::factory()->create(['price' => 99000]);
     $scarf = Product::factory()->create(['price' => 25000]);

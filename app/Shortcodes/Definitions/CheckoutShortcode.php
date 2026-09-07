@@ -78,6 +78,20 @@ class CheckoutShortcode implements ShortcodeDefinition
             'picksProducts' => $page->offersProductChoice(),
 
             /**
+             * Which of them the form opens ticked, so a Customer meets a price
+             * rather than a shelf totalling nothing. Asked of the Page for the
+             * same reason the question above it is: a tick against something
+             * this Page no longer sells is a form opening on an item it cannot
+             * offer.
+             *
+             * Configuration and not a figure handed over at the door, so it is
+             * deliberately absent from the fingerprint below — a Merchant
+             * changing their mind about which box opens ticked must never
+             * refuse an Order somebody is half-way through typing (ADR-0010).
+             */
+            'defaultSelection' => $page->defaultSelection(),
+
+            /**
              * How the island is arranged: the stacked form the Checkout has
              * always drawn, or the form on its own for a Page whose own markup
              * already sold the Product above the fold.

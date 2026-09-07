@@ -80,6 +80,39 @@ class Page extends Model
     }
 
     /**
+     * The Products this Page's Picker opens ticked, by id.
+     *
+     * What the Config alone can say — the Merchant's list, gated on the layout
+     * that would have to draw the boxes, which is `CheckoutConfig::opensTicked()`
+     * — resolved against the Products this Page currently sells. A tick naming
+     * a Product it never sold, or one soft-deleted since the Merchant made it,
+     * is dropped: a form cannot open ticked against something it cannot offer,
+     * and the Merchant's list is kept whole meanwhile for the day the Product
+     * comes back.
+     *
+     * Empty wherever there is no choice to open, so a Page down to its last
+     * Product sells it implicitly rather than drawing a tick beside the only
+     * thing on offer.
+     *
+     * A starting position and never an agreement: what an Order costs is
+     * settled by what was ticked at Capture. Resolved through the very method
+     * that settles it, so a Merchant's ticks and a Customer's are read against
+     * the Page in one place and cannot come to mean different things.
+     *
+     * @return list<int>
+     */
+    public function defaultSelection(): array
+    {
+        if (! $this->offersProductChoice()) {
+            return [];
+        }
+
+        return $this->productsChosen($this->checkout_config->opensTicked())
+            ->map(fn (Product $product): int => $product->getKey())
+            ->all();
+    }
+
+    /**
      * The Products of this Page a Customer's selection names — or everything it
      * sells, where they were never asked to choose.
      *

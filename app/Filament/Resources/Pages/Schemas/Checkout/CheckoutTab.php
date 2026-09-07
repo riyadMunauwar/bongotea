@@ -58,6 +58,14 @@ class CheckoutTab
                                 Products::sold(),
 
                                 Products::picker(),
+
+                                /**
+                                 * After the switch it depends on, for
+                                 * the reason the layout comes before
+                                 * the picker: a merchant meets the
+                                 * cause before the effect.
+                                 */
+                                Products::preTicked(),
                             ]),
 
                         Tab::make('Questions')

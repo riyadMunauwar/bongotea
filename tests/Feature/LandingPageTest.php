@@ -478,8 +478,191 @@ it('hides a quantity behind the checkbox that reveals it', function () {
         expect($quantity)->not->toContain('required');
     }
 
-    /** Nothing is ticked, so nothing is being bought yet. */
+    /** Nothing is ticked, because this page's merchant has said nothing about which should be. */
     expect($html)->toContain('৳0.00');
+
+    preg_match_all('/<input class="gio-checkout-pick"[^>]*>/', $html, $picks);
+
+    expect($picks[0])->toHaveCount(2);
+
+    foreach ($picks[0] as $pick) {
+        expect($pick)->not->toContain('checked');
+    }
+});
+
+/**
+ * A published page whose picker opens on the Products named, selling the
+ * Products it is handed.
+ *
+ * @param  list<Product>  $products
+ * @param  list<int>  $ticked
+ * @param  array<string, mixed>  $config
+ */
+function pickingPage(array $products, array $ticked, array $config = []): Page
+{
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'promo',
+        'checkout_config' => CheckoutConfig::fromArray([
+            'product_picker' => true,
+            'default_selection' => $ticked,
+            ...$config,
+        ]),
+    ]);
+
+    $page->products()->attach(array_map(fn (Product $product): int => $product->getKey(), $products));
+
+    return $page->refresh();
+}
+
+/**
+ * The checkbox drawn for one Product, read out of the served page.
+ *
+ * Matched on the value rather than on the order the boxes appear in, because
+ * nothing resolves a Product by the position it sits at.
+ */
+function pickFor(string $html, Product $product): string
+{
+    preg_match('/<input class="gio-checkout-pick"[^>]*value="'.$product->getKey().'"[^>]*>/', $html, $pick);
+
+    return $pick[0] ?? '';
+}
+
+it('opens the picker on the products a merchant pre-ticked', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    pickingPage([$jacket, $boots], [$jacket->getKey()]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The customer meets a price rather than a form totalling nothing, and the
+     * stepper for what is ticked is on screen without a script having run —
+     * the checkbox's own state reveals it.
+     */
+    expect(pickFor($html, $jacket))->toContain('checked')
+        ->and(pickFor($html, $boots))->not->toContain('checked')
+        /** What is ticked and nothing else: the shelf is 2,480 and no order could come to it. */
+        ->and($html)->toContain('৳990.00')
+        ->and($html)->toContain('৳1050.00')
+        ->and($html)->not->toContain('৳2480.00')
+        /**
+         * A ticked line's stepper is on screen without a script having run,
+         * because the quantity is hidden by the checkbox's own state. That
+         * rule is what makes a pre-ticked line orderable at all, so it is
+         * pinned beside the tick rather than only where the picker is.
+         */
+        ->and($html)->toMatch('/\.gio-checkout-pick:not\(:checked\)\s*~\s*\.gio-checkout-quantity\s*\{[^}]*display:\s*none/')
+        ->and($html)->toContain('name="quantities['.$jacket->getKey().']"');
+});
+
+it('drops a tick a merchant left behind when the picker is switched off', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $boots = Product::factory()->create(['price' => 149000]);
+
+    $page = pickingPage([$jacket, $boots], [$jacket->getKey()], ['product_picker' => false]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The other half of the gate the layout is one half of. A page selling
+     * everything it links has no box to open ticked, so the tick is dropped
+     * and the total is the whole shelf — which is what the customer is being
+     * charged. The merchant's list is kept for the day they switch the picker
+     * back on.
+     */
+    expect($html)->not->toContain('name="selected[]"')
+        ->and($page->checkout_config->defaultSelection)->toBe([$jacket->getKey()])
+        ->and($page->checkout_config->opensTicked())->toBe([])
+        ->and($page->defaultSelection())->toBe([])
+        ->and($html)->toContain('৳2480.00');
+});
+
+it('opens ticked on every product a merchant ticked, however many that is', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $boots = Product::factory()->create(['price' => 149000]);
+
+    pickingPage([$jacket, $boots], [$jacket->getKey(), $boots->getKey()]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * A bundle the merchant asserted, honoured as asserted. The risk is real
+     * and is theirs to take — the Checkout tab warns them above one, and a
+     * merchant selling a set that is normally bought together knows their own
+     * products better than this rule does (ADR-0010).
+     */
+    expect(pickFor($html, $jacket))->toContain('checked')
+        ->and(pickFor($html, $boots))->toContain('checked')
+        ->and($html)->toContain('৳2480.00');
+});
+
+it('drops a tick against a product the page has stopped selling', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $boots = Product::factory()->create(['price' => 149000]);
+    $scarf = Product::factory()->create(['price' => 45000]);
+
+    $page = pickingPage([$jacket, $boots, $scarf], [$jacket->getKey(), $boots->getKey()]);
+
+    $jacket->delete();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * A form cannot open ticked against something the page cannot offer, so
+     * the tick is dropped as the page is drawn. The merchant's list is kept
+     * whole meanwhile: a product coming back out of the bin opens ticked again
+     * the way they left it, rather than being silently forgotten by a delete
+     * they may undo.
+     */
+    expect(pickFor($html, $jacket))->toBe('')
+        ->and(pickFor($html, $boots))->toContain('checked')
+        ->and(pickFor($html, $scarf))->not->toContain('checked')
+        /** The total is what is left ticked, not what the merchant ticked. */
+        ->and($html)->toContain('৳1490.00')
+        ->and($page->refresh()->checkout_config->defaultSelection)
+        ->toBe([$jacket->getKey(), $boots->getKey()])
+        ->and($page->defaultSelection())->toBe([$boots->getKey()]);
+});
+
+it('never opens a form-only checkout on a pre-ticked product', function () {
+    $jacket = Product::factory()->create();
+    $boots = Product::factory()->create();
+
+    $page = pickingPage([$jacket, $boots], [$jacket->getKey()], ['layout' => 'form_only']);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * There is nothing on screen to tick, so a tick is a box nobody can see
+     * and nobody can untick. Dropped on read like the picker it belongs to,
+     * and kept in the Config so switching back restores the page the merchant
+     * configured.
+     */
+    expect($html)->not->toContain('name="selected[]"')
+        ->and($page->checkout_config->defaultSelection)->toBe([$jacket->getKey()])
+        ->and($page->checkout_config->opensTicked())->toBe([])
+        ->and($page->defaultSelection())->toBe([]);
+});
+
+it('opens no tick on a page down to the one product it sells', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $boots = Product::factory()->create(['price' => 149000]);
+
+    $page = pickingPage([$jacket, $boots], [$jacket->getKey()]);
+
+    $boots->delete();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * A choice of one is not a choice: the page sells its last product
+     * implicitly rather than drawing a tick beside the only thing on offer,
+     * and the total says so.
+     */
+    expect($html)->not->toContain('name="selected[]"')
+        ->and($page->refresh()->defaultSelection())->toBe([])
+        ->and($html)->toContain('৳990.00');
 });
 
 /**
