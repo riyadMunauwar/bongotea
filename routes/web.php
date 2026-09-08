@@ -39,3 +39,16 @@ Route::get('/checkout/token', [CheckoutController::class, 'token'])
 
 Route::get('/order/{order:order_number}', [CheckoutController::class, 'confirmation'])
     ->name('checkout.confirmation');
+
+/*
+| The Retry Page: an Unpaid Order's summary and its Page's methods again.
+| Three segments deep, so a slug cannot shadow it either. The choice is a
+| write from a public page, and so is throttled like a Capture.
+*/
+
+Route::get('/order/{order:order_number}/retry', [CheckoutController::class, 'retry'])
+    ->name('checkout.retry');
+
+Route::post('/order/{order:order_number}/retry', [CheckoutController::class, 'choose'])
+    ->middleware('throttle:checkout')
+    ->name('checkout.retry.choose');

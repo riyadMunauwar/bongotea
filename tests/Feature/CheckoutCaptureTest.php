@@ -2352,20 +2352,3 @@ it('places a plain form post carrying a method under that method', function () {
 
     expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
 });
-
-/**
- * The same Page, with its payment section written as given.
- *
- * @param  list<mixed>  $methods  What the stored list holds, as stored — names, or anything else a test wants read totally.
- */
-function payingBy(Page $page, array $methods, bool $showLogos = true, bool $hideLoneCash = true): Page
-{
-    $page->update(['checkout_config' => CheckoutConfig::fromArray([
-        ...$page->checkout_config->toArray(),
-        'payment_methods' => $methods,
-        'show_payment_logos' => $showLogos,
-        'hide_lone_cash_choice' => $hideLoneCash,
-    ])]);
-
-    return $page->refresh();
-}

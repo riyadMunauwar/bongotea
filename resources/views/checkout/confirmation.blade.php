@@ -44,8 +44,18 @@
             <path d="M15 24.5l6.5 6.5L33 19" stroke="#16a34a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
 
-        <h1>Your order is confirmed</h1>
-        <p class="lede">Thank you. Keep the number below handy.</p>
+        {{--
+            An Unpaid Order is saved, not confirmed: it chose an online method
+            and no Payment has been Paid. The one thing it needs from the
+            customer is a way to finish, which is the Retry Page.
+        --}}
+        @if ($order->isUnpaid())
+            <h1>Your order is saved</h1>
+            <p class="lede">It is not yet paid. <a href="{{ route('checkout.retry', $order->order_number) }}">Pay now, or switch to cash on delivery.</a></p>
+        @else
+            <h1>Your order is confirmed</h1>
+            <p class="lede">Thank you. Keep the number below handy.</p>
+        @endif
 
         <p class="reference">
             <span class="reference-label">Order number</span>
@@ -105,7 +115,7 @@
                 <span>{{ $order->payment_method->getLabel() }}</span>
             </p>
             <p class="row grand">
-                <span>Pay on delivery</span>
+                <span>{{ $order->payment_method->isOnline() ? 'Total' : 'Pay on delivery' }}</span>
                 <span>{{ \App\Support\Money::format($order->total) }}</span>
             </p>
         </div>

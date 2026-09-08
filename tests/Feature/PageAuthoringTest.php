@@ -16,6 +16,7 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
+use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
@@ -1994,7 +1995,7 @@ it('starts a new page off offering cash on delivery alone with the choice hidden
         ->and($page->checkout_config->paymentChooser()->isDrawn())->toBeFalse();
 });
 
-it('asks about payment on its own nested tab and lists every method by name', function () {
+it('asks about payment on its own nested tab and lists the methods the installation has switched on', function () {
     $payment = checkoutTabsOf(Page::factory()->create())['Payment'];
 
     /** The list, the logos switch and the lone-cash switch, together and nowhere else. */
@@ -2005,20 +2006,57 @@ it('asks about payment on its own nested tab and lists every method by name', fu
 
     $offered = fieldInside($payment, 'checkout_config.payment_methods');
 
+    /** Cash on delivery alone, which is all an installation with no Payment settings saved has switched on. */
     expect($offered)->toBeInstanceOf(Select::class)
-        ->and($offered->getOptions())->toBe(PaymentMethod::labels())
+        ->and($offered->getOptions())->toBe(['cash_on_delivery' => 'Cash on Delivery'])
         ->and($offered->isMultiple())->toBeTrue()
         /** Dragging into the order the checkout draws them is the whole of what "ordered" means here. */
-        ->and($offered->isReorderable())->toBeTrue();
+        ->and($offered->isReorderable())->toBeTrue()
+        /** So the wording beneath it follows the list as it is edited. */
+        ->and($offered->isLive())->toBeTrue();
+
+    /** Switched on in Settings, and the box offers it — usable or not, because the refusal is worded rather than hidden. */
+    app(PaymentSettings::class)->with(['sslcommerzEnabled' => true])->save();
+
+    $offered = fieldInside(checkoutTabsOf(Page::factory()->create())['Payment'], 'checkout_config.payment_methods');
+
+    expect($offered->getOptions())->toBe(['cash_on_delivery' => 'Cash on Delivery', 'sslcommerz' => 'SSLCommerz']);
+});
+
+it('words a refusal beside a listed method the installation cannot offer, and keeps the method listed', function () {
+    $page = payingBy(Page::factory()->create(), ['sslcommerz', 'cash_on_delivery']);
 
     /**
-     * Only cash on delivery can be picked yet. The online methods are listed
-     * so the merchant can see what is coming, and held shut because a method
-     * with no driver cannot take money.
+     * Listed by the page and switched off for the installation: still in the
+     * box where the merchant put it, so switching it back on in Settings
+     * restores the page's order, and worded so the merchant knows the
+     * checkout is not drawing it.
      */
-    foreach (PaymentMethod::cases() as $method) {
-        expect($offered->isOptionDisabled($method->value, $method->getLabel()))->toBe(! $method->isUsable());
-    }
+    $edit = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertSee('SSLCommerz is switched off in Settings. It is not drawn on this page until that changes.');
+
+    $offered = fieldInside($edit->instance()->getSchema('form'), 'checkout_config.payment_methods');
+
+    expect($offered->getOptions())->toBe(['cash_on_delivery' => 'Cash on Delivery', 'sslcommerz' => 'SSLCommerz']);
+
+    $edit->call('save')->assertHasNoFormErrors();
+
+    expect(PaymentMethod::names($page->refresh()->checkout_config->paymentMethods))->toBe(['sslcommerz', 'cash_on_delivery'])
+        ->and($page->checkout_config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
+
+    /** On, but with a credential blank: the wording changes with the reason. */
+    app(PaymentSettings::class)->with(['sslcommerzEnabled' => true])->save();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertSee('SSLCommerz has blank credentials in Settings.');
+
+    /** Usable at last: no refusal, and the checkout draws it first, as the page lists it. */
+    app(PaymentSettings::class)->with(['sslcommerzStoreId' => 'store_live_1', 'sslcommerzStorePassword' => 'pw_live_1'])->save();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertDontSee('It is not drawn on this page');
+
+    expect($page->refresh()->checkout_config->offeredMethods())->toBe([PaymentMethod::SslCommerz, PaymentMethod::CashOnDelivery]);
 });
 
 it('lets a merchant unhide the lone cash on delivery choice and switch its logo off', function () {

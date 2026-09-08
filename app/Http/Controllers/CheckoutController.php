@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\RetryPaymentRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
 use App\Support\Orders\OrderCapture;
@@ -12,7 +13,7 @@ use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
 
 /**
- * Capture, and the page a visitor lands on afterwards.
+ * Capture, and the pages a visitor lands on afterwards.
  *
  * Unlike the landing routes, these run inside the `web` group with a session
  * and request-forgery protection. They are never cached — one hit per order —
@@ -31,22 +32,11 @@ class CheckoutController extends Controller
     {
         $order = $capture->capture($request->page(), $request->details());
 
-        $confirmation = route('checkout.confirmation', $order->order_number);
-
-        if ($request->expectsJson()) {
-            return response()->json(['redirect' => $confirmation], ResponseCode::HTTP_CREATED);
-        }
-
-        /**
-         * 303 rather than 302: the visitor arrived here by POST, and only See
-         * Other guarantees the browser follows with a GET rather than
-         * re-submitting the order on a refresh.
-         */
-        return redirect()->to($confirmation, ResponseCode::HTTP_SEE_OTHER);
+        return $this->sendOn($request, $order);
     }
 
     /**
-     * The page the visitor lands on once the Order exists.
+     * The Thank-you Page: where the visitor lands once the Order exists.
      *
      * Addressed by `order_number` alone, so it deliberately shows the *order*
      * and not the *customer*: what was bought, what it costs, and that someone
@@ -57,10 +47,46 @@ class CheckoutController extends Controller
      */
     public function confirmation(Order $order): Response
     {
-        return response()
-            ->view('checkout.confirmation', ['order' => $order->load('lines')])
-            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
-            ->header('X-Robots-Tag', 'noindex, nofollow');
+        return $this->uncachedPage('checkout.confirmation', ['order' => $order->load('lines')]);
+    }
+
+    /**
+     * The Retry Page: where a Customer lands with an Unpaid Order.
+     *
+     * The Order summary and the Page's Payment Methods again, Cash on Delivery
+     * among them where the Page offers it, so the Customer finishes without
+     * re-typing anything. Addressed and printed like the Thank-you Page, for
+     * the same reason. An Order that is not Unpaid has nothing to retry and
+     * is sent to its Thank-you Page instead.
+     */
+    public function retry(Order $order): Response|RedirectResponse
+    {
+        if (! $order->isUnpaid()) {
+            return redirect()->route('checkout.confirmation', $order->order_number);
+        }
+
+        return $this->uncachedPage('checkout.retry', [
+            'order' => $order->load('lines'),
+            'methods' => $order->retryPaymentMethods(),
+        ]);
+    }
+
+    /**
+     * The Customer choosing again on the Retry Page.
+     *
+     * The chosen method is written onto the Order, which the Order's own log
+     * records, and the Customer is sent where a Capture under that method
+     * would send them: Cash on Delivery settles the Order and lands on the
+     * Thank-you Page. An online method cannot start a Payment yet, so it
+     * lands back here, Unpaid.
+     */
+    public function choose(RetryPaymentRequest $request, Order $order): RedirectResponse
+    {
+        if ($order->isUnpaid()) {
+            $order->update(['payment_method' => $request->paymentMethod()]);
+        }
+
+        return $this->sendOn($request, $order);
     }
 
     /**
@@ -78,5 +104,47 @@ class CheckoutController extends Controller
         return response()
             ->json(['token' => $request->session()->token()])
             ->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Send the Customer to the page that follows an Order in its current
+     * state: the Thank-you Page once it is settled as far as the Checkout is
+     * concerned, the Retry Page while it is Unpaid.
+     *
+     * Unpaid straight after Capture, today, is every online method: no
+     * Payment can be started until each has its driver, and "could not
+     * start" keeps the Order and sends the Customer here rather than turning
+     * them away (ADR-0013).
+     */
+    private function sendOn(Request $request, Order $order): JsonResponse|RedirectResponse
+    {
+        $destination = $order->isUnpaid()
+            ? route('checkout.retry', $order->order_number)
+            : route('checkout.confirmation', $order->order_number);
+
+        if ($request->expectsJson()) {
+            return response()->json(['redirect' => $destination], ResponseCode::HTTP_CREATED);
+        }
+
+        /**
+         * 303 rather than 302: the visitor arrived here by POST, and only See
+         * Other guarantees the browser follows with a GET rather than
+         * re-submitting the order on a refresh.
+         */
+        return redirect()->to($destination, ResponseCode::HTTP_SEE_OTHER);
+    }
+
+    /**
+     * A page addressed by order number: never stored by a cache or a proxy,
+     * never indexed, because the URL is a bearer handle to an Order.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function uncachedPage(string $view, array $data): Response
+    {
+        return response()
+            ->view($view, $data)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->header('X-Robots-Tag', 'noindex, nofollow');
     }
 }

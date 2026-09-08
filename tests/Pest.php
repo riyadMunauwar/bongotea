@@ -6,6 +6,7 @@ use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
 use App\Shortcodes\ShortcodeRegistry;
+use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\PageCache\StaticPageCache;
 use Illuminate\Filesystem\Filesystem;
@@ -161,6 +162,23 @@ function capturePayload(Page $page, array $overrides = []): array
             fn (Product $product): array => [$product->getKey() => 1],
         )->all(),
     ], $overrides);
+}
+
+/**
+ * The same Page, with its payment section written as given.
+ *
+ * @param  list<mixed>  $methods  What the stored list holds, as stored — names, or anything else a test wants read totally.
+ */
+function payingBy(Page $page, array $methods, bool $showLogos = true, bool $hideLoneCash = true): Page
+{
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'payment_methods' => $methods,
+        'show_payment_logos' => $showLogos,
+        'hide_lone_cash_choice' => $hideLoneCash,
+    ])]);
+
+    return $page->refresh();
 }
 
 /**

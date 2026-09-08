@@ -187,14 +187,16 @@ class StoreOrderRequest extends FormRequest
      * How the Customer will pay, where this Page offers a choice of ways.
      *
      * A name and never anything more: what a method does is read off the
-     * Page's offered list at Capture, so a submission naming a method the Page
-     * never listed is refused here rather than placed under whatever it claims.
+     * Page at Capture, so a submission naming a method the Page never listed
+     * is refused here rather than placed under whatever it claims. A method
+     * the Page lists but cannot offer now is not refused: that is a form that
+     * went stale under a Settings change, and it captures Unpaid.
      *
      * Optional where the Page offers Cash on Delivery, because a Page that
      * draws no chooser posts no method and is placed under cash — and so is a
      * plain post that lost the radio, which is where the form would have
-     * opened. Required only where no cash fallback exists, which no Page can
-     * reach yet.
+     * opened. Required only where no cash fallback exists: a Page listing an
+     * online method alone on an installation that has switched cash off.
      *
      * @return array<string, list<mixed>>
      */
@@ -206,7 +208,7 @@ class StoreOrderRequest extends FormRequest
             'payment_method' => [
                 $config->offersPaymentMethod(PaymentMethod::CashOnDelivery) ? 'nullable' : 'required',
                 'string',
-                Rule::in(PaymentMethod::names($config->offeredMethods())),
+                Rule::in(PaymentMethod::names($config->acceptedMethods())),
             ],
         ];
     }

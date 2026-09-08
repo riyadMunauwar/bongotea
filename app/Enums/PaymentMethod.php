@@ -4,6 +4,7 @@ namespace App\Enums;
 
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
+use App\Support\Settings\PaymentSettings;
 use Filament\Support\Contracts\HasLabel;
 
 /**
@@ -16,8 +17,10 @@ use Filament\Support\Contracts\HasLabel;
  *
  * The four online cases are named now so that a Page can already hold a list
  * that mentions them, and so that Orders, Payments and Settings all spell them
- * one way. Until each has its driver it resolves to nothing usable, and so is
- * offered nowhere whatever a Page says.
+ * one way. Whether one can be offered is the Payment Methods settings' to say
+ * (`isUsable()`); whether a Payment can then be started is its driver's, and a
+ * method with none captures the Order Unpaid and sends the Customer to the
+ * Retry Page.
  *
  * Stored as a string column and cast, never as a native ENUM, for the reason
  * `OrderStatus` is one.
@@ -96,10 +99,10 @@ enum PaymentMethod: string implements HasLabel
     /**
      * The driver this method pays through, or null while it has none.
      *
-     * Null is the whole of "resolves to nothing usable": a method with no
-     * driver cannot start a Payment, cannot verify one and cannot be offered,
-     * and every reading that draws or validates a method goes through
-     * `isUsable()` for that reason.
+     * A method with no driver cannot start a Payment and cannot verify one,
+     * so an Order placed under it stays Unpaid until the driver arrives. It
+     * can still be offered once its settings are filled in: whether it is
+     * offered is `isUsable()`'s answer, not this one's.
      */
     public function gateway(): ?PaymentGateway
     {
@@ -110,16 +113,32 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
+     * Whether paying this way sends the Customer to a gateway before the
+     * Thank-you Page, and so whether an Order placed under it is Unpaid until
+     * a Payment is Paid. False is the whole of what Cash on Delivery is.
+     *
+     * Answered here rather than by the driver because three of the four
+     * online methods have none yet and are already Unpaid when chosen; a
+     * driver's `isOnline()` must agree with this.
+     */
+    public function isOnline(): bool
+    {
+        return $this !== self::CashOnDelivery;
+    }
+
+    /**
      * Whether an Order can be paid this way on this installation.
      *
-     * Today that is whether the method has a driver at all. The Payment
-     * Methods settings will add the Merchant's switch, their credentials and
-     * the installation currency to this answer, and nothing that draws or
-     * validates a method should ask any other question.
+     * The Merchant's switch, their credentials and the installation currency,
+     * read from the Payment Methods settings, which is the one place that rule
+     * lives. Nothing that draws or validates a method asks any other question,
+     * and nothing here asks whether a driver exists: a method whose settings
+     * are filled in is offered, and captures Unpaid until it can start a
+     * Payment.
      */
     public function isUsable(): bool
     {
-        return $this->gateway() !== null;
+        return app(PaymentSettings::class)->isUsable($this);
     }
 
     /**
@@ -135,10 +154,11 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
-     * Where a Checkout fetches the default logo from.
+     * Where a Checkout fetches the logo from: the Merchant's replacement where
+     * the Payment Methods settings hold one, else the default.
      */
     public function logoUrl(): string
     {
-        return asset($this->logoPath());
+        return app(PaymentSettings::class)->logoUrlFor($this);
     }
 }

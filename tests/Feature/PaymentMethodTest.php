@@ -27,11 +27,12 @@ it('knows every payment method by name, with a label and a default logo each', f
     ]);
 });
 
-it('resolves only cash on delivery to a usable driver for now', function () {
+it('resolves only cash on delivery to a driver for now, and offers only it until Settings say otherwise', function () {
     /**
-     * The four online cases exist so a Page can already name them, and
-     * resolve to nothing usable until each has its driver — so they are
-     * offered nowhere whatever a Page says.
+     * The four online cases exist so a Page can already name them. None has
+     * a driver yet, and on an installation with no Payment settings saved
+     * none is usable either — so they are offered nowhere whatever a Page
+     * says. `PaymentSettingsTest` is where one becomes usable.
      */
     expect(PaymentMethod::CashOnDelivery->gateway())->toBeInstanceOf(CashOnDelivery::class)
         ->and(PaymentMethod::CashOnDelivery->isUsable())->toBeTrue();

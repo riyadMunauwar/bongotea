@@ -148,6 +148,33 @@ class Order extends Model
     }
 
     /**
+     * Whether this Order chose an online Payment Method and has no Paid
+     * Payment: none started, or every one Pending, Failed, Cancelled or
+     * Expired. An Unpaid Order sits in the queue like any other; the call an
+     * operator makes about it is a different call (ADR-0013).
+     *
+     * No Payment exists yet, so for now any online method is Unpaid. When
+     * Payments arrive, "and no Paid Payment" is the half that changes.
+     */
+    public function isUnpaid(): bool
+    {
+        return $this->payment_method->isOnline();
+    }
+
+    /**
+     * The Payment Methods the Retry Page offers this Order: what its Page
+     * offers now, read through the same filtered list the Checkout draws
+     * from. Cash on Delivery alone where the Page is gone, because an Order
+     * with nothing to be paid through is still owed a way to be settled.
+     *
+     * @return list<PaymentMethod>
+     */
+    public function retryPaymentMethods(): array
+    {
+        return $this->page?->checkout_config->offeredMethods() ?? [PaymentMethod::CashOnDelivery];
+    }
+
+    /**
      * Re-derive the subtotal from the lines.
      *
      * Always from the lines' *snapshotted* figures — never from a Product's
