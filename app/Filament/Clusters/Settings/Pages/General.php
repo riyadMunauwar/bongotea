@@ -28,7 +28,7 @@ class General extends SettingsPage
         return [
             Section::make('Currency')
                 ->description('One currency for the whole installation. Prices are stored as minor units; this decides how they are shown.')
-                ->columns(3)
+                ->columns(1)
                 ->schema([
                     TextInput::make('currencyCode')
                         ->label('Code')
@@ -54,7 +54,7 @@ class General extends SettingsPage
 
             Section::make('Phone numbers')
                 ->description('A customer is their phone number, so every number is normalised by these rules before it is stored.')
-                ->columns(2)
+                ->columns(1)
                 ->schema([
                     TextInput::make('phoneCountryCode')
                         ->label('Country calling code')
@@ -97,7 +97,7 @@ class General extends SettingsPage
 
             Section::make('Delivery')
                 ->description('What a new page starts from. Pages already made keep the delivery options they have.')
-                ->columns(2)
+                ->columns(1)
                 ->schema([
                     TextInput::make('deliveryCharge')
                         ->label('Default delivery charge')
@@ -110,7 +110,7 @@ class General extends SettingsPage
 
             Section::make('Checkout limits')
                 ->description('Abuse protection, tuned to your traffic.')
-                ->columns(2)
+                ->columns(1)
                 ->schema([
                     TextInput::make('checkoutMaxQuantity')
                         ->label('Maximum quantity per line')
