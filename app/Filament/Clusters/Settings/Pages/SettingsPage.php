@@ -117,11 +117,39 @@ abstract class SettingsPage extends Page
     {
         abort_unless(static::canAccess(), 403);
 
-        static::$group::fromArray($this->form->getState())->save();
+        $previous = app(static::$group);
+        $saved = static::$group::fromArray($this->form->getState())->save();
+
+        $this->logChanges($previous, $saved);
 
         Notification::make()
             ->success()
             ->title('Settings saved')
             ->send();
+    }
+
+    /**
+     * One activity entry per save that changed something: the acting User,
+     * the group by key, and the changed properties in the same
+     * `old`/`attributes` shape a logged model writes, so the entry reads like
+     * any other. A save that changes nothing leaves no entry, so the log
+     * answers "who changed the currency and when" without noise from a resave.
+     */
+    protected function logChanges(SettingsGroup $previous, SettingsGroup $saved): void
+    {
+        $changes = $saved->changesSince($previous);
+
+        if ($changes['attributes'] === []) {
+            return;
+        }
+
+        $key = static::$group::key();
+
+        activity()
+            ->causedBy(auth()->user())
+            ->event('updated')
+            ->withProperty('group', $key)
+            ->withChanges($changes)
+            ->log("Saved the {$key} settings");
     }
 }

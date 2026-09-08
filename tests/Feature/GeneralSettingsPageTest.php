@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Settings\GeneralSettings;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * The migration that brought the permission in, so a test can replay what an
@@ -167,4 +168,56 @@ it('grants the permission to every User who existed when the migration ran', fun
 
     $this->actingAs($existing->fresh())->get(General::getUrl())->assertOk();
     $this->actingAs($later)->get(General::getUrl())->assertForbidden();
+});
+
+it('logs one activity entry naming the User, the group, and each changed value old and new', function () {
+    $user = User::factory()->managingSettings()->create();
+    $this->actingAs($user);
+
+    Livewire::test(General::class)
+        ->fillForm(['currencyCode' => 'GBP', 'currencySymbol' => '£'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(Activity::count())->toBe(1);
+
+    $entry = Activity::sole();
+
+    expect($entry->causer)->toBeInstanceOf(User::class)
+        ->and($entry->causer->is($user))->toBeTrue()
+        ->and($entry->description)->toContain(GeneralSettings::key())
+        ->and($entry->getProperty('group'))->toBe(GeneralSettings::key())
+        ->and($entry->attribute_changes->get('old'))->toBe([
+            'currencyCode' => config('giopages.currency.code'),
+            'currencySymbol' => config('giopages.currency.symbol'),
+        ])
+        ->and($entry->attribute_changes->get('attributes'))->toBe([
+            'currencyCode' => 'GBP',
+            'currencySymbol' => '£',
+        ]);
+});
+
+it('logs a second save against the values the first one stored, not the defaults', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(General::class)->fillForm(['currencyCode' => 'GBP'])->call('save');
+
+    $this->app->forgetInstance(GeneralSettings::class);
+
+    Livewire::test(General::class)->fillForm(['currencyCode' => 'EUR'])->call('save');
+
+    $latest = Activity::latest('id')->first();
+
+    expect(Activity::count())->toBe(2)
+        ->and($latest->attribute_changes->get('old'))->toBe(['currencyCode' => 'GBP'])
+        ->and($latest->attribute_changes->get('attributes'))->toBe(['currencyCode' => 'EUR']);
+});
+
+it('logs nothing when a save changes nothing', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(General::class)->call('save')->assertHasNoFormErrors();
+
+    expect(Setting::count())->toBe(1)
+        ->and(Activity::count())->toBe(0);
 });

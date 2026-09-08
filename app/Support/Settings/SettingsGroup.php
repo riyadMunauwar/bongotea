@@ -118,6 +118,35 @@ abstract class SettingsGroup
     }
 
     /**
+     * What this group changes against another of the same class, property by
+     * property, as the activity log records it: `old` and `attributes` each
+     * hold only the properties whose value differs, keyed the same way. Both
+     * groups are compared as typed values, never as rows, since a secret's
+     * sealed form differs on every write and would always read as changed.
+     *
+     * @return array{old: array<string, mixed>, attributes: array<string, mixed>}
+     */
+    public function changesSince(self $previous): array
+    {
+        $old = [];
+        $attributes = [];
+
+        foreach (static::storedProperties() as $property) {
+            $before = $property->getValue($previous);
+            $after = $property->getValue($this);
+
+            if ($before === $after) {
+                continue;
+            }
+
+            $old[$property->getName()] = $before;
+            $attributes[$property->getName()] = $after;
+        }
+
+        return ['old' => $old, 'attributes' => $attributes];
+    }
+
+    /**
      * The properties a row holds: the public, non-static ones on the concrete
      * class, which is also what makes the class the schema of record.
      *
