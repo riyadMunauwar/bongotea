@@ -271,7 +271,7 @@ it('keeps selling the rest when one of several products is deleted', function ()
      */
     $this->postJson(route('checkout.store'), $stale)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     /**
      * The page itself is not off the air, which is what the refusal above costs
@@ -313,7 +313,7 @@ it('refuses to sell a product the submission never offered', function () {
      */
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -336,7 +336,7 @@ it('refuses a submission that leaves out a product the page sells', function () 
         'quantities' => [$jacket->getKey() => 1],
     ]))
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -1061,7 +1061,7 @@ it('tells the visitor to reload when everything they ticked has gone', function 
      */
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -1196,7 +1196,7 @@ it('refuses a tick that names nothing this page could sell', function () {
         'selected' => ['not-a-product'],
     ]))
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -2084,7 +2084,7 @@ it('refuses a submission that carries no fingerprint at all', function () {
      */
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -2105,7 +2105,7 @@ it('refuses a submission drawn before the product was repriced', function () {
      */
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -2126,7 +2126,7 @@ it('refuses a submission drawn before the delivery amount was changed', function
 
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });
@@ -2157,7 +2157,7 @@ it('refuses a submission drawn before two delivery amounts were swapped', functi
 
     $this->postJson(route('checkout.store'), $payload)
         ->assertUnprocessable()
-        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Please reload and try again.');
+        ->assertJsonPath('errors.page.0', 'This page has changed since you opened it. Reload it to see the current prices, then order again.');
 
     expect(Order::count())->toBe(0);
 });

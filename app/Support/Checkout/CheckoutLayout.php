@@ -98,11 +98,14 @@ enum CheckoutLayout: string
      * arrives reads them in.
      *
      * Everything else keeps the column the form is in, said outright rather
-     * than left to auto-placement, which would otherwise drop the whole-form
-     * failure slot into the panel the first time a Customer saw one. The error
-     * slots are `display: none` until the island writes to them, so they are
-     * not items at all until they say something, and they take their place
-     * above the button in the order the bytes put them. The button carries the
+     * than left to auto-placement, which would otherwise drop the picker's
+     * refusal — the one error slot that is the form's own child — into the
+     * panel the first time a Customer saw one. The error slots are
+     * `display: none` until the island writes to them, so they are not items
+     * at all until they say something, and they take their place above the
+     * button in the order the bytes put them. The whole-form banner is not
+     * here because it is not the form's child: it sits above the island's
+     * form in every arrangement, and needs no cell. The button carries the
      * separation the summary used to be, exactly as it does where the summary
      * moves.
      */

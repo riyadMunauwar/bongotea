@@ -48,6 +48,19 @@ enum StyleToken: string
     case ButtonRadius = 'button_radius';
 
     /**
+     * What a refusal is written in: the words beside a box, and the ground the
+     * banner across the top paints for itself.
+     *
+     * A token because the default is a red drawn for a white Page, and on a
+     * Page styled dark it is the one thing in the form a Customer cannot read
+     * — the message telling them why their Order did not go through. The
+     * banner does not depend on it being readable against the Page: it fills
+     * itself with this colour and writes in white, so the whole-form case is
+     * legible before a Merchant has touched anything.
+     */
+    case Error = 'error';
+
+    /**
      * The scales an input may be sized at, by the wording the Checkout tab
      * offers them under.
      *
@@ -113,6 +126,9 @@ enum StyleToken: string
             self::ButtonBackground => '#16a34a',
             self::ButtonText => '#fff',
             self::ButtonRadius => '.375rem',
+
+            /** The red a refusal has always been written in. */
+            self::Error => '#b91c1c',
         };
     }
 
@@ -120,7 +136,7 @@ enum StyleToken: string
     {
         return match ($this) {
             self::Accent, self::Text, self::Border, self::Background,
-            self::ButtonBackground, self::ButtonText => StyleTokenKind::Colour,
+            self::ButtonBackground, self::ButtonText, self::Error => StyleTokenKind::Colour,
 
             self::Radius, self::BorderWidth, self::FontSize,
             self::ButtonRadius => StyleTokenKind::Length,
@@ -200,6 +216,7 @@ enum StyleToken: string
             self::ButtonBackground => 'Button colour',
             self::ButtonText => 'Button text colour',
             self::ButtonRadius => 'Button corner radius',
+            self::Error => 'Error colour',
         };
     }
 
@@ -221,6 +238,7 @@ enum StyleToken: string
             self::ButtonBackground => 'The order button.',
             self::ButtonText => 'The words on the order button.',
             self::ButtonRadius => 'How round the order button\'s corners are.',
+            self::Error => 'What a refusal is written in, beside the box it is about, and what the banner across the top is filled with when the whole order was turned away. The banner writes on itself in white, so it reads on any page; on a dark page, lighten this so the words beside a box do too.',
         };
     }
 

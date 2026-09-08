@@ -278,9 +278,41 @@
         --}}
         .gio-checkout-choice-label { flex: 1; min-width: 0; }
         .gio-checkout-choice-amount { font-weight: 700; white-space: nowrap; }
-        .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: #b91c1c; }
+        {{--
+            A refusal about one answer, in the error token, beneath the box it
+            is about. The token is read here rather than on the wrapper, so a
+            question that overrides it reaches this line through the cascade
+            without the pairing the inherited properties need.
+        --}}
+        .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: var(--gio-error); }
         .gio-checkout-error[data-shown] { display: block; }
         .gio-checkout-quantity-error { flex: 1 0 100%; margin: 0; }
+        {{--
+            A refusal the customer cannot fix at a box, across the top of the
+            island. Drawn as nothing until the script writes to it, so a page
+            that fails nothing draws nothing and a visitor whose script never
+            runs is told by the page the plain post lands on instead.
+
+            Shown, it paints its own ground in the error token and writes on
+            it in white. That is what makes it legible on a page styled dark
+            before the merchant has touched a colour: the text beside a box
+            can wait for them to lighten the token, but the sentence saying
+            the whole order was turned away cannot be the one thing on the
+            page nobody can read. Both declarations sit on the shown state so
+            the token is read once, where it is painted.
+
+            The reload button is drawn in the banner's own two colours swapped
+            over. Its hidden state is stated outright rather than left to the
+            `hidden` attribute's own styling, which any `button { display }`
+            rule in the page's stylesheet would override — and a reload
+            offered for a dropped connection throws away what the customer
+            typed for nothing.
+        --}}
+        .gio-checkout-banner { display: none; margin: 0 0 1.25rem; }
+        .gio-checkout-banner[data-shown] { display: flex; flex-wrap: wrap; gap: .625rem 1rem; align-items: center; justify-content: space-between; padding: .875rem 1rem; border-radius: var(--gio-radius); background: var(--gio-error); color: #fff; }
+        .gio-checkout-banner-text { flex: 1 1 14rem; margin: 0; font-size: .9375em; line-height: 1.45; color: inherit; }
+        .gio-checkout-reload { flex: none; padding: .5em .875em; border: 0; border-radius: var(--gio-button-radius); background: #fff; color: var(--gio-error); font-family: inherit; font-size: .875em; font-weight: 700; cursor: pointer; }
+        .gio-checkout-reload[hidden] { display: none; }
         .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); }
         {{--
             The summary's own size, moved down onto its rows. It sat on the
@@ -320,6 +352,25 @@
         --}}
         {!! $layout->styleRules() !!}
     </style>
+
+    {{--
+        Where a refusal the customer cannot fix at a box is put: the page moved
+        under them, the connection dropped, the server refused or fell over.
+        At the top of the island rather than above the button, because a
+        customer whose tap did nothing looks up, not down — and outside the
+        form, because every layout arranges the form's children and a child of
+        the island sits above whatever the arrangement draws.
+
+        The reload button is for the one refusal it can put right: a page
+        repriced or changed since these bytes were written. It stays hidden for
+        the others, where reloading would only throw away what they typed for
+        nothing. `aria-live` rather than a role, so a screen reader is told
+        what was written into it and not what an empty box is for.
+    --}}
+    <div class="gio-checkout-banner" data-gio-banner aria-live="assertive">
+        <p class="gio-checkout-banner-text" data-gio-error-for="page"></p>
+        <button class="gio-checkout-reload" type="button" data-gio-reload hidden>Reload page</button>
+    </div>
 
     {{--
         No @csrf token: this markup is shared by every visitor, so a token here
@@ -710,9 +761,6 @@
             </p>
         </div>
 
-        {{-- The page-level failure slot: a refusal the visitor cannot fix by editing a field. --}}
-        <p class="gio-checkout-error" data-gio-error-for="page"></p>
-
         <button class="gio-checkout-submit" type="submit" data-gio-submit>Order now &mdash; Cash on delivery</button>
 
         <p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>
@@ -730,6 +778,16 @@
     window.__gioCheckoutBound = true;
 
     var SUBMITTING = 'Placing your order…';
+
+    /*
+     * One sentence per way an order can fail to arrive, each saying what
+     * actually happened. A customer whose phone dropped off the network and
+     * one who tapped too many times are in different situations, and telling
+     * both to "try again" in the same words helps neither.
+     */
+    var CONNECTION_LOST = 'We could not reach the server. Please check your connection and try again.';
+    var TOO_MANY_ATTEMPTS = 'Too many attempts just now. Please wait a moment and try again.';
+    var SERVER_FAILED = 'Something went wrong placing your order. Please try again.';
 
     function money(form, minorUnits) {
         var decimals = parseInt(form.dataset.currencyDecimals, 10) || 0;
@@ -808,53 +866,114 @@
         if (delivery.label !== null) { set('delivery-label', delivery.label); }
     }
 
+    /*
+     * The island the form sits in, which is what the error slots are looked
+     * up in: the banner is a child of the island and not of the form, so that
+     * no layout has to make room for it.
+     */
+    function islandFor(form) {
+        return form.closest('[data-gio-checkout]');
+    }
+
+    /* The three parts of the whole-form banner, which always travel together. */
+    function bannerFor(form) {
+        var island = islandFor(form);
+
+        return {
+            box: island.querySelector('[data-gio-banner]'),
+            text: island.querySelector('[data-gio-error-for="page"]'),
+            reload: island.querySelector('[data-gio-reload]')
+        };
+    }
+
     function clearErrors(form) {
-        form.querySelectorAll('[data-gio-error-for]').forEach(function (el) {
+        islandFor(form).querySelectorAll('[data-gio-error-for]').forEach(function (el) {
             el.textContent = '';
             el.removeAttribute('data-shown');
         });
+
+        var banner = bannerFor(form);
+
+        if (banner.box) { banner.box.removeAttribute('data-shown'); }
+        if (banner.reload) { banner.reload.hidden = true; }
     }
 
     function slotFor(form, field) {
-        return form.querySelector('[data-gio-error-for="' + field + '"]');
+        return islandFor(form).querySelector('[data-gio-error-for="' + field + '"]');
     }
 
+    /*
+     * Write one message into one slot, and say whether it was taken. One slot,
+     * one message: whatever reaches it first stands.
+     */
+    function fill(el, message) {
+        if (!el || el.hasAttribute('data-shown')) { return false; }
+        el.textContent = message;
+        el.setAttribute('data-shown', '');
+
+        return true;
+    }
+
+    /*
+     * Open the banner, with or without the way back, *before* anything is
+     * written into it: a live region only announces what changes while it is
+     * on the page, and the banner is drawn as nothing until this.
+     */
+    function openBanner(form, offerReload) {
+        var banner = bannerFor(form);
+
+        if (banner.box) { banner.box.setAttribute('data-shown', ''); }
+        if (banner.reload) { banner.reload.hidden = !offerReload; }
+
+        return banner.text;
+    }
+
+    /*
+     * A refusal about one answer goes beside that answer; anything the server
+     * refused that has no box goes in the banner across the top. The server's
+     * page-level key and any key this form never drew both mean the page
+     * moved under the customer, so both come with the reload button — it is
+     * the one failure a reload puts right. A failure of the connection or of
+     * the server is passed to `showFailure` instead, which offers no reload:
+     * what they typed is still good.
+     */
     function showErrors(form, errors) {
+        errors = errors || {};
+
         var first = null;
-        var fields = Object.keys(errors || {});
-
-        var show = function (el, message) {
-            /* One slot, one message: whatever reaches it first stands. */
-            if (!el || el.hasAttribute('data-shown')) { return; }
-            el.textContent = message;
-            el.setAttribute('data-shown', '');
-            if (!first) { first = el; }
-        };
-
-        fields.forEach(function (field) {
-            show(slotFor(form, field), [].concat(errors[field])[0]);
-        });
+        var fields = Object.keys(errors);
+        var message = function (field) { return [].concat(errors[field])[0]; };
 
         /*
-         * A refusal keyed to something this form never asked for — a field the
-         * merchant switched off after these bytes were written to disk — falls
-         * back to the page-level slot, because a visitor whose order was
-         * refused has to be told something. Discarding it leaves them tapping a
-         * button that re-enables and says nothing.
-         *
-         * Second, so it can never take that slot from a page-level refusal that
-         * came in the same response and belongs there.
+         * The server's own page-level refusal first, so it can never lose the
+         * banner to a refusal keyed to something this form never asked for —
+         * a field the merchant switched off after these bytes were written to
+         * disk. That one falls back to the banner too, because a visitor whose
+         * order was refused has to be told something; discarding it leaves
+         * them tapping a button that re-enables and says nothing.
          */
+        var boxless = fields.filter(function (field) { return field !== 'page' && !slotFor(form, field); });
+
+        if (errors.page || boxless.length) {
+            var text = openBanner(form, true);
+
+            ['page'].concat(boxless).forEach(function (field) {
+                if (errors[field] && fill(text, message(field)) && !first) { first = text; }
+            });
+        }
+
         fields.forEach(function (field) {
-            if (slotFor(form, field)) { return; }
-            show(slotFor(form, 'page'), [].concat(errors[field])[0]);
+            if (field !== 'page' && fill(slotFor(form, field), message(field)) && !first) { first = slotFor(form, field); }
         });
 
         if (first) { first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     }
 
+    /* A failure that is nobody's answer to fix, worded for what went wrong and offering no reload. */
     function showFailure(form, message) {
-        showErrors(form, { page: [message] });
+        var text = openBanner(form, false);
+
+        if (fill(text, message)) { text.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     }
 
     function post(form, token) {
@@ -989,21 +1108,34 @@
             }
 
             if (response.status === 429) {
-                showFailure(form, 'Too many attempts just now. Please wait a moment and try again.');
+                showFailure(form, TOO_MANY_ATTEMPTS);
                 restore();
                 return;
             }
 
-            showFailure(form, 'Something went wrong placing your order. Please try again.');
+            showFailure(form, SERVER_FAILED);
             restore();
         };
 
         post(form, null)
             .then(function (response) { return handle(response, true); })
             .catch(function () {
-                showFailure(form, 'We could not reach the server. Please check your connection and try again.');
+                showFailure(form, CONNECTION_LOST);
                 restore();
             });
+    });
+
+    /*
+     * The way back from a page that moved under the customer: a fresh copy of
+     * it, with the current prices in it. Delegated like everything else, and
+     * from the island rather than the form, because the banner is the
+     * island's child.
+     */
+    document.addEventListener('click', function (event) {
+        var reload = event.target.closest ? event.target.closest('[data-gio-reload]') : null;
+        if (!reload || !reload.closest('[data-gio-checkout]')) { return; }
+
+        window.location.reload();
     });
 
     document.querySelectorAll('[data-gio-checkout-form]').forEach(retotal);

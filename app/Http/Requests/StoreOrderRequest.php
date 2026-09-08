@@ -42,7 +42,7 @@ class StoreOrderRequest extends FormRequest
      * of getting here is a mistake the visitor made or can put right at a box
      * — the form on their screen is simply out of date (ADR-0007).
      */
-    private const PAGE_HAS_CHANGED = 'This page has changed since you opened it. Please reload and try again.';
+    private const PAGE_HAS_CHANGED = 'This page has changed since you opened it. Reload it to see the current prices, then order again.';
 
     private ?Page $page = null;
 

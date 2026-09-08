@@ -822,6 +822,7 @@ it('never lets a stored style value break out of the block it is written into', 
         'accent' => 'red; } body { display: none } .x {',
         'radius' => '4pt',
         'input_size' => '9',
+        'error' => 'reddish',
     ]]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
@@ -835,7 +836,119 @@ it('never lets a stored style value break out of the block it is written into', 
     expect($html)->not->toContain('body {')
         ->and(styleBlock($html))->toContain('--gio-accent: '.StyleToken::Accent->defaultValue().';')
         ->and(styleBlock($html))->toContain('--gio-radius: '.StyleToken::Radius->defaultValue().';')
-        ->and(styleBlock($html))->toContain('--gio-input-size: '.StyleToken::InputSize->defaultValue().';');
+        ->and(styleBlock($html))->toContain('--gio-input-size: '.StyleToken::InputSize->defaultValue().';')
+        ->and(styleBlock($html))->toContain('--gio-error: '.StyleToken::Error->defaultValue().';');
+});
+
+it('writes a refusal in the error token', function () {
+    pageStyled(['style_tokens' => ['error' => '#ff8080']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-error \{([^}]*)\}/', $styles, $error);
+
+    /**
+     * A refusal beside a box reads the same token the banner does, so a
+     * merchant whose page is dark lightens every failure message in one
+     * place — the default is a red drawn for a white page, and on a dark one
+     * it is the one thing in the form a customer cannot read.
+     */
+    expect($styles)->toContain('--gio-error: #ff8080;')
+        ->and($error[1] ?? '')->toContain('color: var(--gio-error)')
+        ->and($error[1] ?? '')->not->toContain('#b91c1c');
+});
+
+it('puts a whole-form failure in a banner at the top of the island', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    preg_match('/<div class="gio-checkout-banner"[^>]*data-gio-banner[^>]*>(.*?)<\/div>/s', $markup, $banner);
+
+    /**
+     * Above the form and outside it, in every arrangement: the layouts all
+     * arrange the form's children, and a banner that was one of them would
+     * need a grid cell of its own in split and an order of its own in
+     * summary-first. A child of the island instead sits above whatever the
+     * layout draws, which is where a customer looks first when the button
+     * they tapped did nothing.
+     */
+    expect($banner)->not->toBeEmpty()
+        ->and(strpos($markup, 'data-gio-banner'))->toBeLessThan(strpos($markup, 'data-gio-checkout-form'))
+        ->and($banner[1])->toContain('data-gio-error-for="page"')
+        ->and($banner[1])->toContain('data-gio-reload')
+        ->and($banner[1])->toContain('Reload page');
+
+    /** Empty until the island writes to it, so a page that fails nothing draws nothing. */
+    expect($styles)->toContain('.gio-checkout-banner { display: none;');
+
+    preg_match('/\.gio-checkout-banner\[data-shown\] \{([^}]*)\}/', $styles, $shown);
+
+    /**
+     * The banner paints its own ground in the error token and writes on it in
+     * white, so what it says is legible on a page styled dark without the
+     * merchant having touched a colour — the one failure message that must
+     * never be invisible is the one that turned the whole order away.
+     */
+    expect($shown[1] ?? '')->toContain('background: var(--gio-error)')
+        ->and($shown[1] ?? '')->toContain('color: #fff');
+
+    /** And the button does what it says. */
+    expect(checkoutScript($html))->toContain('location.reload()');
+})->with(fn () => CheckoutLayout::cases());
+
+it('puts a refusal about one answer beside that answer', function () {
+    $page = pageStyled(['fields' => [
+        ['key' => 'phone', 'label' => 'Phone number'],
+        ['key' => 'address', 'label' => 'Address'],
+    ]]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    preg_match_all('/<div class="gio-checkout-field[^"]*"[^>]*>.*?data-gio-error-for="[^"]+"><\/p>\s*<\/div>/s', $markup, $wrappers);
+
+    /**
+     * Each question's slot is inside that question's own wrapper, after its
+     * control, so the words land under the box they are about and nowhere
+     * else. Read per wrapper rather than by presence: every slot present and
+     * all of them at the bottom of the form would also pass a presence check.
+     */
+    foreach ($page->checkout_config->enabledFields() as $field) {
+        $wrapper = array_values(array_filter(
+            $wrappers[0],
+            fn (string $wrapper): bool => str_contains($wrapper, 'name="'.$field->key().'"'),
+        ));
+
+        expect($wrapper)->toHaveCount(1)
+            ->and($wrapper[0])->toContain('data-gio-error-for="'.$field->key().'"')
+            ->and(strpos($wrapper[0], 'name="'.$field->key().'"'))
+            ->toBeLessThan(strpos($wrapper[0], 'data-gio-error-for="'.$field->key().'"'));
+    }
+});
+
+it('words each kind of failure for what actually went wrong', function () {
+    pageStyled([]);
+
+    $script = checkoutScript($this->get('/promo')->assertOk()->getContent());
+
+    $wordings = [
+        'connection lost' => 'We could not reach the server. Please check your connection and try again.',
+        'too many attempts' => 'Too many attempts just now. Please wait a moment and try again.',
+        'the server failed' => 'Something went wrong placing your order. Please try again.',
+    ];
+
+    /**
+     * Three different problems, three different sentences: a customer whose
+     * phone dropped off the network should not be told to try again in a
+     * moment as though they had been sending too fast.
+     */
+    foreach ($wordings as $wording) {
+        expect($script)->toContain($wording);
+    }
+
+    expect(array_unique($wordings))->toHaveCount(3);
 });
 
 it('lets a field override a token the checkout root also reads', function () {
