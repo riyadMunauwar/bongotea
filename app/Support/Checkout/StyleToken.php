@@ -61,6 +61,21 @@ enum StyleToken: string
     case Error = 'error';
 
     /**
+     * What a picked thing is painted in: the tick, the row's border and a light
+     * tint of its ground, for a picked Product and a chosen Delivery Option
+     * alike.
+     *
+     * One token because on a cash-on-delivery Page an item nobody meant to
+     * choose is a refused parcel and courier fees both ways, so a Customer has
+     * to be able to tell at a glance what they have committed to — and a
+     * Merchant has to be able to make that state louder in one place rather
+     * than three. Its default is the accent rather than a colour of its own, so
+     * a Merchant who set only an accent gets a selected state to match and a
+     * Page published before it existed looks as it did.
+     */
+    case Selected = 'selected';
+
+    /**
      * The scales an input may be sized at, by the wording the Checkout tab
      * offers them under.
      *
@@ -129,6 +144,16 @@ enum StyleToken: string
 
             /** The red a refusal has always been written in. */
             self::Error => '#b91c1c',
+
+            /**
+             * The accent, read rather than copied: a `var()` here is resolved
+             * on the root against whatever the Merchant set the accent to, so
+             * an unset token follows the accent instead of freezing today's
+             * default blue. A Merchant may not type this — `refusal()` turns
+             * a `var()` away like any other non-colour — because a value
+             * naming another token is one the tab cannot show the effect of.
+             */
+            self::Selected => 'var(--gio-accent)',
         };
     }
 
@@ -136,7 +161,7 @@ enum StyleToken: string
     {
         return match ($this) {
             self::Accent, self::Text, self::Border, self::Background,
-            self::ButtonBackground, self::ButtonText, self::Error => StyleTokenKind::Colour,
+            self::ButtonBackground, self::ButtonText, self::Error, self::Selected => StyleTokenKind::Colour,
 
             self::Radius, self::BorderWidth, self::FontSize,
             self::ButtonRadius => StyleTokenKind::Length,
@@ -217,6 +242,7 @@ enum StyleToken: string
             self::ButtonText => 'Button text colour',
             self::ButtonRadius => 'Button corner radius',
             self::Error => 'Error colour',
+            self::Selected => 'Selected colour',
         };
     }
 
@@ -227,7 +253,7 @@ enum StyleToken: string
     {
         return match ($this) {
             self::MaxWidth => 'The widest the form gets before it stops growing, centred in whatever you put [checkout] inside. Use 100% to fill that element completely.',
-            self::Accent => 'The outline on the box being typed in, and the tick in a checkbox or radio.',
+            self::Accent => 'The outline on the box being typed in. Until a selected colour is set, it is also what a picked product or delivery row is marked in.',
             self::Text => 'Every word in the form. Left empty it takes the page\'s own.',
             self::Border => 'Every line the form draws — around the boxes, and between the rows.',
             self::Background => 'What the boxes a customer types into are filled with. Nothing else is painted, so the page shows through the form itself and through the rows a customer picks from.',
@@ -239,15 +265,24 @@ enum StyleToken: string
             self::ButtonText => 'The words on the order button.',
             self::ButtonRadius => 'How round the order button\'s corners are.',
             self::Error => 'What a refusal is written in, beside the box it is about, and what the banner across the top is filled with when the whole order was turned away. The banner writes on itself in white, so it reads on any page; on a dark page, lighten this so the words beside a box do too.',
+            self::Selected => 'What a picked product or a chosen delivery row is marked in — the tick, the row\'s border and a light tint behind it — so a customer can see at a glance what they have committed to. Left empty it follows the accent colour.',
         };
     }
 
     /**
      * What the box shows when the Merchant has left it alone, so the value in
      * force is readable without saving to find out.
+     *
+     * The selected colour's default is a reference rather than a value, and a
+     * `var()` in a placeholder tells a Merchant nothing; what they need to know
+     * is which box it is following.
      */
     public function defaultHint(): string
     {
+        if ($this === self::Selected) {
+            return 'Follows the accent colour';
+        }
+
         return $this->options()[$this->defaultValue()] ?? $this->defaultValue();
     }
 }

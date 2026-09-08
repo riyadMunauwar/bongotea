@@ -1037,6 +1037,7 @@ it('refuses a style value on the box that holds it', function (string $token, st
     'a colour that does not parse' => ['accent', 'reddish'],
     'a colour that would close the declaration' => ['button_background', 'red; } body { display: none } .x {'],
     'an error colour that does not parse' => ['error', 'reddish'],
+    'a selected colour that names another token' => ['selected', 'var(--gio-accent)'],
     'a length whose unit is not allowed' => ['radius', '4pt'],
     'a length that is not a length' => ['border_width', 'thin'],
     'a negative length' => ['font_size', '-1rem'],

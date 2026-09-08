@@ -823,6 +823,7 @@ it('never lets a stored style value break out of the block it is written into', 
         'radius' => '4pt',
         'input_size' => '9',
         'error' => 'reddish',
+        'selected' => 'var(--gio-error)',
     ]]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
@@ -837,7 +838,9 @@ it('never lets a stored style value break out of the block it is written into', 
         ->and(styleBlock($html))->toContain('--gio-accent: '.StyleToken::Accent->defaultValue().';')
         ->and(styleBlock($html))->toContain('--gio-radius: '.StyleToken::Radius->defaultValue().';')
         ->and(styleBlock($html))->toContain('--gio-input-size: '.StyleToken::InputSize->defaultValue().';')
-        ->and(styleBlock($html))->toContain('--gio-error: '.StyleToken::Error->defaultValue().';');
+        ->and(styleBlock($html))->toContain('--gio-error: '.StyleToken::Error->defaultValue().';')
+        /** A `var()` is refused like any other non-colour, so the fallback is the accent and not whatever was named. */
+        ->and(styleBlock($html))->toContain('--gio-selected: var(--gio-accent);');
 });
 
 it('writes a refusal in the error token', function () {
@@ -968,7 +971,7 @@ it('lets a field override a token the checkout root also reads', function () {
      */
     expect($field[1])->toContain('color: var(--gio-text)')
         ->and($field[1])->toContain('font-size: var(--gio-font-size)')
-        ->and($field[1])->toContain('accent-color: var(--gio-accent)');
+        ->and($field[1])->toContain('accent-color: var(--gio-selected)');
 });
 
 it('sizes the rows a customer picks from off the same scale as the boxes', function () {
@@ -1174,19 +1177,93 @@ it('marks the chosen delivery row apart from the others', function () {
 
     /**
      * The row that is picked reads as picked from across the room, not only
-     * from the dot inside its radio. Painted with the accent the page already
-     * carries rather than a token of its own, so a merchant who recoloured the
-     * checkout recoloured this too. Where a browser cannot read `:has()` the
-     * radio still shows, so nothing is lost that was there before.
+     * from the dot inside its radio: border, ring and a light tint of its
+     * ground, all read from the one selected-state token. Where a browser
+     * cannot read `:has()` the radio still shows, so nothing is lost that was
+     * there before.
      */
-    expect($chosen[1] ?? '')->toContain('border-color: var(--gio-accent)')
-        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)');
+    expect($chosen[1] ?? '')->toContain('border-color: var(--gio-selected)')
+        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-selected)')
+        ->and($chosen[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-selected\)[^;]*transparent\)/');
 
     preg_match_all('/<input type="radio"[^>]*name="delivery_option"[^>]*>/s', checkoutMarkup($html), $radios);
 
     expect($radios[0])->toHaveCount(2)
         ->and($radios[0][0])->toContain('checked')
         ->and($radios[0][1])->not->toContain('checked');
+});
+
+it('marks a picked product with the same token as a chosen delivery row', function () {
+    pageStyled(['product_picker' => true]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-product:has\(:checked\) \{([^}]*)\}/', $styles, $picked);
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-field \{([^}]*)\}/', $styles, $field);
+
+    /**
+     * On a cash-on-delivery page an item nobody meant to choose is a refused
+     * parcel and courier fees both ways, so a customer must be able to tell
+     * at a glance what they have committed to. One token paints the whole of
+     * the selected state — the tick, the row's border and a tint of its
+     * ground — for a product and a delivery row alike, so a merchant changes
+     * what "picked" looks like in one place. The tick is `accent-color`,
+     * which inherits as a computed value, so the field wrapper reads the
+     * token itself the way it already does for text and size.
+     */
+    expect($picked[1] ?? '')->toContain('border-color: var(--gio-selected)')
+        ->and($picked[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-selected)')
+        ->and($picked[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-selected\)[^;]*transparent\)/')
+        ->and($root[1] ?? '')->toContain('accent-color: var(--gio-selected)')
+        ->and($field[1] ?? '')->toContain('accent-color: var(--gio-selected)');
+});
+
+it('lets the selected state follow the accent until a merchant says otherwise', function () {
+    pageStyled([], slug: 'plain');
+    pageStyled(['style_tokens' => ['selected' => '#ff0000']], slug: 'styled');
+    pageStyled(['fields' => [
+        ['key' => 'colour', 'label' => 'Colour', 'type' => 'radio', 'options' => [['value' => 'red'], ['value' => 'blue']], 'style_tokens' => ['selected' => '#00ff00']],
+    ]], slug: 'one-question');
+
+    $plain = styleBlock($this->get('/plain')->assertOk()->getContent());
+    $styled = styleBlock($this->get('/styled')->assertOk()->getContent());
+    $oneQuestion = $this->get('/one-question')->assertOk()->getContent();
+
+    /**
+     * Unset, the token is declared as the accent rather than as a fixed
+     * colour, so a merchant who set only an accent gets a selected state to
+     * match and a page published before the token existed looks the same as
+     * it did. Set, it is one declaration on the root like every other token:
+     * the block is the same length either way, and a question restyling it
+     * rides on that question's own wrapper with no selector generated for it.
+     */
+    expect($plain)->toContain('--gio-selected: var(--gio-accent);')
+        ->and($styled)->toContain('--gio-selected: #ff0000;')
+        ->and(substr_count($styled, '{'))->toBe(substr_count($plain, '{'))
+        ->and(styleBlock($oneQuestion))->toBe($plain)
+        ->and(substr_count($oneQuestion, '--gio-selected: #00ff00;'))->toBe(1);
+});
+
+it('keeps a question\'s ticks in the accent that question was given', function () {
+    pageStyled(['fields' => [
+        ['key' => 'colour', 'label' => 'Colour', 'type' => 'radio', 'options' => [['value' => 'red'], ['value' => 'blue']], 'style_tokens' => ['accent' => '#ff0000']],
+        ['key' => 'size', 'label' => 'Size', 'type' => 'radio', 'options' => [['value' => 's'], ['value' => 'm']], 'style_tokens' => ['accent' => '#ff0000', 'selected' => '#00ff00']],
+    ]]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The root resolves `--gio-selected` against the accent once, and a
+     * wrapper inherits that resolved colour — so a question redeclaring only
+     * its accent would keep its focus ring and lose its ticks, on a page
+     * published before the selected colour existed. The wrapper therefore
+     * says again that an unset selected colour follows the accent, and only
+     * where the question set an accent for it to follow. A question that set
+     * both is emitted as it said.
+     */
+    expect($html)->toContain('style="--gio-accent: #ff0000; --gio-selected: var(--gio-accent);"')
+        ->and($html)->toContain('style="--gio-accent: #ff0000; --gio-selected: #00ff00;"');
 });
 
 it('lists the summary line by line with a rule above an emphasised total', function () {

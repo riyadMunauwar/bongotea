@@ -102,7 +102,7 @@
             The split block's arithmetic reads the root's edges, so a padding
             or a border put back here has to be added to the figures there.
         --}}
-        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: var(--gio-max-width); margin: 1.5rem auto; font-family: inherit; font-size: var(--gio-font-size); color: var(--gio-text); accent-color: var(--gio-accent); }
+        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: var(--gio-max-width); margin: 1.5rem auto; font-family: inherit; font-size: var(--gio-font-size); color: var(--gio-text); accent-color: var(--gio-selected); }
         .gio-checkout-products { margin: 0 0 1.25rem; padding: 0 0 1.25rem; border-bottom: var(--gio-border-width) solid var(--gio-border); }
         {{--
             A product row is boxed like the boxes a customer types into — the
@@ -117,6 +117,23 @@
         .gio-checkout-pickable > * { grid-column: 2; }
         .gio-checkout-pickable > .gio-checkout-pick { grid-column: 1; grid-row: 1; align-self: center; width: 1.15rem; height: 1.15rem; margin: 0; flex: none; }
         .gio-checkout-pickable .gio-checkout-product-head { cursor: pointer; }
+        {{--
+            A picked product reads as picked from across the room, the same way
+            a chosen delivery row does and in the same token: the border takes
+            the selected colour, a one-pixel ring outside it thickens the edge
+            without moving the row, and the ground takes a light tint of it.
+            The tint is mixed from the one token rather than being a second
+            colour, so a merchant changes what "picked" looks like in one box.
+            On a cash-on-delivery page an item nobody meant to choose is a
+            refused parcel and courier fees both ways, so this is the state a
+            customer most needs to be able to tell at a glance.
+
+            `:has()` because the tick is a sibling of the head, not of the row,
+            and only a box inside a product row can be checked. A browser that
+            cannot read it, or cannot mix a colour, draws the row it always
+            drew with the tick still saying which is picked.
+        --}}
+        .gio-checkout-product:has(:checked) { border-color: var(--gio-selected); box-shadow: 0 0 0 1px var(--gio-selected); background: color-mix(in srgb, var(--gio-selected) 8%, transparent); }
         {{--
             The whole point of the picker: five products on a phone are five
             lines of text until they are wanted, rather than five steppers for
@@ -177,7 +194,7 @@
             a desktop. Zero lets the column be as narrow as it is told, and the
             input's own `width: 100%` then fits it.
         --}}
-        .gio-checkout-field { margin: 0; min-width: 0; color: var(--gio-text); font-size: var(--gio-font-size); accent-color: var(--gio-accent); }
+        .gio-checkout-field { margin: 0; min-width: 0; color: var(--gio-text); font-size: var(--gio-font-size); accent-color: var(--gio-selected); }
         {{--
             Where a half-width question is half width, and the only place it is.
 
@@ -256,10 +273,12 @@
         .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
         {{--
             The row that is picked reads as picked from across the room, not
-            only from the dot inside its radio: the border takes the accent and
-            a one-pixel ring outside it thickens the edge without moving the
-            row. The accent the page already carries rather than a token of its
-            own, so a merchant who recoloured the checkout recoloured this too.
+            only from the dot inside its radio: the border takes the selected
+            colour, a one-pixel ring outside it thickens the edge without
+            moving the row, and the ground takes a light tint of it — the same
+            three declarations, in the same token, as a picked product above.
+            The token defaults to the accent, so a merchant who recoloured the
+            checkout recoloured this too.
 
             `:has()` rather than a sibling selector, because the row is the
             label and the control sits inside it — there is no sibling to
@@ -267,7 +286,7 @@
             with the radio still saying which one is chosen, so nothing is
             lost that was there before.
         --}}
-        .gio-checkout-choice:has(:checked) { border-color: var(--gio-accent); box-shadow: 0 0 0 1px var(--gio-accent); }
+        .gio-checkout-choice:has(:checked) { border-color: var(--gio-selected); box-shadow: 0 0 0 1px var(--gio-selected); background: color-mix(in srgb, var(--gio-selected) 8%, transparent); }
         {{--
             The words take what is left of the row, so the figure sits at the
             far end where a customer expects one — the same shape as a product

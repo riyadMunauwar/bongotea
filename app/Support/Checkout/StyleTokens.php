@@ -104,14 +104,28 @@ class StyleTokens implements Arrayable
     /**
      * The declarations, in the token set's own order rather than the order they
      * were stored in, so the same styling always renders the same bytes.
+     *
+     * One declaration is emitted that nobody set: a sparse set carrying an
+     * accent but no selected colour restates that the selected colour follows
+     * the accent. The root never needs it, being completed before emission,
+     * but a field's wrapper does — a custom property inherits as its resolved
+     * value, so a wrapper redeclaring only `--gio-accent` would otherwise keep
+     * its focus ring and lose its ticks to the root's colour, on a Page that
+     * was published before the selected colour existed.
      */
     public function declarations(): string
     {
+        $values = $this->values;
+
+        if (isset($values[StyleToken::Accent->value]) && ! isset($values[StyleToken::Selected->value])) {
+            $values[StyleToken::Selected->value] = StyleToken::Selected->defaultValue();
+        }
+
         $declarations = [];
 
         foreach (StyleToken::cases() as $token) {
-            if (isset($this->values[$token->value])) {
-                $declarations[] = $token->property().': '.$this->values[$token->value].';';
+            if (isset($values[$token->value])) {
+                $declarations[] = $token->property().': '.$values[$token->value].';';
             }
         }
 
