@@ -687,8 +687,21 @@ it('charges nothing and shows no delivery row for a page that offers no delivery
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
-    expect($html)->not->toContain('data-gio-delivery-label')
-        ->and($html)->toContain('data-delivery-amount="0"');
+    /** The markup alone: the script beside it names the row's marker whether or not one was drawn. */
+    $markup = (string) preg_replace('/<(style|script)>.*?<\/\1>/s', '', $html);
+
+    preg_match('/data-gio-subtotal>([^<]*)</', $html, $subtotal);
+    preg_match('/data-gio-total>([^<]*)</', $html, $total);
+
+    /**
+     * No row to pick from, no line in the summary, and the total the page was
+     * rendered with is the subtotal — what a visitor whose scripts never run
+     * reads and orders from.
+     */
+    expect($markup)->not->toContain('data-gio-delivery-option')
+        ->and($markup)->not->toContain('data-gio-delivery-label')
+        ->and($html)->toContain('data-delivery-amount="0"')
+        ->and($total[1] ?? null)->toBe($subtotal[1] ?? '');
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 

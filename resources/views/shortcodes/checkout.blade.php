@@ -254,8 +254,30 @@
         --}}
         .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: calc(.625rem * var(--gio-input-size)) calc(.75rem * var(--gio-input-size)); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-size: calc(.9375em * var(--gio-input-size)); cursor: pointer; }
         .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
-        .gio-checkout-choice-label { flex: 1; }
-        .gio-checkout-choice-amount { font-weight: 600; }
+        {{--
+            The row that is picked reads as picked from across the room, not
+            only from the dot inside its radio: the border takes the accent and
+            a one-pixel ring outside it thickens the edge without moving the
+            row. The accent the page already carries rather than a token of its
+            own, so a merchant who recoloured the checkout recoloured this too.
+
+            `:has()` rather than a sibling selector, because the row is the
+            label and the control sits inside it — there is no sibling to
+            reach. A browser that cannot read it draws the row it always drew,
+            with the radio still saying which one is chosen, so nothing is
+            lost that was there before.
+        --}}
+        .gio-checkout-choice:has(:checked) { border-color: var(--gio-accent); box-shadow: 0 0 0 1px var(--gio-accent); }
+        {{--
+            The words take what is left of the row, so the figure sits at the
+            far end where a customer expects one — the same shape as a product
+            row: control and name left, price right. `min-width: 0` lets a long
+            label wrap rather than push the price out of the row, and the price
+            itself never wraps, because a figure broken across two lines is a
+            figure misread.
+        --}}
+        .gio-checkout-choice-label { flex: 1; min-width: 0; }
+        .gio-checkout-choice-amount { font-weight: 700; white-space: nowrap; }
         .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: #b91c1c; }
         .gio-checkout-error[data-shown] { display: block; }
         .gio-checkout-quantity-error { flex: 1 0 100%; margin: 0; }
@@ -267,7 +289,18 @@
             and is meant to be the larger figure, not a fraction of a fraction.
         --}}
         .gio-checkout-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0 0 .375rem; font-size: .875em; }
-        .gio-checkout-total { font-size: 1.0625em; font-weight: 700; margin: 0; }
+        {{--
+            The total is ruled off from the lines above it with the same
+            hairline the sections are, and set heavier and larger than they
+            are: a receipt a customer reads down to what the courier will
+            collect. This rule is inside the summary and not between sections,
+            so a layout that drops the panel's bottom rule leaves it alone.
+
+            It carries both classes and both selectors are one class, so the
+            later declaration is the one that applies — order, not
+            specificity, as everywhere else in this sheet.
+        --}}
+        .gio-checkout-total { margin: .375rem 0 0; padding: .5rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); font-size: 1.0625em; font-weight: 700; }
         .gio-checkout-submit { display: block; width: 100%; padding: .875rem 1rem; border: 0; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); font-family: inherit; font-size: 1.0625em; font-weight: 700; cursor: pointer; }
         .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; }
         .gio-checkout-note { margin: .625rem 0 0; font-size: .75em; text-align: center; opacity: .75; }

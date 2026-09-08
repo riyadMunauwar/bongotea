@@ -166,8 +166,10 @@ enum CheckoutLayout: string
      *
      * And the vertical rhythm tightens throughout: the island's own margin,
      * the gaps between Products, between questions, between the rows a customer
-     * picks a delivery from and between the lines of the summary. The bordered
-     * Product row keeps its box and loses some of the air inside it. What is
+     * picks a delivery from and between the lines of the summary — the total
+     * included, whose own rule the row rule above would otherwise squeeze
+     * against the line before it. The bordered Product row keeps its box and
+     * loses some of the air inside it. What is
      * left alone is what a thumb has to hit — the padding inside the delivery
      * rows, the boxes, and the button — because the arrangement is for a phone
      * before it is for anything else, and a target too small to tap is not
@@ -198,6 +200,7 @@ enum CheckoutLayout: string
         .gio-checkout-compact .gio-checkout-choice + .gio-checkout-choice { margin: .25rem 0 0; }
         .gio-checkout-compact .gio-checkout-summary { margin: .75rem 0; padding: .5rem 0 0; }
         .gio-checkout-compact .gio-checkout-row { margin: 0 0 .25rem; }
+        .gio-checkout-compact .gio-checkout-total { margin: .25rem 0 0; padding: .375rem 0 0; }
         .gio-checkout-compact .gio-checkout-note { margin: .5rem 0 0; }
         CSS;
 

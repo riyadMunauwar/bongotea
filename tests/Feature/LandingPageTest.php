@@ -8,6 +8,7 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
+use App\Support\Money;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -987,6 +988,127 @@ it('flanks a real numeric quantity with a minus and a plus', function () {
     expect(checkoutScript($html))->toContain('[data-gio-step]')
         ->and(checkoutScript($html))->toContain('stepUp()')
         ->and(checkoutScript($html))->toContain('stepDown()');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Delivery rows and the summary
+|--------------------------------------------------------------------------
+|
+| Choosing a delivery arrangement is the same gesture as picking a product — a
+| priced thing a thumb has to hit — so it is drawn the same way: a bordered row
+| with the control and its label on the left and the price on the right. The
+| summary beneath is a line list with a rule above an emphasised total, so a
+| customer can see what the courier will collect before they order.
+|
+*/
+
+it('draws each delivery option as a row with the control and label left and the price right', function () {
+    pageStyled([
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $styles = styleBlock($html);
+
+    preg_match('/<fieldset class="gio-checkout-delivery">(.*?)<\/fieldset>/s', checkoutMarkup($html), $delivery);
+    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
+
+    expect($rows[1])->toHaveCount(2);
+
+    /**
+     * Within one row the control comes first, then the words, then the figure
+     * — which is reading order, and so also the order a screen reader hears
+     * them in. The price is inside the label, so tapping it picks the row too.
+     */
+    foreach ([['Inside Dhaka', 6000], ['Outside Dhaka', 12000]] as $index => [$label, $amount]) {
+        expect($rows[1][$index])->toMatch(
+            '/type="radio".*gio-checkout-choice-label">'.preg_quote($label, '/').'<.*gio-checkout-choice-amount">'.preg_quote(Money::format($amount), '/').'</s'
+        );
+    }
+
+    preg_match('/\.gio-checkout-choice \{([^}]*)\}/', $styles, $row);
+    preg_match('/\.gio-checkout-choice-label \{([^}]*)\}/', $styles, $words);
+    preg_match('/\.gio-checkout-choice-amount \{([^}]*)\}/', $styles, $price);
+
+    /**
+     * Boxed like a product row and like the boxes a customer types into: the
+     * same border token, width and radius. The words take what is left of the
+     * row so the figure sits at the far end, and the figure never wraps — a
+     * price broken across two lines is a price misread.
+     */
+    expect($row[1] ?? '')->toContain('border: var(--gio-border-width) solid var(--gio-border)')
+        ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)')
+        ->and($words[1] ?? '')->toContain('flex: 1')
+        ->and($words[1] ?? '')->toContain('min-width: 0')
+        ->and($price[1] ?? '')->toContain('white-space: nowrap');
+});
+
+it('marks the chosen delivery row apart from the others', function () {
+    pageStyled([
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match('/\.gio-checkout-choice:has\(:checked\) \{([^}]*)\}/', styleBlock($html), $chosen);
+
+    /**
+     * The row that is picked reads as picked from across the room, not only
+     * from the dot inside its radio. Painted with the accent the page already
+     * carries rather than a token of its own, so a merchant who recoloured the
+     * checkout recoloured this too. Where a browser cannot read `:has()` the
+     * radio still shows, so nothing is lost that was there before.
+     */
+    expect($chosen[1] ?? '')->toContain('border-color: var(--gio-accent)')
+        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)');
+
+    preg_match_all('/<input type="radio"[^>]*name="delivery_option"[^>]*>/s', checkoutMarkup($html), $radios);
+
+    expect($radios[0])->toHaveCount(2)
+        ->and($radios[0][0])->toContain('checked')
+        ->and($radios[0][1])->not->toContain('checked');
+});
+
+it('lists the summary line by line with a rule above an emphasised total', function () {
+    pageStyled([
+        'delivery_options' => [['label' => 'Inside Dhaka', 'amount' => 6000]],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $styles = styleBlock($html);
+
+    preg_match('/<div class="gio-checkout-summary">(.*?)<\/div>/s', checkoutMarkup($html), $summary);
+    preg_match_all('/class="gio-checkout-row[^"]*"/', $summary[1] ?? '', $rows);
+
+    /**
+     * Subtotal, then the arrangement by its own name, then the total, each a
+     * row with the words left and the figure right — a receipt a customer can
+     * read down to what the courier will collect.
+     */
+    expect($rows[0])->toBe([
+        'class="gio-checkout-row"',
+        'class="gio-checkout-row"',
+        'class="gio-checkout-row gio-checkout-total"',
+    ])->and($summary[1] ?? '')->toMatch('/Subtotal.*Inside Dhaka.*Total/s');
+
+    preg_match('/\.gio-checkout-total \{([^}]*)\}/', $styles, $total);
+
+    /**
+     * The total is ruled off from the lines above it with the same hairline
+     * the sections are, and set heavier than they are. Its rule sits after
+     * the row's in the sheet, at one class each, so it narrows by order — the
+     * same trade the whole sheet makes.
+     */
+    expect($total[1] ?? '')->toContain('border-top: var(--gio-border-width) solid var(--gio-border)')
+        ->and($total[1] ?? '')->toContain('font-weight: 700')
+        ->and(strpos($styles, '.gio-checkout-total {'))->toBeGreaterThan(strpos($styles, '.gio-checkout-row {'));
 });
 
 /*
