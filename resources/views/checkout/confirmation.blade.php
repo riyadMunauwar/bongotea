@@ -34,6 +34,7 @@
         .totals { margin: 1rem 0 0; padding: .75rem 0 0; border-top: 1px solid #e5e7eb; font-size: .9375rem; }
         .row { display: flex; justify-content: space-between; gap: 1rem; margin: 0 0 .375rem; }
         .grand { margin: .5rem 0 0; font-size: 1.125rem; font-weight: 700; }
+        .paid { display: inline-block; margin-left: .5rem; padding: .125rem .5rem; background: #dcfce7; color: #166534; border-radius: 999px; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
         .note { margin: 1.25rem 0 0; padding: .75rem; background: #ecfdf5; border-radius: .375rem; font-size: .875rem; color: #065f46; text-align: center; }
     </style>
 </head>
@@ -112,7 +113,7 @@
             --}}
             <p class="row">
                 <span>Payment</span>
-                <span>{{ $order->payment_method->getLabel() }}</span>
+                <span>{{ $order->payment_method->getLabel() }}@if ($order->isPaid()) <span class="paid">Paid</span>@endif</span>
             </p>
             <p class="row grand">
                 <span>{{ $order->payment_method->isOnline() ? 'Total' : 'Pay on delivery' }}</span>

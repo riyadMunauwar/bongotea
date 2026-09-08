@@ -2,7 +2,7 @@
 
 namespace App\Support\Payments;
 
-use App\Models\Order;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use LogicException;
 
@@ -41,7 +41,7 @@ class CashOnDelivery implements PaymentGateway
         return false;
     }
 
-    public function start(Order $order, string $invoiceReference, string $notificationUrl): string
+    public function start(Payment $payment, string $returnUrl, ?string $notificationUrl): PaymentStarted
     {
         throw new LogicException('Cash on Delivery starts no Payment: the courier collects at the door.');
     }
@@ -56,7 +56,7 @@ class CashOnDelivery implements PaymentGateway
         return null;
     }
 
-    public function verify(string $paymentReference, int $expectedAmount): Verification
+    public function verify(Payment $payment): Verification
     {
         throw new LogicException('Cash on Delivery is never verified: there is no gateway to ask.');
     }

@@ -3,9 +3,12 @@
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
+use App\Support\Payments\SslCommerz;
 use App\Support\Payments\Verification;
+use App\Support\Settings\PaymentSettings;
 use Illuminate\Http\Request;
 
 it('knows every payment method by name, with a label and a default logo each', function () {
@@ -27,19 +30,28 @@ it('knows every payment method by name, with a label and a default logo each', f
     ]);
 });
 
-it('resolves only cash on delivery to a driver for now, and offers only it until Settings say otherwise', function () {
+it('resolves cash on delivery and SSLCommerz to drivers, and offers only cash until Settings say otherwise', function () {
     /**
-     * The four online cases exist so a Page can already name them. None has
-     * a driver yet, and on an installation with no Payment settings saved
-     * none is usable either — so they are offered nowhere whatever a Page
-     * says. `PaymentSettingsTest` is where one becomes usable.
+     * The four online cases exist so a Page can already name them. Only
+     * SSLCommerz has a driver so far, and on an installation with no Payment
+     * settings saved no online method is usable — so they are offered
+     * nowhere whatever a Page says. `PaymentSettingsTest` is where one
+     * becomes usable.
      */
     expect(PaymentMethod::CashOnDelivery->gateway())->toBeInstanceOf(CashOnDelivery::class)
-        ->and(PaymentMethod::CashOnDelivery->isUsable())->toBeTrue();
+        ->and(PaymentMethod::CashOnDelivery->isUsable())->toBeTrue()
+        ->and(PaymentMethod::SslCommerz->gateway())->toBeInstanceOf(SslCommerz::class)
+        ->and(PaymentMethod::SslCommerz->gateway()->isOnline())->toBeTrue()
+        ->and(PaymentMethod::SslCommerz->gateway()->credentialProperties())->toBe(PaymentSettings::secrets())
+        ->and(PaymentMethod::SslCommerz->gateway()->takesNotificationUrl())->toBeTrue()
+        ->and(PaymentMethod::online())->toBe([PaymentMethod::Bkash, PaymentMethod::SslCommerz, PaymentMethod::AamarPay, PaymentMethod::PayStation]);
 
-    foreach ([PaymentMethod::Bkash, PaymentMethod::SslCommerz, PaymentMethod::AamarPay, PaymentMethod::PayStation] as $online) {
-        expect($online->gateway())->toBeNull()
-            ->and($online->isUsable())->toBeFalse();
+    foreach ([PaymentMethod::Bkash, PaymentMethod::AamarPay, PaymentMethod::PayStation] as $online) {
+        expect($online->gateway())->toBeNull();
+    }
+
+    foreach (PaymentMethod::online() as $online) {
+        expect($online->isUsable())->toBeFalse();
     }
 });
 
@@ -71,10 +83,11 @@ it('implements the gateway contract for cash on delivery with nothing to start a
         ->and($cash->paymentReferenceFromNotification(Request::create('/', 'POST', ['tran_id' => 'x'])))->toBeNull();
 
     /** The two calls only an online method receives are refused outright rather than answered with something plausible. */
-    expect(fn () => $cash->start(Order::factory()->create(), 'ABC12345-1', 'https://example.test/notify'))
-        ->toThrow(LogicException::class);
+    $payment = Payment::factory()->make(['order_id' => Order::factory()->create()->getKey()]);
 
-    expect(fn () => $cash->verify('anything', 105000))->toThrow(LogicException::class);
+    expect(fn () => $cash->start($payment, 'https://example.test/pay', null))->toThrow(LogicException::class);
+
+    expect(fn () => $cash->verify($payment))->toThrow(LogicException::class);
 });
 
 it('answers a verification in the payment states', function () {

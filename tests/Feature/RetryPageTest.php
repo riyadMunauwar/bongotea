@@ -6,6 +6,8 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Money;
 use App\Support\Settings\PaymentSettings;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -33,11 +35,23 @@ function pageOfferingSslCommerz(): Page
 }
 
 /**
- * An Order captured under SSLCommerz, which no driver can start a Payment for
- * yet: Unpaid from the moment it exists.
+ * The gateway unreachable for every call, so a Capture under an online
+ * method records a Failed Payment and lands on the Retry Page. The road
+ * through a reachable gateway is `OnlinePaymentTest`'s.
+ */
+function gatewayDown(): void
+{
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: Connection timed out'));
+}
+
+/**
+ * An Order captured under SSLCommerz while the gateway cannot be reached:
+ * Unpaid from the moment it exists, with the attempt recorded Failed.
  */
 function unpaidOrder(?Page $page = null): Order
 {
+    gatewayDown();
+
     $page ??= pageOfferingSslCommerz();
 
     test()->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'sslcommerz']))->assertCreated();
@@ -56,7 +70,9 @@ it('draws the chooser with a usable online method first, as the page lists it', 
         ->and($page->checkout_config->offeredMethods())->toBe([PaymentMethod::SslCommerz, PaymentMethod::CashOnDelivery]);
 });
 
-it('captures an order under a usable online method and answers with the retry page, because no payment can start yet', function () {
+it('captures an order under a usable online method and answers with the retry page when the gateway cannot be reached', function () {
+    gatewayDown();
+
     $page = pageOfferingSslCommerz();
 
     $response = $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'sslcommerz']))
@@ -73,7 +89,9 @@ it('captures an order under a usable online method and answers with the retry pa
     $response->assertJsonPath('redirect', route('checkout.retry', $order->order_number));
 });
 
-it('sends a plain form post under an online method to the retry page with a 303', function () {
+it('sends a plain form post under an online method to the retry page with a 303 when the gateway cannot be reached', function () {
+    gatewayDown();
+
     $page = pageOfferingSslCommerz();
 
     $this->post(route('checkout.store'), capturePayload($page, ['payment_method' => 'sslcommerz']))
@@ -180,7 +198,7 @@ it('switches an unpaid order to cash on delivery, logs it, and lands on the than
         ->assertDontSee(route('checkout.retry', $order->order_number));
 });
 
-it('keeps an unpaid order unpaid when the customer chooses an online method again, and returns to the retry page', function () {
+it('keeps an unpaid order unpaid when the customer chooses an online method again and the gateway is still down, and returns to the retry page', function () {
     $order = unpaidOrder();
 
     $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => 'sslcommerz'])

@@ -2,7 +2,7 @@
 
 namespace App\Support\Payments;
 
-use App\Models\Order;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 
 /**
@@ -14,10 +14,11 @@ use Illuminate\Http\Request;
  * and the sweep all verify through the same call. Adding a gateway is one
  * class implementing this and one case on `PaymentMethod` (ADR-0013).
  *
- * Every figure a driver reads is the Order's own — its total, its number — and
- * every answer it gives comes from a call it made to the gateway itself. What
- * a gateway wrote into the Customer's return URL is read only to find the
- * Payment it is about, never to decide what happened to it.
+ * Every figure a driver reads is the Payment's own — its amount, its invoice
+ * reference, its Order — and every answer it gives comes from a call it made
+ * to the gateway itself. What a gateway wrote into the Customer's return URL
+ * is read only to find the Payment it is about, never to decide what happened
+ * to it.
  */
 interface PaymentGateway
 {
@@ -46,16 +47,19 @@ interface PaymentGateway
     public function takesNotificationUrl(): bool;
 
     /**
-     * Start a Payment for an Order and say where to send the Customer.
+     * Start a Pending Payment at the gateway and say where to send the
+     * Customer.
      *
-     * The invoice reference is ours — the order number plus an attempt
-     * sequence, because gateways refuse a duplicate invoice id — and the
-     * Notification URL is handed over only by a driver that takes one.
+     * The Payment already exists, Pending, for the amount and under the
+     * invoice reference the gateway is told; the return URL is the Processing
+     * Page the gateway sends the Customer back to whatever happens; the
+     * Notification URL is handed over only by a driver that takes one, and is
+     * null while the system has no Notification endpoint to name.
      *
      * Throws `PaymentNotStarted` where the gateway could not be reached or
      * refused: a transport failure is "could not start", never Failed.
      */
-    public function start(Order $order, string $invoiceReference, string $notificationUrl): string;
+    public function start(Payment $payment, string $returnUrl, ?string $notificationUrl): PaymentStarted;
 
     /**
      * The gateway's own reference for the Payment a Customer has been sent
@@ -79,10 +83,13 @@ interface PaymentGateway
     /**
      * Ask the gateway, in a call of our own, what became of a Payment.
      *
-     * Paid only where the gateway confirms it and the amount it took is the
-     * amount asked for. A gateway that cannot be reached answers still
-     * Pending, never Failed, so a moment's outage is retried by the sweep
-     * rather than sending a Customer who paid to the Retry Page.
+     * Asked by the gateway's reference where the Payment holds one, and by
+     * our invoice reference otherwise, so a Customer who cancelled before
+     * anything was attempted is still answered for. Paid only where the
+     * gateway confirms it, names this Payment, and took the amount asked
+     * for. A gateway that cannot be reached answers still Pending, never
+     * Failed, so a moment's outage is retried by the sweep rather than
+     * sending a Customer who paid to the Retry Page.
      */
-    public function verify(string $paymentReference, int $expectedAmount): Verification;
+    public function verify(Payment $payment): Verification;
 }

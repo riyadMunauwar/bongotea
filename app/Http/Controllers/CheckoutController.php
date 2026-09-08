@@ -6,6 +6,7 @@ use App\Http\Requests\RetryPaymentRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
 use App\Support\Orders\OrderCapture;
+use App\Support\Payments\PaymentStarter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,8 @@ use Symfony\Component\HttpFoundation\Response as ResponseCode;
  */
 class CheckoutController extends Controller
 {
+    public function __construct(private readonly PaymentStarter $payments) {}
+
     /**
      * Take an Order.
      *
@@ -77,8 +80,8 @@ class CheckoutController extends Controller
      * The chosen method is written onto the Order, which the Order's own log
      * records, and the Customer is sent where a Capture under that method
      * would send them: Cash on Delivery settles the Order and lands on the
-     * Thank-you Page. An online method cannot start a Payment yet, so it
-     * lands back here, Unpaid.
+     * Thank-you Page; an online method starts a new Payment and lands on the
+     * gateway.
      */
     public function choose(RetryPaymentRequest $request, Order $order): RedirectResponse
     {
@@ -108,19 +111,17 @@ class CheckoutController extends Controller
 
     /**
      * Send the Customer to the page that follows an Order in its current
-     * state: the Thank-you Page once it is settled as far as the Checkout is
-     * concerned, the Retry Page while it is Unpaid.
+     * state: the gateway's page where a Payment could be started, else the
+     * Thank-you Page once the Order is settled as far as the Checkout is
+     * concerned, or the Retry Page while it is Unpaid.
      *
-     * Unpaid straight after Capture, today, is every online method: no
-     * Payment can be started until each has its driver, and "could not
-     * start" keeps the Order and sends the Customer here rather than turning
-     * them away (ADR-0013).
+     * The Order exists before the gateway is asked, so a gateway that cannot
+     * be reached keeps the Order and lands the Customer on the Retry Page
+     * rather than turning them away (ADR-0013).
      */
     private function sendOn(Request $request, Order $order): JsonResponse|RedirectResponse
     {
-        $destination = $order->isUnpaid()
-            ? route('checkout.retry', $order->order_number)
-            : route('checkout.confirmation', $order->order_number);
+        $destination = $this->payments->start($order) ?? $order->followingPageUrl();
 
         if ($request->expectsJson()) {
             return response()->json(['redirect' => $destination], ResponseCode::HTTP_CREATED);
@@ -132,19 +133,5 @@ class CheckoutController extends Controller
          * re-submitting the order on a refresh.
          */
         return redirect()->to($destination, ResponseCode::HTTP_SEE_OTHER);
-    }
-
-    /**
-     * A page addressed by order number: never stored by a cache or a proxy,
-     * never indexed, because the URL is a bearer handle to an Order.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function uncachedPage(string $view, array $data): Response
-    {
-        return response()
-            ->view($view, $data)
-            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
-            ->header('X-Robots-Tag', 'noindex, nofollow');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
+use App\Enums\PaymentState;
 use App\Observers\OrderObserver;
 use App\Support\Orders\AsCapturedAnswers;
 use Database\Factories\OrderFactory;
@@ -148,17 +149,50 @@ class Order extends Model
     }
 
     /**
+     * Every attempt to collect this Order's total online, oldest first: at
+     * most one ends Paid, and the rest are what the gateway said about the
+     * others (ADR-0013).
+     *
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->orderBy('id');
+    }
+
+    /**
+     * Whether money has moved for this Order: any Payment a Verification
+     * has marked Paid. Derived from the Payments and never a column here,
+     * because the answer is theirs; a Paid Order still starts New and needs
+     * the confirmation call.
+     */
+    public function isPaid(): bool
+    {
+        return $this->payments()->where('state', PaymentState::Paid)->exists();
+    }
+
+    /**
      * Whether this Order chose an online Payment Method and has no Paid
      * Payment: none started, or every one Pending, Failed, Cancelled or
      * Expired. An Unpaid Order sits in the queue like any other; the call an
      * operator makes about it is a different call (ADR-0013).
-     *
-     * No Payment exists yet, so for now any online method is Unpaid. When
-     * Payments arrive, "and no Paid Payment" is the half that changes.
      */
     public function isUnpaid(): bool
     {
-        return $this->payment_method->isOnline();
+        return $this->payment_method->isOnline() && ! $this->isPaid();
+    }
+
+    /**
+     * The page that follows this Order as it stands: the Retry Page while it
+     * is Unpaid, the Thank-you Page once it is settled as far as the Checkout
+     * is concerned. The one wording of that choice, read after a Capture, a
+     * choice on the Retry Page and a Verification alike.
+     */
+    public function followingPageUrl(): string
+    {
+        return $this->isUnpaid()
+            ? route('checkout.retry', $this->order_number)
+            : route('checkout.confirmation', $this->order_number);
     }
 
     /**

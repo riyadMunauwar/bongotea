@@ -12,6 +12,7 @@ use App\Support\PageCache\StaticPageCache;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Pest\Expectation;
@@ -37,6 +38,22 @@ pest()->extend(TestCase::class)
 | there by the suite would be real content on a real site.
 |
 */
+
+/*
+|--------------------------------------------------------------------------
+| No test reaches a gateway
+|--------------------------------------------------------------------------
+|
+| Every gateway is spoken to through the framework's HTTP client, and that
+| is the one seam the tests fake. A test that forgets to is refused rather
+| than left to reach a real sandbox, wait out a timeout, and pass on the
+| Failed Payment the outage produced.
+|
+*/
+
+pest()->beforeEach(function (): void {
+    Http::preventStrayRequests();
+})->in('Feature');
 
 pest()->beforeEach(function (): void {
     $this->cacheDirectory = storage_path('framework/testing/page-cache-'.bin2hex(random_bytes(4)));

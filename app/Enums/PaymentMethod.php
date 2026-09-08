@@ -4,6 +4,7 @@ namespace App\Enums;
 
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
+use App\Support\Payments\SslCommerz;
 use App\Support\Settings\PaymentSettings;
 use Filament\Support\Contracts\HasLabel;
 
@@ -97,6 +98,18 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
+     * The methods that send the Customer to a gateway: every case but Cash
+     * on Delivery, in the enum's order. What the Processing Page routes are
+     * registered for.
+     *
+     * @return list<self>
+     */
+    public static function online(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $method): bool => $method->isOnline()));
+    }
+
+    /**
      * The driver this method pays through, or null while it has none.
      *
      * A method with no driver cannot start a Payment and cannot verify one,
@@ -108,7 +121,8 @@ enum PaymentMethod: string implements HasLabel
     {
         return match ($this) {
             self::CashOnDelivery => new CashOnDelivery,
-            self::Bkash, self::SslCommerz, self::AamarPay, self::PayStation => null,
+            self::SslCommerz => app(SslCommerz::class),
+            self::Bkash, self::AamarPay, self::PayStation => null,
         };
     }
 

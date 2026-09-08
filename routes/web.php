@@ -1,7 +1,10 @@
 <?php
 
+use App\Enums\PaymentMethod;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\LandingPageController;
+use App\Http\Controllers\PaymentController;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -52,3 +55,24 @@ Route::get('/order/{order:order_number}/retry', [CheckoutController::class, 'ret
 Route::post('/order/{order:order_number}/retry', [CheckoutController::class, 'choose'])
     ->middleware('throttle:checkout')
     ->name('checkout.retry.choose');
+
+/*
+| The Processing Page and its Verification, one address per online gateway.
+|
+| A gateway sends the Customer back with a cross-site POST carrying no session
+| and no token, so both sit outside request-forgery protection; they take GET
+| as well, so a refresh, or a client without script following the meta
+| refresh, lands on the same decision. Addressed by our invoice reference in
+| the path and by nothing the gateway put in its parameters. Three segments
+| deep, so a slug cannot shadow them.
+*/
+
+Route::match(['get', 'post'], '/pay/{method}/{payment:invoice_reference}', [PaymentController::class, 'processing'])
+    ->whereIn('method', PaymentMethod::names(PaymentMethod::online()))
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->name('payment.processing');
+
+Route::match(['get', 'post'], '/pay/{method}/{payment:invoice_reference}/verify', [PaymentController::class, 'verify'])
+    ->whereIn('method', PaymentMethod::names(PaymentMethod::online()))
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->name('payment.verify');
