@@ -59,6 +59,8 @@ class OrderInfolist
                          */
                         TextEntry::make('page_slug')
                             ->label('Ordered from'),
+
+                        OrderDocument::paymentMethod(),
                     ]),
 
                 /**
@@ -95,6 +97,8 @@ class OrderInfolist
                     ]),
 
                 ...OrderDocument::answers(),
+
+                ...OrderDocument::payments(),
 
                 Section::make('Items')
                     ->columnSpanFull()

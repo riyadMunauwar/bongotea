@@ -2,6 +2,9 @@
 
 namespace App\Enums;
 
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
 /**
  * Where one Payment stands: one attempt to collect an Order's total through
  * one online Payment Method.
@@ -16,11 +19,45 @@ namespace App\Enums;
  * words. The Payment record that stores one of them arrives with the online
  * methods.
  */
-enum PaymentState: string
+enum PaymentState: string implements HasColor, HasLabel
 {
     case Pending = 'pending';
     case Paid = 'paid';
     case Failed = 'failed';
     case Cancelled = 'cancelled';
     case Expired = 'expired';
+
+    public function getLabel(): string
+    {
+        return match ($this) {
+            self::Pending => 'Pending',
+            self::Paid => 'Paid',
+            self::Failed => 'Failed',
+            self::Cancelled => 'Cancelled',
+            self::Expired => 'Expired',
+        };
+    }
+
+    /**
+     * Paid is the one answer that settles the money; Pending is the one still
+     * worth asking about; the other three all mean "no money moved here" and
+     * differ only in whose doing it was, so they share a colour.
+     */
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Pending => 'warning',
+            self::Paid => 'success',
+            self::Failed, self::Cancelled, self::Expired => 'gray',
+        };
+    }
+
+    /**
+     * Whether this is where a Payment ends: anything but Pending. A settled
+     * Payment is never asked about again.
+     */
+    public function isSettled(): bool
+    {
+        return $this !== self::Pending;
+    }
 }

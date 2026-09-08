@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
+use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Customer;
 use Filament\Actions\DeleteAction;
@@ -17,6 +19,14 @@ class EditOrder extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            /**
+             * The payment axis, worked from the header rather than the form:
+             * the form never holds `payment_method`, so a save after either
+             * action cannot write a stale method back over it.
+             */
+            CheckWithGatewayAction::make(),
+            SwitchToCashOnDeliveryAction::make(),
+
             ViewAction::make(),
 
             /**

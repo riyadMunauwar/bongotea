@@ -47,6 +47,10 @@ class PaymentVerifier
 
             $current->save();
 
+            if ($current->state->isSettled()) {
+                $current->logOutcome();
+            }
+
             if ($verification->isPaid()) {
                 $this->flagIfPaidTwice($current);
             }
@@ -73,6 +77,7 @@ class PaymentVerifier
 
         return $this->settle($verified, function (Payment $current): void {
             $current->update(['state' => PaymentState::Expired]);
+            $current->logOutcome();
         });
     }
 

@@ -4,12 +4,17 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Models\Payment;
+use App\Support\Money;
 use App\Support\Orders\CapturedAnswer;
+use Closure;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\FontFamily;
+use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
 
 /**
@@ -42,6 +47,12 @@ class OrderDocument
     public const NOT_ANSWERED = 'Left blank';
 
     /**
+     * The heading of the Unpaid callout, spelled once so the test that pins it
+     * and the screen that draws it cannot drift apart.
+     */
+    public const UNPAID_WARNING = 'Unpaid — no payment has been verified for this order.';
+
+    /**
      * Statuses that mean "do not send this parcel".
      *
      * The document is deliberately shaped to look routine, which is exactly why
@@ -72,7 +83,153 @@ class OrderDocument
                 ->danger()
                 ->visible(fn (?Order $record): bool => $record?->trashed() ?? false)
                 ->columnSpanFull(),
+
+            /**
+             * The other axis (ADR-0013). Not a "do not send" — an Unpaid Order
+             * sits in the queue like any other — but the call about it is a
+             * different call, and the document is shaped to look routine.
+             */
+            Callout::make(self::UNPAID_WARNING)
+                ->description('The customer chose to pay online and no payment has been confirmed. Offer to pay now, or switch the order to Cash on Delivery.')
+                ->icon(Heroicon::OutlinedCreditCard)
+                ->warning()
+                ->visible(fn (?Order $record): bool => $record?->isUnpaid() ?? false)
+                ->columnSpanFull(),
         ];
+    }
+
+    /**
+     * How the Customer said they would pay, and whether they have.
+     *
+     * One line in the Order block on both screens, read-only on both: the
+     * method is changed by the Retry Page or the "switch" action, never by
+     * typing, so the form shows it as text the way it shows the order number.
+     */
+    public static function paymentMethod(): TextEntry
+    {
+        return TextEntry::make('payment_method')
+            ->label('Payment')
+            ->badge()
+            ->state(fn (?Order $record): ?string => $record?->paymentBadgeLabel())
+            ->color(fn (?Order $record): ?string => $record?->paymentBadgeColor())
+            ->hintIcon(
+                Heroicon::OutlinedQuestionMarkCircle,
+                tooltip: 'Its own axis: a paid order still starts New and needs the confirmation call, and cancelling says nothing about the money.',
+            );
+    }
+
+    /**
+     * Every Payment on the Order, with what the gateway said about each.
+     *
+     * Drawn for an Order under an online method, and for one that holds a
+     * Payment whatever its method now says: an Order switched to Cash on
+     * Delivery keeps its history, and a Pending Payment on it may still end
+     * Paid. Absent only for a Cash on Delivery Order that never had one,
+     * which is most Orders. Handed the Payments themselves
+     * as records rather than form data, for the reason `answers()` gives: the
+     * edit screen hydrates whatever a repeatable holds, and a Payment is
+     * written by a Verification alone. Empty where nothing was ever started,
+     * and it says so, because an Unpaid Order with no Payment is the "method
+     * the Page no longer offers" case and an operator should be able to tell
+     * it from a Customer who tried and failed.
+     *
+     * The two raw responses are printed whole, as JSON, because a dispute
+     * months later needs what the gateway actually said rather than what was
+     * made of it at the time (ADR-0013).
+     *
+     * @return array<int, Section>
+     */
+    public static function payments(): array
+    {
+        return [
+            Section::make('Payments')
+                ->columnSpanFull()
+                ->visible(fn (?Order $record): bool => $record !== null && ($record->payment_method->isOnline() || $record->payments->isNotEmpty()))
+                ->schema([
+                    TextEntry::make('no_payments')
+                        ->hiddenLabel()
+                        ->state('No payment has been started.')
+                        ->color('gray')
+                        ->visible(fn (?Order $record): bool => $record?->payments->isEmpty() ?? true),
+
+                    RepeatableEntry::make('payments')
+                        ->hiddenLabel()
+                        ->visible(fn (?Order $record): bool => $record?->payments->isNotEmpty() ?? false)
+                        ->state(fn (?Order $record): array => $record?->payments->all() ?? [])
+                        ->columns(3)
+                        ->schema([
+                            TextEntry::make('invoice_reference')
+                                ->label('Reference')
+                                ->copyable()
+                                ->weight('bold')
+                                ->hintIcon(
+                                    Heroicon::OutlinedQuestionMarkCircle,
+                                    tooltip: 'Our reference, as the gateway knows it: the order number plus the attempt.',
+                                ),
+
+                            TextEntry::make('method')
+                                ->label('Method'),
+
+                            TextEntry::make('state')
+                                ->label('State')
+                                ->badge(),
+
+                            TextEntry::make('amount')
+                                ->label('Amount')
+                                ->formatStateUsing(fn (int $state, Payment $record): string => Money::format($state).' '.$record->currency),
+
+                            TextEntry::make('gateway_reference')
+                                ->label('Gateway reference')
+                                ->copyable()
+                                ->placeholder('None yet'),
+
+                            TextEntry::make('verified_at')
+                                ->label('Verified')
+                                ->dateTime()
+                                ->placeholder('Not verified'),
+
+                            TextEntry::make('created_at')
+                                ->label('Started')
+                                ->dateTime(),
+
+                            TextEntry::make('start_response')
+                                ->label('Gateway said at start')
+                                ->columnSpanFull()
+                                ->fontFamily(FontFamily::Mono)
+                                ->size(TextSize::ExtraSmall)
+                                ->state(self::asJson('start_response'))
+                                ->placeholder('Nothing recorded'),
+
+                            TextEntry::make('verification_response')
+                                ->label('Gateway said when asked')
+                                ->columnSpanFull()
+                                ->fontFamily(FontFamily::Mono)
+                                ->size(TextSize::ExtraSmall)
+                                ->state(self::asJson('verification_response'))
+                                ->placeholder('Not asked yet'),
+                        ]),
+                ]),
+        ];
+    }
+
+    /**
+     * A raw response as a person reads it: pretty-printed, with the slashes
+     * in the gateway's URLs left alone.
+     *
+     * Handed to `state()` rather than `formatStateUsing()`, because a
+     * TextEntry whose state is an array formats each element on its own as a
+     * list, and a response is one document, not a list of its values. Null
+     * where nothing was recorded, so the placeholder shows.
+     */
+    private static function asJson(string $attribute): Closure
+    {
+        return function (Payment $record) use ($attribute): ?string {
+            $response = $record->getAttribute($attribute);
+
+            return $response === null
+                ? null
+                : (string) json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        };
     }
 
     /**

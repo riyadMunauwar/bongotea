@@ -86,6 +86,8 @@ class OrderForm
                         TextEntry::make('page_slug')
                             ->label('Ordered from')
                             ->state(fn (?Order $record): ?string => $record?->page_slug),
+
+                        OrderDocument::paymentMethod(),
                     ]),
 
                 /**
@@ -163,6 +165,8 @@ class OrderForm
                     ]),
 
                 ...OrderDocument::answers(),
+
+                ...OrderDocument::payments(),
 
                 Section::make('Items')
                     ->columnSpanFull()

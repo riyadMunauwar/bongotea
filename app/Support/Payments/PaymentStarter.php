@@ -62,6 +62,8 @@ class PaymentStarter
                 'start_response' => $exception->response,
             ]);
 
+            $payment->logOutcome();
+
             return null;
         }
 

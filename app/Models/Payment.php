@@ -127,6 +127,33 @@ class Payment extends Model
     }
 
     /**
+     * Write where this Payment ended onto its Order's activity trail.
+     *
+     * Called once, by whatever settled it — a Verification or a start the
+     * gateway refused — and never for Pending, which is not an outcome. The
+     * entry lives on the Order because that is the trail an operator reads on
+     * the call: the address that changed, the status the call decided, and
+     * the money, in one place. Whoever is signed in is the causer, so a check
+     * made from the admin names the operator and one made from the Processing
+     * Page, a Notification or the sweep names nobody.
+     */
+    public function logOutcome(): void
+    {
+        activity()
+            ->performedOn($this->order)
+            ->causedBy(auth()->user())
+            ->event('payment_'.$this->state->value)
+            ->withProperties([
+                'payment' => $this->invoice_reference,
+                'method' => $this->method->value,
+                'amount' => $this->amount,
+                'currency' => $this->currency,
+                'gateway_reference' => $this->gateway_reference,
+            ])
+            ->log("Payment {$this->invoice_reference} ({$this->method->getLabel()}) is {$this->state->getLabel()}.");
+    }
+
+    /**
      * @return array{method: string, payment: string}
      */
     private function routeParameters(): array

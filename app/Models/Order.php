@@ -10,6 +10,8 @@ use App\Support\Orders\AsCapturedAnswers;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -61,6 +63,11 @@ class Order extends Model
      * lets the number address that page at all.
      */
     private const NUMBER_LENGTH = 8;
+
+    /**
+     * The attribute `withPaidFlag()` loads the answer to `isPaid()` under.
+     */
+    private const PAID_FLAG = 'is_paid';
 
     /**
      * Mirrors the database defaults, because an Order exists before its lines
@@ -168,7 +175,83 @@ class Order extends Model
      */
     public function isPaid(): bool
     {
+        if ($this->hasAttribute(self::PAID_FLAG)) {
+            return (bool) $this->getAttribute(self::PAID_FLAG);
+        }
+
         return $this->paidPayments()->exists();
+    }
+
+    /**
+     * The payment axis in one badge, as the queue and the Order page both draw
+     * it: the method by name, and whether money has moved. Paid is said
+     * whatever the method, because an Order switched to Cash on Delivery
+     * while a Payment was Pending can still end Paid, and that is the one
+     * case where the courier must not also collect. Cash on Delivery with no
+     * Paid Payment says only its name: it is simply due.
+     */
+    public function paymentBadgeLabel(): string
+    {
+        $method = $this->payment_method->getLabel();
+
+        return match (true) {
+            $this->isPaid() => $method.' · Paid',
+            $this->payment_method->isOnline() => $method.' · Unpaid',
+            default => $method,
+        };
+    }
+
+    /**
+     * Unpaid is the one word drawn in red, because the call an operator makes
+     * about it is a different call — "pay now or switch to cash" rather than
+     * "confirm the address".
+     */
+    public function paymentBadgeColor(): string
+    {
+        return match (true) {
+            $this->isPaid() => 'success',
+            $this->payment_method->isOnline() => 'danger',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * Load the answer to `isPaid()` onto every Order a query returns, so a
+     * screen listing Orders asks the database once rather than once per row.
+     *
+     * @param  Builder<Order>  $query
+     */
+    #[Scope]
+    protected function withPaidFlag(Builder $query): void
+    {
+        $query->withExists('paidPayments as '.self::PAID_FLAG);
+    }
+
+    /**
+     * The Unpaid Orders: an online method and no Paid Payment. What an
+     * operator chases with "pay now or switch to cash".
+     *
+     * @param  Builder<Order>  $query
+     */
+    #[Scope]
+    protected function unpaid(Builder $query): void
+    {
+        $query->where('payment_method', '!=', PaymentMethod::CashOnDelivery)
+            ->whereDoesntHave('paidPayments');
+    }
+
+    /**
+     * The Orders that are both Paid and Cancelled at once: the operator's
+     * decision and the money's story, kept side by side until somebody refunds
+     * (ADR-0013). What an operator opens this list to refund.
+     *
+     * @param  Builder<Order>  $query
+     */
+    #[Scope]
+    protected function paidButCancelled(Builder $query): void
+    {
+        $query->where('status', OrderStatus::Cancelled)
+            ->whereHas('paidPayments');
     }
 
     /**
@@ -190,6 +273,17 @@ class Order extends Model
     public function paidPayments(): HasMany
     {
         return $this->payments()->where('state', PaymentState::Paid);
+    }
+
+    /**
+     * The Payments nothing has been verified about yet: the ones a Verification
+     * is still worth making for, and the ones "check with gateway" asks about.
+     *
+     * @return HasMany<Payment, $this>
+     */
+    public function pendingPayments(): HasMany
+    {
+        return $this->payments()->where('state', PaymentState::Pending);
     }
 
     /**
