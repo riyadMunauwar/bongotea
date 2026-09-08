@@ -129,7 +129,7 @@ The Payment Method where the courier collects the total at the door. The one met
 _Avoid_: COD-only, offline, manual
 
 **Payment**:
-One attempt to collect an Order's total through one online Payment Method, from the moment the Customer is sent to the gateway until the gateway's answer is verified. An Order may hold several; at most one ends Paid. A Payment records the amount it was for, which is the Order's total today and need not always be. Its outcome is its own axis, separate from whether the Order is New, Confirmed or Cancelled: neither ever overwrites the other.
+One attempt to collect an Order's total through one online Payment Method, from the moment the Customer is sent to the gateway until the gateway's answer is verified. An Order may hold several; one is meant to end Paid, and a second that does is recorded Paid all the same and flags the Order as paid twice, because money moved and somebody must refund it. A Payment records the amount it was for, which is the Order's total today and need not always be. Its outcome is its own axis, separate from whether the Order is New, Confirmed or Cancelled: neither ever overwrites the other.
 _Avoid_: transaction, charge, payment attempt, payment status (of an Order)
 
 **Paid**:

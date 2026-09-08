@@ -7,6 +7,7 @@ use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
 use App\Support\Orders\OrderCapture;
 use App\Support\Payments\PaymentStarter;
+use App\Support\Payments\PaymentStillPending;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -118,11 +119,28 @@ class CheckoutController extends Controller
      * The Order exists before the gateway is asked, so a gateway that cannot
      * be reached keeps the Order and lands the Customer on the Retry Page
      * rather than turning them away (ADR-0013).
+     *
+     * A Payment refused because another is Pending and only seconds old is
+     * the one outcome with something to say: the Customer is sent to the
+     * Retry Page with the reason beside the chooser, so a second tap reads
+     * as "wait" rather than as nothing having happened.
      */
     private function sendOn(Request $request, Order $order): JsonResponse|RedirectResponse
     {
-        $destination = $this->payments->start($order) ?? $order->followingPageUrl();
+        $errors = [];
 
+        try {
+            $destination = $this->payments->start($order) ?? $order->followingPageUrl();
+        } catch (PaymentStillPending $refusal) {
+            $destination = route('checkout.retry', $order->order_number);
+            $errors = ['payment_method' => $refusal->getMessage()];
+        }
+
+        /**
+         * The reason rides only on the form post: the Retry Page is a plain
+         * form, and Capture, the one JSON caller, cannot be refused this way
+         * because its Order has no Payment yet to be Pending.
+         */
         if ($request->expectsJson()) {
             return response()->json(['redirect' => $destination], ResponseCode::HTTP_CREATED);
         }
@@ -132,6 +150,6 @@ class CheckoutController extends Controller
          * Other guarantees the browser follows with a GET rather than
          * re-submitting the order on a refresh.
          */
-        return redirect()->to($destination, ResponseCode::HTTP_SEE_OTHER);
+        return redirect()->to($destination, ResponseCode::HTTP_SEE_OTHER)->withErrors($errors);
     }
 }

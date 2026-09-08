@@ -2248,23 +2248,38 @@ it('records the method a customer chose from the chooser', function () {
     expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
 });
 
-it('refuses a method the page never listed and captures nothing', function (string $method) {
+it('refuses a name nothing knows and captures nothing', function () {
     $page = sellingPage(Product::factory()->create());
 
     /**
-     * A known name the page does not offer and a name nothing knows arrive the
-     * same way — nothing on screen offers either — and are refused beside the
-     * chooser rather than placed under whatever the payload claims.
+     * Nothing on screen offers a name that is not a method at all: a
+     * hand-made post, refused beside the chooser rather than placed under
+     * whatever the payload claims.
      */
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => $method]))
+    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'gold-bars']))
         ->assertUnprocessable()
         ->assertJsonPath('errors.payment_method.0', 'Please choose one of the payment methods listed.');
 
     expect(Order::count())->toBe(0);
-})->with([
-    'an online method no page can offer yet' => ['bkash'],
-    'a name nothing knows' => ['gold-bars'],
-]);
+});
+
+it('captures a known method the page does not offer as unpaid rather than refusing it', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A known name the page does not offer now cannot be told from one it
+     * offered when the form was drawn — a Merchant edits the payment tab
+     * under live forms — so it is taken and left Unpaid, with no Payment,
+     * and the Customer lands on the Retry Page (ADR-0013).
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'bkash']))
+        ->assertCreated()
+        ->assertJsonPath('redirect', route('checkout.retry', Order::sole()->order_number));
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::Bkash)
+        ->and(Order::sole()->isUnpaid())->toBeTrue()
+        ->and(Order::sole()->payments()->count())->toBe(0);
+});
 
 it('reads a config written before a method could be chosen as cash on delivery alone', function () {
     $page = sellingPage(Product::factory()->create());

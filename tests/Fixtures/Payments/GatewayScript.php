@@ -25,8 +25,8 @@ abstract class GatewayScript
     /** Where the gateway sends a Customer to pay. */
     abstract public function gatewayPageUrl(): string;
 
-    /** The gateway's own reference for a Payment the Customer comes back with. */
-    abstract public function gatewayReference(): string;
+    /** The gateway's own reference for this Payment, the one the Customer comes back with; distinct per Payment, as a gateway's are. */
+    abstract public function gatewayReference(Payment $payment): string;
 
     /** Fake the gateway accepting a Payment and answering with its page. */
     abstract public function fakeStart(): void;

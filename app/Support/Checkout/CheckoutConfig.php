@@ -534,29 +534,24 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * The Payment Methods a Capture may name: everything this Page lists,
-     * offered now or not, and whatever it offers now besides.
+     * The Payment Methods a Capture may name: every method the system knows,
+     * offered by this Page now or not.
      *
      * Wider than `offeredMethods()` on purpose. A form on a Customer's phone
      * was drawn from the Page as it stood, and a method the installation has
-     * since switched off is still one that form offered in good faith. Such a
-     * Capture is taken and left Unpaid, and the Customer lands on the Retry
-     * Page, rather than being turned away for a Merchant's toggle (ADR-0013).
-     * A name the Page never listed is a hand-made post, and is refused.
+     * since switched off, or the Merchant has since taken off the Page's tab,
+     * is still one that form offered in good faith — and at Capture the two
+     * cannot be told from a name the Page never listed. So any known name is
+     * taken: a method the Page offers now starts a Payment as ever, and any
+     * other captures Unpaid with no Payment and lands the Customer on the
+     * Retry Page, rather than turning them away for a Merchant's edit
+     * (ADR-0013). Only a name that is no method at all is refused.
      *
      * @return list<PaymentMethod>
      */
     public function acceptedMethods(): array
     {
-        $accepted = $this->paymentMethods;
-
-        foreach ($this->offeredMethods() as $method) {
-            if (! in_array($method, $accepted, true)) {
-                $accepted[] = $method;
-            }
-        }
-
-        return $accepted;
+        return PaymentMethod::cases();
     }
 
     /**
@@ -568,9 +563,9 @@ class CheckoutConfig implements Arrayable
      * Cash on Delivery where the Page offers it — a Page that draws no chooser
      * posts no method, and a plain post that lost the radio should land where
      * the form would have opened — and null where it does not, which the
-     * request refuses before a Capture is reached. A name the Page never
-     * listed is null too, for the same treatment; a name it lists but cannot
-     * offer now is taken, and captures Unpaid.
+     * request refuses before a Capture is reached. A name that is no method
+     * at all is null too, for the same treatment; a known name the Page does
+     * not offer now is taken, and captures Unpaid.
      */
     public function paymentMethodFor(?string $name): ?PaymentMethod
     {

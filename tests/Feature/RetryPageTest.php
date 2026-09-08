@@ -3,6 +3,7 @@
 use App\Enums\PaymentMethod;
 use App\Models\Order;
 use App\Models\Page;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Support\Money;
 use App\Support\Settings\PaymentSettings;
@@ -99,18 +100,56 @@ it('sends a plain form post under an online method to the retry page with a 303 
         ->assertRedirect(route('checkout.retry', Order::sole()->order_number));
 });
 
-it('still refuses a method the page never listed, however usable the installation finds it', function () {
+it('captures a known method the page never listed as unpaid, because a form drawn before the tab was edited looks the same', function () {
+    Http::fake();
+
     offeringSslCommerz();
 
     /** Offers cash only; SSLCommerz is usable but not this page's. */
     $page = sellingPage(Product::factory()->create());
 
     $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'sslcommerz']))
-        ->assertUnprocessable()
-        ->assertJsonPath('errors.payment_method.0', 'Please choose one of the payment methods listed.');
+        ->assertCreated()
+        ->assertJsonPath('redirect', route('checkout.retry', Order::sole()->order_number));
 
-    expect(Order::count())->toBe(0);
+    /** Taken and kept Unpaid with no Payment and no gateway spoken to; the Retry Page offers what the page offers. */
+    Http::assertNothingSent();
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::SslCommerz)
+        ->and(Order::sole()->isUnpaid())->toBeTrue()
+        ->and(Payment::count())->toBe(0);
+
+    $this->get(route('checkout.retry', Order::sole()->order_number))
+        ->assertOk()
+        ->assertSee('Cash on Delivery')
+        ->assertDontSee('value="sslcommerz"', escape: false);
 });
+
+it('never refuses a submission for an edit of the payment tab made while the form was on a customer\'s screen', function (array $methods, bool $showLogos, bool $paymentStarted) {
+    Http::fake();
+
+    $page = pageOfferingSslCommerz();
+
+    /** Written from the page as the customer's screen has it. */
+    $payload = capturePayload($page, ['payment_method' => 'sslcommerz']);
+
+    payingBy($page, $methods, showLogos: $showLogos);
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    $order = Order::sole();
+
+    expect($order->payment_method)->toBe(PaymentMethod::SslCommerz)
+        ->and($order->isUnpaid())->toBeTrue()
+        ->and(Payment::count())->toBe($paymentStarted ? 1 : 0);
+
+    /** A method the page still offers starts a Payment as ever; one it removed captures Unpaid and asks the gateway nothing. */
+    $paymentStarted ? Http::assertSentCount(1) : Http::assertNothingSent();
+})->with([
+    'the methods reordered' => [['cash_on_delivery', 'sslcommerz'], true, true],
+    'the logos switched off' => [['sslcommerz', 'cash_on_delivery'], false, true],
+    'the method removed' => [['cash_on_delivery'], true, false],
+]);
 
 it('captures a method the page lists but can no longer offer as unpaid, rather than turning the customer away', function () {
     $page = pageOfferingSslCommerz();
@@ -121,7 +160,7 @@ it('captures a method the page lists but can no longer offer as unpaid, rather t
     app(PaymentSettings::class)->with(['sslcommerzEnabled' => false])->save();
 
     expect($page->refresh()->checkout_config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery])
-        ->and($page->checkout_config->acceptedMethods())->toBe([PaymentMethod::SslCommerz, PaymentMethod::CashOnDelivery]);
+        ->and($page->checkout_config->acceptedMethods())->toBe(PaymentMethod::cases());
 
     /** A Merchant's toggle is not the customer's mistake: the order is kept and the retry page offers what can be offered now (ADR-0013). */
     $this->postJson(route('checkout.store'), $payload)

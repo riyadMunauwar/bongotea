@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Settings\PaymentSettings;
 use Illuminate\Support\Facades\Http;
+use Spatie\Activitylog\Models\Activity;
 use Tests\Fixtures\Payments\GatewayScript;
 use Tests\Fixtures\Payments\SslCommerzScript;
 
@@ -193,7 +194,7 @@ it('renders the processing page on the gateway\'s return, outside request-forger
         ->assertDontSee('01712345678');
 
     /** The return is read for the gateway's reference and nothing more: the state waits for a Verification. */
-    expect($payment->refresh()->gateway_reference)->toBe($gateway->gatewayReference())
+    expect($payment->refresh()->gateway_reference)->toBe($gateway->gatewayReference($payment))
         ->and($payment->state)->toBe(PaymentState::Pending);
 
     /** A refresh of the same address is harmless. */
@@ -218,7 +219,7 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
 
     expect($payment->state)->toBe(PaymentState::Paid)
         ->and($payment->verified_at)->not->toBeNull()
-        ->and($payment->gateway_reference)->toBe($gateway->gatewayReference())
+        ->and($payment->gateway_reference)->toBe($gateway->gatewayReference($payment))
         ->and($payment->verification_response)->not->toBeEmpty()
         ->and($order->isPaid())->toBeTrue()
         ->and($order->isUnpaid())->toBeFalse()
@@ -468,3 +469,170 @@ it('goes to the live host once the sandbox switch is off', function () {
 
     Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'));
 });
+
+/**
+ * A second Pending Payment on the Order, started once the first is old
+ * enough to be retried: the Customer back on the Retry Page a minute later
+ * choosing the gateway again, with the first attempt still unanswered.
+ */
+function secondPaymentStartedAfterTheWait(GatewayScript $gateway, Payment $first): Payment
+{
+    test()->travel(Payment::RETRY_WAIT_SECONDS + 1)->seconds();
+
+    $gateway->fakeStart();
+
+    test()->post(route('checkout.retry.choose', $first->order->order_number), ['payment_method' => $gateway->method()->value])
+        ->assertStatus(303)
+        ->assertRedirect($gateway->gatewayPageUrl());
+
+    /** The relation reads oldest first; the newest is the one just started. */
+    return $first->order->payments()->get()->last();
+}
+
+it('refuses a second payment while one is pending and only seconds old, and says so on the retry page', function (GatewayScript $gateway) {
+    $payment = capturedFor($gateway);
+
+    $order = $payment->order;
+
+    /** Tapped again with the first attempt seconds old: refused beside the chooser, no Payment made, no gateway spoken to. */
+    $this->from(route('checkout.retry', $order->order_number))
+        ->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => $gateway->method()->value])
+        ->assertStatus(303)
+        ->assertRedirect(route('checkout.retry', $order->order_number))
+        ->assertSessionHasErrors(['payment_method' => 'A payment you started a moment ago is still being confirmed. Please wait a minute before trying again.']);
+
+    /** Followed the way a browser follows it, the Retry Page says so beside the chooser. */
+    $this->followingRedirects()
+        ->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => $gateway->method()->value])
+        ->assertOk()
+        ->assertSee('not yet paid')
+        ->assertSee('still being confirmed');
+
+    expect(Payment::count())->toBe(1)
+        ->and($payment->refresh()->state)->toBe(PaymentState::Pending);
+
+    /** Asked once, at Capture; the refused attempt never reached the gateway. */
+    Http::assertSentCount(1);
+
+    /** A minute on, the same choice starts the next attempt. */
+    $retry = secondPaymentStartedAfterTheWait($gateway, $payment);
+
+    expect(Payment::count())->toBe(2)
+        ->and($retry->state)->toBe(PaymentState::Pending)
+        ->and($retry->invoice_reference)->toBe($order->order_number.'-2');
+})->with('online gateways');
+
+it('still lets the customer switch to cash on delivery while a payment is pending and seconds old', function (GatewayScript $gateway) {
+    $payment = capturedFor($gateway);
+
+    $this->post(route('checkout.retry.choose', $payment->order->order_number), ['payment_method' => 'cash_on_delivery'])
+        ->assertStatus(303)
+        ->assertRedirect(route('checkout.confirmation', $payment->order->order_number));
+
+    expect($payment->order->refresh()->payment_method)->toBe(PaymentMethod::CashOnDelivery)
+        ->and(Payment::count())->toBe(1);
+})->with('online gateways');
+
+it('records a second paid payment as paid and flags the order as paid twice', function (GatewayScript $gateway) {
+    $first = capturedFor($gateway);
+    $second = secondPaymentStartedAfterTheWait($gateway, $first);
+
+    $order = $first->order;
+
+    /** Both attempts come back taken: the Customer paid in two tabs, or twice from the gateway's app. */
+    foreach ([$first, $second] as $payment) {
+        $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
+        $gateway->fakeVerifiedPaid($payment);
+        $this->postJson(verifyUrl($payment))
+            ->assertOk()
+            ->assertJsonPath('redirect', route('checkout.confirmation', $order->order_number));
+    }
+
+    /** Money moved twice, so both are recorded Paid as they are — and the Order is flagged, because someone must refund one. */
+    expect($first->refresh()->state)->toBe(PaymentState::Paid)
+        ->and($second->refresh()->state)->toBe(PaymentState::Paid)
+        ->and($order->refresh()->isPaid())->toBeTrue()
+        ->and($order->isPaidTwice())->toBeTrue()
+        ->and($order->status)->toBe(OrderStatus::New);
+
+    $flag = Activity::query()->where('subject_type', Order::class)->where('subject_id', $order->getKey())->where('event', 'paid_twice')->sole();
+
+    expect($flag->description)->toContain('paid twice')
+        ->and($flag->properties->get('payments'))->toBe([$first->invoice_reference, $second->invoice_reference]);
+})->with('online gateways');
+
+it('does not read one paid payment as paid twice', function () {
+    $order = Payment::factory()->paid()->create()->order;
+
+    expect($order->isPaid())->toBeTrue()
+        ->and($order->isPaidTwice())->toBeFalse()
+        ->and(Activity::query()->where('event', 'paid_twice')->exists())->toBeFalse();
+});
+
+it('starts no payment for an order that is already paid, and sends the customer to the thank-you page', function (GatewayScript $gateway) {
+    $payment = capturedFor($gateway);
+
+    $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
+    $gateway->fakeVerifiedPaid($payment);
+    $this->postJson(verifyUrl($payment))->assertOk();
+
+    $order = $payment->order;
+
+    $this->travel(Payment::RETRY_WAIT_SECONDS + 1)->seconds();
+
+    Http::fake();
+
+    /** A Retry Page left open in another tab, posted after the money moved: nothing to collect, so nothing is started. */
+    $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => $gateway->method()->value])
+        ->assertStatus(303)
+        ->assertRedirect(route('checkout.confirmation', $order->order_number));
+
+    Http::assertNothingSent();
+
+    expect(Payment::count())->toBe(1)
+        ->and($order->refresh()->payment_method)->toBe($gateway->method());
+})->with('online gateways');
+
+it('records paid against a cancelled order and leaves it cancelled, so the order reads as both', function (GatewayScript $gateway) {
+    $payment = capturedFor($gateway);
+
+    /** The operator cancelled while the Customer was at the gateway. */
+    $payment->order->update(['status' => OrderStatus::Cancelled]);
+
+    $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
+    $gateway->fakeVerifiedPaid($payment);
+    $this->postJson(verifyUrl($payment))
+        ->assertOk()
+        ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
+
+    $order = $payment->order->refresh();
+
+    /** The operator's decision and the money's story are both kept, until somebody refunds (ADR-0013). */
+    expect($payment->refresh()->state)->toBe(PaymentState::Paid)
+        ->and($order->status)->toBe(OrderStatus::Cancelled)
+        ->and($order->isPaid())->toBeTrue()
+        ->and($order->isUnpaid())->toBeFalse();
+})->with('online gateways');
+
+it('never marks paid on a success return the verification does not confirm, whatever the return says', function (GatewayScript $gateway, string $fake, PaymentState $state) {
+    $payment = capturedFor($gateway);
+
+    /** A return claiming success in every field a gateway writes — replayed, forged, or real but unconfirmable. */
+    $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
+
+    expect($payment->refresh()->state)->toBe(PaymentState::Pending);
+
+    $gateway->{$fake}($payment);
+
+    $this->postJson(verifyUrl($payment))
+        ->assertOk()
+        ->assertJsonPath('redirect', route('checkout.retry', $payment->order->order_number));
+
+    expect($payment->refresh()->state)->toBe($state)
+        ->and($payment->verified_at)->toBeNull()
+        ->and($payment->order->isPaid())->toBeFalse()
+        ->and($payment->order->isUnpaid())->toBeTrue();
+})->with('online gateways')->with([
+    'the gateway says the transaction is invalid' => ['fakeVerifiedInvalid', PaymentState::Failed],
+    'the gateway cannot be reached to confirm it' => ['fakeOutage', PaymentState::Pending],
+]);

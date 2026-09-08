@@ -288,9 +288,10 @@ class StoreOrderRequest extends FormRequest
             'delivery_option.in' => 'Please choose one of the delivery options listed.',
 
             /**
-             * A name the Page never listed is a stale form or a hand-made
-             * post, and reads as one: nothing on screen offers a method the
-             * Page does not.
+             * Only a name that is no method at all is refused here — a
+             * known method the Page does not offer captures Unpaid, because
+             * a form drawn before the Merchant edited the tab looks the
+             * same — and it reads as the hand-made post it is.
              */
             'payment_method.required' => 'Please choose how you would like to pay.',
             'payment_method.in' => 'Please choose one of the payment methods listed.',

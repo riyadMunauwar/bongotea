@@ -28,7 +28,8 @@ final class SslCommerzScript extends GatewayScript
 
     private const SESSION_KEY = '3CB2A6A2C4C0E8A7F5D1B9E2A1C3D4E5';
 
-    private const VALIDATION_ID = '2609081200001AbCdEfGhIjK';
+    /** What every validation id of the gateway's opens with; the rest names the attempt, so two Payments never share one. */
+    private const VALIDATION_ID_PREFIX = '2609081200001';
 
     public function method(): PaymentMethod
     {
@@ -49,9 +50,9 @@ final class SslCommerzScript extends GatewayScript
         return self::HOST.'/EasyCheckOut/testcde'.self::SESSION_KEY;
     }
 
-    public function gatewayReference(): string
+    public function gatewayReference(Payment $payment): string
     {
-        return self::VALIDATION_ID;
+        return self::VALIDATION_ID_PREFIX.strtoupper(str_replace('-', '', $payment->invoice_reference));
     }
 
     public function fakeStart(): void
@@ -117,12 +118,12 @@ final class SslCommerzScript extends GatewayScript
 
     public function paidReturn(Payment $payment): array
     {
-        return $this->returnFields($payment, 'VALID') + ['val_id' => self::VALIDATION_ID, 'bank_tran_id' => '2609081200001BANK'];
+        return $this->returnFields($payment, 'VALID') + ['val_id' => $this->gatewayReference($payment), 'bank_tran_id' => '2609081200001BANK'];
     }
 
     public function failedReturn(Payment $payment): array
     {
-        return $this->returnFields($payment, 'FAILED') + ['val_id' => self::VALIDATION_ID, 'error' => 'Transaction failed'];
+        return $this->returnFields($payment, 'FAILED') + ['val_id' => $this->gatewayReference($payment), 'error' => 'Transaction failed'];
     }
 
     public function cancelledReturn(Payment $payment): array
@@ -132,12 +133,12 @@ final class SslCommerzScript extends GatewayScript
 
     public function fakeVerifiedPaid(Payment $payment): void
     {
-        $this->fakeValidation($this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount)));
+        $this->fakeValidation($payment, $this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount)));
     }
 
     public function fakeVerifiedShort(Payment $payment): void
     {
-        $this->fakeValidation($this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount - 100)));
+        $this->fakeValidation($payment, $this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount - 100)));
     }
 
     /**
@@ -146,13 +147,13 @@ final class SslCommerzScript extends GatewayScript
      */
     public function fakeVerifiedInvalid(Payment $payment): void
     {
-        $this->fakeValidation(['status' => 'INVALID_TRANSACTION']);
+        $this->fakeValidation($payment, ['status' => 'INVALID_TRANSACTION']);
         $this->fakeTransactionQuery($payment, 'FAILED', 'Transaction failed');
     }
 
     public function fakeVerifiedForAnotherPayment(Payment $payment): void
     {
-        $this->fakeValidation(['tran_id' => 'OTHER123-1'] + $this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount)));
+        $this->fakeValidation($payment, ['tran_id' => 'OTHER123-1'] + $this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount)));
         $this->fakeTransactionQuery($payment, 'VALID', '');
     }
 
@@ -208,7 +209,7 @@ final class SslCommerzScript extends GatewayScript
             'status' => $status,
             'tran_date' => '2026-09-08 12:00:00',
             'tran_id' => $payment->invoice_reference,
-            'val_id' => self::VALIDATION_ID,
+            'val_id' => $this->gatewayReference($payment),
             'amount' => $amount,
             'store_amount' => Money::toMajorString($payment->amount - 2625),
             'currency' => 'BDT',
@@ -241,25 +242,32 @@ final class SslCommerzScript extends GatewayScript
     }
 
     /**
+     * The validation API, asked by this Payment's own validation id.
+     *
+     * Matched on the id in the request rather than on the address alone, so
+     * the fakes for two Payments on one Order stand side by side and each
+     * answers for its own; a question about any other id falls through.
+     *
      * @param  array<string, mixed>  $response
      */
-    private function fakeValidation(array $response): void
+    private function fakeValidation(Payment $payment, array $response): void
     {
-        Http::fake([self::HOST.'/validator/api/validationserverAPI.php*' => Http::response($response)]);
+        $this->fakeAnswerWhenAsked('/validator/api/validationserverAPI.php', 'val_id', $this->gatewayReference($payment), $response);
     }
 
     /**
      * The transaction query by our reference, answering one attempt in the
-     * given status.
+     * given status; matched on the reference for the reason the validation
+     * fake is matched on its id.
      */
     private function fakeTransactionQuery(Payment $payment, string $status, string $error): void
     {
-        Http::fake([self::HOST.'/validator/api/merchantTransIDvalidationAPI.php*' => Http::response([
+        $this->fakeAnswerWhenAsked('/validator/api/merchantTransIDvalidationAPI.php', 'tran_id', $payment->invoice_reference, [
             'APIConnect' => 'DONE',
             'no_of_trans_found' => 1,
             'element' => [[
                 'tran_id' => $payment->invoice_reference,
-                'val_id' => $status === 'VALID' ? self::VALIDATION_ID : '',
+                'val_id' => $status === 'VALID' ? $this->gatewayReference($payment) : '',
                 'status' => $status,
                 'amount' => Money::toMajorString($payment->amount),
                 'store_amount' => $status === 'VALID' ? Money::toMajorString($payment->amount - 2625) : '0.00',
@@ -270,6 +278,19 @@ final class SslCommerzScript extends GatewayScript
                 'currency_amount' => Money::toMajorString($payment->amount),
                 'error' => $error,
             ]],
-        ])]);
+        ]);
+    }
+
+    /**
+     * One answer for one question: the gateway path, and the reference the
+     * question must carry. Any other question falls through to the next fake.
+     *
+     * @param  array<string, mixed>  $response
+     */
+    private function fakeAnswerWhenAsked(string $path, string $parameter, string $reference, array $response): void
+    {
+        Http::fake(fn (Request $request) => str_starts_with($request->url(), self::HOST.$path) && $request[$parameter] === $reference
+            ? Http::response($response)
+            : null);
     }
 }

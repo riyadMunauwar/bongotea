@@ -6,6 +6,7 @@ use App\Enums\PaymentState;
 use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Verification: the system asking a gateway, in a call of its own, whether a
@@ -54,7 +55,39 @@ class PaymentVerifier
 
             $current->save();
 
+            if ($verification->isPaid()) {
+                $this->flagIfPaidTwice($current);
+            }
+
             return $current;
         });
+    }
+
+    /**
+     * Money that moved twice is recorded as it is, because it happened, and
+     * the Order is flagged on its own trail, because somebody must refund
+     * one: the second Paid Payment is a fact about the money, never a reason
+     * to record it as anything else (ADR-0013). Nobody caused it — a
+     * Verification runs from a page, a Notification or the sweep — so the
+     * entry names no User, and the log carries the same word for whoever
+     * watches it rather than the trail.
+     */
+    private function flagIfPaidTwice(Payment $paid): void
+    {
+        $order = $paid->order;
+
+        if (! $order->isPaidTwice()) {
+            return;
+        }
+
+        $references = $order->paidPayments()->pluck('invoice_reference')->all();
+
+        Log::warning("Order [{$order->order_number}] was paid twice.", ['payments' => $references]);
+
+        activity()
+            ->performedOn($order)
+            ->event('paid_twice')
+            ->withProperties(['payments' => $references])
+            ->log("Order {$order->order_number} was paid twice; one payment must be refunded.");
     }
 }

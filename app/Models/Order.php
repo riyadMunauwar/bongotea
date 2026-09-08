@@ -168,7 +168,43 @@ class Order extends Model
      */
     public function isPaid(): bool
     {
-        return $this->payments()->where('state', PaymentState::Paid)->exists();
+        return $this->paidPayments()->exists();
+    }
+
+    /**
+     * Whether money moved more than once: two Payments a Verification has
+     * marked Paid. Each is recorded as it is, because it happened; the Order
+     * is flagged, because somebody must refund one (ADR-0013).
+     */
+    public function isPaidTwice(): bool
+    {
+        return $this->paidPayments()->count() > 1;
+    }
+
+    /**
+     * The Payments a Verification has marked Paid: the one reading of "money
+     * moved for this Order", oldest first.
+     *
+     * @return HasMany<Payment, $this>
+     */
+    public function paidPayments(): HasMany
+    {
+        return $this->payments()->where('state', PaymentState::Paid);
+    }
+
+    /**
+     * The Payment the Customer was sent to the gateway for only seconds ago
+     * and nothing has been verified about yet, if there is one: what holds
+     * off starting another, so a Customer tapping again cannot pay twice.
+     * Null once the wait is over, or once it is settled either way.
+     */
+    public function recentPendingPayment(): ?Payment
+    {
+        return $this->payments()
+            ->where('state', PaymentState::Pending)
+            ->where('created_at', '>', now()->subSeconds(Payment::RETRY_WAIT_SECONDS))
+            ->latest('id')
+            ->first();
     }
 
     /**

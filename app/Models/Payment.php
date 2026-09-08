@@ -40,6 +40,16 @@ class Payment extends Model
     /** @use HasFactory<PaymentFactory> */
     use HasFactory;
 
+    /**
+     * How long a Pending Payment holds off another on the same Order.
+     *
+     * A Customer who taps again seconds after being sent to the gateway is
+     * about to pay twice; one who comes back a minute later with the
+     * first attempt still unanswered has given up on it. About a minute is
+     * the line between the two, and the Retry Page says so while it holds.
+     */
+    public const RETRY_WAIT_SECONDS = 60;
+
     protected function casts(): array
     {
         return [
