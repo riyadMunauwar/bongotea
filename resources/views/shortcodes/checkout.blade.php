@@ -87,9 +87,31 @@
             shortcode into. The island does not own that document and has no
             business escaping it.
         --}}
-        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: var(--gio-max-width); margin: 1.5rem auto; padding: 1rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: var(--gio-font-size); color: var(--gio-text); accent-color: var(--gio-accent); }
-        .gio-checkout-products { margin: 0 0 1.25rem; }
-        .gio-checkout-product + .gio-checkout-product { margin: 1rem 0 0; padding: 1rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); }
+        {{--
+            No panel. The island sits inside a page the merchant already
+            designed, so a box of its own would double-frame whatever they drew
+            around it; a merchant who wants one writes it into their own
+            stylesheet, which is what the flat sheet exists to allow. With no
+            box there is nothing to inset from, so no padding either — the form
+            sits flush with the element the shortcode was dropped in. What is
+            bordered instead is what a thumb has to hit: the boxes a customer
+            types into and the product rows they pick, with a hairline rule
+            between one section and the next and structural whitespace for
+            everything else.
+
+            The split block's arithmetic reads the root's edges, so a padding
+            or a border put back here has to be added to the figures there.
+        --}}
+        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: var(--gio-max-width); margin: 1.5rem auto; font-family: inherit; font-size: var(--gio-font-size); color: var(--gio-text); accent-color: var(--gio-accent); }
+        .gio-checkout-products { margin: 0 0 1.25rem; padding: 0 0 1.25rem; border-bottom: var(--gio-border-width) solid var(--gio-border); }
+        {{--
+            A product row is boxed like the boxes a customer types into — the
+            same border token, the same width, the same radius — because it is
+            the same kind of thing: something a thumb has to hit. One
+            redeclaration restyles all of them together.
+        --}}
+        .gio-checkout-product { padding: .75rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-checkout-product + .gio-checkout-product { margin: .5rem 0 0; }
         .gio-checkout-product-head { display: flex; gap: .75rem; align-items: center; }
         .gio-checkout-pickable { display: grid; grid-template-columns: auto 1fr; column-gap: .625rem; }
         .gio-checkout-pickable > * { grid-column: 2; }
@@ -110,10 +132,23 @@
             where it was. Nothing between here and the root sets a font size, so
             nothing compounds.
         --}}
-        .gio-checkout-name { margin: 0 0 .25rem; font-size: 1em; font-weight: 600; }
-        .gio-checkout-price { margin: 0; font-size: 1.125em; font-weight: 700; }
+        {{--
+            The row reads as a cart line: the picture, then the name taking
+            what is left, then the price at the far end where a customer
+            expects a figure. `min-width: 0` on the name is what lets a long
+            one wrap rather than push the price out of the row.
+        --}}
+        .gio-checkout-name { flex: 1; min-width: 0; margin: 0; font-size: 1em; font-weight: 600; }
+        .gio-checkout-price { margin: 0; font-size: 1.125em; font-weight: 700; white-space: nowrap; }
         .gio-checkout-description { margin: .5rem 0 0; font-size: .875em; line-height: 1.5; }
-        .gio-checkout-quantity { margin: .75rem 0 0; }
+        {{--
+            The word and the stepper on one line, and the refusal — when there
+            is one — on a line of its own beneath them, which is what the wrap
+            and the full-width slot are for. Both of the slot's rules sit below
+            the one-class rules they narrow and beat them by order, the same
+            trade as everywhere else in this sheet.
+        --}}
+        .gio-checkout-quantity { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: .75rem 0 0; }
         .gio-checkout-form { margin: 0; }
         {{--
             The questions, as a grid rather than as a stack of margins. One
@@ -131,7 +166,7 @@
             are the root's, so a field that overrides nothing renders as it did.
         --}}
         {{--
-            `min-width: 0` is what stops a paired question overflowing the card.
+            `min-width: 0` is what stops a paired question overflowing the island.
 
             A grid item's `min-width` is `auto`, which is its content's
             min-content width — and an input's is about twenty characters
@@ -170,6 +205,7 @@
         --}}
         @media (min-width: 30rem) { .gio-checkout-fields { grid-template-columns: 1fr 1fr; } .gio-checkout-field { grid-column: span 2; } .gio-checkout-field-half { grid-column: span 1; } }
         .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125em; font-weight: 600; }
+        .gio-checkout-quantity-label { margin: 0; }
         .gio-checkout-help { margin: 0 0 .375rem; font-size: .75em; line-height: 1.4; opacity: .75; }
         {{--
             One scale, two declarations. The padding is stated in `em`, so it is
@@ -180,17 +216,29 @@
         .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625em .75em; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: calc(1em * var(--gio-input-size)); background: var(--gio-background); color: inherit; }
         .gio-checkout-input:focus { outline: 2px solid var(--gio-accent); outline-offset: -1px; }
         {{--
-            Below the rule it narrows, and that is the whole of what makes it
-            work: the stepper carries both classes, both selectors are one
-            class, so the later declaration is the one that applies. It sat
-            above and has never had any effect — a stepper for a quantity of one
-            has been running the full width of the form since it was written.
+            The stepper is one bordered box holding three things: minus, the
+            number, plus. The border and the radius are the wrapper's, so the
+            box inside gives its own up — below the rule it narrows, and that
+            is the whole of what makes it work: the box carries both classes,
+            both selectors are one class, so the later declaration is the one
+            that applies. Painted with the background token like any box a
+            customer types into.
 
-            Sized off the same scale as the box it is, so a form asked for at
-            Large does not get a wider stepper's worth of type in a box that
-            stayed where it was.
+            The number stays a real numeric input, and its native spinner is
+            left alone. That spinner and the keyboard are the stepper a
+            customer whose script never runs gets, and they honour the same
+            bounds the buttons do — so a quantity is never blocked by the
+            browser from being something the capture would have taken.
+
+            The buttons carry no border of their own and no background, so a
+            merchant's `--gio-border` restyles the whole control at once.
+            Everything is sized off the same scale as the box, so a form asked
+            for at Large does not get a wider stepper's worth of type in a box
+            that stayed where it was.
         --}}
-        .gio-checkout-quantity-input { width: calc(7rem * var(--gio-input-size)); }
+        .gio-checkout-stepper { display: inline-flex; align-items: stretch; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-background); overflow: hidden; }
+        .gio-checkout-step { flex: none; width: calc(2.25rem * var(--gio-input-size)); padding: 0; border: 0; background: transparent; color: inherit; font-family: inherit; font-size: calc(1.125em * var(--gio-input-size)); line-height: 1; cursor: pointer; }
+        .gio-checkout-quantity-input { width: calc(3rem * var(--gio-input-size)); padding: .625em .25em; border: 0; border-radius: 0; text-align: center; }
         .gio-checkout-delivery, .gio-checkout-choices { margin: 0; padding: 0; border: 0; }
         {{--
             A row a customer taps is a box like any other, so the same scale
@@ -210,6 +258,7 @@
         .gio-checkout-choice-amount { font-weight: 600; }
         .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: #b91c1c; }
         .gio-checkout-error[data-shown] { display: block; }
+        .gio-checkout-quantity-error { flex: 1 0 100%; margin: 0; }
         .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); }
         {{--
             The summary's own size, moved down onto its rows. It sat on the
@@ -329,10 +378,8 @@
                                 <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
                             @endif
 
-                            <div>
-                                <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
-                                <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
-                            </div>
+                            <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
+                            <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
                         </{{ $productHead }}>
 
                         @if ($product->description)
@@ -347,25 +394,49 @@
                                 times. The visible label stays the visible label, which
                                 is what a voice-control user says out loud.
                             --}}
-                            <label class="gio-checkout-label"
+                            <label class="gio-checkout-label gio-checkout-quantity-label"
                                    id="gio-quantity-label-{{ $product->getKey() }}"
                                    for="gio-quantity-{{ $product->getKey() }}">Quantity</label>
                             {{--
-                                Not `required` where the box can be hidden. A
-                                stepper emptied and then unticked would fail the
-                                browser's own check from behind `display: none`,
-                                which refuses to submit and shows the customer
-                                nothing at all. The server checks what was ticked
-                                either way, and the island puts that refusal in the
-                                slot below.
+                                Minus and plus flanking a real numeric input, and
+                                the input is the control. Its bounds are what keep
+                                the browser and the capture agreed on the largest
+                                quantity, and typing into it is how a customer gets
+                                from one to twelve without eleven taps — a readout
+                                that could not be typed into was rejected for both
+                                reasons. The buttons only step it, by the step it
+                                declares, and do nothing at all until the script
+                                runs; the box works without them.
+
+                                `type="button"`, because a button in a form
+                                submits it unless told otherwise, and a tap on
+                                plus must never place an order. Hidden from the
+                                accessibility tree and skipped by the keyboard:
+                                the spinbutton they step already has arrow keys
+                                and a name, and three stops per product would
+                                make a page selling five things fifteen stops
+                                long.
                             --}}
-                            <input class="gio-checkout-input gio-checkout-quantity-input"
-                                   id="gio-quantity-{{ $product->getKey() }}"
-                                   name="quantities[{{ $product->getKey() }}]"
-                                   aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
-                                   type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
-                                   inputmode="numeric" @required(! $picksProducts) data-gio-quantity>
-                            <p class="gio-checkout-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
+                            <div class="gio-checkout-stepper">
+                                <button class="gio-checkout-step" type="button" data-gio-step="-1" aria-hidden="true" tabindex="-1">&minus;</button>
+                                {{--
+                                    Not `required` where the box can be hidden. A
+                                    stepper emptied and then unticked would fail the
+                                    browser's own check from behind `display: none`,
+                                    which refuses to submit and shows the customer
+                                    nothing at all. The server checks what was ticked
+                                    either way, and the island puts that refusal in the
+                                    slot below.
+                                --}}
+                                <input class="gio-checkout-input gio-checkout-quantity-input"
+                                       id="gio-quantity-{{ $product->getKey() }}"
+                                       name="quantities[{{ $product->getKey() }}]"
+                                       aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
+                                       type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
+                                       inputmode="numeric" @required(! $picksProducts) data-gio-quantity>
+                                <button class="gio-checkout-step" type="button" data-gio-step="1" aria-hidden="true" tabindex="-1">+</button>
+                            </div>
+                            <p class="gio-checkout-error gio-checkout-quantity-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
                         </div>
                     </div>
                 @endforeach
@@ -773,6 +844,28 @@
     document.addEventListener('input', function (event) {
         var form = formFor(event);
         if (form) { retotal(form); }
+    });
+
+    /*
+     * The plus and minus beside a quantity step the box between them, and
+     * nothing more: `stepUp` and `stepDown` read the min, the max and the step
+     * the markup declares, so the buttons honour exactly the bounds the box
+     * does and a limit is written once. An `input` event follows, because a
+     * value set from script fires none and the total above would go stale.
+     */
+    document.addEventListener('click', function (event) {
+        var form = formFor(event);
+        if (!form) { return; }
+
+        var step = event.target.closest ? event.target.closest('[data-gio-step]') : null;
+        if (!step) { return; }
+
+        var box = step.parentNode.querySelector('[data-gio-quantity]');
+        if (!box) { return; }
+
+        if (parseInt(step.dataset.gioStep, 10) < 0) { box.stepDown(); } else { box.stepUp(); }
+
+        box.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     document.addEventListener('change', function (event) {

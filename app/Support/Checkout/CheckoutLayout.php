@@ -43,15 +43,16 @@ enum CheckoutLayout: string
      * and then chose split would get that figure honoured as two columns too
      * narrow to type in, and a setting that stops meaning what it says on one
      * arrangement is the kind of thing nobody reports, because nothing failed.
-     * So the container is the form column plus the twenty rem around it — a
-     * sixteen rem panel, the two rem between them, and the rem of padding on
-     * each side — plus the border, both of which count against the figure
-     * because the root is `border-box`. The token itself is left exactly as
-     * the Merchant set it. It is not given a default of its own here: the
-     * token set is sparse and filled at emission so that a Merchant's value is
-     * the only value.
+     * So the container is the form column plus the eighteen rem beside it — a
+     * sixteen rem panel and the two rem between them. Nothing for the root's
+     * own edges, because the island draws no panel and so has no padding and
+     * no border; a padding put back on the root would have to be added here,
+     * or the form column comes out narrower than the figure by that much. The
+     * token itself is left exactly as the Merchant set it. It is not given a
+     * default of its own here: the token set is sparse and filled at emission
+     * so that a Merchant's value is the only value.
      *
-     * The track then takes eighteen of those twenty back out, and reads the
+     * The track then takes the same eighteen back out, and reads the
      * Merchant's figure nowhere — which is what makes this hold for a width
      * typed as a percentage as well as for one typed as a length. A percentage
      * is measured against whatever box the declaration reading it sits on, and
@@ -61,10 +62,13 @@ enum CheckoutLayout: string
      * half of a half and not what anybody asked for. Taken off the container
      * instead, the arithmetic cancels — the container's content box is the
      * Merchant's figure plus eighteen rem, so the form column comes out as the
-     * figure itself, in whatever unit it was typed. The two constants are one
-     * subtraction apart and the difference is the base sheet's own padding;
-     * `LandingPageTest` reads all three rather than assuming them, because
+     * figure itself, in whatever unit it was typed. `LandingPageTest` reads
+     * both constants and the root's edges rather than assuming them, because
      * they are declared in two different files.
+     *
+     * The panel gives up the rule the base draws beneath it. Here the summary
+     * sits directly under the products, and the summary rules itself off
+     * above, so the two hairlines would meet as a double line between them.
      *
      * The panel is bounded below as well. A container squeezed into something
      * narrower than the arrangement needs would otherwise take the panel down
@@ -104,13 +108,13 @@ enum CheckoutLayout: string
      */
     private const SPLIT_RULES = <<<'CSS'
         @media (min-width: 60rem) {
-        .gio-checkout-split { max-width: calc(var(--gio-max-width) + 20rem + var(--gio-border-width) * 2); }
+        .gio-checkout-split { max-width: calc(var(--gio-max-width) + 18rem); }
         .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, calc(100% - 18rem)) minmax(12rem, 1fr); grid-template-rows: auto 1fr; column-gap: 2rem; }
         .gio-checkout-split .gio-checkout-fields { grid-column: 1; grid-row: 1 / 3; }
         .gio-checkout-split .gio-checkout-error { grid-column: 1; }
         .gio-checkout-split .gio-checkout-submit { grid-column: 1; margin: 1rem 0 0; }
         .gio-checkout-split .gio-checkout-note { grid-column: 1; }
-        .gio-checkout-split .gio-checkout-products { grid-column: 2; grid-row: 1; }
+        .gio-checkout-split .gio-checkout-products { grid-column: 2; grid-row: 1; padding: 0; border-bottom: 0; }
         .gio-checkout-split .gio-checkout-summary { grid-column: 2; grid-row: 2; align-self: start; position: sticky; top: 1rem; margin: 0; }
         }
         CSS;
@@ -160,12 +164,14 @@ enum CheckoutLayout: string
      * second column back. The stored width is left alone, so a Page moved off
      * compact asks its questions paired again.
      *
-     * And the vertical rhythm tightens throughout: the island's own padding,
+     * And the vertical rhythm tightens throughout: the island's own margin,
      * the gaps between Products, between questions, between the rows a customer
-     * picks a delivery from and between the lines of the summary. What is left
-     * alone is what a thumb has to hit — the padding inside those rows, the
-     * boxes, and the button — because the arrangement is for a phone before it
-     * is for anything else, and a target too small to tap is not compact.
+     * picks a delivery from and between the lines of the summary. The bordered
+     * Product row keeps its box and loses some of the air inside it. What is
+     * left alone is what a thumb has to hit — the padding inside the delivery
+     * rows, the boxes, and the button — because the arrangement is for a phone
+     * before it is for anything else, and a target too small to tap is not
+     * compact.
      *
      * The row wraps, which is the whole of what happens when a quantity is
      * refused. That slot is inside the stepper's end of the row: while it is
@@ -177,17 +183,16 @@ enum CheckoutLayout: string
      * it.
      */
     private const COMPACT_RULES = <<<'CSS'
-        .gio-checkout-compact { margin: 1rem auto; padding: .75rem; }
-        .gio-checkout-compact .gio-checkout-products { margin: 0 0 .75rem; }
-        .gio-checkout-compact .gio-checkout-product { display: flex; flex-wrap: wrap; gap: .625rem; align-items: center; }
-        .gio-checkout-compact .gio-checkout-product + .gio-checkout-product { margin: .5rem 0 0; padding: .5rem 0 0; }
+        .gio-checkout-compact { margin: 1rem auto; }
+        .gio-checkout-compact .gio-checkout-products { margin: 0 0 .75rem; padding: 0 0 .75rem; }
+        .gio-checkout-compact .gio-checkout-product { display: flex; flex-wrap: wrap; gap: .625rem; align-items: center; padding: .5rem .625rem; }
+        .gio-checkout-compact .gio-checkout-product + .gio-checkout-product { margin: .375rem 0 0; }
         .gio-checkout-compact .gio-checkout-product-head { flex: 1; min-width: 0; gap: .5rem; }
-        .gio-checkout-compact .gio-checkout-product-head > * { min-width: 0; }
         .gio-checkout-compact .gio-checkout-image { width: 2.75rem; height: 2.75rem; }
-        .gio-checkout-compact .gio-checkout-name, .gio-checkout-compact .gio-checkout-price { display: inline; margin: 0 .375rem 0 0; font-size: 1em; }
+        .gio-checkout-compact .gio-checkout-price { font-size: 1em; }
         .gio-checkout-compact .gio-checkout-description { display: none; }
         .gio-checkout-compact .gio-checkout-quantity { margin: 0; }
-        .gio-checkout-compact .gio-checkout-quantity-input { width: calc(4.5rem * var(--gio-input-size)); }
+        .gio-checkout-compact .gio-checkout-quantity-input { width: calc(2.5rem * var(--gio-input-size)); }
         .gio-checkout-compact .gio-checkout-fields { grid-template-columns: 1fr; gap: .5rem; }
         .gio-checkout-compact .gio-checkout-field { grid-column: auto; }
         .gio-checkout-compact .gio-checkout-choice + .gio-checkout-choice { margin: .25rem 0 0; }
@@ -231,15 +236,18 @@ enum CheckoutLayout: string
      * before anything is touched, and the script retotals it on every touch
      * after.
      *
-     * Two margins go with the reordering, and both are the arrangement paying
-     * for what it moved. Flex items do not collapse their margins, so the
-     * products' bottom margin would add to the summary's top one and open a gap
-     * neither of them asks for — trimmed on the panel rather than on the
-     * summary, which keeps the spacing the summary has everywhere else and
-     * leaves the slot between them, where an order for nothing is refused,
-     * clear of the rule the summary draws along its top. And with the summary
-     * gone from between the last question and the button, the button has to
-     * carry the separation the summary used to be.
+     * Two margins and a rule go with the reordering, and all three are the
+     * arrangement paying for what it moved. Flex items do not collapse their
+     * margins, so the products' bottom margin would add to the summary's top
+     * one and open a gap neither of them asks for — trimmed on the panel
+     * rather than on the summary, which keeps the spacing the summary has
+     * everywhere else and leaves the slot between them, where an order for
+     * nothing is refused, clear of the rule the summary draws along its top.
+     * The hairline the base draws beneath the panel goes with the margin, for
+     * the same reason: the summary rules itself off above, and two rules
+     * meeting is a double line. And with the summary gone from between the
+     * last question and the button, the button has to carry the separation
+     * the summary used to be.
      *
      * What this does not do is reorder the bytes. A Customer whose stylesheet
      * never arrives, and one listening to the page rather than looking at it,
@@ -250,7 +258,7 @@ enum CheckoutLayout: string
      */
     private const SUMMARY_FIRST_RULES = <<<'CSS'
         .gio-checkout-summary-first .gio-checkout-form { display: flex; flex-direction: column; }
-        .gio-checkout-summary-first .gio-checkout-products { margin: 0; }
+        .gio-checkout-summary-first .gio-checkout-products { margin: 0; padding: 0; border-bottom: 0; }
         .gio-checkout-summary-first .gio-checkout-fields { order: 1; }
         .gio-checkout-summary-first .gio-checkout-submit { order: 2; margin: 1rem 0 0; }
         .gio-checkout-summary-first .gio-checkout-note { order: 3; }

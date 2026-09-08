@@ -890,6 +890,107 @@ it('draws the quantity stepper narrow rather than the width of the form', functi
 
 /*
 |--------------------------------------------------------------------------
+| The hairline island
+|--------------------------------------------------------------------------
+|
+| No outer panel, sections set apart by rules, and a border on the things a
+| customer touches: the boxes they type in and the product rows they pick.
+| Everything else is whitespace, because the island sits inside a page the
+| merchant already designed and a box of its own would double-frame it.
+|
+*/
+
+it('draws no panel around the island', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+
+    /**
+     * The island asserts no box. A merchant who wants one adds it in their own
+     * stylesheet, which is what the flat single-class sheet exists to allow —
+     * and with nothing to inset from, the root carries no padding either, so
+     * the form sits flush with whatever element the shortcode was dropped in.
+     */
+    expect($root[1] ?? '')->not->toMatch('/(^|;)\s*border:/')
+        ->and($root[1] ?? '')->not->toMatch('/(^|;)\s*padding:/')
+        ->and($root[1] ?? '')->not->toContain('border-radius:');
+});
+
+it('borders each product row and rules off the sections around it', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-product \{([^}]*)\}/', $styles, $row);
+    preg_match('/\.gio-checkout-products \{([^}]*)\}/', $styles, $panel);
+    preg_match('/\.gio-checkout-summary \{([^}]*)\}/', $styles, $summary);
+
+    /**
+     * A product row is a thing being bought, and it is boxed like the boxes a
+     * customer types into: the same border token, the same width, the same
+     * radius, so one redeclaration restyles all of them together.
+     */
+    expect($row[1] ?? '')->toContain('border: var(--gio-border-width) solid var(--gio-border)')
+        ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)');
+
+    /**
+     * Between the sections, a rule and nothing heavier: beneath the products
+     * and above the summary, read from the same border tokens.
+     */
+    expect($panel[1] ?? '')->toContain('border-bottom: var(--gio-border-width) solid var(--gio-border)')
+        ->and($summary[1] ?? '')->toContain('border-top: var(--gio-border-width) solid var(--gio-border)');
+});
+
+it('flanks a real numeric quantity with a minus and a plus', function () {
+    $page = pageStyled([]);
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    preg_match('/<div class="gio-checkout-stepper">(.*?)<\/div>/s', $markup, $stepper);
+
+    expect($stepper)->not->toBeEmpty();
+
+    /**
+     * Minus, the box, plus — in that order, so a thumb finds them where a cart
+     * puts them. The buttons are `type="button"`: a button inside a form
+     * submits it unless told otherwise, and a customer tapping plus must never
+     * place an order.
+     */
+    expect($stepper[1])->toMatch('/<button class="gio-checkout-step" type="button"[^>]*data-gio-step="-1".*<input[^>]*data-gio-quantity.*<button class="gio-checkout-step" type="button"[^>]*data-gio-step="1"/s');
+
+    /**
+     * What the buttons flank is the same numeric input the form has always
+     * posted, with its bounds intact. Those bounds are what keep the browser
+     * and the capture agreed on the maximum quantity — a readout that could
+     * not be typed into was rejected for exactly that reason — so a customer
+     * can still type twelve rather than tapping plus eleven times, and a
+     * customer whose script never runs still has a working box.
+     */
+    preg_match('/<input[^>]*data-gio-quantity[^>]*>/', $stepper[1], $input);
+
+    expect($input[0] ?? '')->toContain('type="number"')
+        ->and($input[0] ?? '')->toContain('name="quantities['.$product->getKey().']"')
+        ->and($input[0] ?? '')->toContain('min="1"')
+        ->and($input[0] ?? '')->toContain('max="'.config('giopages.checkout.max_quantity').'"')
+        ->and($input[0] ?? '')->toContain('step="1"')
+        ->and($input[0] ?? '')->not->toContain('readonly');
+
+    /**
+     * The script upgrades the buttons and nothing else: it steps the input by
+     * the input's own step, so the bounds the markup declares are the bounds
+     * the buttons honour, and a rule is never written twice.
+     */
+    expect(checkoutScript($html))->toContain('[data-gio-step]')
+        ->and(checkoutScript($html))->toContain('stepUp()')
+        ->and(checkoutScript($html))->toContain('stepDown()');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Layouts and width
 |--------------------------------------------------------------------------
 |
@@ -1240,7 +1341,7 @@ it('draws a compact checkout as one dense row per product', function () {
      */
     expect($styles)->toContain('.gio-checkout-compact .gio-checkout-product { display: flex;')
         ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-image {')
-        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-name, .gio-checkout-compact .gio-checkout-price { display: inline;')
+        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-price { font-size: 1em; }')
         ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-description { display: none; }');
 });
 
@@ -1550,14 +1651,35 @@ it('reserves around a split checkout\'s form column exactly what it takes back o
     expect($rules['.gio-checkout-split .gio-checkout-form'])->not->toContain('var(--gio-max-width)');
 
     /**
-     * The two figures differ by the padding alone, and the padding is declared
-     * in the view rather than here. Read rather than assumed, because the file
-     * that would break this arrangement is not the file this arrangement is
-     * written in.
+     * The two figures are the same figure, because the root has no edges of
+     * its own for them to differ by — no padding and no border, since the
+     * island draws no panel. Read rather than assumed, because the file that
+     * would break this arrangement is not the file this arrangement is
+     * written in: a padding put back on the root has to be added to what the
+     * container reserves, or the form column comes out narrower than the
+     * merchant's figure by exactly that much.
      */
-    expect($padding[1] ?? '')->toBe('1rem')
-        ->and((int) $reserved[1] - (int) $taken[1])->toBe(2);
+    expect($padding)->toBeEmpty()
+        ->and((int) $reserved[1])->toBe((int) $taken[1]);
 });
+
+it('draws one rule between the products and the total wherever the two meet', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.'.$layout->modifierClass().' \.gio-checkout-products \{([^}]*)\}/', $styles, $panel);
+
+    /**
+     * The base rules the products off beneath them and the summary off above
+     * it, which is one hairline between each pair of sections on a stacked
+     * page. These two arrangements put the summary directly beneath the
+     * products, so the base's two rules would meet as a double line — the
+     * panel gives its own up, and the summary's stands.
+     */
+    expect($panel[1] ?? '')->toContain('border-bottom: 0')
+        ->and($panel[1] ?? '')->toContain('padding: 0');
+})->with(['split' => CheckoutLayout::Split, 'summary first' => CheckoutLayout::SummaryFirst]);
 
 it('draws a split checkout as the stacked one below the breakpoint', function () {
     pageStyled(['layout' => 'split'], slug: 'split');
