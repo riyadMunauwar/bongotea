@@ -67,14 +67,16 @@ abstract class SettingsPage extends Page
     }
 
     /**
-     * Two columns, so sections pair up across a row as they do on the
-     * resource forms; a section that wants the full width says so itself.
+     * One column, so each section takes a row of its own and the page reads
+     * top to bottom as a list of settled things. That differs from the
+     * resource forms, whose sections pair up; a section here lays its own
+     * fields out with its own `columns()`.
      */
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components($this->formComponents())
-            ->columns(2)
+            ->columns(1)
             ->statePath('data');
     }
 
