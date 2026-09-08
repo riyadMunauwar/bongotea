@@ -18,9 +18,6 @@
 --}}
 @use(App\Support\Checkout\CheckoutFieldType)
 @php
-    $currencySymbol = config('giopages.currency.symbol');
-    $currencyDecimals = (int) config('giopages.currency.decimals');
-
     /**
      * The arrangement this form opens on, which is the first the merchant
      * listed — the one charged outright where there is no choice to make, and

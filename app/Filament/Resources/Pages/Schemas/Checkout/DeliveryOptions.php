@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Money;
+use App\Support\Settings\GeneralSettings;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -98,7 +99,7 @@ class DeliveryOptions
                     ->required()
                     ->numeric()
                     ->minValue(0)
-                    ->prefix(config('giopages.currency.symbol'))
+                    ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
                     ->helperText('Added to the total, and collected at the door.')
                     ->formatStateUsing(fn (mixed $state): ?string => blank($state)
                         ? null

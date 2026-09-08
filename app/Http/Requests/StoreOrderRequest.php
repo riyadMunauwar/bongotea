@@ -8,6 +8,7 @@ use App\Support\Checkout\BuiltInField;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\Orders\CapturedAnswer;
+use App\Support\Settings\GeneralSettings;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -205,12 +206,14 @@ class StoreOrderRequest extends FormRequest
     {
         $rules = ['quantities' => ['required', 'array']];
 
+        $maxQuantity = app(GeneralSettings::class)->checkoutMaxQuantity;
+
         foreach ($this->soldProducts() as $product) {
             $rules['quantities.'.$product->getKey()] = [
                 'required',
                 'integer',
                 'min:1',
-                'max:'.config('giopages.checkout.max_quantity'),
+                'max:'.$maxQuantity,
             ];
         }
 

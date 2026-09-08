@@ -7,6 +7,7 @@ use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
 use App\Support\Checkout\PricingFingerprint;
+use App\Support\Settings\GeneralSettings;
 
 /**
  * The only shortcode v1 registers.
@@ -59,6 +60,8 @@ class CheckoutShortcode implements ShortcodeDefinition
              */
             return '<!-- giopages: checkout unavailable (no product linked) -->';
         }
+
+        $general = app(GeneralSettings::class);
 
         return view('shortcodes.checkout', [
             'page' => $page,
@@ -158,7 +161,15 @@ class CheckoutShortcode implements ShortcodeDefinition
              */
             'fingerprint' => PricingFingerprint::for($page),
 
-            'maxQuantity' => (int) config('giopages.checkout.max_quantity'),
+            /**
+             * The installation-wide figures the island prints and enforces:
+             * the currency beside every amount and the ceiling on a line's
+             * quantity. General Settings, read here rather than in the view,
+             * so the view knows nothing about where a Setting comes from.
+             */
+            'currencySymbol' => $general->currencySymbol,
+            'currencyDecimals' => $general->currencyDecimals,
+            'maxQuantity' => $general->checkoutMaxQuantity,
         ])->render();
     }
 }

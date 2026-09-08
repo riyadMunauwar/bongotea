@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Models\Product;
 use App\Support\Money;
+use App\Support\Settings\GeneralSettings;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -47,11 +48,11 @@ class ProductForm
                          * database has to know what a minor unit is worth.
                          */
                         TextInput::make('price')
-                            ->label('Price ('.config('giopages.currency.code').')')
+                            ->label(fn (): string => 'Price ('.app(GeneralSettings::class)->currencyCode.')')
                             ->required()
                             ->numeric()
                             ->minValue(0)
-                            ->prefix(config('giopages.currency.symbol'))
+                            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
                             ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::toMajorString($state))
                             ->dehydrateStateUsing(fn (string $state): int => Money::toMinorUnits($state)),
 

@@ -2,12 +2,15 @@
 
 namespace App\Support;
 
+use App\Support\Settings\GeneralSettings;
+
 /**
  * Formats integer minor units for display.
  *
  * Money is stored and computed as minor units and converted only at a
  * boundary — the admin form and the rendered page. Nothing outside this class
- * knows the currency symbol or how many decimal places it has.
+ * knows the currency symbol or how many decimal places it has; both are
+ * General Settings, so a Merchant changes them from the admin.
  */
 class Money
 {
@@ -16,7 +19,7 @@ class Money
      */
     public static function format(int $minorUnits): string
     {
-        return config('giopages.currency.symbol').self::toMajorString($minorUnits);
+        return app(GeneralSettings::class)->currencySymbol.self::toMajorString($minorUnits);
     }
 
     /**
@@ -38,7 +41,7 @@ class Money
 
     private static function decimals(): int
     {
-        return (int) config('giopages.currency.decimals');
+        return app(GeneralSettings::class)->currencyDecimals;
     }
 
     private static function factor(): int

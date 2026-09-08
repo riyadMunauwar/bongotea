@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Support\Settings\GeneralSettings;
+
 /**
  * Reduces a phone number as typed to the one canonical form the system stores.
  *
@@ -12,8 +14,8 @@ namespace App\Support;
  * provide.
  *
  * The canonical form is E.164-shaped: `+` then country code then the national
- * number. Dialling rules are per-installation config, not constants, because
- * this is sold self-hosted.
+ * number. Dialling rules are General Settings, not constants, because this is
+ * sold self-hosted and a Merchant sets their country from the admin.
  */
 class PhoneNumber
 {
@@ -29,7 +31,7 @@ class PhoneNumber
             return null;
         }
 
-        return '+'.self::countryCode().$national;
+        return '+'.self::settings()->phoneCountryCode.$national;
     }
 
     public static function isValid(string $number): bool
@@ -51,13 +53,15 @@ class PhoneNumber
     {
         $digits = preg_replace('/\D+/', '', $number) ?? '';
 
-        $countryCode = self::countryCode();
+        $settings = self::settings();
+
+        $countryCode = $settings->phoneCountryCode;
 
         if ($countryCode !== '' && str_starts_with($digits, $countryCode)) {
             $digits = substr($digits, strlen($countryCode));
         }
 
-        $trunkPrefix = (string) config('giopages.phone.trunk_prefix');
+        $trunkPrefix = $settings->phoneTrunkPrefix;
 
         if ($trunkPrefix !== '' && str_starts_with($digits, $trunkPrefix)) {
             $digits = substr($digits, strlen($trunkPrefix));
@@ -65,14 +69,14 @@ class PhoneNumber
 
         $length = strlen($digits);
 
-        $withinBounds = $length >= (int) config('giopages.phone.national_length.min')
-            && $length <= (int) config('giopages.phone.national_length.max');
+        $withinBounds = $length >= $settings->phoneNationalLengthMin
+            && $length <= $settings->phoneNationalLengthMax;
 
         return $withinBounds ? $digits : null;
     }
 
-    private static function countryCode(): string
+    private static function settings(): GeneralSettings
     {
-        return (string) config('giopages.phone.country_code');
+        return app(GeneralSettings::class);
     }
 }

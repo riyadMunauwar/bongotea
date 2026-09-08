@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Support\Money;
 use App\Support\PhoneNumber;
+use App\Support\Settings\GeneralSettings;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
@@ -196,7 +197,7 @@ class OrderForm
                                     ->required()
                                     ->numeric()
                                     ->minValue(1)
-                                    ->maxValue(config('giopages.checkout.max_quantity'))
+                                    ->maxValue(fn (): int => app(GeneralSettings::class)->checkoutMaxQuantity)
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 /** Recomputed from state, so it moves as the quantity beside it is typed. */
@@ -235,7 +236,7 @@ class OrderForm
                             ->required()
                             ->numeric()
                             ->minValue(0)
-                            ->prefix(config('giopages.currency.symbol'))
+                            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
                             ->hint(fn (?Order $record): ?string => $record?->delivery_label)
                             ->live(debounce: self::RECOMPUTE_DEBOUNCE)
                             ->hintIcon(

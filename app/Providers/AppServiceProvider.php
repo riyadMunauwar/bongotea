@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Shortcodes\Definitions\CheckoutShortcode;
 use App\Shortcodes\ShortcodeRegistry;
 use App\Support\PageCache\StaticPageCache;
+use App\Support\Settings\GeneralSettings;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Request;
@@ -22,6 +23,13 @@ class AppServiceProvider extends ServiceProvider
             $app->make(Filesystem::class),
             public_path('page-cache'),
         ));
+
+        /**
+         * A Settings group is one instance per request, built from its row the
+         * first time something asks for it and never before — so a public
+         * Page that reads no Setting pays no query for one (ADR-0012).
+         */
+        $this->app->singleton(GeneralSettings::class, fn (): GeneralSettings => GeneralSettings::load());
 
         /**
          * v1 registers exactly one shortcode. The registry is also the boundary
@@ -53,7 +61,7 @@ class AppServiceProvider extends ServiceProvider
          * orders costs more than the abuse a tighter limit would stop.
          */
         RateLimiter::for('checkout', fn (Request $request): Limit => Limit::perMinute(
-            (int) config('giopages.checkout.rate_limit'),
+            $this->app->make(GeneralSettings::class)->checkoutRateLimit,
         )->by($request->ip()));
     }
 }

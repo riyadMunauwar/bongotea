@@ -3,6 +3,7 @@
 namespace App\Support\Checkout;
 
 use App\Support\Money;
+use App\Support\Settings\GeneralSettings;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Str;
 
@@ -135,14 +136,14 @@ class CheckoutConfig implements Arrayable
      *
      * One option is exactly today's behaviour — an amount added to the total
      * with no question asked — so a Merchant who never opens the Checkout tab
-     * sees no change (ADR-0008). The figure comes from installation config
-     * because that is where the single global charge lived; from here on it is
-     * a starting point rather than the answer, and a Page that edits it is
-     * unaffected by anyone changing it.
+     * sees no change (ADR-0008). The figure is a General Setting because that
+     * is where the single global charge lives; from here on it is a starting
+     * point rather than the answer, and a Page that edits it is unaffected by
+     * anyone changing it.
      */
     private static function seededDeliveryOption(): DeliveryOption
     {
-        return new DeliveryOption('Delivery', Money::toMinorUnits(config('giopages.delivery.charge')));
+        return new DeliveryOption('Delivery', Money::toMinorUnits(app(GeneralSettings::class)->deliveryCharge));
     }
 
     /**
