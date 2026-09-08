@@ -49,8 +49,11 @@ class PaymentStarter
         $payment = $this->createPending($order);
 
         try {
-            /** No Notification endpoint exists yet to name; a driver that takes one is handed nothing until it does. */
-            $started = $gateway->start($payment, $payment->processingUrl(), null);
+            $started = $gateway->start(
+                $payment,
+                $payment->processingUrl(),
+                $gateway->takesNotificationUrl() ? $payment->notificationUrl() : null,
+            );
         } catch (PaymentNotStarted $exception) {
             Log::warning($exception->getMessage(), ['order' => $order->order_number, 'payment' => $payment->invoice_reference]);
 

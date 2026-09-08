@@ -90,7 +90,7 @@ final class SslCommerzScript extends GatewayScript
         ));
     }
 
-    public function assertStartedFor(Payment $payment, string $returnUrl): void
+    public function assertStartedFor(Payment $payment, string $returnUrl, string $notificationUrl): void
     {
         $order = $payment->order;
 
@@ -104,6 +104,7 @@ final class SslCommerzScript extends GatewayScript
             && $request['success_url'] === $returnUrl
             && $request['fail_url'] === $returnUrl
             && $request['cancel_url'] === $returnUrl
+            && $request['ipn_url'] === $notificationUrl
             && $request['cus_name'] === $order->customer_name
             && $request['cus_phone'] === $order->customer_phone
             && $request['cus_email'] !== ''
@@ -131,9 +132,46 @@ final class SslCommerzScript extends GatewayScript
         return $this->returnFields($payment, 'CANCELLED') + ['error' => 'Cancelled by user'];
     }
 
+    /**
+     * The IPN: the return's fields posted to the ipn_url, with the validation
+     * id, whether or not the Customer's browser ever came back.
+     */
+    public function paidNotification(Payment $payment): array
+    {
+        return $this->paidReturn($payment);
+    }
+
+    public function notificationNamingNoPayment(): array
+    {
+        return ['tran_id' => 'NOSUCH01-1', 'val_id' => self::VALIDATION_ID_PREFIX.'NOSUCH011', 'status' => 'VALID', 'amount' => '10.00', 'currency' => 'BDT'];
+    }
+
+    public function notificationWithMismatchedAmount(Payment $payment): array
+    {
+        return ['amount' => Money::toMajorString($payment->amount - 100), 'currency_amount' => Money::toMajorString($payment->amount - 100)] + $this->paidReturn($payment);
+    }
+
+    /**
+     * Taken, whichever way it is asked: by the validation id the Customer
+     * came back with, or by our reference where they never did.
+     */
     public function fakeVerifiedPaid(Payment $payment): void
     {
         $this->fakeValidation($payment, $this->validationFields($payment, 'VALID', Money::toMajorString($payment->amount)));
+        $this->fakeTransactionQuery($payment, 'VALID', '');
+    }
+
+    /**
+     * Asked by our reference, SSLCommerz knows of no attempt yet: the
+     * Customer never got as far as paying, and nothing has been decided.
+     */
+    public function fakeVerifiedStillPending(Payment $payment): void
+    {
+        $this->fakeAnswerWhenAsked('/validator/api/merchantTransIDvalidationAPI.php', 'tran_id', $payment->invoice_reference, [
+            'APIConnect' => 'DONE',
+            'no_of_trans_found' => 0,
+            'element' => [],
+        ]);
     }
 
     public function fakeVerifiedShort(Payment $payment): void

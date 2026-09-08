@@ -80,7 +80,7 @@ it('implements the gateway contract for cash on delivery with nothing to start a
         ->and($cash->credentialProperties())->toBe([])
         ->and($cash->takesNotificationUrl())->toBeFalse()
         ->and($cash->paymentReferenceFromReturn(Request::create('/', 'GET', ['paymentID' => 'x'])))->toBeNull()
-        ->and($cash->paymentReferenceFromNotification(Request::create('/', 'POST', ['tran_id' => 'x'])))->toBeNull();
+        ->and($cash->readNotification(Request::create('/', 'POST', ['tran_id' => 'x'])))->toBeNull();
 
     /** The two calls only an online method receives are refused outright rather than answered with something plausible. */
     $payment = Payment::factory()->make(['order_id' => Order::factory()->create()->getKey()]);

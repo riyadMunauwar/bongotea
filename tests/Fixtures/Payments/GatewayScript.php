@@ -37,8 +37,31 @@ abstract class GatewayScript
     /** Fake the gateway being unreachable for every call. */
     abstract public function fakeOutage(): void;
 
-    /** Assert the start request carried the mandatory fields for this Payment, filled from its Order. */
-    abstract public function assertStartedFor(Payment $payment, string $returnUrl): void;
+    /** Assert the start request carried the mandatory fields for this Payment, filled from its Order, and the Notification URL where the gateway takes one per request. */
+    abstract public function assertStartedFor(Payment $payment, string $returnUrl, string $notificationUrl): void;
+
+    /**
+     * What the gateway posts to the Notification URL on its own once the
+     * Payment was taken: the same story as the return, told to the system
+     * rather than to the browser.
+     *
+     * @return array<string, string>
+     */
+    abstract public function paidNotification(Payment $payment): array;
+
+    /**
+     * A Notification naming a Payment the system does not know.
+     *
+     * @return array<string, string>
+     */
+    abstract public function notificationNamingNoPayment(): array;
+
+    /**
+     * A Notification naming this Payment but claiming a different amount.
+     *
+     * @return array<string, string>
+     */
+    abstract public function notificationWithMismatchedAmount(Payment $payment): array;
 
     /**
      * What the gateway posts the Customer back to the Processing Page with.
@@ -60,8 +83,11 @@ abstract class GatewayScript
      */
     abstract public function cancelledReturn(Payment $payment): array;
 
-    /** Fake the gateway confirming the Payment for its full amount when asked. */
+    /** Fake the gateway confirming the Payment for its full amount when asked, by its own reference or by ours. */
     abstract public function fakeVerifiedPaid(Payment $payment): void;
+
+    /** Fake the gateway, asked by our reference, having nothing decided about the Payment yet. */
+    abstract public function fakeVerifiedStillPending(Payment $payment): void;
 
     /** Fake the gateway confirming a Payment for a smaller amount than asked for. */
     abstract public function fakeVerifiedShort(Payment $payment): void;

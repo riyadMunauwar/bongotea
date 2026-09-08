@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Page;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Pest\Expectation;
+use Tests\Fixtures\Payments\GatewayScript;
 use Tests\TestCase;
 
 /*
@@ -196,6 +198,54 @@ function payingBy(Page $page, array $methods, bool $showLogos = true, bool $hide
     ])]);
 
     return $page->refresh();
+}
+
+/**
+ * A published Page offering the gateway first and cash on delivery second,
+ * with the installation set up so the gateway is usable.
+ */
+function pageOffering(GatewayScript $gateway): Page
+{
+    $gateway->makeUsable();
+
+    return payingBy(sellingPage(Product::factory()->create(['price' => 99000])), [$gateway->method()->value, 'cash_on_delivery']);
+}
+
+/**
+ * Capture an Order under the gateway, with the gateway accepting the Payment,
+ * the way a Customer does before being sent off to pay.
+ */
+function capturedFor(GatewayScript $gateway): Payment
+{
+    $gateway->fakeStart();
+
+    test()->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
+        ->assertCreated();
+
+    return Payment::sole();
+}
+
+/**
+ * The Processing Page's address for a Payment: the one the gateway sends the
+ * Customer back to, by our invoice reference and nothing of the gateway's.
+ */
+function processingUrl(Payment $payment): string
+{
+    return route('payment.processing', ['method' => $payment->method->value, 'payment' => $payment->invoice_reference]);
+}
+
+function verifyUrl(Payment $payment): string
+{
+    return route('payment.verify', ['method' => $payment->method->value, 'payment' => $payment->invoice_reference]);
+}
+
+/**
+ * The Notification address for a Payment's method: one per gateway, naming
+ * no Payment, because the gateway says which one in its own words.
+ */
+function notificationUrl(Payment $payment): string
+{
+    return route('payment.notify', ['method' => $payment->method->value]);
 }
 
 /**

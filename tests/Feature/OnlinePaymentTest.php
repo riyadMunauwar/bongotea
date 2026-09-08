@@ -6,7 +6,6 @@ use App\Enums\PaymentState;
 use App\Models\Order;
 use App\Models\Page;
 use App\Models\Payment;
-use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Settings\PaymentSettings;
 use Illuminate\Support\Facades\Http;
@@ -15,53 +14,11 @@ use Tests\Fixtures\Payments\GatewayScript;
 use Tests\Fixtures\Payments\SslCommerzScript;
 
 /**
- * Every online gateway walks the same road — Capture, the gateway's page, the
- * return, the Verification, the Thank-you or Retry Page — so the tests run
- * once per gateway over its documented shapes. A later gateway is a new
- * script and a new row here, nothing more (ADR-0013).
+ * The road every gateway walks — the dataset, the Page offering it, the
+ * Capture and the addresses — lives in `tests/Pest.php` and
+ * `tests/Datasets/OnlineGateways.php`, shared with the Notification and sweep
+ * tests, which walk the same road from the other end.
  */
-dataset('online gateways', [
-    'SSLCommerz' => [new SslCommerzScript],
-]);
-
-/**
- * A published Page offering the gateway first and cash on delivery second,
- * with the installation set up so the gateway is usable.
- */
-function pageOffering(GatewayScript $gateway): Page
-{
-    $gateway->makeUsable();
-
-    return payingBy(sellingPage(Product::factory()->create(['price' => 99000])), [$gateway->method()->value, 'cash_on_delivery']);
-}
-
-/**
- * Capture an Order under the gateway, with the gateway accepting the Payment,
- * the way a Customer does before being sent off to pay.
- */
-function capturedFor(GatewayScript $gateway): Payment
-{
-    $gateway->fakeStart();
-
-    test()->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
-        ->assertCreated();
-
-    return Payment::sole();
-}
-
-/**
- * The Processing Page's address for a Payment: the one the gateway sends the
- * Customer back to, by our invoice reference and nothing of the gateway's.
- */
-function processingUrl(Payment $payment): string
-{
-    return route('payment.processing', ['method' => $payment->method->value, 'payment' => $payment->invoice_reference]);
-}
-
-function verifyUrl(Payment $payment): string
-{
-    return route('payment.verify', ['method' => $payment->method->value, 'payment' => $payment->invoice_reference]);
-}
 
 /**
  * The same Page asking for a phone and nothing else, its payment section
@@ -109,7 +66,7 @@ it('captures the order, starts a pending payment for its total, and sends the cu
         ->and($payment->verification_response)->toBeNull();
 
     /** The mandatory fields were filled from the Order, and every way back is the Processing Page addressed by our reference. */
-    $gateway->assertStartedFor($payment, processingUrl($payment));
+    $gateway->assertStartedFor($payment, processingUrl($payment), notificationUrl($payment));
 })->with('online gateways');
 
 it('answers a plain form post with a 303 to the gateway', function (GatewayScript $gateway) {
@@ -375,7 +332,7 @@ it('starts a new payment from the retry page for a chosen online method, with th
         ->and($retry->amount)->toBe($order->total)
         ->and($order->refresh()->payment_method)->toBe($gateway->method());
 
-    $gateway->assertStartedFor($retry, processingUrl($retry));
+    $gateway->assertStartedFor($retry, processingUrl($retry), notificationUrl($retry));
 })->with('online gateways');
 
 it('switches to cash on delivery from the retry page without starting a payment', function (GatewayScript $gateway) {

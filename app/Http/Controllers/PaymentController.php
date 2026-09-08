@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
 use App\Models\Payment;
+use App\Support\Payments\Notification;
 use App\Support\Payments\PaymentVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
+use Throwable;
 
 /**
  * Where a gateway sends a Customer back, and the Verification that decides
@@ -67,6 +71,82 @@ class PaymentController extends Controller
         }
 
         return redirect()->to($destination, ResponseCode::HTTP_SEE_OTHER);
+    }
+
+    /**
+     * A Notification: the gateway telling the system on its own that
+     * something happened to a Payment. Read through the driver for which
+     * Payment it names, then a Verification the system makes decides;
+     * nothing the Notification says is ever written down (ADR-0013).
+     *
+     * Answers 200 whatever happened, so the gateway stops retrying: a
+     * Notification naming no Payment the system knows, or claiming a figure
+     * that is not the Payment's, is garbage from a guessable address and is
+     * logged and ignored rather than asked about.
+     */
+    public function notify(Request $request, string $method): Response
+    {
+        $gateway = PaymentMethod::from($method)->gateway();
+
+        abort_if($gateway === null, ResponseCode::HTTP_NOT_FOUND);
+
+        $notification = $gateway->readNotification($request);
+
+        if ($notification === null) {
+            return $this->heard();
+        }
+
+        $payment = Payment::query()->where('invoice_reference', $notification->invoiceReference)->first();
+
+        if ($payment === null || $payment->method->value !== $method) {
+            return $this->ignored("A {$method} notification named [{$notification->invoiceReference}], which is no Payment under it.", $notification);
+        }
+
+        if (! $notification->claimsAmountOf($payment)) {
+            return $this->ignored("A {$method} notification for Payment [{$payment->invoice_reference}] claimed an amount that is not its own.", $notification);
+        }
+
+        /**
+         * The gateway's reference is lent to the Verification, not written:
+         * it came from a guessable address, so the record takes only the
+         * reference the gateway itself names when asked.
+         */
+        $payment->gateway_reference ??= $notification->gatewayReference;
+
+        try {
+            $this->verifier->verify($payment);
+        } catch (Throwable $failure) {
+            /** Still 200: a retry from the gateway would only fail the same way, and the sweep asks again regardless. */
+            report($failure);
+        }
+
+        return $this->heard();
+    }
+
+    /**
+     * What every Notification is answered with: 200 and nothing else, so the
+     * gateway stops retrying. What became of the Payment is not its concern.
+     */
+    private function heard(): Response
+    {
+        return response()->noContent(ResponseCode::HTTP_OK);
+    }
+
+    /**
+     * A Notification not worth a call to the gateway: logged with what it
+     * named and claimed — not its whole body, which carries the Customer's
+     * card details — and heard all the same.
+     */
+    private function ignored(string $why, Notification $notification): Response
+    {
+        Log::warning($why, [
+            'invoice_reference' => $notification->invoiceReference,
+            'gateway_reference' => $notification->gatewayReference,
+            'amount' => $notification->amount,
+            'currency' => $notification->currency,
+        ]);
+
+        return $this->heard();
     }
 
     /**

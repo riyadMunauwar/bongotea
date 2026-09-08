@@ -111,6 +111,16 @@ class Payment extends Model
         return route('payment.verify', $this->routeParameters());
     }
 
+    /**
+     * Where the gateway tells the system on its own: one address per method,
+     * naming no Payment, because the gateway says which in its own words and
+     * the driver reads it.
+     */
+    public function notificationUrl(): string
+    {
+        return route('payment.notify', ['method' => $this->method->value]);
+    }
+
     public function isPending(): bool
     {
         return $this->state === PaymentState::Pending;

@@ -53,8 +53,8 @@ interface PaymentGateway
      * The Payment already exists, Pending, for the amount and under the
      * invoice reference the gateway is told; the return URL is the Processing
      * Page the gateway sends the Customer back to whatever happens; the
-     * Notification URL is handed over only by a driver that takes one, and is
-     * null while the system has no Notification endpoint to name.
+     * Notification URL is where the gateway tells the system on its own, and
+     * is handed over only to a driver that takes one per request.
      *
      * Throws `PaymentNotStarted` where the gateway could not be reached or
      * refused: a transport failure is "could not start", never Failed.
@@ -72,13 +72,15 @@ interface PaymentGateway
     public function paymentReferenceFromReturn(Request $request): ?string;
 
     /**
-     * The gateway's own reference for the Payment a Notification is about,
-     * or null where the request names none.
+     * What a Notification names — our reference for the Payment, the
+     * gateway's where it carries one, and the figure it claims — or null
+     * where the request names no Payment.
      *
      * A hint that a Verification is worth making, and never an answer: a
-     * Notification records nothing by itself.
+     * Notification records nothing by itself, and what it says of the
+     * outcome is not read at all.
      */
-    public function paymentReferenceFromNotification(Request $request): ?string;
+    public function readNotification(Request $request): ?Notification;
 
     /**
      * Ask the gateway, in a call of our own, what became of a Payment.

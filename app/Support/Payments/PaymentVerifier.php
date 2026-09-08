@@ -34,15 +34,7 @@ class PaymentVerifier
 
         $verification = $payment->gateway()->verify($payment);
 
-        return DB::transaction(function () use ($payment, $verification): Payment {
-            Order::query()->lockForUpdate()->findOrFail($payment->order_id);
-
-            $current = Payment::query()->lockForUpdate()->findOrFail($payment->getKey());
-
-            if (! $current->isPending()) {
-                return $current;
-            }
-
+        return $this->settle($payment, function (Payment $current) use ($verification): void {
             $current->verification_response = $verification->response;
             $current->gateway_reference ??= $verification->gatewayReference;
 
@@ -57,6 +49,50 @@ class PaymentVerifier
 
             if ($verification->isPaid()) {
                 $this->flagIfPaidTwice($current);
+            }
+        });
+    }
+
+    /**
+     * One final Verification, and Expired if the gateway still cannot answer
+     * for the Payment: what the sweep does with a Pending Payment older than
+     * a day, so the queue is not full of Payments nothing will ever resolve.
+     *
+     * The gateway's answer wins where it gives one — Paid a day late is still
+     * Paid — and Expired is written the way every other outcome is, under
+     * the Order's lock against a fresh read, so a Notification landing at
+     * the same moment cannot be overwritten by the giving-up.
+     */
+    public function verifyOrExpire(Payment $payment): Payment
+    {
+        $verified = $this->verify($payment);
+
+        if (! $verified->isPending()) {
+            return $verified;
+        }
+
+        return $this->settle($verified, function (Payment $current): void {
+            $current->update(['state' => PaymentState::Expired]);
+        });
+    }
+
+    /**
+     * Write an outcome onto a Payment under its Order's lock, against a fresh
+     * read, and only while it is still Pending: whichever caller writes first
+     * decides, and every later one finds nothing left to decide. The Payment
+     * as it stands afterwards, whoever wrote it.
+     *
+     * @param  callable(Payment): void  $write
+     */
+    private function settle(Payment $payment, callable $write): Payment
+    {
+        return DB::transaction(function () use ($payment, $write): Payment {
+            Order::query()->lockForUpdate()->findOrFail($payment->order_id);
+
+            $current = Payment::query()->lockForUpdate()->findOrFail($payment->getKey());
+
+            if ($current->isPending()) {
+                $write($current);
             }
 
             return $current;

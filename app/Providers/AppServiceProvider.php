@@ -16,6 +16,9 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /** Notifications one address may post in a minute before it is refused. */
+    private const NOTIFICATIONS_PER_MINUTE = 60;
+
     /**
      * Register any application services.
      */
@@ -70,6 +73,16 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('checkout', fn (Request $request): Limit => Limit::perMinute(
             $this->app->make(GeneralSettings::class)->checkoutRateLimit,
+        )->by($request->ip()));
+
+        /**
+         * A Notification is an unauthenticated POST that costs a call to the
+         * gateway, so it is throttled per address. Set to what a gateway's
+         * own servers plausibly send an installation in a minute, with room:
+         * a gateway that is refused retries, so nothing is lost but time.
+         */
+        RateLimiter::for('payment-notification', fn (Request $request): Limit => Limit::perMinute(
+            self::NOTIFICATIONS_PER_MINUTE,
         )->by($request->ip()));
     }
 }

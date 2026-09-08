@@ -67,6 +67,21 @@ Route::post('/order/{order:order_number}/retry', [CheckoutController::class, 'ch
 | deep, so a slug cannot shadow them.
 */
 
+/*
+| The Notification: where a gateway tells the system on its own, one address
+| per online gateway. POST only, since nothing but a gateway's server ever
+| calls it; outside request-forgery protection for the reason the Processing
+| Page is; throttled, because it is unauthenticated and triggers a call to the
+| gateway. Registered before the Processing Page so that `notify` is never
+| read as an invoice reference.
+*/
+
+Route::post('/pay/{method}/notify', [PaymentController::class, 'notify'])
+    ->whereIn('method', PaymentMethod::names(PaymentMethod::online()))
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->middleware('throttle:payment-notification')
+    ->name('payment.notify');
+
 Route::match(['get', 'post'], '/pay/{method}/{payment:invoice_reference}', [PaymentController::class, 'processing'])
     ->whereIn('method', PaymentMethod::names(PaymentMethod::online()))
     ->withoutMiddleware(PreventRequestForgery::class)

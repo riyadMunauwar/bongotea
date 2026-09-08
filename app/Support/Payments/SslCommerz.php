@@ -145,9 +145,28 @@ class SslCommerz implements PaymentGateway
         return $this->validationId($request);
     }
 
-    public function paymentReferenceFromNotification(Request $request): ?string
+    /**
+     * The IPN: the return's fields posted to the ipn_url by SSLCommerz itself,
+     * so it names the Payment by our tran_id and carries the val_id and the
+     * amount beside it. Read for those and not for its status.
+     */
+    public function readNotification(Request $request): ?Notification
     {
-        return $this->validationId($request);
+        $invoiceReference = $request->input('tran_id');
+
+        if (! is_string($invoiceReference) || $invoiceReference === '') {
+            return null;
+        }
+
+        $amount = $request->input('amount');
+        $currency = $request->input('currency');
+
+        return new Notification(
+            $invoiceReference,
+            $this->validationId($request),
+            is_scalar($amount) && is_numeric($amount) ? Money::toMinorUnits($amount) : null,
+            is_string($currency) && $currency !== '' ? Str::upper($currency) : null,
+        );
     }
 
     public function verify(Payment $payment): Verification
@@ -184,7 +203,7 @@ class SslCommerz implements PaymentGateway
             return $this->verifyByInvoiceReference($payment);
         }
 
-        return new Verification($this->stateOf($payment, $answer), $answer);
+        return new Verification($this->stateOf($payment, $answer), $answer, $answer['val_id'] ?? null);
     }
 
     /**

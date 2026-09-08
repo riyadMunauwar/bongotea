@@ -51,7 +51,7 @@ class CashOnDelivery implements PaymentGateway
         return null;
     }
 
-    public function paymentReferenceFromNotification(Request $request): ?string
+    public function readNotification(Request $request): ?Notification
     {
         return null;
     }
