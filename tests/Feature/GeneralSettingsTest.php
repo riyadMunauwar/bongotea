@@ -122,7 +122,7 @@ it('keeps a secret property out of the row in plain text and hands it back whole
         }
 
         /** @return list<string> */
-        protected static function secrets(): array
+        public static function secrets(): array
         {
             return ['apiKey'];
         }

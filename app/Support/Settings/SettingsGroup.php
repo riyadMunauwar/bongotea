@@ -34,14 +34,30 @@ abstract class SettingsGroup
     abstract public static function key(): string;
 
     /**
-     * The properties whose values must never sit in the database, or reach the
-     * activity log, in plain text.
+     * The properties whose values must never sit in the database, reach the
+     * activity log, or travel to the browser in plain text. This one list
+     * drives all three: `toArray()` seals them, `changesSince()` redacts them
+     * and `SettingsPage` makes their fields write-only (ADR-0012).
      *
      * @return list<string>
      */
-    protected static function secrets(): array
+    public static function secrets(): array
     {
         return [];
+    }
+
+    public static function isSecret(string $name): bool
+    {
+        return in_array($name, static::secrets(), true);
+    }
+
+    /**
+     * Whether a secret holds a value, without saying what it is: what the
+     * form's "a value is stored" hint asks.
+     */
+    public function hasSecret(string $name): bool
+    {
+        return static::isSecret($name) && filled($this->{$name});
     }
 
     /**
@@ -56,28 +72,42 @@ abstract class SettingsGroup
     }
 
     /**
-     * Rebuild a group from its stored shape, over the defaults.
+     * Rebuild a group from its stored shape, over the defaults: secrets are
+     * unsealed on the way in, then it is `with()` on a fresh instance.
      *
      * @param  array<string, mixed>  $stored
      */
     public static function fromArray(array $stored): static
     {
-        $group = new static;
+        foreach (static::secrets() as $name) {
+            if (array_key_exists($name, $stored)) {
+                $stored[$name] = static::reveal($stored[$name]);
+            }
+        }
+
+        return (new static)->with($stored);
+    }
+
+    /**
+     * A copy of this group with the named properties replaced by plain
+     * values, as a form hands them over. A property the values do not name
+     * keeps what this group has, which is how a secret left blank in the
+     * form keeps its stored value: the page leaves it out.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function with(array $values): static
+    {
+        $group = clone $this;
 
         foreach (static::storedProperties() as $property) {
             $name = $property->getName();
 
-            if (! array_key_exists($name, $stored)) {
+            if (! array_key_exists($name, $values)) {
                 continue;
             }
 
-            $value = $stored[$name];
-
-            if (in_array($name, static::secrets(), true)) {
-                $value = static::reveal($value);
-            }
-
-            $property->setValue($group, static::coerce($property, $value));
+            $property->setValue($group, static::coerce($property, $values[$name]));
         }
 
         return $group;
@@ -96,9 +126,7 @@ abstract class SettingsGroup
             $name = $property->getName();
             $value = $property->getValue($this);
 
-            $values[$name] = in_array($name, static::secrets(), true)
-                ? static::conceal($value)
-                : $value;
+            $values[$name] = static::isSecret($name) ? static::conceal($value) : $value;
         }
 
         return $values;
@@ -123,6 +151,8 @@ abstract class SettingsGroup
      * hold only the properties whose value differs, keyed the same way. Both
      * groups are compared as typed values, never as rows, since a secret's
      * sealed form differs on every write and would always read as changed.
+     * A secret that changed is named on both sides with a null in place of
+     * each value, so the log says it was rotated and nothing more.
      *
      * @return array{old: array<string, mixed>, attributes: array<string, mixed>}
      */
@@ -132,6 +162,7 @@ abstract class SettingsGroup
         $attributes = [];
 
         foreach (static::storedProperties() as $property) {
+            $name = $property->getName();
             $before = $property->getValue($previous);
             $after = $property->getValue($this);
 
@@ -139,8 +170,10 @@ abstract class SettingsGroup
                 continue;
             }
 
-            $old[$property->getName()] = $before;
-            $attributes[$property->getName()] = $after;
+            $redacted = static::isSecret($name);
+
+            $old[$name] = $redacted ? null : $before;
+            $attributes[$name] = $redacted ? null : $after;
         }
 
         return ['old' => $old, 'attributes' => $attributes];
