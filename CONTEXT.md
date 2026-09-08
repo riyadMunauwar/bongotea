@@ -1,6 +1,6 @@
 # GioPages
 
-A performance-first landing-page ecommerce system. A merchant authors landing pages, attaches products to them, and takes cash-on-delivery orders from paid traffic.
+A performance-first landing-page ecommerce system. A merchant authors landing pages, attaches products to them, and takes orders from paid traffic, paid at the door or online.
 
 This glossary is the shared vocabulary for that domain. It says what each term means, not how anything is built.
 
@@ -25,11 +25,11 @@ Something a Customer can order, carrying a single price and no variations. Produ
 _Avoid_: item, SKU, variant, listing
 
 **Checkout**:
-The form on a Page that captures a cash-on-delivery Order. There is no cart and no multi-step flow: a Checkout captures one Order in one submission. Every Page has its own Checkout, defined by its own Checkout Config.
+The form on a Page that captures an Order, and asks how it will be paid when the Page offers more than one way. There is no cart and no multi-step flow: a Checkout captures one Order in one submission; an online payment happens after Capture, never before it. Every Page has its own Checkout, defined by its own Checkout Config.
 _Avoid_: cart, basket, funnel
 
 **Checkout Config**:
-Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else. Anything shared by every Page is a Setting, not part of a Config.
+Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers, which Payment Methods it offers and in what order, and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else. Anything shared by every Page is a Setting, not part of a Config.
 _Avoid_: settings, preset, theme, template
 
 **Checkout Layout**:
@@ -115,8 +115,54 @@ The amount added to an Order for getting the parcel to the door, taken from the 
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
-An Order that genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel. Distinct from a deleted Order, which is one that should never have existed at all.
+An Order that genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel. Distinct from a deleted Order, which is one that should never have existed at all. Cancelling says nothing about money: a Payment that completes against a Cancelled Order is recorded Paid, and the Order is both at once until somebody refunds it.
 _Avoid_: rejected, void, failed, refunded
+
+### Paying
+
+**Payment Method**:
+One of the named ways an Order can be paid, known to the system by name: Cash on Delivery and the online gateways. The Merchant switches each on for the installation and supplies what the gateway needs; a Page then chooses which of the switched-on ones it offers, and in what order. A method the installation has not switched on, or cannot reach, is offered nowhere, whatever a Page says.
+_Avoid_: gateway, payment option, payment provider, driver
+
+**Cash on Delivery**:
+The Payment Method where the courier collects the total at the door. The one method every Page starts with, the one a Page falls back to when nothing else it lists can be offered, and the one that needs no Payment: an Order paid this way is simply due.
+_Avoid_: COD-only, offline, manual
+
+**Payment**:
+One attempt to collect an Order's total through one online Payment Method, from the moment the Customer is sent to the gateway until the gateway's answer is verified. An Order may hold several; at most one ends Paid. A Payment records the amount it was for, which is the Order's total today and need not always be. Its outcome is its own axis, separate from whether the Order is New, Confirmed or Cancelled: neither ever overwrites the other.
+_Avoid_: transaction, charge, payment attempt, payment status (of an Order)
+
+**Paid**:
+Said of a Payment the gateway has been asked about and has confirmed, and by extension of the Order it belongs to. Only a Verification the system made itself can say it; what the gateway wrote into the Customer's return URL is never enough.
+_Avoid_: successful, completed, settled
+
+**Pending**:
+Said of a Payment the Customer has been sent to the gateway for and nothing has been verified about yet. A Pending Payment older than a day that still cannot be verified is Expired, and an Expired or Failed Payment can be retried like any other.
+_Avoid_: processing, in progress, awaiting
+
+**Unpaid**:
+Said of an Order that chose an online Payment Method and has no Paid Payment: none started, or every one Pending, Failed, Cancelled by the Customer, or Expired. An Unpaid Order sits in the fulfilment queue like any other, drawn distinctly, because the call an operator makes about it is a different call.
+_Avoid_: abandoned, incomplete, outstanding
+
+**Verification**:
+The system asking a gateway, in a call of its own, whether a Payment is Paid. It is the only thing that can mark one so, and it runs from three places that all say the same thing: the Processing Page, a Notification, and the sweep over Pending Payments.
+_Avoid_: callback, validation, IPN check
+
+**Notification**:
+A gateway telling the system on its own that something happened to a Payment. Treated as a hint and never as an answer: it triggers a Verification and records nothing by itself.
+_Avoid_: webhook, IPN, callback
+
+**Processing Page**:
+Where a gateway sends a Customer back. It says the Payment is being verified, runs the Verification, then sends the Customer to the Thank-you Page or the Retry Page. It prints nothing about the Customer, because it is the one address a gateway's own logs hold.
+_Avoid_: callback page, return URL, success page
+
+**Thank-you Page**:
+Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone, and shows the Order and not the Customer.
+_Avoid_: confirmation page, success page, receipt
+
+**Retry Page**:
+Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Thank-you Page.
+_Avoid_: failure page, error page, payment page
 
 ### People
 
