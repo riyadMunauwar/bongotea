@@ -97,6 +97,12 @@ class AdminPanelProvider extends PanelProvider
              * what the widget discovery below it puts on that screen.
              */
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
+            /**
+             * The Settings cluster, and with it the pages inside: each is
+             * discovered under its cluster's folder, which is what makes the
+             * set of Settings pages the set of files there.
+             */
+            ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\Filament\Clusters')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             /**
              * The branding, and specifically the mark.

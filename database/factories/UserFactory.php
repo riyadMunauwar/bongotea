@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,15 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * A User who may open Settings: one holding the permission the cluster is
+     * gated by, granted directly the way the migration grants it.
+     */
+    public function managingSettings(): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->givePermissionTo(SettingsCluster::PERMISSION));
     }
 
     /**

@@ -11,19 +11,25 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasRoles, Notifiable;
 
     /**
-     * Every User is an admin. Roles are out of scope for v1 — the rule is
-     * "you can log in" and nothing finer. Without this Filament grants panel
-     * access only in the `local` environment, which locks the merchant out of
-     * their own admin in production.
+     * Every User is an admin: the rule for the panel is "you can log in".
+     * Without this Filament grants panel access only in the `local`
+     * environment, which locks the merchant out of their own admin in
+     * production.
+     *
+     * The one thing finer than logging in is the `manage settings`
+     * permission, which gates the Settings cluster alone. Roles are still out
+     * of scope; `HasRoles` is what lets a User hold that permission, directly
+     * today and through a role once roles arrive.
      */
     public function canAccessPanel(Panel $panel): bool
     {
