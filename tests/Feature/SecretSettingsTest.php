@@ -3,6 +3,7 @@
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\ViewException;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
@@ -12,13 +13,12 @@ use Tests\Fixtures\Settings\SecretTextareaPage;
 
 const STORED_TOKEN = 'tok_live_4f9a7c1e2b';
 
+/**
+ * Nothing binds this fixture group: the container gives every `SettingsGroup`
+ * subclass the same per-request seam the moment it is first resolved, which
+ * is what lets a real group ship as one class plus one page.
+ */
 beforeEach(function (): void {
-    /**
-     * The same seam `AppServiceProvider` gives every real group: one instance
-     * per request, built from its row on first use.
-     */
-    $this->app->singleton(SecretSettings::class, fn (): SecretSettings => SecretSettings::load());
-
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
@@ -125,6 +125,59 @@ it('logs a changed secret by name only, with neither the old nor the new value',
 it('refuses a page that declares a secret as anything but a text input', function () {
     Livewire::test(SecretTextareaPage::class);
 })->throws(ViewException::class, 'The secret [apiToken] on Tests\Fixtures\Settings\SecretTextareaPage must be a TextInput');
+
+/**
+ * What an `APP_KEY` rotation without re-encrypting looks like from inside:
+ * the ciphertext is still in the row, and only the current key is missing.
+ * Editing an unrelated value must not destroy what a re-encrypt command
+ * could still recover (ADR-0012).
+ */
+it('keeps a secret it cannot decrypt sealed in the row across a save, says a value is stored, and logs the failure', function () {
+    Log::spy();
+
+    $sealedUnderAnotherKey = 'eyJpdiI6Im5vdC1hLXJlYWwtaXYiLCJ2YWx1ZSI6Im5vdC1yZWFsIiwibWFjIjoiMDAifQ==';
+
+    Setting::query()->create([
+        'key' => SecretSettings::key(),
+        'value' => ['apiToken' => $sealedUnderAnotherKey, 'label' => 'Pathao'],
+    ]);
+
+    Livewire::test(SecretSettingsPage::class)
+        ->assertSet('data.apiToken', null)
+        ->assertSee('A value is stored')
+        ->fillForm(['label' => 'Steadfast'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $row = Setting::query()->findOrFail(SecretSettings::key())->value;
+
+    expect($row['apiToken'])->toBe($sealedUnderAnotherKey)
+        ->and($row['label'])->toBe('Steadfast');
+
+    Log::shouldHaveReceived('error')
+        ->withArgs(fn (string $message, array $context): bool => str_contains($message, 'could not be decrypted')
+            && $context['group'] === SecretSettings::key()
+            && $context['property'] === 'apiToken')
+        ->atLeast()->once();
+});
+
+it('replaces a secret it cannot decrypt when a new value is typed', function () {
+    Log::spy();
+
+    Setting::query()->create([
+        'key' => SecretSettings::key(),
+        'value' => ['apiToken' => 'eyJpdiI6Im5vdC1hLXJlYWwtaXYiLCJ2YWx1ZSI6Im5vdC1yZWFsIiwibWFjIjoiMDAifQ==', 'label' => 'Pathao'],
+    ]);
+
+    Livewire::test(SecretSettingsPage::class)
+        ->fillForm(['apiToken' => 'tok_live_replaced'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(SecretSettings::class);
+
+    expect(app(SecretSettings::class)->apiToken)->toBe('tok_live_replaced');
+});
 
 it('logs nothing for a secret saved blank, since nothing changed', function () {
     storeToken();

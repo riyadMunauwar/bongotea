@@ -2,7 +2,6 @@
 
 use App\Filament\Clusters\Settings\Pages\General;
 use App\Filament\Clusters\Settings\SettingsCluster;
-use App\Models\Page;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\User;
@@ -107,6 +106,35 @@ it('saves a blank trunk prefix for a country that dials none', function () {
     expect(app(GeneralSettings::class)->phoneTrunkPrefix)->toBe('');
 });
 
+/**
+ * Every stored price and total is an integer in minor units whose scale is the
+ * decimals value, so changing it once money exists would rescale all of it.
+ */
+it('locks the currency decimals once a product or order exists, and keeps the stored value on save', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(General::class)
+        ->assertFormFieldEnabled('currencyDecimals')
+        ->fillForm(['currencyDecimals' => 3])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Product::factory()->trashed()->create();
+    $this->app->forgetInstance(GeneralSettings::class);
+
+    Livewire::test(General::class)
+        ->assertFormFieldDisabled('currencyDecimals')
+        ->assertSee('already stored at this scale')
+        ->fillForm(['currencyDecimals' => 0, 'currencySymbol' => '$'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $this->app->forgetInstance(GeneralSettings::class);
+
+    expect(app(GeneralSettings::class)->currencyDecimals)->toBe(3)
+        ->and(app(GeneralSettings::class)->currencySymbol)->toBe('$');
+});
+
 it('sends a signed-out visitor to the login screen rather than forbidding the page', function () {
     $this->get(General::getUrl())->assertRedirect('/admin/login');
 });
@@ -127,8 +155,7 @@ it('refuses invalid input with field errors and saves nothing', function () {
 });
 
 it('shows a customer the currency symbol saved on the page', function () {
-    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
-    $page->products()->attach(Product::factory()->create(['price' => 99000]));
+    sellingPage(Product::factory()->create(['price' => 99000]));
 
     $this->actingAs(User::factory()->managingSettings()->create());
 

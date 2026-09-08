@@ -113,12 +113,21 @@ class OrderForm
                          * leaving the snapshot disagreeing with the identity it
                          * is linked to. Stored canonical, never as typed, so
                          * two spellings cannot fork into two Customers.
+                         *
+                         * Only a changed number is judged. The stored one was
+                         * valid under the phone rules of its day, and a
+                         * Merchant who has since changed those rules in
+                         * Settings must still be able to save an old Order.
                          */
                         TextInput::make('customer_phone')
                             ->label('Phone')
                             ->required()
                             ->maxLength(32)
-                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                            ->rule(fn (?Order $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                                if ($record !== null && $value === $record->customer_phone) {
+                                    return;
+                                }
+
                                 if (! is_string($value) || ! PhoneNumber::isValid($value)) {
                                     $fail('That is not a number a courier could call.');
                                 }

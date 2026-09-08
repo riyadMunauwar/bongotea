@@ -28,7 +28,14 @@ secrets in plain text was rejected outright.
 
 - Rotating `APP_KEY` requires re-encrypting the secret properties of every Settings row, the same
   obligation any Laravel encrypted data carries. A command for that is expected the first time a
-  key rotation is needed.
+  key rotation is needed. Until it runs, a secret sealed under the old key reads as blank and is
+  logged, but stays in the row as it is: a save that does not replace it writes the ciphertext
+  back rather than nulling what the command could still recover.
+- Saving any group forgets every cached public Page. The currency symbol, the decimals and the
+  quantity ceiling are read while a Page is rendered and so are baked into its cached file; a
+  Merchant sees a saved Setting on the next visit without flushing anything by hand.
+- The currency decimals are fixed once a Product or an Order exists. Every stored amount is an
+  integer in minor units at that scale, so changing it later would rescale all of them in place.
 - The group class is the schema of record for its row. A property with a default can be added to a
   group at any time and old rows keep working; a property cannot be renamed without a data migration.
 - A secret never round-trips to the browser. The admin form shows a blank field with a hint that a

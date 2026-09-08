@@ -157,8 +157,6 @@ abstract class SettingsPage extends Page
 
     public function save(): void
     {
-        abort_unless(static::canAccess(), 403);
-
         $previous = app(static::$group);
         $saved = $previous->with($this->valuesToSave())->save();
 

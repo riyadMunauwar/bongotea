@@ -46,11 +46,19 @@ class EditOrder extends EditRecord
      * The Customer left behind is not cleaned up. A customer with no orders is
      * harmless; deleting one that a second operator is mid-edit on is not.
      *
+     * An untouched number is left alone: it is already canonical and already
+     * linked, and re-resolving it under phone rules that have changed since
+     * Capture would refuse a save that changed nothing about the Customer.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if (($data['customer_phone'] ?? null) === $this->record->customer_phone) {
+            return $data;
+        }
+
         /** The field's own rule already rejected anything unresolvable. */
         $customer = Customer::forPhone((string) $data['customer_phone']);
 

@@ -5,38 +5,9 @@ use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Setting;
-use App\Support\Checkout\PricingFingerprint;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\SettingsGroup;
 use Illuminate\Support\Facades\DB;
-
-/**
- * A published Page selling one Product, the way a Customer meets Settings.
- */
-function pageSelling(Product $product): Page
-{
-    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
-
-    $page->products()->attach($product);
-
-    return $page;
-}
-
-/**
- * @return array<string, mixed>
- */
-function orderFor(Page $page, array $overrides = []): array
-{
-    return array_merge([
-        'page' => $page->slug,
-        'fingerprint' => PricingFingerprint::for($page),
-        'name' => 'Rahim Uddin',
-        'phone' => '01712345678',
-        'address' => 'House 4, Road 12, Banani',
-        'district' => 'Dhaka',
-        'quantities' => [$page->products->sole()->getKey() => 1],
-    ], $overrides);
-}
 
 it('answers every general setting from config when nothing has been saved', function () {
     /**
@@ -94,6 +65,25 @@ it('ignores a key the group no longer knows and defaults one it has since gained
         ->and(isset($general->somethingWeStoppedStoring))->toBeFalse();
 });
 
+it('reads a null in the row as the empty value of the property, never as an error', function () {
+    /**
+     * The row is the one input that must never throw: a `TypeError` from
+     * `load()` would take down every request, including the Settings page
+     * that could repair the row.
+     */
+    Setting::query()->create([
+        'key' => GeneralSettings::key(),
+        'value' => ['currencySymbol' => null, 'phoneTrunkPrefix' => null, 'checkoutMaxQuantity' => null, 'deliveryCharge' => null],
+    ]);
+
+    $general = app(GeneralSettings::class);
+
+    expect($general->currencySymbol)->toBe('')
+        ->and($general->phoneTrunkPrefix)->toBe('')
+        ->and($general->checkoutMaxQuantity)->toBe(0)
+        ->and($general->deliveryCharge)->toBe(0.0);
+});
+
 it('queries a group once per request, and not at all when nothing asks for it', function () {
     DB::enableQueryLog();
 
@@ -139,17 +129,20 @@ it('keeps a secret property out of the row in plain text and hands it back whole
     expect($group::load()->apiKey)->toBe('sk_live_very_secret');
 });
 
-it('shows a customer prices in the currency the merchant saved', function () {
-    pageSelling(Product::factory()->create(['price' => 99000]));
+it('shows a customer prices in the currency the merchant saved, even on a page already cached', function () {
+    sellingPage(Product::factory()->create(['price' => 99000]));
 
     $this->get('/promo')->assertOk()->assertSee('data-currency-symbol="৳"', escape: false);
+
+    /** The symbol is baked into the cached file, so the save has to be what throws it away. */
+    expect($this->cache->has('promo'))->toBeTrue();
 
     $general = app(GeneralSettings::class);
     $general->currencySymbol = '$';
     $general->currencyDecimals = 0;
     $general->save();
 
-    $this->cache->flush();
+    expect($this->cache->has('promo'))->toBeFalse();
 
     $this->get('/promo')
         ->assertOk()
@@ -159,7 +152,7 @@ it('shows a customer prices in the currency the merchant saved', function () {
 });
 
 it('validates a customer phone number by the rules the merchant saved', function () {
-    $page = pageSelling(Product::factory()->create());
+    $page = sellingPage(Product::factory()->create());
 
     $general = app(GeneralSettings::class);
     $general->phoneCountryCode = '44';
@@ -168,10 +161,10 @@ it('validates a customer phone number by the rules the merchant saved', function
     $general->phoneNationalLengthMax = 10;
     $general->save();
 
-    $this->postJson(route('checkout.store'), orderFor($page, ['phone' => '07700 900123']))->assertCreated();
+    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '07700 900123']))->assertCreated();
 
     /** Ten digits was fine in Bangladesh; the row now says the country is the United Kingdom. */
-    $this->postJson(route('checkout.store'), orderFor($page, ['phone' => '+880 1712 345678']))
+    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '+880 1712 345678']))
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['phone']);
 
@@ -180,31 +173,29 @@ it('validates a customer phone number by the rules the merchant saved', function
 });
 
 it('caps a quantity at the ceiling the merchant saved', function () {
-    $page = pageSelling(Product::factory()->create());
+    $page = sellingPage(Product::factory()->create());
 
     $general = app(GeneralSettings::class);
     $general->checkoutMaxQuantity = 2;
     $general->save();
 
-    $this->cache->flush();
-
     $this->get('/promo')->assertOk()->assertSee('max="2"', escape: false);
 
-    $this->postJson(route('checkout.store'), orderFor($page, [
+    $this->postJson(route('checkout.store'), capturePayload($page, [
         'quantities' => [$page->products->sole()->getKey() => 3],
     ]))->assertUnprocessable();
 });
 
 it('turns away a flood of captures at the rate the merchant saved', function () {
-    $page = pageSelling(Product::factory()->create());
+    $page = sellingPage(Product::factory()->create());
 
     $general = app(GeneralSettings::class);
     $general->checkoutRateLimit = 1;
     $general->save();
 
-    $this->postJson(route('checkout.store'), orderFor($page))->assertCreated();
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
-    $this->postJson(route('checkout.store'), orderFor($page))->assertTooManyRequests();
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertTooManyRequests();
 
     expect(Order::count())->toBe(1);
 });

@@ -10,6 +10,7 @@ use App\Models\OrderLine;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Settings\GeneralSettings;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -300,6 +301,32 @@ it('stores a corrected number in its canonical form', function () {
      */
     expect($order->refresh()->customer_phone)->toBe('+8801911111111')
         ->and(Customer::where('phone', '+8801911111111')->count())->toBe(1);
+});
+
+it('saves an order whose untouched number no longer fits the phone rules the merchant has since changed', function () {
+    $order = capturedOrder();
+
+    $originalCustomer = $order->customer_id;
+    $originalPhone = $order->customer_phone;
+
+    /** Captured as a Bangladeshi number; the installation has since moved to the United Kingdom. */
+    $general = app(GeneralSettings::class);
+    $general->phoneCountryCode = '44';
+    $general->phoneTrunkPrefix = '0';
+    $general->phoneNationalLengthMin = 10;
+    $general->phoneNationalLengthMax = 10;
+    $general->save();
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_name' => 'Rahim Uddin Ahmed'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $order->refresh();
+
+    expect($order->customer_name)->toBe('Rahim Uddin Ahmed')
+        ->and($order->customer_phone)->toBe($originalPhone)
+        ->and($order->customer_id)->toBe($originalCustomer);
 });
 
 it('refuses a corrected number no courier could call', function () {

@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Page;
+use App\Models\Product;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
 use App\Shortcodes\ShortcodeRegistry;
+use App\Support\Checkout\PricingFingerprint;
 use App\Support\PageCache\StaticPageCache;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -117,6 +119,49 @@ expect()->extend('toBeServedFromTheDocumentRoot', function (): Expectation {
 | Functions
 |--------------------------------------------------------------------------
 */
+
+/**
+ * A published Page selling whatever Products it is handed, the way a Customer
+ * meets checkout. One is the shape every Page had before Products could be
+ * linked in numbers; more is what a combo or an upsell page looks like.
+ */
+function sellingPage(Product|iterable $products, string $slug = 'promo'): Page
+{
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => $slug]);
+
+    $page->products()->attach($products instanceof Product
+        ? $products
+        : collect($products)->map(fn (Product $product): int => $product->getKey())->all());
+
+    return $page;
+}
+
+/**
+ * A submission of one of everything the Page sells.
+ *
+ * Quantities are keyed by Product id, the way the rendered form names them, so
+ * a test never has to know what order the admin arranged them in.
+ *
+ * The fingerprint is taken as the payload is built, which is where a rendered
+ * form takes it: a test that changes a price or a Product afterwards is a test
+ * about a visitor holding bytes that went stale under them.
+ *
+ * @return array<string, mixed>
+ */
+function capturePayload(Page $page, array $overrides = []): array
+{
+    return array_merge([
+        'page' => $page->slug,
+        'fingerprint' => PricingFingerprint::for($page),
+        'name' => 'Rahim Uddin',
+        'phone' => '01712345678',
+        'address' => 'House 4, Road 12, Banani',
+        'district' => 'Dhaka',
+        'quantities' => $page->products->mapWithKeys(
+            fn (Product $product): array => [$product->getKey() => 1],
+        )->all(),
+    ], $overrides);
+}
 
 /**
  * Register a throwaway Shortcode Definition for the duration of one test.

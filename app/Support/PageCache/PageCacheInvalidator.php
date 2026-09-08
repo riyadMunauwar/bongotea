@@ -42,4 +42,14 @@ class PageCacheInvalidator
         $product->pages()->withTrashed()->pluck('slug')
             ->each(fn (string $slug) => $this->cache->forget($slug));
     }
+
+    /**
+     * Clear every Page there is. What a saved Setting calls for: the currency
+     * symbol, the decimals and the quantity ceiling are read while a Page is
+     * rendered, so there is no Page a change to them leaves intact.
+     */
+    public function forgetEveryPage(): void
+    {
+        $this->cache->flush();
+    }
 }

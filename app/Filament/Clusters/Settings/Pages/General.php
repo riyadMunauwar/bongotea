@@ -2,6 +2,8 @@
 
 namespace App\Filament\Clusters\Settings\Pages;
 
+use App\Models\Order;
+use App\Models\Product;
 use App\Support\Settings\GeneralSettings;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -43,13 +45,24 @@ class General extends SettingsPage
                         ->maxLength(8)
                         ->helperText('Drawn beside every figure.'),
 
+                    /**
+                     * Every stored price and total is an integer in minor
+                     * units whose scale is this value, so changing it once
+                     * money exists would rescale all of it in place. The
+                     * field locks at the first Product or Order, trashed
+                     * ones included; a disabled field is left out of the
+                     * saved state, so the stored value survives a save.
+                     */
                     TextInput::make('currencyDecimals')
                         ->label('Decimals')
                         ->required()
                         ->integer()
                         ->minValue(0)
                         ->maxValue(4)
-                        ->helperText('Digits after the point. Zero for JPY, three for KWD.'),
+                        ->disabled(fn (): bool => self::moneyHasBeenStored())
+                        ->helperText(fn (): string => self::moneyHasBeenStored()
+                            ? 'Fixed: prices and orders are already stored at this scale.'
+                            : 'Digits after the point. Zero for JPY, three for KWD. Fixed once a product or order exists.'),
                 ]),
 
             Section::make('Phone numbers')
@@ -66,14 +79,12 @@ class General extends SettingsPage
                     /**
                      * The one field here that may be blank: some countries
                      * dial no trunk prefix. Filament hands a blank field
-                     * over as null, and `PhoneNumber` reads "no prefix" as
-                     * the empty string, so blank is put back before it
-                     * reaches the group's typed property.
+                     * over as null, and the group reads that as the empty
+                     * string `PhoneNumber` takes for "no prefix".
                      */
                     TextInput::make('phoneTrunkPrefix')
                         ->label('Trunk prefix')
                         ->regex('/^\d{1,2}$/')
-                        ->dehydrateStateUsing(fn (?string $state): string => (string) $state)
                         ->validationMessages(['regex' => 'Digits only. Leave blank where there is none.'])
                         ->helperText('The leading digit dropped when dialling internationally.'),
 
@@ -127,5 +138,14 @@ class General extends SettingsPage
                         ->helperText('Mobile carriers put thousands of real buyers behind one address, so keep this generous.'),
                 ]),
         ];
+    }
+
+    /**
+     * Whether any figure has been stored at the current decimal scale.
+     * Trashed rows count: a restored Product or Order is stored money too.
+     */
+    private static function moneyHasBeenStored(): bool
+    {
+        return Product::withTrashed()->exists() || Order::withTrashed()->exists();
     }
 }
