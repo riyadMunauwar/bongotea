@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PaymentMethod;
 use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
@@ -2230,3 +2231,101 @@ it('drops button copy the checkout tab would refuse and draws the words it alway
     'copy too long for the button and the line beneath it' => [['wording' => str_repeat('x', 81), 'note' => str_repeat('y', 201)]],
     'a wording broken over two lines' => [['wording' => "Order\nnow"]],
 ]);
+
+it('draws no payment chooser on a page that says nothing about paying', function () {
+    pageStyled([]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Every page that exists today is cash on delivery with the choice
+     * hidden, and a page that has always been cash-only draws the same form
+     * it always did: no chooser, no method posted, no rule for a logo in the
+     * sheet. Nothing about paying reaches the bytes at all.
+     */
+    expect(checkoutMarkup($html))->not->toContain('payment')
+        ->and(styleBlock($html))->not->toContain('gio-checkout-logo')
+        ->and($html)->not->toContain('gio-checkout-payment');
+});
+
+it('draws a single cash on delivery row with its logo once the page unhides the choice', function () {
+    pageStyled(['hide_lone_cash_choice' => false]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    preg_match('/<fieldset class="gio-checkout-choices gio-checkout-payment">(.*?)<\/fieldset>/s', $markup, $payment);
+    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $payment[1] ?? '', $rows);
+
+    /**
+     * One row, already picked, drawn as a delivery row is: the control, then
+     * the logo, then the words — and inside the grid of questions, so every
+     * layout arranges it with them. The radio is a real one in a real form,
+     * so a visitor whose script never runs still posts a method.
+     */
+    expect($payment[1] ?? '')->toContain('<legend class="gio-checkout-label">Payment</legend>')
+        ->and($rows[1])->toHaveCount(1)
+        ->and($rows[1][0])->toMatch('/type="radio"[^>]*name="payment_method"[^>]*value="cash_on_delivery"[^>]*checked required>.*<img class="gio-checkout-logo" src="[^"]*\/images\/payment-methods\/cash-on-delivery\.svg" alt="".*gio-checkout-choice-label">Cash on Delivery</s')
+        ->and($markup)->toContain('data-gio-error-for="payment_method"');
+
+    /** The logo rule rides only on a page that draws one, sized in em like everything else below the root. */
+    expect(styleBlock($html))->toContain('.gio-checkout-logo { height: 1.5em; width: auto; flex: none; }');
+});
+
+it('lists payment methods by name alone when the page switches logos off', function () {
+    pageStyled(['hide_lone_cash_choice' => false, 'show_payment_logos' => false]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /** No logo drawn, and no rule for one either: the block appears only where it applies. */
+    expect(checkoutMarkup($html))->toContain('gio-checkout-choice-label">Cash on Delivery<')
+        ->and($html)->not->toContain('gio-checkout-logo');
+});
+
+it('ships every default logo as a public asset the checkout can fetch', function () {
+    /** The default marks live in the codebase, so a checkout looks right with no upload from the merchant. */
+    foreach (PaymentMethod::cases() as $method) {
+        expect(public_path($method->logoPath()))->toBeFile()
+            ->and($method->logoUrl())->toEndWith('/'.$method->logoPath());
+    }
+});
+
+it('generates no selector for the payment chooser', function () {
+    pageStyled(['hide_lone_cash_choice' => false], slug: 'plain');
+    pageStyled([
+        'hide_lone_cash_choice' => false,
+        'fields' => [['key' => 'gift', 'label' => 'Gift?', 'style_tokens' => ['border' => '#ff0000']]],
+    ], slug: 'busy');
+
+    /**
+     * The chooser's block is a fixed rule picked by a switch, never built from
+     * a merchant's figures, so restyling a question beside it leaves the sheet
+     * exactly where it was — and the base a merchant's own stylesheet has to
+     * beat is the same on both pages.
+     */
+    expect(styleBlock($this->get('/busy')->assertOk()->getContent()))
+        ->toBe(styleBlock($this->get('/plain')->assertOk()->getContent()));
+});
+
+it('keeps the layout block last when a chooser adds its own', function () {
+    pageStyled(['hide_lone_cash_choice' => false, 'layout' => CheckoutLayout::Compact->value]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /** The layout still sits last so that what it narrows it narrows by order, the chooser's rule included. */
+    expect(strpos($styles, '.gio-checkout-logo {'))->toBeLessThan((int) strpos($styles, '.gio-checkout-compact {'))
+        ->and(baseSheet($styles, CheckoutLayout::Compact))->toContain('.gio-checkout-logo {')
+        ->and(baseSheet($styles, CheckoutLayout::Compact))->not->toContain('.gio-checkout-compact');
+});
+
+it('hands the visitor, the disk and the fallback reader the same bytes with a chooser drawn', function () {
+    pageStyled(['hide_lone_cash_choice' => false]);
+
+    $response = $this->get('/promo');
+
+    $served = (new FallbackPageCacheReader($this->cacheDirectory))->resolve('/promo', 'GET');
+
+    expect($response->getContent())->toContain('name="payment_method"')
+        ->and(file_get_contents($this->cache->htmlPath('promo')))->toBe($response->getContent())
+        ->and(file_get_contents($served['path']))->toBe($response->getContent());
+});

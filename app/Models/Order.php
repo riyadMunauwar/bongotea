@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
 use App\Observers\OrderObserver;
 use App\Support\Orders\AsCapturedAnswers;
 use Database\Factories\OrderFactory;
@@ -38,6 +39,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'answers',
     'delivery_label',
     'delivery_charge',
+    'payment_method',
     'status',
 ])]
 class Order extends Model
@@ -76,6 +78,13 @@ class Order extends Model
     {
         return [
             'status' => OrderStatus::class,
+
+            /**
+             * How the Customer said they would pay, by name. Its own axis:
+             * whether money moved is answered by the Order's Payments, and
+             * neither this nor `status` ever overwrites the other (ADR-0013).
+             */
+            'payment_method' => PaymentMethod::class,
 
             /**
              * The answers to the questions this Page's Merchant added of their

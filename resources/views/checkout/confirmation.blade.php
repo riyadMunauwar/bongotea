@@ -94,6 +94,16 @@
                     <span>{{ \App\Support\Money::format($order->delivery_charge) }}</span>
                 </p>
             @endif
+            {{--
+                How the customer said they would pay, in the words the
+                checkout offered it under. Read off the Order, not the Page:
+                the method chosen on the day is what the call and the courier
+                go by, whatever the Page offers now.
+            --}}
+            <p class="row">
+                <span>Payment</span>
+                <span>{{ $order->payment_method->getLabel() }}</span>
+            </p>
             <p class="row grand">
                 <span>Pay on delivery</span>
                 <span>{{ \App\Support\Money::format($order->total) }}</span>

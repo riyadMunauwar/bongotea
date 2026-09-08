@@ -80,6 +80,22 @@ class CheckoutTab
                                 DeliveryOptions::offered(),
                             ]),
 
+                        /**
+                         * After delivery, because that is the
+                         * order the customer meets them in on
+                         * the form: how the parcel arrives,
+                         * then how it is paid for.
+                         */
+                        Tab::make('Payment')
+                            ->columns(1)
+                            ->schema([
+                                PaymentMethods::offered(),
+
+                                PaymentMethods::logos(),
+
+                                PaymentMethods::loneCash(),
+                            ]),
+
                         Tab::make('Appearance')
                             ->columns(1)
                             ->schema([

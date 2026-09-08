@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 40" width="64" height="40" role="img" aria-label="Cash on Delivery">
+  <rect x="2" y="8" width="60" height="24" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <rect x="8" y="13" width="48" height="14" rx="2" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <circle cx="32" cy="20" r="5.5" fill="#16a34a"/>
+  <text x="32" y="23" font-family="system-ui, sans-serif" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">৳</text>
+</svg>

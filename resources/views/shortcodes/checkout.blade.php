@@ -365,8 +365,16 @@
             one string here that is — a layout's rules are code, and a layout
             that wanted a merchant's value in them would be the generated rule
             this sheet exists not to write.
+
+            Ahead of it on the same line, the one rule the payment chooser
+            adds, and only on a page that draws a logo. An additive block on
+            the layout's model: a page whose only method is cash on delivery
+            with the choice hidden ships the sheet it always shipped, byte for
+            byte — which is why it shares the layout's line and carries its own
+            line break, so an absent block leaves no blank line behind. Before
+            the layout's block, so the layout still sits last and may narrow it.
         --}}
-        {!! $layout->styleRules() !!}
+        {!! $paymentChooser->styleRules() !!}{!! $layout->styleRules() !!}
     </style>
 
     {{--
@@ -731,6 +739,56 @@
                     <p class="gio-checkout-error" data-gio-error-for="delivery_option"></p>
                 </div>
             @endif
+@if ($paymentChooser->isDrawn())
+                {{--
+                    At column 0, and so is its @endif: Blade swallows the
+                    newline after a directive but not the indent before it, so
+                    an indented @if leaves a line of spaces in the bytes of
+                    every page that draws no chooser. Written flush left, a
+                    page with a default Config emits exactly what it did
+                    before a method could be chosen.
+
+                    How the customer will pay, in the merchant's order. Drawn
+                    only where there is a decision worth putting in front of
+                    them: a page offering nothing but cash on delivery with the
+                    choice hidden draws the form it always did and posts no
+                    method, and the server places the order under cash on
+                    delivery. The comment sits inside the branch for the same
+                    reason, so a page drawing no chooser emits no line for it.
+
+                    Radios like the delivery choice above, and drawn as the
+                    same row: the control, then the logo where the page shows
+                    them, then the name. The first is already picked so a page
+                    with one preferred method needs no extra tap, and so a
+                    plain form post with no script carries a method
+                    regardless. The server refuses a name the page never
+                    listed.
+
+                    The logo is decorative beside a name that says the same
+                    thing, so its alt is empty and a screen reader hears the
+                    method once.
+                --}}
+                <div class="gio-checkout-field">
+                    <fieldset class="gio-checkout-choices gio-checkout-payment">
+                        <legend class="gio-checkout-label">Payment</legend>
+
+                        @foreach ($paymentChooser->methods as $index => $method)
+                            <label class="gio-checkout-choice">
+                                <input type="radio"
+                                       name="payment_method"
+                                       value="{{ $method->value }}"
+                                       @checked($index === 0) required>
+                                @if ($paymentChooser->showsLogos)
+                                    <img class="gio-checkout-logo" src="{{ $method->logoUrl() }}" alt="" loading="lazy">
+                                @endif
+                                <span class="gio-checkout-choice-label">{{ $method->getLabel() }}</span>
+                            </label>
+                        @endforeach
+                    </fieldset>
+
+                    <p class="gio-checkout-error" data-gio-error-for="payment_method"></p>
+                </div>
+@endif
         </div>
 
         {{--

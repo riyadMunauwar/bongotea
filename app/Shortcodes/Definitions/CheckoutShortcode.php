@@ -151,6 +151,22 @@ class CheckoutShortcode implements ShortcodeDefinition
             'orderButton' => $page->checkout_config->orderButton,
 
             /**
+             * How the Customer is asked to pay, if they are asked at all: the
+             * Page's offered methods in its order, with or without logos, or
+             * nothing where the only method is Cash on Delivery and the Page
+             * hides that choice — which is every Page as it stands today.
+             *
+             * Read from the same reading the Capture validates against, so the
+             * form cannot draw a method the server refuses. Configuration and
+             * not a figure handed over at the door, so like the layout and the
+             * copy it is deliberately absent from the fingerprint below: the
+             * total is the same whichever method is picked, and a Merchant
+             * reordering methods must never refuse an Order somebody is
+             * half-way through typing (ADR-0013).
+             */
+            'paymentChooser' => $page->checkout_config->paymentChooser(),
+
+            /**
              * What the courier will collect, written into the form so a
              * Capture can tell whether the figures on this visitor's screen are
              * still the figures the server would charge.

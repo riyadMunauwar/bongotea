@@ -2,6 +2,7 @@
 
 namespace App\Support\Checkout;
 
+use App\Enums\PaymentMethod;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
 use Illuminate\Contracts\Support\Arrayable;
@@ -79,6 +80,32 @@ class CheckoutConfig implements Arrayable
          * through typing.
          */
         public readonly OrderButton $orderButton,
+
+        /**
+         * Which Payment Methods this Page offers, by name and in the order
+         * the Checkout draws them.
+         *
+         * The Merchant's list and nothing more, kept whole even where a
+         * method in it cannot be offered — switched off for the installation,
+         * or not yet usable at all — so a method switched back on reappears
+         * where the Merchant put it. What a Checkout actually offers is
+         * `offeredMethods()`, which is the only reading anything draws or
+         * validates from.
+         *
+         * @var list<PaymentMethod>
+         */
+        public readonly array $paymentMethods,
+
+        /** Whether the chooser draws each method's logo beside its name. */
+        public readonly bool $showPaymentLogos,
+
+        /**
+         * Whether a Page offering nothing but Cash on Delivery draws a chooser
+         * at all. On, a cash-only Page draws the form it always did and the
+         * submission carries no method; off, it draws a single row so the
+         * Customer sees how they will pay.
+         */
+        public readonly bool $hideLoneCashChoice,
     ) {}
 
     /**
@@ -128,6 +155,17 @@ class CheckoutConfig implements Arrayable
 
             /** The words the button has always carried. */
             orderButton: OrderButton::default(),
+
+            /**
+             * Cash on Delivery alone, with the choice hidden: every Page that
+             * exists today is paid at the door, and a chooser with one row
+             * would put a decision nobody can make in front of paid traffic.
+             * Logos shown, so a Page that does start offering a second method
+             * looks right with no upload from the Merchant.
+             */
+            paymentMethods: [PaymentMethod::CashOnDelivery],
+            showPaymentLogos: true,
+            hideLoneCashChoice: true,
         );
     }
 
@@ -215,7 +253,49 @@ class CheckoutConfig implements Arrayable
 
             /** Absent, blank, or something the tab would refuse, is the wording it has always had. */
             orderButton: OrderButton::fromArray((array) ($stored['order_button'] ?? [])),
+
+            /**
+             * Absent is Cash on Delivery alone, with the choice hidden and
+             * logos shown, which is what every Config written before a Page
+             * could choose a method holds and what those Pages have always
+             * drawn. No data migration: the defaults are read, not written.
+             */
+            paymentMethods: array_key_exists('payment_methods', $stored)
+                ? self::paymentMethodsFromArray($stored['payment_methods'])
+                : [PaymentMethod::CashOnDelivery],
+            showPaymentLogos: (bool) ($stored['show_payment_logos'] ?? true),
+            hideLoneCashChoice: (bool) ($stored['hide_lone_cash_choice'] ?? true),
         );
+    }
+
+    /**
+     * The Payment Methods of a stored Config, by name and in stored order.
+     *
+     * Names only, one of each: a name nothing knows is dropped rather than
+     * thrown, like every other unusable value a Config holds, and a name twice
+     * over would draw a choice that decides nothing. Nothing here asks whether
+     * a method can be offered — that is `offeredMethods()`, and the raw list is
+     * kept whole so a method switched back on reappears where it was.
+     *
+     * Empty is kept empty rather than filled in: absent and empty say different
+     * things, as they do for Delivery Options, and it is the offered reading
+     * that falls back so a Page always has one way to order.
+     *
+     * @return list<PaymentMethod>
+     */
+    private static function paymentMethodsFromArray(mixed $stored): array
+    {
+        $methods = [];
+
+        foreach ((array) $stored as $name) {
+            $method = PaymentMethod::fromStored($name);
+
+            if ($method !== null && ! in_array($method, $methods, true)) {
+                $methods[] = $method;
+            }
+        }
+
+        return $methods;
     }
 
     /**
@@ -414,6 +494,65 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
+     * The Payment Methods this Checkout actually offers, in the Page's order.
+     *
+     * The Merchant's list filtered to what the installation can take money
+     * through, falling back to Cash on Delivery when nothing in it can be —
+     * a Settings change, or a list a Merchant emptied, must never leave a live
+     * Page with no way to order. Everything that draws or validates a method
+     * reads this and never the raw list, so the form and the Capture cannot
+     * disagree about what was on offer.
+     *
+     * @return list<PaymentMethod>
+     */
+    public function offeredMethods(): array
+    {
+        $offered = array_values(array_filter(
+            $this->paymentMethods,
+            fn (PaymentMethod $method): bool => $method->isUsable(),
+        ));
+
+        return $offered === [] ? [PaymentMethod::CashOnDelivery] : $offered;
+    }
+
+    /**
+     * Whether this Checkout offers a way to pay by this name.
+     */
+    public function offersPaymentMethod(PaymentMethod $method): bool
+    {
+        return in_array($method, $this->offeredMethods(), true);
+    }
+
+    /**
+     * What the island draws to ask how the Customer will pay — or nothing,
+     * where the only method offered is Cash on Delivery and the Page hides
+     * that choice.
+     */
+    public function paymentChooser(): PaymentChooser
+    {
+        return PaymentChooser::for($this->offeredMethods(), $this->showPaymentLogos, $this->hideLoneCashChoice);
+    }
+
+    /**
+     * The Payment Method a Capture is placed under, given what the Customer
+     * chose.
+     *
+     * A name and never anything more: the request says how they will pay, and
+     * whether that is on offer is read here. No name at all is Cash on
+     * Delivery where the Page offers it — a Page that draws no chooser posts
+     * no method, and a plain post that lost the radio should land where the
+     * form would have opened — and null where it does not, which the request
+     * refuses before a Capture is reached. A name the Page never listed is
+     * null too, for the same treatment.
+     */
+    public function paymentMethodFor(?string $name): ?PaymentMethod
+    {
+        $method = $name === null ? PaymentMethod::CashOnDelivery : PaymentMethod::fromStored($name);
+
+        return $method !== null && $this->offersPaymentMethod($method) ? $method : null;
+    }
+
+    /**
      * The server side of the one definition.
      *
      * @return array<string, list<mixed>>
@@ -464,7 +603,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
      */
     public function toArray(): array
     {
@@ -476,6 +615,9 @@ class CheckoutConfig implements Arrayable
             'default_selection' => $this->defaultSelection,
             'layout' => $this->layout->value,
             'order_button' => $this->orderButton->toArray(),
+            'payment_methods' => PaymentMethod::names($this->paymentMethods),
+            'show_payment_logos' => $this->showPaymentLogos,
+            'hide_lone_cash_choice' => $this->hideLoneCashChoice,
         ];
     }
 

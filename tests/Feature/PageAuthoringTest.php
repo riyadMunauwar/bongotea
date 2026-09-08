@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PageStatus;
+use App\Enums\PaymentMethod;
 use App\Filament\Resources\Pages\Pages\CreatePage;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Filament\Resources\Pages\Pages\ListPages;
@@ -18,6 +19,7 @@ use App\Support\Checkout\StyleToken;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Tabs;
@@ -1634,7 +1636,7 @@ it('splits the checkout tab into one nested tab per concern', function () {
      * is met before the picker it gates.
      */
     expect(checkoutTabsOf(Page::factory()->create())->keys()->all())
-        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Appearance']);
+        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Appearance']);
 });
 
 it('keeps everything the checkout decides inside the checkout tab', function () {
@@ -1686,6 +1688,12 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
             'saved' => fn (CheckoutConfig $config): array => $config->deliveryOptionsToArray(),
             'expected' => [['label' => 'Next day', 'amount' => 9000]],
         ],
+        'Payment' => [
+            'control' => 'checkout_config.hide_lone_cash_choice',
+            'typed' => ['checkout_config' => ['hide_lone_cash_choice' => false]],
+            'saved' => fn (CheckoutConfig $config): bool => $config->hideLoneCashChoice,
+            'expected' => false,
+        ],
         'Appearance' => [
             'control' => 'checkout_config.style_tokens.accent',
             'typed' => ['checkout_config' => ['style_tokens' => ['accent' => '#ff0000']]],
@@ -1708,7 +1716,7 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
 
     /** And still written where it always was: no stored Config changed shape. */
     expect(($setting['saved'])($page->refresh()->checkout_config))->toBe($setting['expected']);
-})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Appearance']);
+})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Appearance']);
 
 it('puts the checkout-wide appearance controls where no question stands in front of them', function () {
     $tabs = checkoutTabsOf(Page::factory()->create());
@@ -1971,3 +1979,89 @@ it('refuses button copy on the box that holds it', function (array $typed, strin
     'a wording broken over two lines' => [['wording' => "Order\nnow"], 'checkout_config.order_button.wording'],
     'a note too long for one line beneath the button' => [['note' => str_repeat('y', 201)], 'checkout_config.order_button.note'],
 ]);
+
+it('starts a new page off offering cash on delivery alone with the choice hidden', function () {
+    $page = Page::factory()->create();
+
+    /**
+     * Nothing about an existing page changes when paying by other means
+     * arrives: cash on delivery only, no chooser drawn, logos on for the day
+     * a second method is listed.
+     */
+    expect($page->checkout_config->paymentMethods)->toBe([PaymentMethod::CashOnDelivery])
+        ->and($page->checkout_config->hideLoneCashChoice)->toBeTrue()
+        ->and($page->checkout_config->showPaymentLogos)->toBeTrue()
+        ->and($page->checkout_config->paymentChooser()->isDrawn())->toBeFalse();
+});
+
+it('asks about payment on its own nested tab and lists every method by name', function () {
+    $payment = checkoutTabsOf(Page::factory()->create())['Payment'];
+
+    /** The list, the logos switch and the lone-cash switch, together and nowhere else. */
+    expect(statePathsInside($payment))
+        ->toContain('checkout_config.payment_methods')
+        ->toContain('checkout_config.show_payment_logos')
+        ->toContain('checkout_config.hide_lone_cash_choice');
+
+    $offered = fieldInside($payment, 'checkout_config.payment_methods');
+
+    expect($offered)->toBeInstanceOf(Select::class)
+        ->and($offered->getOptions())->toBe(PaymentMethod::labels())
+        ->and($offered->isMultiple())->toBeTrue()
+        /** Dragging into the order the checkout draws them is the whole of what "ordered" means here. */
+        ->and($offered->isReorderable())->toBeTrue();
+
+    /**
+     * Only cash on delivery can be picked yet. The online methods are listed
+     * so the merchant can see what is coming, and held shut because a method
+     * with no driver cannot take money.
+     */
+    foreach (PaymentMethod::cases() as $method) {
+        expect($offered->isOptionDisabled($method->value, $method->getLabel()))->toBe(! $method->isUsable());
+    }
+});
+
+it('lets a merchant unhide the lone cash on delivery choice and switch its logo off', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => [
+            'payment_methods' => [PaymentMethod::CashOnDelivery->value],
+            'show_payment_logos' => false,
+            'hide_lone_cash_choice' => false,
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->paymentMethods)->toBe([PaymentMethod::CashOnDelivery])
+        ->and($config->showPaymentLogos)->toBeFalse()
+        ->and($config->hideLoneCashChoice)->toBeFalse();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)->toContain('name="payment_method"')
+        ->and($html)->toContain('gio-checkout-choice-label">Cash on Delivery<')
+        ->and($html)->not->toContain('gio-checkout-logo');
+});
+
+it('keeps offering cash on delivery when the merchant empties the list', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['payment_methods' => []]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->checkout_config;
+
+    /**
+     * The list is stored as the merchant left it, and the offered reading is
+     * what falls back: a page must never be left with no way to order.
+     */
+    expect($config->paymentMethods)->toBe([])
+        ->and($config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
+});

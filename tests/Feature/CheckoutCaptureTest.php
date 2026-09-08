@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
@@ -2222,3 +2223,149 @@ it('leaves the fingerprint alone when the order button is reworded', function ()
 
     expect(Order::sole()->subtotal)->toBe(99000);
 });
+
+it('places an order under cash on delivery when the form posts no method', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A page offering nothing but cash on delivery with the choice hidden
+     * draws no chooser, so its submission carries no method — and so does a
+     * plain post that lost the radio. Both land where the form would have
+     * opened.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
+});
+
+it('records the method a customer chose from the chooser', function () {
+    $page = payingBy(sellingPage(Product::factory()->create()), ['cash_on_delivery'], hideLoneCash: false);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'payment_method' => 'cash_on_delivery',
+    ]))->assertCreated();
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
+});
+
+it('refuses a method the page never listed and captures nothing', function (string $method) {
+    $page = sellingPage(Product::factory()->create());
+
+    /**
+     * A known name the page does not offer and a name nothing knows arrive the
+     * same way — nothing on screen offers either — and are refused beside the
+     * chooser rather than placed under whatever the payload claims.
+     */
+    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => $method]))
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.payment_method.0', 'Please choose one of the payment methods listed.');
+
+    expect(Order::count())->toBe(0);
+})->with([
+    'an online method no page can offer yet' => ['bkash'],
+    'a name nothing knows' => ['gold-bars'],
+]);
+
+it('reads a config written before a method could be chosen as cash on delivery alone', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    /** The stored shape of every page that exists today: no payment keys at all. */
+    $stored = $page->checkout_config->toArray();
+    unset($stored['payment_methods'], $stored['show_payment_logos'], $stored['hide_lone_cash_choice']);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray($stored)]);
+    $config = $page->refresh()->checkout_config;
+
+    expect($config->paymentMethods)->toBe([PaymentMethod::CashOnDelivery])
+        ->and($config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery])
+        ->and($config->showPaymentLogos)->toBeTrue()
+        ->and($config->hideLoneCashChoice)->toBeTrue()
+        ->and($config->paymentChooser()->isDrawn())->toBeFalse();
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
+});
+
+it('offers cash on delivery whatever a stored list holds that cannot be offered', function (array $stored, array $kept) {
+    $page = payingBy(sellingPage(Product::factory()->create()), $stored);
+    $config = $page->checkout_config;
+
+    /**
+     * The raw list is kept whole — minus what is not a name at all — so a
+     * method switched on later reappears where the merchant put it; the
+     * offered reading drops what cannot take money and falls back to cash so
+     * the page always has one way to order.
+     */
+    expect(PaymentMethod::names($config->paymentMethods))->toBe($kept)
+        ->and($config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
+})->with([
+    'an empty list' => [[], []],
+    'online methods only' => [['bkash', 'sslcommerz'], ['bkash', 'sslcommerz']],
+    'a name nothing knows, twice, beside a real one' => [['gold-bars', 'cash_on_delivery', 'cash_on_delivery', 42], ['cash_on_delivery']],
+]);
+
+it('leaves the fingerprint alone when the payment settings change', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $page = sellingPage($jacket);
+
+    $before = PricingFingerprint::for($page);
+
+    /** Written against the page as the visitor's screen has it, before the merchant edits the payment section. */
+    $payload = capturePayload($page);
+
+    $page = payingBy($page, ['cash_on_delivery'], showLogos: false, hideLoneCash: false);
+
+    /**
+     * Which methods are listed, in what order and with what beside them is
+     * configuration, not a figure handed over at the door: the total is the
+     * same whichever method is picked. Fingerprinting it would turn away
+     * everyone mid-form every time a merchant reordered the list (ADR-0013).
+     */
+    expect(PricingFingerprint::for($page))->toBe($before);
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->total)->toBe(105000);
+});
+
+it('says on the thank-you page how the order will be paid', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $this->get(route('checkout.confirmation', Order::sole()->order_number))
+        ->assertOk()
+        ->assertSee('Cash on Delivery');
+});
+
+it('places a plain form post carrying a method under that method', function () {
+    $page = payingBy(sellingPage(Product::factory()->create()), ['cash_on_delivery'], hideLoneCash: false);
+
+    /** The chooser is a real radio in a real form, so a visitor whose script never runs can still say how they will pay. */
+    $this->post(route('checkout.store'), capturePayload($page, ['payment_method' => 'cash_on_delivery']))
+        ->assertStatus(303);
+
+    expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
+});
+
+/**
+ * The same Page, with its payment section written as given.
+ *
+ * @param  list<mixed>  $methods  What the stored list holds, as stored — names, or anything else a test wants read totally.
+ */
+function payingBy(Page $page, array $methods, bool $showLogos = true, bool $hideLoneCash = true): Page
+{
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'payment_methods' => $methods,
+        'show_payment_logos' => $showLogos,
+        'hide_lone_cash_choice' => $hideLoneCash,
+    ])]);
+
+    return $page->refresh();
+}

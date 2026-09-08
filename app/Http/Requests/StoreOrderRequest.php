@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PaymentMethod;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\BuiltInField;
@@ -79,6 +80,8 @@ class StoreOrderRequest extends FormRequest
             ...$this->checkoutConfig()->rules(),
 
             ...$this->deliveryRules(),
+
+            ...$this->paymentRules(),
 
             ...$this->selectionRules(),
 
@@ -181,6 +184,34 @@ class StoreOrderRequest extends FormRequest
     }
 
     /**
+     * How the Customer will pay, where this Page offers a choice of ways.
+     *
+     * A name and never anything more: what a method does is read off the
+     * Page's offered list at Capture, so a submission naming a method the Page
+     * never listed is refused here rather than placed under whatever it claims.
+     *
+     * Optional where the Page offers Cash on Delivery, because a Page that
+     * draws no chooser posts no method and is placed under cash — and so is a
+     * plain post that lost the radio, which is where the form would have
+     * opened. Required only where no cash fallback exists, which no Page can
+     * reach yet.
+     *
+     * @return array<string, list<mixed>>
+     */
+    private function paymentRules(): array
+    {
+        $config = $this->checkoutConfig();
+
+        return [
+            'payment_method' => [
+                $config->offersPaymentMethod(PaymentMethod::CashOnDelivery) ? 'nullable' : 'required',
+                'string',
+                Rule::in(PaymentMethod::names($config->offeredMethods())),
+            ],
+        ];
+    }
+
+    /**
      * One quantity per Product this submission would sell, keyed by Product id.
      *
      * Keyed rather than positional so a reorder in the admin can never point a
@@ -253,6 +284,14 @@ class StoreOrderRequest extends FormRequest
              */
             'delivery_option.required' => 'Please choose how you would like it delivered.',
             'delivery_option.in' => 'Please choose one of the delivery options listed.',
+
+            /**
+             * A name the Page never listed is a stale form or a hand-made
+             * post, and reads as one: nothing on screen offers a method the
+             * Page does not.
+             */
+            'payment_method.required' => 'Please choose how you would like to pay.',
+            'payment_method.in' => 'Please choose one of the payment methods listed.',
 
             /**
              * Nothing ticked, no tick list at all, and a tick list that is not
@@ -460,7 +499,7 @@ class StoreOrderRequest extends FormRequest
      * posted for a field that is switched off is dropped here rather than
      * stored: it was never asked for and never checked.
      *
-     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}
+     * @return array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, payment_method: PaymentMethod|null, selected: list<int>|null, quantities: array<int, int>}
      */
     public function details(): array
     {
@@ -468,9 +507,27 @@ class StoreOrderRequest extends FormRequest
             ...$this->answersInColumns(),
             'answers' => $this->answersInSnapshot(),
             'delivery_option' => $this->deliveryOption(),
+            'payment_method' => $this->paymentMethod(),
             'selected' => $this->selected(),
             'quantities' => $this->quantities(),
         ];
+    }
+
+    /**
+     * How the Customer said they would pay, resolved against what the Page
+     * offers.
+     *
+     * Read through the Config so that a submission carrying no method — a
+     * Page that drew no chooser, or a plain post that lost the radio — lands
+     * on Cash on Delivery where the Page offers it, the same place the form
+     * would have opened. Null only where the rules above have already refused
+     * the submission.
+     */
+    private function paymentMethod(): ?PaymentMethod
+    {
+        $name = $this->string('payment_method')->trim()->toString();
+
+        return $this->checkoutConfig()->paymentMethodFor($name === '' ? null : $name);
     }
 
     /**

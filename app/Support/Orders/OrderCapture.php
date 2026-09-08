@@ -2,6 +2,7 @@
 
 namespace App\Support\Orders;
 
+use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
@@ -27,12 +28,25 @@ class OrderCapture
      * on a form with no address box records that it has no address, rather than
      * a blank that reads as a Customer who declined to give one.
      *
-     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, selected: list<int>|null, quantities: array<int, int>}  $details
+     * @param  array{name: string|null, phone: string, email: string|null, address: string|null, district: string|null, answers: list<CapturedAnswer>, delivery_option: string|null, payment_method: PaymentMethod|null, selected: list<int>|null, quantities: array<int, int>}  $details
      */
     public function capture(Page $page, array $details): Order
     {
         if ($page->products->isEmpty()) {
             throw new CheckoutUnavailable("Page [{$page->slug}] has nothing left to sell.");
+        }
+
+        /**
+         * Already resolved against what the Page offers, so null here is a
+         * request that skipped its own rules. An Order placed under a method
+         * nobody offered is an Order nobody can collect.
+         */
+        $paymentMethod = $details['payment_method'];
+
+        if ($paymentMethod === null) {
+            throw new CheckoutUnavailable(
+                "Page [{$page->slug}] was captured without one of the payment methods it offers."
+            );
         }
 
         /**
@@ -64,7 +78,7 @@ class OrderCapture
          */
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($page, $customer, $details, $delivery, $lines): Order {
+        return DB::transaction(function () use ($page, $customer, $details, $delivery, $paymentMethod, $lines): Order {
             $order = $customer->orders()->create([
                 'page_id' => $page->getKey(),
 
@@ -105,6 +119,16 @@ class OrderCapture
                  */
                 'delivery_label' => $delivery?->label,
                 'delivery_charge' => $delivery?->amount ?? 0,
+
+                /**
+                 * How the Customer said they would pay, by name. Snapshotted
+                 * for the reason the arrangement above is: a Page that stops
+                 * offering a method next month must not rewrite what this
+                 * Customer chose today. Whether money then moved is its own
+                 * axis, answered by the Order's Payments and never by this
+                 * column or by `status` (ADR-0013).
+                 */
+                'payment_method' => $paymentMethod,
             ]);
 
             foreach ($lines as $line) {

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
@@ -30,6 +31,7 @@ class OrderFactory extends Factory
             'customer_district' => fake()->randomElement(config('giopages.districts')),
             'delivery_label' => 'Delivery',
             'delivery_charge' => 6000,
+            'payment_method' => PaymentMethod::CashOnDelivery,
             'status' => OrderStatus::New,
         ];
     }
