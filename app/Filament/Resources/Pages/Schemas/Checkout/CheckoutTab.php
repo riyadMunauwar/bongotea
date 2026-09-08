@@ -84,6 +84,14 @@ class CheckoutTab
                             ->columns(1)
                             ->schema([
                                 Appearance::section(),
+
+                                /**
+                                 * After the tokens, because it is
+                                 * the smaller change: a merchant
+                                 * restyling a checkout reaches for
+                                 * a colour before a sentence.
+                                 */
+                                OrderButtonCopy::section(),
                             ]),
                     ]),
             ]);

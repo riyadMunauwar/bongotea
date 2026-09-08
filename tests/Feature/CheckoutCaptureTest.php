@@ -2235,3 +2235,33 @@ it('leaves the fingerprint alone when the products are only rearranged', functio
 
     expect(Order::sole()->subtotal)->toBe(248000);
 });
+
+it('leaves the fingerprint alone when the order button is reworded', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $page = sellingPage($jacket);
+
+    $before = PricingFingerprint::for($page);
+
+    /** Written against the page as the visitor's screen has it, before the merchant edits the copy. */
+    $payload = capturePayload($page);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'order_button' => ['wording' => 'Order for {total}', 'note' => 'You pay the courier.'],
+    ])]);
+
+    $page = $page->refresh();
+
+    /**
+     * What the button says is configuration and not a figure handed over at
+     * the door. Fingerprinting it would turn away everyone mid-form every time
+     * a merchant edited a word on a live page, on traffic they are paying for.
+     */
+    expect(PricingFingerprint::for($page))->toBe($before)
+        ->and($page->checkout_config->orderButton->wording)->toBe('Order for {total}')
+        ->and($page->checkout_config->orderButton->note)->toBe('You pay the courier.');
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->subtotal)->toBe(99000);
+});

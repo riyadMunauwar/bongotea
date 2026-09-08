@@ -68,6 +68,16 @@ class CheckoutConfig implements Arrayable
          * nothing about what it asks for, what it charges or how it is styled.
          */
         public readonly CheckoutLayout $layout,
+
+        /**
+         * What the order button says and the line beneath it.
+         *
+         * Copy, not a figure: like the layout and the Default Selection it
+         * stays out of the Pricing Fingerprint, so a Merchant editing a word
+         * on a live Page never turns away an Order somebody is half-way
+         * through typing.
+         */
+        public readonly OrderButton $orderButton,
     ) {}
 
     /**
@@ -114,6 +124,9 @@ class CheckoutConfig implements Arrayable
              * never opens the Checkout tab sees the form they already know.
              */
             layout: CheckoutLayout::Stacked,
+
+            /** The words the button has always carried. */
+            orderButton: OrderButton::default(),
         );
     }
 
@@ -198,6 +211,9 @@ class CheckoutConfig implements Arrayable
 
             /** Absent, or a name nothing draws, is the arrangement it has always had. */
             layout: CheckoutLayout::fromStored($stored['layout'] ?? null),
+
+            /** Absent, blank, or something the tab would refuse, is the wording it has always had. */
+            orderButton: OrderButton::fromArray((array) ($stored['order_button'] ?? [])),
         );
     }
 
@@ -447,7 +463,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}}
      */
     public function toArray(): array
     {
@@ -458,6 +474,7 @@ class CheckoutConfig implements Arrayable
             'product_picker' => $this->productPicker,
             'default_selection' => $this->defaultSelection,
             'layout' => $this->layout->value,
+            'order_button' => $this->orderButton->toArray(),
         ];
     }
 

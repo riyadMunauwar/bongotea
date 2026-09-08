@@ -754,6 +754,7 @@
             from them, which is what this figure has to be right for.
         --}}
         @php($subtotal = (int) ($picksProducts ? $products->filter($opensTicked) : $products)->sum('price'))
+        @php($total = $subtotal + ($preselected?->amount ?? 0))
 
         <div class="gio-checkout-summary">
             <p class="gio-checkout-row">
@@ -776,13 +777,22 @@
 
             <p class="gio-checkout-row gio-checkout-total">
                 <span>Total</span>
-                <span data-gio-total>{{ \App\Support\Money::format($subtotal + ($preselected?->amount ?? 0)) }}</span>
+                <span data-gio-total>{{ \App\Support\Money::format($total) }}</span>
             </p>
         </div>
 
-        <button class="gio-checkout-submit" type="submit" data-gio-submit>Order now &mdash; Cash on delivery</button>
+        {{--
+            The merchant's words, or the words the button has always carried.
+            Where the wording names the total it is filled in here from the
+            same figure the summary shows, so a visitor whose scripts never run
+            reads a price and never a placeholder; the template then rides on
+            the button for the script, which refills it every time it retotals.
+            No template where nothing is named, so the script leaves a plain
+            button alone.
+        --}}
+        <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $orderButton->carriesTotal() ? ' data-gio-submit-wording="'.e($orderButton->wording()).'"' : '' !!}>{{ $orderButton->wordingFor(\App\Support\Money::format($total)) }}</button>
 
-        <p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>
+        <p class="gio-checkout-note">{{ $orderButton->note() }}</p>
     </form>
 </div>
 
@@ -797,6 +807,13 @@
     window.__gioCheckoutBound = true;
 
     var SUBMITTING = 'Placing your order…';
+
+    /*
+     * What the merchant writes into the button's wording to put the total on
+     * it, spelled the one way the Checkout tab documents. The server has
+     * already filled it in once at render; this is what the script refills.
+     */
+    var TOTAL_PLACEHOLDER = '{total}';
 
     /*
      * One sentence per way an order can fail to arrive, each saying what
@@ -877,9 +894,22 @@
             if (el) { el.textContent = text; }
         };
 
+        var total = money(form, subtotal + delivery.amount);
+
         set('subtotal', money(form, subtotal));
         set('delivery', money(form, delivery.amount));
-        set('total', money(form, subtotal + delivery.amount));
+        set('total', total);
+
+        /*
+         * The button carries the same figure where the merchant put it there.
+         * Left alone while an order is going out: the button is saying so, and
+         * a retotal in flight must not talk over it.
+         */
+        var button = form.querySelector('[data-gio-submit][data-gio-submit-wording]');
+
+        if (button && !button.disabled) {
+            button.textContent = button.dataset.gioSubmitWording.split(TOTAL_PLACEHOLDER).join(total);
+        }
 
         /* The row is named after the arrangement the customer just chose. */
         if (delivery.label !== null) { set('delivery-label', delivery.label); }

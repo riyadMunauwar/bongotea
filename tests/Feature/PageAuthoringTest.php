@@ -1921,3 +1921,53 @@ it('reorders the questions while their rows are collapsed', function () {
     expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
         ->toBe(['phone', 'name', 'email', 'district', 'address']);
 });
+
+it('lets a merchant word the order button and the line beneath it', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    /** Asked where the rest of how the checkout looks is asked, and nowhere else. */
+    expect(statePathsInside(checkoutTabsOf($page)['Appearance']))
+        ->toContain('checkout_config.order_button.wording')
+        ->toContain('checkout_config.order_button.note');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['order_button' => [
+            'wording' => 'Order for {total}',
+            'note' => 'You pay the courier when it arrives.',
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)->toContain('data-gio-submit-wording="Order for {total}"')
+        ->and($html)->toContain('<p class="gio-checkout-note">You pay the courier when it arrives.</p>');
+});
+
+it('keeps button copy the merchant left alone out of the stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['order_button' => ['wording' => '  ', 'note' => '']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Blank is the merchant saying nothing, so the page keeps the words it always had rather than storing a blank. */
+    expect($page->refresh()->checkout_config->orderButton->wording)->toBeNull()
+        ->and($page->checkout_config->orderButton->note)->toBeNull();
+});
+
+it('refuses button copy on the box that holds it', function (array $typed, string $box) {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['order_button' => $typed]])
+        ->call('save')
+        ->assertHasFormErrors([$box]);
+})->with([
+    'a wording too long for a button' => [['wording' => str_repeat('x', 81)], 'checkout_config.order_button.wording'],
+    'a wording broken over two lines' => [['wording' => "Order\nnow"], 'checkout_config.order_button.wording'],
+    'a note too long for one line beneath the button' => [['note' => str_repeat('y', 201)], 'checkout_config.order_button.note'],
+]);

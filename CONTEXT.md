@@ -29,7 +29,7 @@ The form on a Page that captures a cash-on-delivery Order. There is no cart and 
 _Avoid_: cart, basket, funnel
 
 **Checkout Config**:
-Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else.
+Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else. Anything shared by every Page is a Setting, not part of a Config.
 _Avoid_: settings, preset, theme, template
 
 **Checkout Layout**:
@@ -43,6 +43,10 @@ _Avoid_: column, span, size, grid
 **Style Token**:
 One thing about a Checkout a Merchant can restyle — a colour, a length, a size. Every token is set once for the whole Checkout and may be overridden by a single Checkout Field, so a form is styled in one place and a question that must look different says only how it differs. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
 _Avoid_: theme, variable, style setting, CSS variable
+
+**Order Button**:
+What a Checkout's button says, and the line beneath it, in the Merchant's own words. The wording may carry a total placeholder, filled in with what the courier will collect so the price sits on the button at the moment a Customer taps it. Both belong to one Page's Checkout Config; a Page that says nothing keeps the words the button has always had. Copy and not a figure, so neither is in the Pricing Fingerprint: a Merchant editing a word on a live Page never turns away an Order somebody has half-typed.
+_Avoid_: CTA, call to action, submit label, microcopy
 
 **Product Picker**:
 Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. What it opens with is the Page's Default Selection. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout Layout that draws no Products to pick between.
@@ -123,3 +127,9 @@ _Avoid_: admin, operator, staff
 **Merchant**:
 The business running an installation of GioPages. Relevant because the system is self-hosted by many merchants, so anything a merchant would reasonably differ on — currency, the list of Districts — belongs in configuration rather than baked into the system.
 _Avoid_: tenant, client, store owner
+
+### The installation
+
+**Settings**:
+The values a Merchant decides once for the whole installation rather than per Page: how the Merchant is reached by payment providers and couriers, and anything else that would be the same on every Page. A Setting is never part of a Checkout Config; if a Page could reasonably differ on it, it is not a Setting.
+_Avoid_: config, options, preferences, site settings, global settings

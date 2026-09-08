@@ -6,6 +6,7 @@ use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldWidth;
+use App\Support\Checkout\OrderButton;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\Money;
@@ -2160,3 +2161,72 @@ it('lets a paired question be narrower than the box it types in', function () {
     expect($field[1])->toContain('min-width: 0;')
         ->and($styles)->toContain('--gio-max-width: 20rem;');
 });
+
+it('puts the merchant\'s words on the order button and beneath it', function () {
+    pageStyled(['order_button' => [
+        'wording' => 'Send me the jacket',
+        'note' => 'You pay the courier, not us.',
+    ]]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    expect($markup)->toContain('data-gio-submit>Send me the jacket</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">You pay the courier, not us.</p>');
+});
+
+it('keeps the wording the button has always had on a page that says nothing about it', function () {
+    pageStyled([]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Blank is the merchant saying nothing, and a page that says nothing reads
+     * exactly as it did before the button could be reworded. No template rides
+     * on the button either: there is no placeholder for the script to fill.
+     */
+    expect($markup)->toContain('data-gio-submit>Order now — Cash on delivery</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>')
+        ->and($markup)->not->toContain('data-gio-submit-wording');
+});
+
+it('puts the live total on the button where the merchant asked for it', function () {
+    $page = pageStyled(['order_button' => ['wording' => 'Order for {total}']]);
+    $page->products()->sync([Product::factory()->create(['price' => 99000])->getKey()]);
+    $page->checkout_config = CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'delivery_options' => [['label' => 'Inside Dhaka', 'amount' => 6000]],
+    ]);
+    $page->save();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    /**
+     * Substituted at render, so a visitor whose scripts never run reads a
+     * figure and not a placeholder — the same figure the summary totals. The
+     * template stays on the button for the script, which retotals the button
+     * with the summary as the customer changes what they are buying.
+     */
+    expect($markup)->toContain('data-gio-submit-wording="Order for {total}"')
+        ->and($markup)->toContain('>Order for '.Money::format(105000).'</button>')
+        ->and($markup)->not->toContain('>Order for {total}<')
+        ->and(checkoutScript($html))->toContain('gioSubmitWording')
+        /** The script and the tab spell the placeholder the same way, or a merchant's total goes stale on the first retotal. */
+        ->and(checkoutScript($html))->toContain("var TOTAL_PLACEHOLDER = '".OrderButton::TOTAL_PLACEHOLDER."';");
+});
+
+it('drops button copy the checkout tab would refuse and draws the words it always had', function (array $stored) {
+    pageStyled(['order_button' => $stored]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Refused twice, like every value a Config holds: worded on the tab, and
+     * silent here where a Config written by another route has nobody to tell.
+     */
+    expect($markup)->toContain('data-gio-submit>Order now — Cash on delivery</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>');
+})->with([
+    'copy too long for the button and the line beneath it' => [['wording' => str_repeat('x', 81), 'note' => str_repeat('y', 201)]],
+    'a wording broken over two lines' => [['wording' => "Order\nnow"]],
+]);
