@@ -89,7 +89,7 @@ it('marks paid once when a notification lands between the gateway\'s answer and 
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
     $this->postJson(verifyUrl($payment))
         ->assertOk()
-        ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
+        ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
 
     /** Both asked; the second to write found nothing left to decide. */
     expect($interrupted)->toBeTrue()

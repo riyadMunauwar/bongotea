@@ -201,7 +201,7 @@ it('shows the unpaid order by number alone on the retry page, with the page\'s m
         ->not->toContain('value="cash_on_delivery" checked');
 });
 
-it('sends an order that is not unpaid from the retry page to its thank-you page', function () {
+it('sends an order that is not unpaid from the retry page to its Order Complete Page', function () {
     $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
 
     $order = Order::sole();
@@ -209,15 +209,15 @@ it('sends an order that is not unpaid from the retry page to its thank-you page'
     expect($order->isUnpaid())->toBeFalse();
 
     $this->get(route('checkout.retry', $order->order_number))
-        ->assertRedirect(route('checkout.confirmation', $order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $order->order_number));
 });
 
-it('switches an unpaid order to cash on delivery, logs it, and lands on the thank-you page', function () {
+it('switches an unpaid order to cash on delivery, logs it, and lands on the Order Complete Page', function () {
     $order = unpaidOrder();
 
     $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => 'cash_on_delivery'])
         ->assertStatus(303)
-        ->assertRedirect(route('checkout.confirmation', $order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $order->order_number));
 
     $order->refresh();
 
@@ -230,7 +230,7 @@ it('switches an unpaid order to cash on delivery, logs it, and lands on the than
     expect($entry->attribute_changes->get('old'))->toBe(['payment_method' => 'sslcommerz'])
         ->and($entry->attribute_changes->get('attributes'))->toBe(['payment_method' => 'cash_on_delivery']);
 
-    $this->get(route('checkout.confirmation', $order->order_number))
+    $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
         ->assertSee('Your order is confirmed')
         ->assertSee('Pay on delivery')
@@ -289,15 +289,10 @@ it('offers the page\'s methods as they stand now, and cash on delivery alone onc
     $this->get(route('checkout.retry', $order->order_number))->assertOk()->assertSee('Cash on Delivery');
 });
 
-it('links the thank-you page of an unpaid order to the retry page and calls its figure a total', function () {
+it('sends an unpaid order from the order complete page to its retry page', function () {
     $order = unpaidOrder();
 
-    $this->get(route('checkout.confirmation', $order->order_number))
-        ->assertOk()
-        ->assertSee('Your order is saved')
-        ->assertSee(route('checkout.retry', $order->order_number))
-        ->assertSee('SSLCommerz')
-        ->assertSee('Total')
-        ->assertDontSee('Pay on delivery')
-        ->assertDontSee('Rahim Uddin');
+    /** The Order Complete Page draws one state, a settled Order; an Unpaid Order has only a way to finish. */
+    $this->get(route('checkout.order-complete', $order->order_number))
+        ->assertRedirect(route('checkout.retry', $order->order_number));
 });

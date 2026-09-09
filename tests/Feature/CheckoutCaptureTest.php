@@ -41,7 +41,7 @@ it('captures an order at the price agreed on the page', function () {
         ->and($line->line_total)->toBe(198000)
         ->and($line->product_id)->toBe($product->id);
 
-    $response->assertJsonPath('redirect', route('checkout.confirmation', $order->order_number));
+    $response->assertJsonPath('redirect', route('checkout.order-complete', $order->order_number));
 });
 
 it('holds the price captured even after the product is repriced', function () {
@@ -320,9 +320,9 @@ it('answers a plain form post with a redirect the browser will not resubmit', fu
     /** No JSON accept header: the visitor's scripts never ran. */
     $response = $this->post(route('checkout.store'), capturePayload($page));
 
-    $response->assertRedirect(route('checkout.confirmation', Order::sole()->order_number));
+    $response->assertRedirect(route('checkout.order-complete', Order::sole()->order_number));
 
-    /** 303, so a refresh of the confirmation page cannot capture a second order. */
+    /** 303, so a refresh of the Order Complete Page cannot capture a second order. */
     expect($response->getStatusCode())->toBe(303);
 });
 
@@ -336,7 +336,7 @@ it('shows the visitor their order without printing their details back', function
 
     $order = Order::sole();
 
-    $response = $this->get(route('checkout.confirmation', $order->order_number));
+    $response = $this->get(route('checkout.order-complete', $order->order_number));
 
     $response->assertOk()
         ->assertSee($order->order_number)
@@ -352,19 +352,19 @@ it('shows the visitor their order without printing their details back', function
         ->assertDontSee('Banani');
 });
 
-it('does not keep the confirmation page anywhere it could be seen again', function () {
+it('does not keep the order complete page anywhere it could be seen again', function () {
     $page = sellingPage(Product::factory()->create());
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
-    $response = $this->get(route('checkout.confirmation', Order::sole()->order_number));
+    $response = $this->get(route('checkout.order-complete', Order::sole()->order_number));
 
     expect($response->headers->get('Cache-Control'))->toContain('no-store')
         ->and($response->headers->get('X-Robots-Tag'))->toContain('noindex');
 });
 
-it('404s a confirmation page for an order that does not exist', function () {
-    $this->get(route('checkout.confirmation', 'AAAA2222'))->assertNotFound();
+it('404s an order complete page for an order that does not exist', function () {
+    $this->get(route('checkout.order-complete', 'AAAA2222'))->assertNotFound();
 });
 
 it('hands a token to a client that cannot pass the origin check', function () {
@@ -2348,12 +2348,12 @@ it('leaves the fingerprint alone when the payment settings change', function () 
     expect(Order::sole()->total)->toBe(105000);
 });
 
-it('says on the thank-you page how the order will be paid', function () {
+it('says on the order complete page how the order will be paid', function () {
     $page = sellingPage(Product::factory()->create());
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
-    $this->get(route('checkout.confirmation', Order::sole()->order_number))
+    $this->get(route('checkout.order-complete', Order::sole()->order_number))
         ->assertOk()
         ->assertSee('Cash on Delivery');
 });

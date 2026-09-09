@@ -24,7 +24,7 @@ interface PaymentGateway
 {
     /**
      * Whether paying this way sends the Customer to a gateway before the
-     * Thank-you Page, and so whether there is ever a Payment to start or to
+     * Order Complete Page, and so whether there is ever a Payment to start or to
      * verify. False is the whole of what Cash on Delivery is.
      */
     public function isOnline(): bool;

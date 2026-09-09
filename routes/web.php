@@ -40,8 +40,8 @@ Route::get('/checkout/token', [CheckoutController::class, 'token'])
     ->middleware('throttle:checkout')
     ->name('checkout.token');
 
-Route::get('/order/{order:order_number}', [CheckoutController::class, 'confirmation'])
-    ->name('checkout.confirmation');
+Route::get('/order/{order:order_number}', [CheckoutController::class, 'orderComplete'])
+    ->name('checkout.order-complete');
 
 /*
 | The Retry Page: an Unpaid Order's summary and its Page's methods again.

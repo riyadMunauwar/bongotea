@@ -40,7 +40,12 @@ class CheckoutController extends Controller
     }
 
     /**
-     * The Thank-you Page: where the visitor lands once the Order exists.
+     * The Order Complete Page: where the Customer lands once the Order is
+     * settled as far as the Checkout is concerned.
+     *
+     * It draws exactly one state. An Unpaid Order has nothing complete to
+     * show and one thing to do, which is the Retry Page, so it is sent there
+     * rather than drawn as "saved".
      *
      * Addressed by `order_number` alone, so it deliberately shows the *order*
      * and not the *customer*: what was bought, what it costs, and that someone
@@ -49,9 +54,13 @@ class CheckoutController extends Controller
      * anything else that sees a link — for no gain, since the visitor typed
      * them moments ago.
      */
-    public function confirmation(Order $order): Response
+    public function orderComplete(Order $order): Response|RedirectResponse
     {
-        return $this->uncachedPage('checkout.confirmation', ['order' => $order->load('lines')]);
+        if ($order->isUnpaid()) {
+            return redirect()->route('checkout.retry', $order->order_number);
+        }
+
+        return $this->uncachedPage('checkout.order-complete', ['order' => $order->load('lines')]);
     }
 
     /**
@@ -59,14 +68,14 @@ class CheckoutController extends Controller
      *
      * The Order summary and the Page's Payment Methods again, Cash on Delivery
      * among them where the Page offers it, so the Customer finishes without
-     * re-typing anything. Addressed and printed like the Thank-you Page, for
+     * re-typing anything. Addressed and printed like the Order Complete Page, for
      * the same reason. An Order that is not Unpaid has nothing to retry and
-     * is sent to its Thank-you Page instead.
+     * is sent to its Order Complete Page instead.
      */
     public function retry(Order $order): Response|RedirectResponse
     {
         if (! $order->isUnpaid()) {
-            return redirect()->route('checkout.confirmation', $order->order_number);
+            return redirect()->route('checkout.order-complete', $order->order_number);
         }
 
         return $this->uncachedPage('checkout.retry', [
@@ -81,7 +90,7 @@ class CheckoutController extends Controller
      * The chosen method is written onto the Order, which the Order's own log
      * records, and the Customer is sent where a Capture under that method
      * would send them: Cash on Delivery settles the Order and lands on the
-     * Thank-you Page; an online method starts a new Payment and lands on the
+     * Order Complete Page; an online method starts a new Payment and lands on the
      * gateway.
      */
     public function choose(RetryPaymentRequest $request, Order $order): RedirectResponse
@@ -113,7 +122,7 @@ class CheckoutController extends Controller
     /**
      * Send the Customer to the page that follows an Order in its current
      * state: the gateway's page where a Payment could be started, else the
-     * Thank-you Page once the Order is settled as far as the Checkout is
+     * Order Complete Page once the Order is settled as far as the Checkout is
      * concerned, or the Retry Page while it is Unpaid.
      *
      * The Order exists before the gateway is asked, so a gateway that cannot

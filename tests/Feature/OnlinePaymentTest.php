@@ -155,7 +155,7 @@ it('renders the processing page on the gateway\'s return, outside request-forger
     expect($response->getContent())->toContain('role="status"');
 })->with('online gateways');
 
-it('verifies with the gateway, marks the payment paid, and sends the customer to the thank-you page showing paid', function (GatewayScript $gateway) {
+it('verifies with the gateway, marks the payment paid, and sends the customer to the Order Complete Page showing paid', function (GatewayScript $gateway) {
     $payment = capturedFor($gateway);
 
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
@@ -164,7 +164,7 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
 
     $this->postJson(verifyUrl($payment))
         ->assertOk()
-        ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
+        ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
 
     $payment->refresh();
     $order = $payment->order->refresh();
@@ -178,7 +178,7 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
         /** Paid is the Payment's axis; the Order still starts New and needs the confirmation call (ADR-0013). */
         ->and($order->status)->toBe(OrderStatus::New);
 
-    $this->get(route('checkout.confirmation', $order->order_number))
+    $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
         ->assertSee('Your order is confirmed')
         ->assertSee('Paid')
@@ -187,7 +187,7 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
 
     /** Nothing to retry once Paid. */
     $this->get(route('checkout.retry', $order->order_number))
-        ->assertRedirect(route('checkout.confirmation', $order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $order->order_number));
 })->with('online gateways');
 
 it('verifies once however often the processing page is refreshed, and never marks paid twice', function (GatewayScript $gateway) {
@@ -198,8 +198,8 @@ it('verifies once however often the processing page is refreshed, and never mark
     $gateway->fakeVerifiedPaid($payment);
 
     $this->postJson(verifyUrl($payment))->assertOk();
-    $this->postJson(verifyUrl($payment))->assertOk()->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
-    $this->get(verifyUrl($payment))->assertRedirect(route('checkout.confirmation', $payment->order->order_number));
+    $this->postJson(verifyUrl($payment))->assertOk()->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
+    $this->get(verifyUrl($payment))->assertRedirect(route('checkout.order-complete', $payment->order->order_number));
 
     /** Asked the gateway once; a Paid Payment is not asked about again. */
     $gateway->assertVerificationsSent(1);
@@ -217,7 +217,7 @@ it('answers a client without script with a redirect from the verification endpoi
 
     $this->get(verifyUrl($payment))
         ->assertStatus(303)
-        ->assertRedirect(route('checkout.confirmation', $payment->order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $payment->order->order_number));
 
     expect($payment->refresh()->state)->toBe(PaymentState::Paid);
 })->with('online gateways');
@@ -257,7 +257,7 @@ it('never settles a payment on a reference that names another transaction, and a
 
     $this->postJson(verifyUrl($payment))
         ->assertOk()
-        ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
+        ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
 
     /** Asked by the id and then by our reference where the gateway takes both, by our reference alone where it takes one; settled only on the answer that named this Payment. */
     $gateway->assertVerificationsSent($gateway->questionsToSettlePastAnotherReference());
@@ -337,7 +337,7 @@ it('switches to cash on delivery from the retry page without starting a payment'
 
     $this->post(route('checkout.retry.choose', $payment->order->order_number), ['payment_method' => 'cash_on_delivery'])
         ->assertStatus(303)
-        ->assertRedirect(route('checkout.confirmation', $payment->order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $payment->order->order_number));
 
     Http::assertNothingSent();
 
@@ -479,7 +479,7 @@ it('still lets the customer switch to cash on delivery while a payment is pendin
 
     $this->post(route('checkout.retry.choose', $payment->order->order_number), ['payment_method' => 'cash_on_delivery'])
         ->assertStatus(303)
-        ->assertRedirect(route('checkout.confirmation', $payment->order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $payment->order->order_number));
 
     expect($payment->order->refresh()->payment_method)->toBe(PaymentMethod::CashOnDelivery)
         ->and(Payment::count())->toBe(1);
@@ -497,7 +497,7 @@ it('records a second paid payment as paid and flags the order as paid twice', fu
         $gateway->fakeVerifiedPaid($payment);
         $this->postJson(verifyUrl($payment))
             ->assertOk()
-            ->assertJsonPath('redirect', route('checkout.confirmation', $order->order_number));
+            ->assertJsonPath('redirect', route('checkout.order-complete', $order->order_number));
     }
 
     /** Money moved twice, so both are recorded Paid as they are — and the Order is flagged, because someone must refund one. */
@@ -521,7 +521,7 @@ it('does not read one paid payment as paid twice', function () {
         ->and(Activity::query()->where('event', 'paid_twice')->exists())->toBeFalse();
 });
 
-it('starts no payment for an order that is already paid, and sends the customer to the thank-you page', function (GatewayScript $gateway) {
+it('starts no payment for an order that is already paid, and sends the customer to the Order Complete Page', function (GatewayScript $gateway) {
     $payment = capturedFor($gateway);
 
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
@@ -537,7 +537,7 @@ it('starts no payment for an order that is already paid, and sends the customer 
     /** A Retry Page left open in another tab, posted after the money moved: nothing to collect, so nothing is started. */
     $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => $gateway->method()->value])
         ->assertStatus(303)
-        ->assertRedirect(route('checkout.confirmation', $order->order_number));
+        ->assertRedirect(route('checkout.order-complete', $order->order_number));
 
     Http::assertNothingSent();
 
@@ -555,7 +555,7 @@ it('records paid against a cancelled order and leaves it cancelled, so the order
     $gateway->fakeVerifiedPaid($payment);
     $this->postJson(verifyUrl($payment))
         ->assertOk()
-        ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
+        ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
 
     $order = $payment->order->refresh();
 

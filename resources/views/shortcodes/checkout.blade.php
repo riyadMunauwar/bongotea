@@ -796,7 +796,7 @@
             plus the delivery arrangement that is already selected. The script
             keeps these truthful as the visitor changes them; a visitor whose
             scripts never run reads the figures the page was rendered with, and
-            the confirmation page after Capture is where they see what they
+            the Order Complete Page after Capture is where they see what they
             actually owe.
 
             Where the customer picks, only what the form opens ticked: totalling

@@ -59,7 +59,7 @@ class Order extends Model
 
     /**
      * Eight characters of that alphabet is ~10^12 orders — sparse enough that
-     * the confirmation page cannot be found by walking the range, which is what
+     * the Order Complete Page cannot be found by walking the range, which is what
      * lets the number address that page at all.
      */
     private const NUMBER_LENGTH = 8;
@@ -314,7 +314,7 @@ class Order extends Model
 
     /**
      * The page that follows this Order as it stands: the Retry Page while it
-     * is Unpaid, the Thank-you Page once it is settled as far as the Checkout
+     * is Unpaid, the Order Complete Page once it is settled as far as the Checkout
      * is concerned. The one wording of that choice, read after a Capture, a
      * choice on the Retry Page and a Verification alike.
      */
@@ -322,7 +322,7 @@ class Order extends Model
     {
         return $this->isUnpaid()
             ? route('checkout.retry', $this->order_number)
-            : route('checkout.confirmation', $this->order_number);
+            : route('checkout.order-complete', $this->order_number);
     }
 
     /**

@@ -1,7 +1,7 @@
 {{--
     The Processing Page: where a gateway sends a customer back.
 
-    Ours like the Thank-you Page, and never cached. It says the payment is
+    Ours like the Order Complete Page, and never cached. It says the payment is
     being verified, with a loading indicator, and has the browser call the
     Verification once drawn: what the gateway wrote into the return decides
     nothing, and the customer sees a "verifying" state rather than a blank

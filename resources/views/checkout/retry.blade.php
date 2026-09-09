@@ -1,9 +1,9 @@
 {{--
     The Retry Page: where a customer lands with an Unpaid Order.
 
-    Ours like the confirmation page, and never cached: addressed per order and
+    Ours like the Order Complete Page, and never cached: addressed per order and
     read while the customer decides. It shows the Order and not the Customer,
-    for the reason the Thank-you Page does — this URL is a bearer handle that
+    for the reason the Order Complete Page does — this URL is a bearer handle that
     ends up in history and in a gateway's logs — and it draws the Page's
     Payment Methods again, so the customer finishes without re-typing a thing.
 

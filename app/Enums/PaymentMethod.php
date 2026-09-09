@@ -134,7 +134,7 @@ enum PaymentMethod: string implements HasLabel
 
     /**
      * Whether paying this way sends the Customer to a gateway before the
-     * Thank-you Page, and so whether an Order placed under it is Unpaid until
+     * Order Complete Page, and so whether an Order placed under it is Unpaid until
      * a Payment is Paid. False is the whole of what Cash on Delivery is.
      *
      * Answered here rather than by the driver so that a method whose driver

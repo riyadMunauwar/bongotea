@@ -9,7 +9,7 @@ class OrderObserver
     /**
      * Every Order gets its public handle here rather than at the one call site
      * that captures one, so a factory, a seeder or an admin-created Order can
-     * never produce a row the confirmation page has no way to address.
+     * never produce a row the Order Complete Page has no way to address.
      */
     public function creating(Order $order): void
     {

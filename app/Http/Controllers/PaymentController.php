@@ -54,7 +54,7 @@ class PaymentController extends Controller
     }
 
     /**
-     * The Verification, and where to go next: the Thank-you Page once the
+     * The Verification, and where to go next: the Order Complete Page once the
      * Order is paid, the Retry Page while it is not. JSON to the Processing
      * Page's script, a redirect to a client without one, and idempotent for
      * both, so calling it twice costs one call to the gateway and never two

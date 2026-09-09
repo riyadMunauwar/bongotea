@@ -12,8 +12,8 @@ use LogicException;
  * The one Payment Method that needs no credentials, starts no Payment and is
  * never verified — an Order paid this way is simply due. It implements the
  * same contract as every gateway so that the Checkout never special-cases it:
- * Capture asks `isOnline()`, hears no, and sends the Customer to the Thank-you
- * Page.
+ * Capture asks `isOnline()`, hears no, and sends the Customer to the Order
+ * Complete Page.
  *
  * The three calls only an online method ever receives are refused outright
  * rather than answered with something plausible. A caller reaching them has

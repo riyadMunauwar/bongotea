@@ -18,8 +18,8 @@ use Illuminate\Validation\Rule;
 class RetryPaymentRequest extends FormRequest
 {
     /**
-     * Whoever holds the order number holds the Order, as on the Thank-you
-     * Page. There is no user to authorize.
+     * Whoever holds the order number holds the Order, as on the Order
+     * Complete Page. There is no user to authorize.
      */
     public function authorize(): bool
     {

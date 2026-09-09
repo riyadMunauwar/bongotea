@@ -1,5 +1,7 @@
 {{--
-    The page a visitor lands on once their Order exists.
+    The Order Complete Page: where a Customer lands once their Order is settled
+    as far as the Checkout is concerned. It draws that one state; the
+    controller sends an Unpaid Order to the Retry Page before this is reached.
 
     Unlike a landing page, this document is ours — the merchant does not author
     it — so it carries its own minimal styles inline. It is never cached: it is
@@ -45,18 +47,8 @@
             <path d="M15 24.5l6.5 6.5L33 19" stroke="#16a34a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
 
-        {{--
-            An Unpaid Order is saved, not confirmed: it chose an online method
-            and no Payment has been Paid. The one thing it needs from the
-            customer is a way to finish, which is the Retry Page.
-        --}}
-        @if ($order->isUnpaid())
-            <h1>Your order is saved</h1>
-            <p class="lede">It is not yet paid. <a href="{{ route('checkout.retry', $order->order_number) }}">Pay now, or switch to cash on delivery.</a></p>
-        @else
-            <h1>Your order is confirmed</h1>
-            <p class="lede">Thank you. Keep the number below handy.</p>
-        @endif
+        <h1>Your order is confirmed</h1>
+        <p class="lede">Thank you. Keep the number below handy.</p>
 
         <p class="reference">
             <span class="reference-label">Order number</span>
