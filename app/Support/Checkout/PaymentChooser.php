@@ -32,8 +32,8 @@ final class PaymentChooser
      * customer taps, the words beside the control, the fieldset around them —
      * is the markup a delivery choice or a radio question already draws, and
      * the base sheet already styles. The logo is sized in `em` against the
-     * root's font size like every other size below it, so a form grown by the
-     * font-size token grows its logos with it, and `flex: none` keeps a wide
+     * root's font size like every other size below it, so a layout that sets
+     * the form's type larger grows its logos with it, and `flex: none` keeps a wide
      * mark from being squeezed by a long label.
      */
     private const STYLE_RULES = <<<'CSS'

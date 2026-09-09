@@ -799,7 +799,28 @@ it('refuses a font that is not a list of names', function (string $font) {
     'a quoted name' => '"Hind Siliguri", serif',
     'a url' => 'url(https://example.com/a.woff2)',
     'a keyword that is not inherit' => 'initial',
+    /** A browser meeting a keyword anywhere in a list drops the whole declaration. */
+    'a keyword hidden in a list' => 'inherit, serif',
+    'a stack longer than anyone meant' => str_repeat('Georgia, ', 20).'serif',
 ]);
+
+it('reads a background stored before the surface token existed as the boxes\' fill', function () {
+    pageStyled(['style_tokens' => ['background' => '#000000']], slug: 'old');
+    pageStyled(['style_tokens' => ['background' => '#000000', 'surface' => '#ffffff']], slug: 'new');
+
+    $old = styleBlock($this->get('/old')->assertOk()->getContent());
+    $new = styleBlock($this->get('/new')->assertOk()->getContent());
+
+    /**
+     * `background` once filled the inputs. A published page that coloured
+     * them keeps them coloured rather than gaining a slab behind the whole
+     * form on upgrade; a page that says both is read as it says.
+     */
+    expect($old)->toContain('--gio-surface: #000000;')
+        ->and($old)->toContain('--gio-background: transparent;')
+        ->and($new)->toContain('--gio-surface: #ffffff;')
+        ->and($new)->toContain('--gio-background: #000000;');
+});
 
 it('ignores a question\'s stored appearance and writes no style on its row', function () {
     $page = pageStyled(['fields' => [

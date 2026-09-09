@@ -52,6 +52,19 @@ class StyleTokens implements Arrayable
     {
         $values = [];
 
+        /**
+         * `background` once filled the boxes a Customer types into; that is
+         * `surface` now, and `background` is the ground the island sits on. A
+         * Config written before the split is read as it was meant — its
+         * background fills the boxes — rather than painting a slab behind a
+         * published form on upgrade. A Config that says both is read as it
+         * says, and the first save writes the new shape.
+         */
+        if (array_key_exists(StyleToken::Background->value, $stored) && ! array_key_exists(StyleToken::Surface->value, $stored)) {
+            $stored[StyleToken::Surface->value] = $stored[StyleToken::Background->value];
+            unset($stored[StyleToken::Background->value]);
+        }
+
         foreach ($stored as $name => $value) {
             $token = is_string($name) ? StyleToken::tryFrom($name) : null;
 

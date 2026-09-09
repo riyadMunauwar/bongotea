@@ -100,6 +100,14 @@
             The split block's arithmetic reads the root's edges, so a padding
             or a border put back here has to be added to the figures there.
         --}}
+        {{--
+            `font-family` reads the token, and `inherit` in the token still
+            means the page's face: a custom property set to `inherit` takes the
+            parent's `--gio-font`, which nothing declares, so the `var()` is
+            invalid at computed-value time and `font-family` — an inherited
+            property — falls back to inheriting. Sound for any inherited
+            property; do not move the read onto one that is not.
+        --}}
         .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: 30rem; margin: 1.5rem auto; background: var(--gio-background); font-family: var(--gio-font); font-size: 1rem; color: var(--gio-text); accent-color: var(--gio-accent); }
         .gio-checkout-products { margin: 0 0 1.25rem; padding: 0 0 1.25rem; border-bottom: 1px solid var(--gio-border); }
         {{--
@@ -141,8 +149,8 @@
         .gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }
         .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: var(--gio-radius); flex: none; }
         {{--
-            Every size below is an `em` against the root's own font size, which
-            is a token. That is what makes one control grow the whole form
+            Every size below is an `em` against the root's own font size, so a
+            layout that sets the root's type larger grows the whole form
             proportionally instead of growing one paragraph and leaving the rest
             where it was. Nothing between here and the root sets a font size, so
             nothing compounds.

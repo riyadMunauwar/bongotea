@@ -69,9 +69,9 @@ class Look
 
         $control = match ($token->kind()) {
             StyleTokenKind::Colour => ColorPicker::make($statePath)->hex(),
-            StyleTokenKind::Length => TextInput::make($statePath)->maxLength(20),
+            StyleTokenKind::Length => TextInput::make($statePath)->maxLength($token->kind()->maxLength()),
             /** A list of names, so it takes the row: three short boxes beside it would be too narrow to read one back. */
-            StyleTokenKind::Font => TextInput::make($statePath)->maxLength(120)->columnSpanFull(),
+            StyleTokenKind::Font => TextInput::make($statePath)->maxLength($token->kind()->maxLength())->columnSpanFull(),
         };
 
         return $control

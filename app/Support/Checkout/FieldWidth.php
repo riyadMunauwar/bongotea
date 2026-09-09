@@ -25,9 +25,8 @@ namespace App\Support\Checkout;
  * questions paired again.
  *
  * A screen and not a container, which is worth knowing before reading the
- * media query as more than it says: a Merchant who boxes the Checkout narrow
- * with `StyleToken::MaxWidth` and then opens it on a desktop gets two columns
- * inside that box. The alternative is a container query, which would mean
+ * media query as more than it says: a Checkout Layout that boxes the form
+ * narrow, opened on a desktop, gets two columns inside that box. The alternative is a container query, which would mean
  * making the Checkout root a size container — containment imposed on a document
  * we do not own — for a case a Merchant produces deliberately and can undo by
  * widening the box or by leaving the questions full width.

@@ -50,22 +50,33 @@ enum StyleTokenKind
     /**
      * The words a browser reads as an instruction rather than a family name.
      *
-     * `inherit` is the one of them the font token means something by. The
-     * rest would each be a single bare word the family pattern accepts and a
-     * value the Look tab cannot show the effect of, so they are turned away by
-     * name — a Merchant typing `initial` gets a message rather than a form set
-     * in whatever the browser's default happens to be.
+     * `inherit`, on its own, is the one of them the font token means something
+     * by. Each of them is otherwise a single bare word the family pattern
+     * accepts, and a browser meeting one anywhere in a list drops the whole
+     * declaration — so every name in the list is checked against them, and a
+     * Merchant typing `initial` or `inherit, serif` gets a message rather than
+     * a form set in whatever the browser's default happens to be.
      */
-    private const FONT_KEYWORDS = ['initial', 'unset', 'revert', 'revert-layer', 'default'];
+    private const FONT_KEYWORDS = ['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'default'];
 
     /**
-     * The most a font stack may run to.
+     * The most a value of this kind may run to, in characters.
      *
-     * Generous — the default is three names — and there only because the value
-     * is emitted into every cached page, so a stack nobody could have meant
-     * should not be paid for by every visitor.
+     * Read by the Look tab as the box's `maxLength` and here as a refusal, so
+     * the two cannot disagree. A font's is generous — the default is three
+     * names — and there only because the value is emitted into every cached
+     * page, so a stack nobody could have meant should not be paid for by every
+     * visitor. A colour is bounded by its own pattern, so its figure is the
+     * longest form the pattern accepts.
      */
-    private const FONT_LENGTH = 120;
+    public function maxLength(): int
+    {
+        return match ($this) {
+            self::Colour => 40,
+            self::Length => 20,
+            self::Font => 120,
+        };
+    }
 
     /**
      * Why this value may not be stored, or nothing where it may.
@@ -79,6 +90,10 @@ enum StyleTokenKind
      */
     public function refusal(string $value): ?string
     {
+        if (strlen($value) > $this->maxLength()) {
+            return 'That is too long. Use at most '.$this->maxLength().' characters.';
+        }
+
         return match ($this) {
             self::Colour => self::colourRefusal($value),
             self::Length => self::lengthRefusal($value),
@@ -158,10 +173,11 @@ enum StyleTokenKind
 
         $family = '-?[a-z][a-z0-9_-]*(?:\s+[a-z0-9_-]+)*';
 
+        $names = array_map(fn (string $name): string => strtolower(trim($name)), explode(',', $value));
+
         if (
-            strlen($value) <= self::FONT_LENGTH
-            && ! in_array(strtolower($value), self::FONT_KEYWORDS, true)
-            && preg_match('/^'.$family.'(?:\s*,\s*'.$family.')*$/i', $value) === 1
+            preg_match('/^'.$family.'(?:\s*,\s*'.$family.')*$/i', $value) === 1
+            && array_intersect($names, self::FONT_KEYWORDS) === []
         ) {
             return null;
         }
