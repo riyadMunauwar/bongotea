@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Filament\Resources\Pages\Schemas\RefusedBy;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\DeliveryOption;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
 use Closure;
@@ -105,6 +107,21 @@ class DeliveryOptions
                         ? null
                         : Money::toMajorString((int) $state))
                     ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((string) $state)),
+
+                /**
+                 * Copy beneath the name, and nothing the
+                 * order records or the courier collects —
+                 * so editing it on a live page refuses
+                 * nobody mid-form, unlike the two boxes
+                 * above it. Refused here in the domain
+                 * object's words, and dropped silently on
+                 * read by the same refusal.
+                 */
+                TextInput::make('detail')
+                    ->label('Detail line')
+                    ->rules([RefusedBy::rule(DeliveryOption::detailRefusal(...))])
+                    ->columnSpanFull()
+                    ->helperText('An optional detail line under the name — "1–2 days". Words only, never a figure: changing it never turns away an order in progress.'),
             ]);
     }
 

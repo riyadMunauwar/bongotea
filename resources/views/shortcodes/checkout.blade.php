@@ -278,6 +278,13 @@
             figure misread.
         --}}
         .gio-checkout-choice-label { flex: 1; min-width: 0; }
+        {{--
+            A delivery option's detail line: on its own line beneath the name,
+            smaller, and receding in the muted token the way every help line
+            does. In the base sheet whether or not any option carries one, so
+            a page with a detail costs the same bytes as a page without.
+        --}}
+        .gio-checkout-choice-detail { display: block; margin: .125rem 0 0; font-size: .8125em; line-height: 1.4; color: var(--gio-muted); }
         .gio-checkout-choice-amount { font-weight: 700; white-space: nowrap; }
         {{--
             A refusal about one answer, beneath the box it is about, in a red
@@ -717,7 +724,15 @@
                                        data-gio-delivery-option
                                        data-amount="{{ $option->amount }}"
                                        @checked($index === 0) required>
-                                <span class="gio-checkout-choice-label">{{ $option->label }}</span>
+                                {{--
+                                    The detail line sits inside the words' span, on
+                                    one line with the name, so a row with none emits
+                                    exactly the bytes it always did and a row with
+                                    one keeps the row's reading order: name, detail,
+                                    figure. Copy, not a figure — the script reads
+                                    `data-amount` and never this.
+                                --}}
+                                <span class="gio-checkout-choice-label">{{ $option->label }}@if ($option->detail !== null)<span class="gio-checkout-choice-detail">{{ $option->detail }}</span>@endif</span>
                                 <span class="gio-checkout-choice-amount">{{ \App\Support\Money::format($option->amount) }}</span>
                             </label>
                         @endforeach

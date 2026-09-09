@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutLayout;
+use App\Support\Checkout\DeliveryOption;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
@@ -477,6 +478,59 @@ it('renames, reprices, reorders and deletes a delivery option', function () {
         ['label' => 'Dhaka city', 'amount' => 6000],
     ]);
 });
+
+it('gives a delivery option a detail line, worded on the delivery tab and drawn under its name', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    /** Named by the glossary's term, so the tab and the docs call it one thing. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertSee('Detail line')
+        ->fillForm(deliveryOptionRows([
+            ['label' => 'Inside Dhaka', 'amount' => '60', 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => '120'],
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Stored only where the merchant wrote one; a row saying nothing stores nothing extra. */
+    expect($page->refresh()->checkout_config->deliveryOptionsToArray())->toBe([
+        ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('1–2 days');
+});
+
+it('refuses a detail line that would not fit under a delivery option\'s name', function (string $detail, string $reason) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(deliveryOptionRows([
+            ['label' => 'Inside Dhaka', 'amount' => '60', 'detail' => $detail],
+        ]))
+        ->call('save')
+        ->assertHasFormErrors();
+
+    /**
+     * Worded against the row that holds it, like every other refusal on the
+     * delivery options, and in the domain object's own words — the one
+     * wording, so the tab and the silent read cannot disagree.
+     */
+    $messages = $component->errors()->messages();
+
+    expect(array_keys($messages))->each->toStartWith('data.checkout_config.delivery_options')
+        ->and(array_merge(...array_values($messages)))->toBe([$reason]);
+
+    expect($page->refresh()->checkout_config->deliveryOptionsToArray())
+        ->toBe([['label' => 'Delivery', 'amount' => 6000]]);
+})->with([
+    'a detail line too long' => [str_repeat('d', DeliveryOption::DETAIL_MAX_LENGTH + 1), 'The detail line is at most 60 characters.'],
+    'a detail line broken over two lines' => ["1–2\ndays", 'The detail line is one line.'],
+]);
 
 it('lets a page charge for no delivery at all', function () {
     $page = Page::factory()->create();

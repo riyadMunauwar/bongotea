@@ -1225,6 +1225,36 @@ it('draws each delivery option as a row with the control and label left and the 
         ->and($price[1] ?? '')->toContain('white-space: nowrap');
 });
 
+it('draws a delivery option\'s detail line under its name, and nothing where there is none', function () {
+    pageStyled([
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    preg_match('/<fieldset class="gio-checkout-delivery">(.*?)<\/fieldset>/s', checkoutMarkup($html), $delivery);
+    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
+
+    /**
+     * Beneath the name and inside the words' span, so it takes the row's
+     * reading order — name, then detail, then the figure — and tapping it
+     * still picks the row. A row with no detail draws no empty line for one.
+     */
+    expect($rows[1])->toHaveCount(2)
+        ->and($rows[1][0])->toMatch('/gio-checkout-choice-label">Inside Dhaka<span class="gio-checkout-choice-detail">1–2 days<\/span><\/span>.*gio-checkout-choice-amount"/s')
+        ->and($rows[1][1])->toContain('gio-checkout-choice-label">Outside Dhaka</span>')
+        ->and($rows[1][1])->not->toContain('gio-checkout-choice-detail');
+
+    preg_match('/\.gio-checkout-choice-detail \{([^}]*)\}/', styleBlock($html), $detail);
+
+    /** On its own line beneath the name, smaller, and receding in the muted token like every other help line. */
+    expect($detail[1] ?? '')->toContain('display: block')
+        ->and($detail[1] ?? '')->toContain('color: var(--gio-muted)');
+});
+
 it('marks the chosen delivery row apart from the others', function () {
     pageStyled([
         'delivery_options' => [

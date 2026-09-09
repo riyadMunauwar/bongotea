@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
+use App\Support\Checkout\DeliveryOption;
 use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\OrderComplete\OrderCompleteLayout;
@@ -981,6 +982,33 @@ it('drops a delivery option nothing could be chosen by', function () {
     expect($config->deliveryOptionsToArray())->toBe([
         ['label' => 'Inside Dhaka', 'amount' => 6000],
         ['label' => 'Refunded delivery', 'amount' => 0],
+    ]);
+});
+
+it('drops a detail line the delivery tab would refuse and keeps the option it was under', function () {
+    $config = CheckoutConfig::fromArray(['delivery_options' => [
+        ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+
+        /** Too long for the line beneath a name. */
+        ['label' => 'Outside Dhaka', 'amount' => 12000, 'detail' => str_repeat('d', DeliveryOption::DETAIL_MAX_LENGTH + 1)],
+
+        /** Broken over two lines, which a line beneath a name cannot be. */
+        ['label' => 'Courier', 'amount' => 15000, 'detail' => "3\ndays"],
+
+        /** Blank is the merchant saying nothing. */
+        ['label' => 'Pickup', 'amount' => 0, 'detail' => '   '],
+    ]]);
+
+    /**
+     * Refused twice, like every value a Config holds: worded on the tab, and
+     * silent here where a Config written by another route has nobody to tell.
+     * The option itself stays — it is copy that was refused, not the charge.
+     */
+    expect($config->deliveryOptionsToArray())->toBe([
+        ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ['label' => 'Courier', 'amount' => 15000],
+        ['label' => 'Pickup', 'amount' => 0],
     ]);
 });
 
@@ -2358,6 +2386,35 @@ it('leaves the fingerprint alone when the checkout is reworded', function () {
     $this->postJson(route('checkout.store'), $payload)->assertCreated();
 
     expect(Order::sole()->subtotal)->toBe(99000);
+});
+
+it('leaves the fingerprint alone when a delivery option\'s detail line changes', function () {
+    $page = deliveringBy(sellingPage(Product::factory()->create(['price' => 99000])), [
+        ['label' => 'Inside Dhaka', 'amount' => 6000],
+        ['label' => 'Outside Dhaka', 'amount' => 12000],
+    ]);
+
+    $before = PricingFingerprint::for($page);
+
+    /** Written against the page as the visitor's screen has it, before the merchant edits the copy. */
+    $payload = capturePayload($page, ['delivery_option' => 'Outside Dhaka']);
+
+    $page = deliveringBy($page, [
+        ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+        ['label' => 'Outside Dhaka', 'amount' => 12000, 'detail' => '3–5 days'],
+    ]);
+
+    /**
+     * A detail line is copy and not a figure handed over at the door, so it
+     * is outside the fingerprint the same way the checkout's words are: a
+     * merchant adding "1–2 days" to a live page turns away nobody mid-form.
+     */
+    expect(PricingFingerprint::for($page))->toBe($before)
+        ->and($page->checkout_config->deliveryOptions[0]->detail)->toBe('1–2 days');
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->delivery_charge)->toBe(12000);
 });
 
 it('places an order under cash on delivery when the form posts no method', function () {
