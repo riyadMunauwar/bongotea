@@ -24,6 +24,7 @@ use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -785,30 +786,42 @@ it('lets a merchant author the options one of their own questions offers', funct
         ->assertSee('<option value="sky">Sky blue</option>', false);
 });
 
+/** The "Add a question" action on the Questions tab, which opens the settings modal. */
+function addQuestion(): TestAction
+{
+    return TestAction::make('add')->schemaComponent('checkout_config.fields');
+}
+
 it('refuses a question of the merchant that nothing could answer', function (array $questions) {
     $page = Page::factory()->create();
 
-    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, $questions))
-        ->call('save')
-        ->assertHasFormErrors();
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
 
     /**
-     * Named against the row that is wrong rather than against the repeater, so
-     * a merchant with a dozen questions is told which one to fix. The key the
-     * repeater invents per item is in the middle of the path, so the ends are
-     * what there is to assert on.
+     * Each question goes through the modal the merchant adds one with. Only
+     * the last is the one that must be refused — the ones before it are what
+     * it clashes with.
      */
-    expect(array_keys($component->errors()->messages()))
-        ->each->toStartWith('data.checkout_config.fields');
+    foreach ($questions as $question) {
+        $livewire->callAction(addQuestion(), data: $question);
+    }
+
+    $livewire->assertHasFormErrors();
 
     /**
-     * Refused at save rather than tidied up on read: a question a merchant
-     * thinks their page asks and does not is a campaign collecting less than
-     * they believe it is.
+     * Raised in the modal, on the box the merchant is looking at, rather than
+     * somewhere on the list behind it.
      */
-    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
-        ->toBe(['name', 'phone', 'email', 'district', 'address']);
+    expect(array_keys($livewire->errors()->messages()))
+        ->each->toStartWith('mountedActions.');
+
+    /**
+     * Refused before it reaches the list rather than tidied up on read: a
+     * question a merchant thinks their page asks and does not is a campaign
+     * collecting less than they believe it is.
+     */
+    /** The five built-ins plus every question but the refused last one. */
+    expect(questionsRepeaterIn($livewire)->getItems())->toHaveCount(5 + count($questions) - 1);
 })->with([
     'two questions under one key' => [[
         questionRow('gift_note'),
@@ -827,46 +840,73 @@ it('refuses a question of the merchant that nothing could answer', function (arr
     'radio buttons with nothing to choose between' => [[questionRow('colour', ['type' => 'radio', 'options' => []])]],
 ]);
 
-it('refuses a duplicated key on the row that holds it', function () {
+it('refuses a duplicated key on the key box of the question being edited', function () {
     $page = Page::factory()->create();
 
-    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [
-            questionRow('gift_note'),
-            questionRow('gift_note', ['label' => 'A second note']),
-        ]))
-        ->call('save')
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->callAction(addQuestion(), data: questionRow('gift_note'))
+        ->assertHasNoFormErrors()
+        ->callAction(addQuestion(), data: questionRow('gift_note', ['label' => 'A second note']))
         ->assertHasFormErrors();
 
     /**
-     * On the key box itself, which is the control the merchant has to change.
-     * Both rows are named, because either one of the pair could be the one that
-     * was meant to be something else.
+     * On the key box itself, which is the control the merchant has to change,
+     * and worded by what the key is for.
      */
-    expect(array_keys($component->errors()->messages()))
-        ->toHaveCount(2)
-        ->each->toEndWith('.key');
+    expect($livewire->errors()->messages())
+        ->toHaveCount(1)
+        ->and(array_key_first($livewire->errors()->messages()))->toEndWith('.key')
+        ->and(array_values($livewire->errors()->messages())[0][0])
+        ->toBe('Two questions cannot share the key "gift_note". It is what the answer is filed under on every order.');
 });
 
-it('refuses a built-in key on the row that typed it and not on the built-in', function () {
+it('refuses a key renamed onto another question from the edit modal, and lets a question keep its own', function () {
     $page = Page::factory()->create();
 
-    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [questionRow('district', ['label' => 'Which district?'])]))
-        ->call('save')
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->callAction(addQuestion(), data: questionRow('gift_note'))
+        ->assertHasNoFormErrors()
+        ->callAction(addQuestion(), data: questionRow('card_note', ['label' => 'Card note']))
+        ->assertHasNoFormErrors();
+
+    /** The list is where the clash is, so the modal checks every other row. */
+    $livewire
+        ->callAction(editQuestionKeyed($livewire, 'card_note'), data: ['key' => 'gift_note'])
+        ->assertHasFormErrors(['key']);
+
+    /** But not the row being edited: reopening a question and applying it unchanged is not a clash with itself. */
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->callAction(addQuestion(), data: questionRow('gift_note'))
+        ->assertHasNoFormErrors();
+
+    $livewire
+        ->callAction(editQuestionKeyed($livewire, 'gift_note'), data: ['label' => 'A note for the card'])
+        ->assertHasNoFormErrors();
+});
+
+it('refuses a built-in key on the question that typed it and not on the built-in', function () {
+    $page = Page::factory()->create();
+
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->callAction(addQuestion(), data: questionRow('district', ['label' => 'Which district?']))
         ->assertHasFormErrors();
 
     /**
-     * One refusal, on the row the merchant can put right. The district built-in
-     * is untouched: its key box is read-only and its row cannot be deleted, so
-     * an error raised there would name a control nobody can act on and leave
-     * the merchant unable to save at all.
+     * One refusal, on the question the merchant can put right. The district
+     * built-in is untouched: its key box is read-only and its row cannot be
+     * deleted, so an error raised there would name a control nobody can act
+     * on and leave the merchant unable to save at all.
      */
-    expect($component->errors()->messages())
+    expect($livewire->errors()->messages())
         ->toHaveCount(1)
-        ->and(array_key_first($component->errors()->messages()))->toEndWith('.key')
-        ->and(array_values($component->errors()->messages())[0][0])
+        ->and(array_key_first($livewire->errors()->messages()))->toEndWith('.key')
+        ->and(array_values($livewire->errors()->messages())[0][0])
         ->toBe('This checkout already asks a question under that key. Give yours one of its own.');
+
+    $livewire->call('save')->assertHasNoFormErrors();
+
+    expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
+        ->toBe(['name', 'phone', 'email', 'district', 'address']);
 });
 
 it('lets a merchant bound what one of their own questions accepts', function () {
@@ -927,21 +967,20 @@ it('keeps a bound the merchant left empty out of the stored config', function ()
     expect($stored['gift_note']['constraints'])->toBe(['max_length' => 200]);
 });
 
-it('refuses a bound nothing could satisfy on the row that holds it', function (array $constraints, string $box, string $message) {
+it('refuses a bound nothing could satisfy on the box that holds it', function (array $constraints, string $box, string $message) {
     $page = Page::factory()->create();
 
     $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [questionRow('detail', [
+        ->callAction(addQuestion(), data: questionRow('detail', [
             'type' => isset($constraints['min']) ? 'number' : 'text',
             'constraints' => $constraints,
-        ])]))
-        ->call('save')
+        ]))
         ->assertHasFormErrors();
 
     /**
      * On the smaller figure's own box, which is the control that has to come
-     * down — and on the offending row, so a merchant with a dozen questions is
-     * told which one to fix rather than that something somewhere is wrong.
+     * down — in the modal the merchant is looking at, rather than somewhere on
+     * the list behind it.
      *
      * Worded by what the pair bounds, the way a customer's refusal is: a box
      * labelled "Shortest answer" told it is larger than the largest is being
@@ -953,7 +992,8 @@ it('refuses a bound nothing could satisfy on the row that holds it', function (a
         ->and(array_values($component->errors()->messages())[0][0])
         ->toBe($message);
 
-    expect($page->refresh()->checkout_config->fields)->toHaveCount(5);
+    /** Refused in the modal, so the list behind it never gained the row. */
+    expect(questionsRepeaterIn($component)->getItems())->toHaveCount(5);
 })->with([
     'a shortest above the longest' => [
         ['min_length' => 40, 'max_length' => 10],
@@ -976,11 +1016,10 @@ it('refuses a longest above what the kind of question will hold', function (stri
      * asked for is one they find out about from a support call.
      */
     $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [questionRow('detail', [
+        ->callAction(addQuestion(), data: questionRow('detail', [
             'type' => $type,
             'constraints' => ['max_length' => $beyond],
-        ])]))
-        ->call('save')
+        ]))
         ->assertHasFormErrors();
 
     expect(array_keys($component->errors()->messages()))
@@ -1000,14 +1039,13 @@ it('offers no box anywhere that takes a rule the merchant wrote themselves', fun
      * conversion rate going to zero on a page that is spending money.
      */
     $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [questionRow('gift_note', ['constraints' => ['pattern' => $pattern]])]))
-        ->call('save')
+        ->callAction(addQuestion(), data: questionRow('gift_note', ['constraints' => ['pattern' => $pattern]]))
         ->assertHasFormErrors();
 
     expect(array_keys($component->errors()->messages()))
         ->each->toEndWith('.constraints.pattern');
 
-    expect($page->refresh()->checkout_config->fields)->toHaveCount(5);
+    expect(questionsRepeaterIn($component)->getItems())->toHaveCount(5);
 })->with([
     'an expression of their own' => ['^[a-z]+$'],
     'a rule string' => ['regex:/^[a-z]+$/'],
@@ -1019,18 +1057,17 @@ it('asks nothing about bounds on a question there is nothing to bound', function
 
     /**
      * A choice is answered by picking and the list is the only bound worth
-     * having; a built-in answers to the column waiting for it (ADR-0006). So a
-     * bound typed onto either row is not saved, and there is no control on
-     * screen that could have typed it.
+     * having; a built-in answers to the column waiting for it (ADR-0006). So
+     * the modal shows no Answer rules for either, and a bound pushed into it
+     * anyway is not what it writes to the row.
      */
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(fieldRows($page, [
-            questionRow('colour', [
-                'type' => 'select',
-                'options' => [['value' => 'sky', 'label' => 'Sky blue']],
-                'constraints' => ['min_length' => 8],
-            ]),
+        ->callAction(addQuestion(), data: questionRow('colour', [
+            'type' => 'select',
+            'options' => [['value' => 'sky', 'label' => 'Sky blue']],
+            'constraints' => ['min_length' => 8],
         ]))
+        ->assertHasNoFormErrors()
         ->call('save')
         ->assertHasNoFormErrors();
 
@@ -1914,38 +1951,56 @@ function questionSummariesOf(Page $page): array
     return $summaries;
 }
 
-it('opens the questions tab with every row collapsed', function () {
+it('draws every question as one line that nothing opens', function () {
     /**
-     * Ten questions are ten lines to scan, not a page to scroll. Asserted on
-     * each row rather than on the repeater, because collapsed is decided per
-     * item and a merchant reads the rows one at a time.
+     * Ten questions are ten lines to scan, not a page to scroll — and a line
+     * is all a row is. Nothing on it takes typing: the row carries its state
+     * out of sight, and there is no toggle, because there is nothing behind
+     * the line to reveal. Asserted on each row, because a merchant reads the
+     * rows one at a time.
      */
     $questions = questionsRepeaterIn(Livewire::test(EditPage::class, [
         'record' => Page::factory()->create()->getKey(),
     ]));
 
-    expect($questions->isCollapsible())->toBeTrue()
+    expect($questions->isCollapsible())->toBeFalse()
         ->and($questions->getItems())->not->toBeEmpty();
 
     foreach ($questions->getItems() as $item) {
-        expect($questions->isCollapsed($item))->toBeTrue();
+        expect($questions->isCollapsed($item))->toBeTrue()
+            ->and($item->getComponents(withHidden: true))
+            ->each->toBeInstanceOf(Hidden::class);
     }
 });
 
-it('opens a question the merchant has just added', function () {
+it('asks about a new question in the modal before adding it to the list', function () {
     /**
-     * Collapsing the rows must not make adding one slower. A row that arrived
-     * shut would cost a click before the first box the merchant came here to
-     * type in — every time, on a control whose whole purpose is to be typed
-     * into.
+     * A row nothing can open cannot be filled in after the fact, so adding a
+     * question is the same modal editing one is, and the list gains the row
+     * as it closes — one click to the first box the merchant came here to
+     * type in, and never a wordless line waiting on the list.
      */
     $livewire = Livewire::test(EditPage::class, ['record' => Page::factory()->create()->getKey()])
-        ->mountAction(TestAction::make('add')->schemaComponent('checkout_config.fields'));
+        ->mountAction(addQuestion());
+
+    expect(questionsRepeaterIn($livewire)->getItems())->toHaveCount(5)
+        ->and($livewire->instance()->getSchema('mountedActionSchema0'))->not->toBeNull();
+
+    $livewire->callMountedAction();
+
+    /** The modal's own refusals, before a row exists to carry them. */
+    $livewire->assertHasFormErrors(['label']);
+
+    $livewire
+        ->fillForm(questionRow('gift_note', ['label' => 'Gift note']))
+        ->callMountedAction()
+        ->assertHasNoFormErrors();
 
     $questions = questionsRepeaterIn($livewire);
 
     expect($questions->getItems())->toHaveCount(6)
-        ->and($questions->isCollapsed())->toBeFalse();
+        ->and((string) $questions->getItemLabel(array_key_last($questions->getItems())))
+        ->toBe('Gift note · Single line · Optional · Full width');
 });
 
 it('says enough about a collapsed question to identify it without opening it', function () {
@@ -2016,30 +2071,36 @@ it('says separately that a question is not asked and that its answer is compulso
         ->and($summaries['email'])->toBe('Email address · Not asked · Single line · Optional · Full width');
 });
 
-it('hangs the theme\'s dimming hook on the switch that stops a question being asked', function () {
+it('hangs the theme\'s dimming hook on every row\'s edit button, saying whether the question is asked', function () {
     /**
      * A switched-off row is dimmed by `forms.css`, which finds it by this
-     * attribute on this one control — see `Questions::ASKED_MARKER`. Nothing
-     * in the rendered HTML says which rule matched it, so the pair is pinned
-     * here or it breaks silently and a merchant is left reading a dead
-     * question as a live one.
+     * attribute on this one control — see `Questions::ASKED_MARKER`. The
+     * switch itself is in the modal, so the row's Edit button, which every
+     * row has, carries the answer as the row was drawn. Nothing in the
+     * rendered HTML says which rule matched it, so the pair is pinned here or
+     * it breaks silently and a merchant is left reading a dead question as a
+     * live one.
      */
     $questions = questionsRepeaterIn(Livewire::test(EditPage::class, [
         'record' => Page::factory()->create()->getKey(),
     ]));
 
-    $switches = [];
+    $asked = [];
 
     foreach (array_keys($questions->getItems()) as $itemKey) {
-        foreach ($questions->getChildSchema($itemKey)->getComponents(withHidden: true) as $component) {
-            if ($component instanceof Toggle && $component->getName() === 'enabled') {
-                $switches[] = $component->getExtraAttributes();
-            }
-        }
+        $button = $questions->getAction('edit')->arguments(['item' => $itemKey]);
+
+        $asked[$questions->getRawItemState($itemKey)['key']] = $button->getExtraAttributes()[Questions::ASKED_MARKER] ?? null;
     }
 
-    expect($switches)->toHaveCount(5)
-        ->each->toHaveKey(Questions::ASKED_MARKER);
+    /** Email is the one built-in a new page starts off not asking. */
+    expect($asked)->toBe([
+        'name' => 'true',
+        'phone' => 'true',
+        'email' => 'false',
+        'district' => 'true',
+        'address' => 'true',
+    ]);
 });
 
 it('reorders the questions while their rows are collapsed', function () {
@@ -2067,6 +2128,231 @@ it('reorders the questions while their rows are collapsed', function () {
 
     expect(array_map(fn (CheckoutField $field): string => $field->key(), $page->refresh()->checkout_config->fields))
         ->toBe(['phone', 'name', 'email', 'district', 'address']);
+});
+
+/**
+ * The repeater key of the row holding the question stored under `$key`, which
+ * is what an item action is addressed by.
+ */
+function questionItemKeyed(Testable $livewire, string $key): string
+{
+    $questions = questionsRepeaterIn($livewire);
+
+    foreach (array_keys($questions->getItems()) as $itemKey) {
+        if (($questions->getRawItemState($itemKey)['key'] ?? null) === $key) {
+            return $itemKey;
+        }
+    }
+
+    throw new RuntimeException('No question row is keyed '.$key);
+}
+
+/** The Edit action on the row holding the question stored under `$key`. */
+function editQuestionKeyed(Testable $livewire, string $key): TestAction
+{
+    return TestAction::make('edit')
+        ->schemaComponent('checkout_config.fields')
+        ->arguments(['item' => questionItemKeyed($livewire, $key)]);
+}
+
+it('edits a question in a modal that writes back to its row', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
+
+    /**
+     * Driven the way a merchant drives it: the Edit action on the row opens a
+     * form filled from that row, and what they type there is the row once the
+     * modal closes — nothing on the row itself takes typing.
+     */
+    $livewire
+        ->callAction(editQuestionKeyed($livewire, 'email'), data: [
+            'label' => 'Where should we send the receipt?',
+            'enabled' => true,
+            'required' => true,
+            'width' => 'half',
+            'placeholder' => 'you@example.com',
+            'help' => 'Only used for the receipt.',
+        ])
+        ->assertHasNoFormErrors()
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $email = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key')['email'];
+
+    expect($email)->toMatchArray([
+        'label' => 'Where should we send the receipt?',
+        'built_in' => true,
+        'enabled' => true,
+        'required' => true,
+        'placeholder' => 'you@example.com',
+        'help' => 'Only used for the receipt.',
+        'width' => 'half',
+    ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Where should we send the receipt?')
+        ->assertSee('Only used for the receipt.');
+});
+
+/**
+ * The groups of the question modal that is open, by heading and in the order
+ * they are drawn.
+ *
+ * @return Collection<string, Section>
+ */
+function questionModalGroupsOf(Testable $livewire): Collection
+{
+    return collect($livewire->instance()->getSchema('mountedActionSchema0')->getComponents(withHidden: true))
+        ->filter(fn (Component $component): bool => $component instanceof Section)
+        ->keyBy(fn (Section $section): string => (string) $section->getHeading());
+}
+
+it('settles a question in four groups, showing choices and answer rules by the kind of question', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(fieldRows($page, [
+            questionRow('nickname', ['label' => 'What should we call you?', 'type' => 'text']),
+            questionRow('colour', ['label' => 'Which colour?', 'type' => 'select', 'options' => [['value' => 'sky', 'label' => 'Sky blue']]]),
+        ]))
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $expected = [
+        /** A built-in answers to its column, so neither of the last two is its to settle. */
+        'district' => ['Choices' => false, 'Answer rules' => false],
+        'nickname' => ['Choices' => false, 'Answer rules' => true],
+        'colour' => ['Choices' => true, 'Answer rules' => false],
+    ];
+
+    foreach ($expected as $key => $shown) {
+        $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
+        $livewire->mountAction(editQuestionKeyed($livewire, $key));
+
+        $groups = questionModalGroupsOf($livewire);
+
+        /** The four, in the order a merchant meets them, whichever are shown. */
+        expect($groups->keys()->all())->toBe(['Question', 'Hint', 'Choices', 'Answer rules']);
+
+        foreach ($shown as $heading => $isShown) {
+            expect($groups[$heading]->isVisible())->toBe($isShown, $key.' should '.($isShown ? 'show ' : 'hide ').$heading);
+        }
+
+        /** The controls the groups are named for, where the group is shown. */
+        $paths = statePathsInside($livewire->instance()->getSchema('mountedActionSchema0'));
+
+        expect($paths)->toContain('label', 'key', 'type', 'width', 'enabled', 'required', 'placeholder', 'help');
+    }
+});
+
+it('holds a built-in\'s key and type shut in the modal, and phone\'s switch, and writes the row back whole', function () {
+    $page = Page::factory()->create();
+
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
+    $livewire->mountAction(editQuestionKeyed($livewire, 'phone'));
+
+    $modal = $livewire->instance()->getSchema('mountedActionSchema0');
+
+    /**
+     * Held shut rather than hidden, so a merchant can see which column an
+     * answer lands in — and phone's switch too, because a customer is their
+     * phone number.
+     */
+    expect(fieldInside($modal, 'key')->isReadOnly())->toBeTrue()
+        ->and(fieldInside($modal, 'type')->isDisabled())->toBeTrue()
+        ->and(fieldInside($modal, 'enabled')->isDisabled())->toBeTrue()
+        ->and(fieldInside($modal, 'required')->isDisabled())->toBeTrue();
+
+    /**
+     * Written back whole: what the modal holds shut still rides along, so the
+     * row on the list stays what it was and the summary can read it.
+     */
+    $livewire
+        ->fillForm(['label' => 'Your mobile number', 'enabled' => false])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $phone = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key')['phone'];
+
+    expect($phone)->toMatchArray([
+        'label' => 'Your mobile number',
+        'type' => 'text',
+        'built_in' => true,
+        'enabled' => true,
+        'required' => true,
+    ]);
+
+    /** And a built-in that is not phone keeps its switch to itself. */
+    $livewire = Livewire::test(EditPage::class, ['record' => $page->getKey()]);
+    $livewire->mountAction(editQuestionKeyed($livewire, 'district'));
+
+    $modal = $livewire->instance()->getSchema('mountedActionSchema0');
+
+    expect(fieldInside($modal, 'key')->isReadOnly())->toBeTrue()
+        ->and(fieldInside($modal, 'type')->isDisabled())->toBeTrue()
+        ->and(fieldInside($modal, 'enabled')->isDisabled())->toBeFalse();
+});
+
+it('derives a key from the wording while the key box is empty, and leaves one already typed alone', function () {
+    $livewire = Livewire::test(EditPage::class, ['record' => Page::factory()->create()->getKey()])
+        ->mountAction(addQuestion());
+
+    /** So a merchant never has to invent one. */
+    $livewire->set('mountedActions.0.data.label', 'Anything we should write on the card?');
+
+    expect($livewire->get('mountedActions.0.data.key'))->toBe('anything_we_should_write_on_the_card');
+
+    /** And one already in use by orders is never moved under them. */
+    $livewire->set('mountedActions.0.data.label', 'A note for the card');
+
+    expect($livewire->get('mountedActions.0.data.key'))->toBe('anything_we_should_write_on_the_card');
+});
+
+it('adds a question of the merchant through the modal and serves it', function () {
+    $product = Product::factory()->create();
+    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
+    $page->products()->attach($product);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->callAction(addQuestion(), data: questionRow('colour', [
+            'label' => 'Which colour?',
+            'type' => 'select',
+            'required' => true,
+            'placeholder' => 'Choose a colour',
+            'options' => [
+                ['value' => 'sky', 'label' => 'Sky blue'],
+                ['value' => 'Moss green', 'label' => null],
+            ],
+        ]))
+        ->assertHasNoFormErrors()
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $stored = collect($page->refresh()->checkout_config->fieldsToArray())->keyBy('key');
+
+    expect($stored->keys()->all())->toBe(['name', 'phone', 'email', 'district', 'address', 'colour'])
+        ->and($stored['colour'])->toMatchArray([
+            'label' => 'Which colour?',
+            'type' => 'select',
+            'built_in' => false,
+            'required' => true,
+            'placeholder' => 'Choose a colour',
+            'options' => [
+                ['value' => 'sky', 'label' => 'Sky blue'],
+                ['value' => 'Moss green', 'label' => 'Moss green'],
+            ],
+        ]);
+
+    $this->get('/promo')
+        ->assertOk()
+        ->assertSee('Which colour?')
+        ->assertSee('<option value="sky">Sky blue</option>', false);
 });
 
 it('lets a merchant word the order button and the line beneath it', function () {

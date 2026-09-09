@@ -242,29 +242,26 @@
 /*
  * A question this page has stopped asking.
  *
- * The question rows on the Checkout tab open collapsed, so the summary line is
- * all a merchant has to go on — and a switched-off question keeps its wording,
+ * A question row on the Checkout tab is one line, so the summary is all a
+ * merchant has to go on — and a switched-off question keeps its wording,
  * waiting for the day it comes back. Something on the row has to say it is
  * inert, or it reads as one the customer is being asked.
  *
- * Found by the toggle that switches it: `Questions::ASKED_MARKER` is on that
- * one control, and `aria-checked` is the attribute Alpine keeps in step with
- * the switch, so a row dims as the merchant throws it rather than on the next
- * save. Nothing nested inside a question row carries the marker, so `:has()`
- * cannot reach past the question it belongs to and dim an option row with it.
+ * Found by the row's Edit button: `Questions::ASKED_MARKER` is on that one
+ * control, and its value is the "Ask for this" switch as the row was drawn.
+ * The switch itself lives in the modal the button opens, and the row is
+ * redrawn as the modal closes, so the dim follows the switch by the time the
+ * merchant can see the row again. Nothing nested inside a question row carries
+ * the marker, so `:has()` cannot reach past the question it belongs to.
  *
  * The row gives up its fill and its label goes quiet. Losing the fill does
  * most of the work — an outlined row among filled ones recedes without
  * disappearing — and it says the same thing in both modes without either
  * needing a value of its own, which is the point of the token discipline
  * above.
- *
- * It stays dimmed when the merchant opens it, deliberately: what the row is
- * does not change because they are editing it, and a header that brightened on
- * being opened would say the question had come back on.
  */
 .fi-fo-repeater
-    .fi-fo-repeater-item:has([data-gp-question-asked][aria-checked='false']) {
+    .fi-fo-repeater-item:has([data-gp-question-asked='false']) {
     background-color: transparent;
 
     & > .fi-fo-repeater-item-header > .fi-fo-repeater-item-header-label {
