@@ -15,8 +15,16 @@
     run can still order. The script below only upgrades that: inline errors
     instead of a page reload, and a retry path for clients that send no
     Sec-Fetch-Site header.
+
+    One template for all ten layouts, and the document is written in the same
+    order for every one of them: the products, the questions with the delivery
+    choice, the payment choice, the summary, the button (ADR-0015). What a
+    layout changes it changes in the sheet, and the only branches here are the
+    layout's own predicates — which of its words it draws, whether a delivery
+    detail line fits, which payment label it names a method by.
 --}}
 @use(App\Support\Checkout\CheckoutFieldType)
+@use(App\Support\Checkout\WordSlot)
 @php
     /**
      * The arrangement this form opens on, which is the first the merchant
@@ -49,6 +57,20 @@
      * scripts never run.
      */
     $opensTicked = fn (\App\Models\Product $product): bool => in_array($product->getKey(), $defaultSelection, true);
+
+    /**
+     * The button in the layout's own words where the merchant has said
+     * nothing: several designs put the live total on it.
+     */
+    $button = $words->orderButton->forLayout($layout);
+
+    /**
+     * The numbered sections, counted as they are drawn. The products may be
+     * hidden and the payment choice may not be drawn, so the numbers follow
+     * what is on the page rather than the design's fixed three: a customer
+     * never reads a "2" with no "1" above it.
+     */
+    $sectionNumber = 0;
 @endphp
 {{--
     The layout's class rides beside the base one, in every layout, and the
@@ -81,26 +103,19 @@
             Set once for the whole form: no question redeclares a token on its
             own wrapper, so this block is the same bytes whether the form asks
             two questions or twenty, and the page never carries a per-field
-            style attribute. Everything that is not a token — how wide the form
-            sits, one-pixel borders, the type size — is the layout's figure,
-            written here.
+            style attribute. Everything that is not a token — how wide the card
+            sits, one-pixel borders, the type scale — is the design's figure,
+            written here from the handoff README.
         --}}
         {{--
-            No panel. The island sits inside a page the merchant already
-            designed, so a box of its own would double-frame whatever they drew
-            around it; a merchant who wants one writes it into their own
-            stylesheet, which is what the flat sheet exists to allow. With no
-            box there is nothing to inset from, so no padding either — the form
-            sits flush with the element the shortcode was dropped in. What is
-            bordered instead is what a thumb has to hit: the boxes a customer
-            types into and the product rows they pick, with a hairline rule
-            between one section and the next and structural whitespace for
-            everything else.
+            The root is the section the design paints behind the card: the
+            background token's ground, and the design's padding around it. The
+            card inside is what is bordered and filled — a white card at the
+            design's width with the design's padding — and everything a
+            customer reads is inside it. Sizes are in rem so the scale is the
+            design's pixels at the browser's default and grows with a page
+            that sets its own root size.
 
-            The split block's arithmetic reads the root's edges, so a padding
-            or a border put back here has to be added to the figures there.
-        --}}
-        {{--
             `font-family` reads the token, and `inherit` in the token still
             means the page's face: a custom property set to `inherit` takes the
             parent's `--gio-font`, which nothing declares, so the `var()` is
@@ -108,78 +123,73 @@
             property — falls back to inheriting. Sound for any inherited
             property; do not move the read onto one that is not.
         --}}
-        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; max-width: 30rem; margin: 1.5rem auto; background: var(--gio-background); font-family: var(--gio-font); font-size: 1rem; color: var(--gio-text); accent-color: var(--gio-accent); }
-        .gio-checkout-products { margin: 0 0 1.25rem; padding: 0 0 1.25rem; border-bottom: 1px solid var(--gio-border); }
+        .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; padding: 2.5rem 1.5rem; background: var(--gio-background); font-family: var(--gio-font); font-size: .875rem; line-height: 1.4; color: var(--gio-text); accent-color: var(--gio-accent); }
+        .gio-checkout-card { box-sizing: border-box; max-width: 35rem; margin: 0 auto; padding: 1.75rem; border: 1px solid var(--gio-border); background: var(--gio-surface); }
+        .gio-checkout-form { margin: 0; }
         {{--
-            A product row is boxed and filled like the boxes a customer types
-            into — the same border token, the same surface, the same radius —
-            because it is the same kind of thing: something a thumb has to hit.
-            One redeclaration restyles all of them together.
+            The numbered sections the design draws, set apart by whitespace
+            alone: a badge in the text colour with the number in the surface
+            colour, and the layout's own headline beside it. The heading is
+            drawn only where the layout owns the words for it, but the rules
+            are in the base whatever the layout, so the sheet is the same bytes
+            whichever words a page draws.
         --}}
-        .gio-checkout-product { padding: .75rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); }
-        .gio-checkout-product + .gio-checkout-product { margin: .5rem 0 0; }
-        .gio-checkout-product-head { display: flex; gap: .75rem; align-items: center; }
-        .gio-checkout-pickable { display: grid; grid-template-columns: auto 1fr; column-gap: .625rem; }
-        .gio-checkout-pickable > * { grid-column: 2; }
-        .gio-checkout-pickable > .gio-checkout-pick { grid-column: 1; grid-row: 1; align-self: center; width: 1.15rem; height: 1.15rem; margin: 0; flex: none; }
+        .gio-checkout-section { margin: 0; }
+        .gio-checkout-section + .gio-checkout-section { margin: 1.75rem 0 0; }
+        .gio-checkout-heading { display: flex; align-items: center; gap: .625rem; margin: 0 0 .875rem; font-size: 1rem; font-weight: 700; line-height: 1.3; }
+        .gio-checkout-number { display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gio-text); color: var(--gio-surface); font-size: .75rem; font-weight: 700; }
+        {{--
+            A product row is one line a thumb can read: the tick where there is
+            one, the picture, the name with its price beneath, the stepper, and
+            the line total at the far end. Boxed with the border token and
+            filled from the surface token like every box a customer touches,
+            and square-cornered as the design draws every row. The row wraps,
+            which is the whole of what happens when a quantity is refused: the
+            message takes a line of its own beneath.
+        --}}
+        .gio-checkout-products { display: grid; gap: .5rem; margin: 0; }
+        .gio-checkout-product { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem; border: 1px solid var(--gio-border); background: var(--gio-surface); transition: border-color .15s, background .15s; }
+        .gio-checkout-pick { flex: none; width: 1rem; height: 1rem; margin: 0; }
         .gio-checkout-pickable .gio-checkout-product-head { cursor: pointer; }
         {{--
             A picked product reads as picked from across the room, the same way
             a chosen delivery row does and in the same token: the border takes
-            the selected colour, a one-pixel ring outside it thickens the edge
-            without moving the row, and the ground takes a light tint of it.
-            The tint is mixed from the one token rather than being a second
-            colour, so a merchant changes what "picked" looks like in one box.
-            On a cash-on-delivery page an item nobody meant to choose is a
-            refused parcel and courier fees both ways, so this is the state a
-            customer most needs to be able to tell at a glance.
+            the accent and the ground takes a light tint of it, mixed from the
+            one token rather than being a second colour, so a merchant changes
+            what "picked" looks like in one box. On a cash-on-delivery page an
+            item nobody meant to choose is a refused parcel and courier fees
+            both ways, so this is the state a customer most needs to be able
+            to tell at a glance.
 
             `:has()` because the tick is a sibling of the head, not of the row,
             and only a box inside a product row can be checked. A browser that
             cannot read it, or cannot mix a colour, draws the row it always
             drew with the tick still saying which is picked.
         --}}
-        .gio-checkout-product:has(:checked) { border-color: var(--gio-accent); box-shadow: 0 0 0 1px var(--gio-accent); background: color-mix(in srgb, var(--gio-accent) 8%, transparent); }
+        .gio-checkout-product:has(:checked) { border-color: var(--gio-accent); background: color-mix(in srgb, var(--gio-accent) 5%, var(--gio-surface)); }
         {{--
             The whole point of the picker: five products on a phone are five
             lines of text until they are wanted, rather than five steppers for
-            items nobody chose. A sibling selector rather than :has(), so the
-            oldest webview that can render the form can also hide the stepper.
+            items nobody chose, and the line total of an item not chosen fades
+            as the design draws it. Sibling selectors rather than :has(), so
+            the oldest webview that can render the form can also hide the
+            stepper.
         --}}
         .gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }
-        .gio-checkout-image { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: var(--gio-radius); flex: none; }
+        .gio-checkout-pick:not(:checked) ~ .gio-checkout-line-total { opacity: .45; }
+        .gio-checkout-product-head { display: flex; flex: 1; min-width: 0; gap: .75rem; align-items: center; }
+        .gio-checkout-image { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-checkout-product-words { flex: 1; min-width: 0; }
+        .gio-checkout-name { margin: 0; font-size: .875rem; font-weight: 600; line-height: 1.3; }
+        .gio-checkout-description { margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); }
+        .gio-checkout-price { margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); white-space: nowrap; }
+        .gio-checkout-quantity { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0; }
+        .gio-checkout-line-total { flex: none; width: 3.75rem; margin: 0; font-size: .875rem; font-weight: 600; text-align: right; white-space: nowrap; }
         {{--
-            Every size below is an `em` against the root's own font size, so a
-            layout that sets the root's type larger grows the whole form
-            proportionally instead of growing one paragraph and leaving the rest
-            where it was. Nothing between here and the root sets a font size, so
-            nothing compounds.
+            The questions, as a grid rather than as a stack of margins, holding
+            the delivery choice beneath them as the design draws it.
         --}}
-        {{--
-            The row reads as a cart line: the picture, then the name taking
-            what is left, then the price at the far end where a customer
-            expects a figure. `min-width: 0` on the name is what lets a long
-            one wrap rather than push the price out of the row.
-        --}}
-        .gio-checkout-name { flex: 1; min-width: 0; margin: 0; font-size: 1em; font-weight: 600; }
-        .gio-checkout-price { margin: 0; font-size: 1.125em; font-weight: 700; white-space: nowrap; }
-        .gio-checkout-description { margin: .5rem 0 0; font-size: .875em; line-height: 1.5; color: var(--gio-muted); }
-        {{--
-            The word and the stepper on one line, and the refusal — when there
-            is one — on a line of its own beneath them, which is what the wrap
-            and the full-width slot are for. Both of the slot's rules sit below
-            the one-class rules they narrow and beat them by order, the same
-            trade as everywhere else in this sheet.
-        --}}
-        .gio-checkout-quantity { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: .75rem 0 0; }
-        .gio-checkout-form { margin: 0; }
-        {{--
-            The questions, as a grid rather than as a stack of margins. One
-            column here and the gap where each field's own bottom margin used to
-            be, so a form where nobody paired anything is spaced exactly as it
-            always was.
-        --}}
-        .gio-checkout-fields { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+        .gio-checkout-fields { display: grid; grid-template-columns: 1fr; gap: .875rem; }
         {{--
             `min-width: 0` is what stops a paired question overflowing the island.
 
@@ -188,9 +198,8 @@
             whatever width we give it. So two columns narrower than that would
             push the grid wider than the checkout and out of the element the
             merchant put the shortcode in, which is the one thing this island
-            must never do. It is reachable: box the form at 20rem and open it on
-            a desktop. Zero lets the column be as narrow as it is told, and the
-            input's own `width: 100%` then fits it.
+            must never do. Zero lets the column be as narrow as it is told, and
+            the input's own `width: 100%` then fits it.
         --}}
         .gio-checkout-field { margin: 0; min-width: 0; }
         {{--
@@ -210,8 +219,7 @@
             `rem` here is 16px whatever the merchant's document says. Relative
             units in a media query resolve against the initial font size, not
             against the page's root, so a page setting `html { font-size: 10px }`
-            cannot drag the breakpoint down onto a phone. Inside the rules below
-            it, `rem` means what the document says, as everywhere else.
+            cannot drag the breakpoint down onto a phone.
 
             Below the rule it narrows, both selectors one class, so the later
             declaration is the one that applies. Same order dependency as the
@@ -219,11 +227,30 @@
             merchant's own stylesheet needs on ourselves.
         --}}
         @media (min-width: 30rem) { .gio-checkout-fields { grid-template-columns: 1fr 1fr; } .gio-checkout-field { grid-column: span 2; } .gio-checkout-field-half { grid-column: span 1; } }
-        .gio-checkout-label { display: block; margin: 0 0 .25rem; font-size: .8125em; font-weight: 600; }
-        .gio-checkout-quantity-label { margin: 0; }
-        .gio-checkout-help { margin: 0 0 .375rem; font-size: .75em; line-height: 1.4; color: var(--gio-muted); }
-        .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .625em .75em; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); font-family: inherit; font-size: 1em; background: var(--gio-surface); color: inherit; }
-        .gio-checkout-input:focus { outline: 2px solid var(--gio-accent); outline-offset: -1px; }
+        {{--
+            A label is the design's secondary ink: between the text and the
+            muted token, mixed from the two so a merchant recolouring either
+            moves it with them rather than leaving a third colour behind.
+        --}}
+        .gio-checkout-label { display: block; margin: 0 0 .375rem; font-size: .75rem; font-weight: 600; line-height: 1.3; color: color-mix(in srgb, var(--gio-text) 35%, var(--gio-muted)); }
+        {{--
+            A label a screen reader hears and a sighted customer does not: the
+            word "Quantity" beside a stepper that already reads as one, and the
+            word "Delivery" over two priced boxes that already read as the
+            choice. Clipped rather than hidden, so it stays in the
+            accessibility tree and stays what a voice-control user says.
+        --}}
+        .gio-checkout-hidden-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+        .gio-checkout-help { margin: -.125rem 0 .375rem; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); }
+        {{--
+            The boxes a customer types into, at the design's padding and type
+            size, bordered and filled from the tokens and rounded by the radius
+            token. Focus is the design's: the accent on the border and a soft
+            ring mixed from it, in place of the browser's outline.
+        --}}
+        .gio-checkout-input { box-sizing: border-box; width: 100%; padding: .6875rem .75rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); color: inherit; font-family: inherit; font-size: .875rem; line-height: 1.4; resize: vertical; transition: border-color .15s, box-shadow .15s; }
+        .gio-checkout-input::placeholder { color: color-mix(in srgb, var(--gio-muted) 70%, var(--gio-surface)); opacity: 1; }
+        .gio-checkout-input:focus { outline: 0; border-color: var(--gio-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gio-accent) 15%, transparent); }
         {{--
             The stepper is one bordered box holding three things: minus, the
             number, plus. The border and the radius are the wrapper's, so the
@@ -242,33 +269,30 @@
             The buttons carry no border of their own and no background, so a
             merchant's `--gio-border` restyles the whole control at once.
         --}}
-        .gio-checkout-stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); overflow: hidden; }
-        .gio-checkout-step { flex: none; width: 2.25rem; padding: 0; border: 0; background: transparent; color: inherit; font-family: inherit; font-size: 1.125em; line-height: 1; cursor: pointer; }
-        .gio-checkout-quantity-input { width: 3rem; padding: .625em .25em; border: 0; border-radius: 0; text-align: center; }
-        .gio-checkout-delivery, .gio-checkout-choices { margin: 0; padding: 0; border: 0; }
+        .gio-checkout-quantity-stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); overflow: hidden; }
+        .gio-checkout-quantity-step { flex: none; width: 1.875rem; height: 1.875rem; padding: 0; border: 0; background: transparent; color: inherit; font-family: inherit; font-size: 1rem; line-height: 1; cursor: pointer; }
+        .gio-checkout-quantity-input { width: 2rem; padding: 0; border: 0; border-radius: 0; font-size: .8125rem; font-weight: 600; text-align: center; }
         {{--
-            A row a customer taps is a box like any other — bordered, filled
-            with the surface token and rounded the same — because it is the
-            same kind of thing: something a thumb has to hit.
+            The delivery choice is two boxes side by side beneath the
+            questions, each taking half the row and wrapping to a row of its
+            own when the card is narrow; a radio question and the payment
+            choice stack theirs. The rows themselves are one rule: a flex row
+            a thumb can hit anywhere, bordered and filled from the tokens,
+            square as the design draws every row. The `flex` a delivery row
+            carries is inert in the grids the other groups draw.
         --}}
-        .gio-checkout-choice { display: flex; gap: .625rem; align-items: center; padding: .625rem .75rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); font-size: .9375em; cursor: pointer; }
-        .gio-checkout-choice + .gio-checkout-choice { margin: .375rem 0 0; }
+        .gio-checkout-delivery { display: flex; flex-wrap: wrap; gap: .625rem; margin: .875rem 0 0; padding: 0; border: 0; min-width: 0; }
+        .gio-checkout-choices { display: grid; gap: .5rem; margin: 0; padding: 0; border: 0; min-width: 0; }
+        .gio-checkout-choice { display: flex; flex: 1 1 12.5rem; gap: .625rem; align-items: center; padding: .75rem .875rem; border: 1px solid var(--gio-border); background: var(--gio-surface); font-size: .875rem; cursor: pointer; transition: border-color .15s; }
         {{--
-            The row that is picked reads as picked from across the room, not
-            only from the dot inside its radio: the border takes the selected
-            colour, a one-pixel ring outside it thickens the edge without
-            moving the row, and the ground takes a light tint of it — the same
-            three declarations, in the same token, as a picked product above.
-            The token defaults to the accent, so a merchant who recoloured the
-            checkout recoloured this too.
-
-            `:has()` rather than a sibling selector, because the row is the
-            label and the control sits inside it — there is no sibling to
-            reach. A browser that cannot read it draws the row it always drew,
-            with the radio still saying which one is chosen, so nothing is
-            lost that was there before.
+            The row that is picked takes the accent on its border, as a picked
+            product does. `:has()` rather than a sibling selector, because the
+            row is the label and the control sits inside it — there is no
+            sibling to reach. A browser that cannot read it draws the row it
+            always drew, with the radio still saying which one is chosen.
         --}}
-        .gio-checkout-choice:has(:checked) { border-color: var(--gio-accent); box-shadow: 0 0 0 1px var(--gio-accent); background: color-mix(in srgb, var(--gio-accent) 8%, transparent); }
+        .gio-checkout-choice:has(:checked) { border-color: var(--gio-accent); }
+        .gio-checkout-tick { flex: none; margin: 0; }
         {{--
             The words take what is left of the row, so the figure sits at the
             far end where a customer expects one — the same shape as a product
@@ -284,7 +308,7 @@
             does. In the base sheet whether or not any option carries one, so
             a page with a detail costs the same bytes as a page without.
         --}}
-        .gio-checkout-choice-detail { display: block; margin: .125rem 0 0; font-size: .8125em; line-height: 1.4; color: var(--gio-muted); }
+        .gio-checkout-choice-detail { display: block; margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); }
         .gio-checkout-choice-amount { font-weight: 700; white-space: nowrap; }
         {{--
             A refusal about one answer, beneath the box it is about, in a red
@@ -292,12 +316,12 @@
             a merchant restyles, because the one place it must be readable is
             the moment the order did not go through.
         --}}
-        .gio-checkout-error { display: none; margin: .25rem 0 0; font-size: .8125em; color: #b91c1c; }
+        .gio-checkout-error { display: none; margin: .375rem 0 0; font-size: .75rem; color: #b91c1c; }
         .gio-checkout-error[data-shown] { display: block; }
         .gio-checkout-quantity-error { flex: 1 0 100%; margin: 0; }
         {{--
             A refusal the customer cannot fix at a box, across the top of the
-            island. Drawn as nothing until the script writes to it, so a page
+            card. Drawn as nothing until the script writes to it, so a page
             that fails nothing draws nothing and a visitor whose script never
             runs is told by the page the plain post lands on instead.
 
@@ -315,34 +339,39 @@
             offered for a dropped connection throws away what the customer
             typed for nothing.
         --}}
-        .gio-checkout-banner { display: none; margin: 0 0 1.25rem; }
-        .gio-checkout-banner[data-shown] { display: flex; flex-wrap: wrap; gap: .625rem 1rem; align-items: center; justify-content: space-between; padding: .875rem 1rem; border-radius: var(--gio-radius); background: #b91c1c; color: #fff; }
-        .gio-checkout-banner-text { flex: 1 1 14rem; margin: 0; font-size: .9375em; line-height: 1.45; color: inherit; }
-        .gio-checkout-reload { flex: none; padding: .5em .875em; border: 0; border-radius: var(--gio-button-radius); background: #fff; color: #b91c1c; font-family: inherit; font-size: .875em; font-weight: 700; cursor: pointer; }
+        .gio-checkout-banner { display: none; margin: 0 0 1.75rem; }
+        .gio-checkout-banner[data-shown] { display: flex; flex-wrap: wrap; gap: .625rem 1rem; align-items: center; justify-content: space-between; padding: .875rem 1rem; background: #b91c1c; color: #fff; }
+        .gio-checkout-banner-text { flex: 1 1 14rem; margin: 0; font-size: .9375rem; line-height: 1.45; color: inherit; }
+        .gio-checkout-reload { flex: none; padding: .5em .875em; border: 0; border-radius: var(--gio-button-radius); background: #fff; color: #b91c1c; font-family: inherit; font-size: .875rem; font-weight: 700; cursor: pointer; }
         .gio-checkout-reload[hidden] { display: none; }
-        .gio-checkout-summary { margin: 1rem 0; padding: .75rem 0 0; border-top: 1px solid var(--gio-border); }
         {{--
-            The summary's own size, moved down onto its rows. It sat on the
-            container while the sizes were rem and nothing compounded; in `em`
-            it would multiply against the total's, which carries both classes
-            and is meant to be the larger figure, not a fraction of a fraction.
+            The footer the design rules off from the sections above it: the
+            summary's rows in the secondary ink, the total ruled off again and
+            set large in the text colour, and the button beneath. The total's
+            rule sits after the row's in the sheet, at one class each, so it
+            narrows by order — the same trade the whole sheet makes.
         --}}
-        .gio-checkout-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0 0 .375rem; font-size: .875em; }
+        .gio-checkout-summary { display: grid; gap: .5rem; margin: 1.75rem 0 0; padding: 1.125rem 0 0; border-top: 1px solid var(--gio-border); }
+        .gio-checkout-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0; font-size: .875rem; color: color-mix(in srgb, var(--gio-text) 35%, var(--gio-muted)); }
+        .gio-checkout-total { margin: .25rem 0 0; padding: .625rem 0 0; border-top: 1px solid var(--gio-border); font-size: 1.125rem; font-weight: 700; color: var(--gio-text); }
         {{--
-            The total is ruled off from the lines above it with the same
-            hairline the sections are, and set heavier and larger than they
-            are: a receipt a customer reads down to what the courier will
-            collect. This rule is inside the summary and not between sections,
-            so a layout that drops the panel's bottom rule leaves it alone.
-
-            It carries both classes and both selectors are one class, so the
-            later declaration is the one that applies — order, not
-            specificity, as everywhere else in this sheet.
+            The button, full width at the design's height, in the button
+            tokens. Hover darkens the button's own colour rather than naming a
+            second one, so a merchant's button colour still has a hover; the
+            press is the design's one-pixel drop.
         --}}
-        .gio-checkout-total { margin: .375rem 0 0; padding: .5rem 0 0; border-top: 1px solid var(--gio-border); font-size: 1.0625em; font-weight: 700; }
-        .gio-checkout-submit { display: block; width: 100%; padding: .875rem 1rem; border: 0; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); font-family: inherit; font-size: 1.0625em; font-weight: 700; cursor: pointer; }
-        .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; }
-        .gio-checkout-note { margin: .625rem 0 0; font-size: .75em; text-align: center; color: var(--gio-muted); }
+        .gio-checkout-submit { display: flex; justify-content: center; align-items: center; gap: .5rem; box-sizing: border-box; width: 100%; min-height: 3rem; margin: .625rem 0 0; padding: .875rem 1.25rem; border: 0; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); font-family: inherit; font-size: .9375rem; font-weight: 700; line-height: 1.3; cursor: pointer; transition: background .15s, transform .1s; }
+        .gio-checkout-submit:hover { background: color-mix(in srgb, var(--gio-button-background) 85%, #000); }
+        .gio-checkout-submit:active { transform: translateY(1px); }
+        .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; transform: none; }
+        .gio-checkout-note { margin: .625rem 0 0; font-size: .75rem; text-align: center; color: var(--gio-muted); }
+        {{--
+            The phone, as the design draws it at 375: the section and the card
+            close in, a product's line total drops to a row of its own beneath
+            the name, and the button loses a little of its padding. Nothing
+            here reorders anything; it is the same island, tighter.
+        --}}
+        @media (max-width: 37.5rem) { .gio-checkout { padding: 1.25rem 1rem; } .gio-checkout-card { padding: 1.25rem 1rem; } .gio-checkout-line-total { flex: 1 0 100%; width: auto; padding: 0 0 0 1.75rem; font-size: .8125rem; text-align: left; } .gio-checkout-submit { padding: .875rem 1rem; font-size: .875rem; } }
         {{--
             Everything above is the base, and it is the same bytes whichever
             arrangement the merchant chose. This is the one block that is not:
@@ -368,489 +397,542 @@
         {!! $paymentChooser->styleRules() !!}{!! $layout->styleRules() !!}
     </style>
 
-    {{--
-        Where a refusal the customer cannot fix at a box is put: the page moved
-        under them, the connection dropped, the server refused or fell over.
-        At the top of the island rather than above the button, because a
-        customer whose tap did nothing looks up, not down — and outside the
-        form, because every layout arranges the form's children and a child of
-        the island sits above whatever the arrangement draws.
+    <div class="gio-checkout-card">
+        {{--
+            Where a refusal the customer cannot fix at a box is put: the page
+            moved under them, the connection dropped, the server refused or
+            fell over. At the top of the card rather than above the button,
+            because a customer whose tap did nothing looks up, not down — and
+            outside the form, because every layout arranges the form's
+            children and a sibling of the form sits above whatever the
+            arrangement draws.
 
-        The reload button is for the one refusal it can put right: a page
-        repriced or changed since these bytes were written. It stays hidden for
-        the others, where reloading would only throw away what they typed for
-        nothing. `aria-live` rather than a role, so a screen reader is told
-        what was written into it and not what an empty box is for.
-    --}}
-    <div class="gio-checkout-banner" data-gio-banner aria-live="assertive">
-        <p class="gio-checkout-banner-text" data-gio-error-for="page"></p>
-        <button class="gio-checkout-reload" type="button" data-gio-reload hidden>Reload page</button>
-    </div>
-
-    {{--
-        No @csrf token: this markup is shared by every visitor, so a token here
-        would be one person's token handed to everyone. The POST authenticates
-        by origin instead, with the script's token retry as the fallback.
-    --}}
-    <form class="gio-checkout-form"
-          method="post"
-          action="{{ route('checkout.store') }}"
-          data-gio-checkout-form
-          data-currency-symbol="{{ $currencySymbol }}"
-          data-currency-decimals="{{ $currencyDecimals }}"
-          {{--
-              What delivery costs when there is nothing to choose between. The
-              server charges it either way, so the figure on screen has to be
-              the figure collected at the door — a total that reads low by the
-              delivery charge is a refused parcel.
-          --}}
-          data-delivery-amount="{{ $preselected?->amount ?? 0 }}"
-          data-token-url="{{ route('checkout.token') }}">
-        <input type="hidden" name="page" value="{{ $page->slug }}">
+            The reload button is for the one refusal it can put right: a page
+            repriced or changed since these bytes were written. It stays hidden
+            for the others, where reloading would only throw away what they
+            typed for nothing. `aria-live` rather than a role, so a screen
+            reader is told what was written into it and not what an empty box
+            is for.
+        --}}
+        <div class="gio-checkout-banner" data-gio-banner aria-live="assertive">
+            <p class="gio-checkout-banner-text" data-gio-error-for="page"></p>
+            <button class="gio-checkout-reload" type="button" data-gio-reload hidden>Reload page</button>
+        </div>
 
         {{--
-            What this form quoted the customer, as a figure the server can check
-            back. These bytes may sit on disk for days, and a price or a delivery
-            amount edited in the meantime means the total on screen is not the
-            total the courier would collect — which in cash on delivery is a
-            refused parcel and a fee in both directions.
-
-            The capture refuses a submission whose fingerprint is not the page's
-            current one, and tells the visitor to reload. Nothing about the
-            questions or the styling is in it, so editing those never rejects an
-            order somebody has half-typed (ADR-0007).
+            No @csrf token: this markup is shared by every visitor, so a token
+            here would be one person's token handed to everyone. The POST
+            authenticates by origin instead, with the script's token retry as
+            the fallback.
         --}}
-        <input type="hidden" name="fingerprint" value="{{ $fingerprint }}">
+        <form class="gio-checkout-form"
+              method="post"
+              action="{{ route('checkout.store') }}"
+              data-gio-checkout-form
+              data-currency-symbol="{{ $currencySymbol }}"
+              data-currency-decimals="{{ $currencyDecimals }}"
+              {{--
+                  What delivery costs when there is nothing to choose between.
+                  The server charges it either way, so the figure on screen has
+                  to be the figure collected at the door — a total that reads
+                  low by the delivery charge is a refused parcel.
+              --}}
+              data-delivery-amount="{{ $preselected?->amount ?? 0 }}"
+              data-token-url="{{ route('checkout.token') }}">
+            <input type="hidden" name="page" value="{{ $page->slug }}">
 
-        {{--
-            Everything this Page sells, each with a quantity of its own.
-
-            Quantities are keyed by Product id rather than by the position the
-            Product sits at, so reordering them in the admin cannot point a form
-            already open on someone's phone at a different item. A Product
-            soft-deleted since these bytes were written is simply absent from
-            the Page by the time the Capture is checked, and the rest still sell.
-
-            Drawn only where the Product List is shown, on whichever layout the
-            page is arranged in. Where it is hidden, the quantities are still
-            posted — one of everything the page sells — so a checkout with the
-            list hidden captures exactly the Order one showing it would.
-        --}}
-        @if ($showProducts)
-            <div class="gio-checkout-products">
-                @foreach ($products as $product)
-                    <div class="gio-checkout-product{{ $picksProducts ? ' gio-checkout-pickable' : '' }}"
-                         data-gio-line data-unit-price="{{ $product->price }}">
-                        @if ($picksProducts)
-                            {{--
-                                Ticked where the merchant said so, and unticked
-                                otherwise, which is what a page says nothing about.
-                                A tick is a starting position and never an
-                                agreement: the server charges for what arrives
-                                ticked, so a customer who unticks one before
-                                ordering is charged for what is left.
-
-                                One ticked is a price the customer meets on load
-                                and then changes. Two or more is a bundle the
-                                merchant is asserting, and on a cash-on-delivery
-                                page it carries the risk the empty default existed
-                                to avoid — an extra nobody chose is a refused
-                                parcel and a courier fee in both directions. The
-                                Checkout tab warns them there; here it is honoured
-                                (ADR-0010).
-
-                                Labelled by the product's own name, so a screen
-                                reader hears what is being ticked rather than
-                                "checkbox" three times.
-                            --}}
-                            <input class="gio-checkout-pick"
-                                   id="gio-pick-{{ $product->getKey() }}"
-                                   name="selected[]"
-                                   value="{{ $product->getKey() }}"
-                                   aria-labelledby="gio-product-{{ $product->getKey() }}"
-                                   type="checkbox" data-gio-pick
-                                   @checked($opensTicked($product))>
-                        @endif
-
-                        {{-- The `for` carries its own leading space, so a page that asks nothing renders the tag it always did. --}}
-                        <{{ $productHead }} class="gio-checkout-product-head"@if ($picksProducts) for="gio-pick-{{ $product->getKey() }}"@endif>
-                            @if ($image = $product->imageUrl())
-                                <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
-                            @endif
-
-                            <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
-                            <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
-                        </{{ $productHead }}>
-
-                        @if ($product->description)
-                            <p class="gio-checkout-description">{{ $product->description }}</p>
-                        @endif
-
-                        <div class="gio-checkout-quantity">
-                            {{--
-                                Labelled by its own word *and* the product's name, so a
-                                screen reader on a page selling three things hears
-                                "Quantity, Winter Jacket" rather than "Quantity" three
-                                times. The visible label stays the visible label, which
-                                is what a voice-control user says out loud.
-                            --}}
-                            <label class="gio-checkout-label gio-checkout-quantity-label"
-                                   id="gio-quantity-label-{{ $product->getKey() }}"
-                                   for="gio-quantity-{{ $product->getKey() }}">Quantity</label>
-                            {{--
-                                Minus and plus flanking a real numeric input, and
-                                the input is the control. Its bounds are what keep
-                                the browser and the capture agreed on the largest
-                                quantity, and typing into it is how a customer gets
-                                from one to twelve without eleven taps — a readout
-                                that could not be typed into was rejected for both
-                                reasons. The buttons only step it, by the step it
-                                declares, and do nothing at all until the script
-                                runs; the box works without them.
-
-                                `type="button"`, because a button in a form
-                                submits it unless told otherwise, and a tap on
-                                plus must never place an order. Hidden from the
-                                accessibility tree and skipped by the keyboard:
-                                the spinbutton they step already has arrow keys
-                                and a name, and three stops per product would
-                                make a page selling five things fifteen stops
-                                long.
-                            --}}
-                            <div class="gio-checkout-stepper">
-                                <button class="gio-checkout-step" type="button" data-gio-step="-1" aria-hidden="true" tabindex="-1">&minus;</button>
-                                {{--
-                                    Not `required` where the box can be hidden. A
-                                    stepper emptied and then unticked would fail the
-                                    browser's own check from behind `display: none`,
-                                    which refuses to submit and shows the customer
-                                    nothing at all. The server checks what was ticked
-                                    either way, and the island puts that refusal in the
-                                    slot below.
-                                --}}
-                                <input class="gio-checkout-input gio-checkout-quantity-input"
-                                       id="gio-quantity-{{ $product->getKey() }}"
-                                       name="quantities[{{ $product->getKey() }}]"
-                                       aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
-                                       type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
-                                       inputmode="numeric" @required(! $picksProducts) data-gio-quantity>
-                                <button class="gio-checkout-step" type="button" data-gio-step="1" aria-hidden="true" tabindex="-1">+</button>
-                            </div>
-                            <p class="gio-checkout-error gio-checkout-quantity-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
             {{--
-                The whole product panel, minus everything a customer looks at.
+                What this form quoted the customer, as a figure the server can
+                check back. These bytes may sit on disk for days, and a price or
+                a delivery amount edited in the meantime means the total on
+                screen is not the total the courier would collect — which in
+                cash on delivery is a refused parcel and a fee in both
+                directions.
 
-                A page hiding its Product List sold the product in its own
-                markup above the fold, so drawing it again in smaller type
-                would be the page arguing with itself. What is left is what an
-                Order cannot be captured without: one quantity per product,
-                keyed by product id like the stepper it stands in for, so the
-                Capture checks and writes exactly what it would from a form
-                that drew the list.
-
-                One of each, and no way to say otherwise. There is no stepper to
-                type into and no box to tick — which is also why a checkout
-                with the list hidden never asks the customer to choose, and why
-                the switch is read where that question is answered
-                (`picksProducts()`).
-
-                They carry the line markers too, so the summary below totals the
-                same way in every layout rather than the script needing to know
-                which one it is looking at.
+                The capture refuses a submission whose fingerprint is not the
+                page's current one, and tells the visitor to reload. Nothing
+                about the questions or the styling is in it, so editing those
+                never rejects an order somebody has half-typed (ADR-0007).
             --}}
-            @foreach ($products as $product)
-                <input type="hidden" name="quantities[{{ $product->getKey() }}]" value="1"
-                       data-gio-line data-unit-price="{{ $product->price }}">
-            @endforeach
-        @endif
+            <input type="hidden" name="fingerprint" value="{{ $fingerprint }}">
 
-        {{--
-            Where an order for nothing is refused, beside the boxes that were
-            never ticked. Only a page that asks the question has anywhere to
-            show the answer being wrong; on any other, the island's fallback
-            puts it in the page-level slot instead.
-        --}}
-        @if ($picksProducts)
-            <p class="gio-checkout-error" data-gio-error-for="selected"></p>
-        @endif
+            {{--
+                Everything this Page sells, each with a quantity of its own.
 
-        {{--
-            The questions, their wording and their order come from this Page's
-            own Checkout Config — the same list the server compiles its rules
-            from, so a visitor is never blocked from typing something the
-            Capture would have accepted.
+                Quantities are keyed by Product id rather than by the position
+                the Product sits at, so reordering them in the admin cannot
+                point a form already open on someone's phone at a different
+                item. A Product soft-deleted since these bytes were written is
+                simply absent from the Page by the time the Capture is checked,
+                and the rest still sell.
 
-            One loop for both kinds of field. A question the merchant added of
-            their own is drawn by its type exactly as a built-in of that type
-            is, and sits wherever the list puts it, including between two
-            built-ins (ADR-0006).
-
-            The grid they sit in is what lets two short questions share a row,
-            and it holds the delivery choice as well: that is a question the
-            page asks like any other, and it should be spaced like one.
-        --}}
-        <div class="gio-checkout-fields">
-            @foreach ($fields as $field)
-                @php
-                    $id = 'gio-'.$field->key();
-
-                    /** The id is the view's to invent, so it is the view that ties the two together. */
-                    $control = $field->controlAttributes()->merge(array_filter([
-                        'aria-describedby' => $field->help === null ? null : $id.'-help',
-                    ]));
-                @endphp
-
-                {{--
-                    What this one question looks like where the merchant wanted it
-                    to differ from the rest, written onto its own wrapper.
-
-                    A redeclaration of tokens the root already declares, so the
-                    cascade confines it to this field and nothing has to be
-                    generated to name it. Absent entirely where the merchant
-                    overrode nothing, which is every field on almost every page.
-
-                    How wide it sits is a flat class the sheet above already
-                    carries, and it says nothing about phones: the class only
-                    means anything above the breakpoint. Blank for a full-width
-                    question, so a page where nobody paired anything renders the
-                    markup it always did.
-                --}}
-                <div class="gio-checkout-field{{ $field->width->classSuffix() }}">
-                    {{--
-                        A radio group and a checkbox carry their own wording — a
-                        legend over the choices, and the text beside the box — so
-                        neither takes the label block above it. Labelling both would
-                        ask the same question twice, and a stray <label> pointing at
-                        nothing is worse than no label at all.
-                    --}}
-                    @if ($field->type() === CheckoutFieldType::Radio)
-                        <fieldset class="gio-checkout-choices">
-                            <legend class="gio-checkout-label">{{ $field->label }}</legend>
-
-                            @if ($field->help !== null)
-                                <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
-                            @endif
-
-                            {{--
-                                Nothing chosen to begin with, even where an answer is
-                                compulsory: a pre-ticked answer is one the customer
-                                never gave. The browser's own check asks for one, and
-                                the server refuses a value the list does not hold.
-                            --}}
-                            @foreach ($field->options() as $option)
-                                <label class="gio-checkout-choice">
-                                    <input name="{{ $field->key() }}" value="{{ $option->value }}"
-                                           {{ $control }} @required($field->required)>
-                                    <span class="gio-checkout-choice-label">{{ $option->label }}</span>
-                                </label>
-                            @endforeach
-                        </fieldset>
-                    @elseif ($field->type() === CheckoutFieldType::Checkbox)
-                        @if ($field->help !== null)
-                            <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
-                        @endif
-
-                        <label class="gio-checkout-choice">
-                            <input name="{{ $field->key() }}" {{ $control }} @required($field->required)>
-                            <span class="gio-checkout-choice-label">{{ $field->label }}</span>
-                        </label>
-                    @else
-                        <label class="gio-checkout-label" for="{{ $id }}">{{ $field->label }}</label>
-
-                        @if ($field->help !== null)
-                            <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
-                        @endif
-
-                        @switch ($field->type())
-                            @case (CheckoutFieldType::Textarea)
-                                <textarea class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                                          {{ $control }} @required($field->required)></textarea>
-                                @break
-
-                            @case (CheckoutFieldType::Select)
-                                <select class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                                        {{ $control }} @required($field->required)>
-                                    {{--
-                                        Unpickable only where an answer is compulsory, so a browser can
-                                        submit what the server would accept. It is rendered even with no
-                                        placeholder to word it: a required select has to be able to start
-                                        on nothing chosen, rather than on whichever district sorts first.
-                                    --}}
-                                    <option value="" selected @disabled($field->required)>{{ $field->placeholder }}</option>
-                                    @foreach ($field->options() as $option)
-                                        <option value="{{ $option->value }}">{{ $option->label }}</option>
-                                    @endforeach
-                                </select>
-                                @break
-
-                            @default
-                                <input class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
-                                       {{ $control }} @required($field->required)>
-                        @endswitch
+                Drawn only where the Product List is shown, on whichever layout
+                the page is arranged in. Where it is hidden, the quantities are
+                still posted — one of everything the page sells — so a checkout
+                with the list hidden captures exactly the Order one showing it
+                would.
+            --}}
+            @if ($showProducts)
+                <div class="gio-checkout-section">
+                    @if ($layout->draws(WordSlot::StackedProductsHeadline))
+                        <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedProductsHeadline) }}</h3>
                     @endif
 
-                    <p class="gio-checkout-error" data-gio-error-for="{{ $field->key() }}"></p>
+                    <div class="gio-checkout-products">
+                        @foreach ($products as $product)
+                            <div class="gio-checkout-product{{ $picksProducts ? ' gio-checkout-pickable' : '' }}"
+                                 data-gio-line data-unit-price="{{ $product->price }}">
+                                @if ($picksProducts)
+                                    {{--
+                                        Ticked where the merchant said so, and
+                                        unticked otherwise, which is what a page
+                                        says nothing about. A tick is a starting
+                                        position and never an agreement: the
+                                        server charges for what arrives ticked,
+                                        so a customer who unticks one before
+                                        ordering is charged for what is left.
+
+                                        One ticked is a price the customer meets
+                                        on load and then changes. Two or more is
+                                        a bundle the merchant is asserting, and
+                                        on a cash-on-delivery page it carries the
+                                        risk the empty default existed to avoid —
+                                        an extra nobody chose is a refused parcel
+                                        and a courier fee in both directions. The
+                                        Checkout tab warns them there; here it is
+                                        honoured (ADR-0010).
+
+                                        Labelled by the product's own name, so a
+                                        screen reader hears what is being ticked
+                                        rather than "checkbox" three times.
+                                    --}}
+                                    <input class="gio-checkout-pick"
+                                           id="gio-pick-{{ $product->getKey() }}"
+                                           name="selected[]"
+                                           value="{{ $product->getKey() }}"
+                                           aria-labelledby="gio-product-{{ $product->getKey() }}"
+                                           type="checkbox" data-gio-pick
+                                           @checked($opensTicked($product))>
+                                @endif
+
+                                {{-- The `for` carries its own leading space, so a page that asks nothing renders the tag it always did. --}}
+                                <{{ $productHead }} class="gio-checkout-product-head"@if ($picksProducts) for="gio-pick-{{ $product->getKey() }}"@endif>
+                                    @if ($image = $product->imageUrl())
+                                        <img class="gio-checkout-image" src="{{ $image }}" alt="{{ $product->name }}" loading="lazy">
+                                    @endif
+
+                                    <div class="gio-checkout-product-words">
+                                        <p class="gio-checkout-name" id="gio-product-{{ $product->getKey() }}">{{ $product->name }}</p>
+                                        @if ($product->description)
+                                            <p class="gio-checkout-description">{{ $product->description }}</p>
+                                        @endif
+                                        <p class="gio-checkout-price">{{ \App\Support\Money::format($product->price) }}</p>
+                                    </div>
+                                </{{ $productHead }}>
+
+                                <div class="gio-checkout-quantity">
+                                    {{--
+                                        Labelled by its own word *and* the
+                                        product's name, so a screen reader on a
+                                        page selling three things hears
+                                        "Quantity, Winter Jacket" rather than
+                                        "Quantity" three times. The word is
+                                        clipped from sight, as the design draws
+                                        the stepper bare, and stays what a
+                                        voice-control user says out loud.
+                                    --}}
+                                    <label class="gio-checkout-label gio-checkout-hidden-label gio-checkout-quantity-label"
+                                           id="gio-quantity-label-{{ $product->getKey() }}"
+                                           for="gio-quantity-{{ $product->getKey() }}">Quantity</label>
+                                    {{--
+                                        Minus and plus flanking a real numeric
+                                        input, and the input is the control. Its
+                                        bounds are what keep the browser and the
+                                        capture agreed on the largest quantity,
+                                        and typing into it is how a customer gets
+                                        from one to twelve without eleven taps —
+                                        a readout that could not be typed into
+                                        was rejected for both reasons. The
+                                        buttons only step it, by the step it
+                                        declares, and do nothing at all until the
+                                        script runs; the box works without them.
+
+                                        `type="button"`, because a button in a
+                                        form submits it unless told otherwise,
+                                        and a tap on plus must never place an
+                                        order. Hidden from the accessibility tree
+                                        and skipped by the keyboard: the
+                                        spinbutton they step already has arrow
+                                        keys and a name, and three stops per
+                                        product would make a page selling five
+                                        things fifteen stops long.
+                                    --}}
+                                    <div class="gio-checkout-quantity-stepper">
+                                        <button class="gio-checkout-quantity-step" type="button" data-gio-step="-1" aria-hidden="true" tabindex="-1">&minus;</button>
+                                        {{--
+                                            Not `required` where the box can be
+                                            hidden. A stepper emptied and then
+                                            unticked would fail the browser's own
+                                            check from behind `display: none`,
+                                            which refuses to submit and shows the
+                                            customer nothing at all. The server
+                                            checks what was ticked either way,
+                                            and the island puts that refusal in
+                                            the slot below.
+                                        --}}
+                                        <input class="gio-checkout-input gio-checkout-quantity-input"
+                                               id="gio-quantity-{{ $product->getKey() }}"
+                                               name="quantities[{{ $product->getKey() }}]"
+                                               aria-labelledby="gio-quantity-label-{{ $product->getKey() }} gio-product-{{ $product->getKey() }}"
+                                               type="number" value="1" min="1" max="{{ $maxQuantity }}" step="1"
+                                               inputmode="numeric" @required(! $picksProducts) data-gio-quantity>
+                                        <button class="gio-checkout-quantity-step" type="button" data-gio-step="1" aria-hidden="true" tabindex="-1">+</button>
+                                    </div>
+                                    <p class="gio-checkout-error gio-checkout-quantity-error" data-gio-error-for="quantities.{{ $product->getKey() }}"></p>
+                                </div>
+
+                                {{--
+                                    What this line comes to, as the design
+                                    draws it at the end of the row: one of it
+                                    at the page's price until the customer
+                                    touches the stepper, and kept truthful by
+                                    the script after. Drawn at the price even
+                                    for a product not yet ticked, faded, so a
+                                    customer reads what ticking it would add.
+                                --}}
+                                <p class="gio-checkout-line-total" data-gio-line-total>{{ \App\Support\Money::format($product->price) }}</p>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
-            @endforeach
+            @else
+                {{--
+                    The whole product panel, minus everything a customer looks
+                    at.
+
+                    A page hiding its Product List sold the product in its own
+                    markup above the fold, so drawing it again in smaller type
+                    would be the page arguing with itself. What is left is what
+                    an Order cannot be captured without: one quantity per
+                    product, keyed by product id like the stepper it stands in
+                    for, so the Capture checks and writes exactly what it would
+                    from a form that drew the list.
+
+                    One of each, and no way to say otherwise. There is no
+                    stepper to type into and no box to tick — which is also why
+                    a checkout with the list hidden never asks the customer to
+                    choose, and why the switch is read where that question is
+                    answered (`picksProducts()`).
+
+                    They carry the line markers too, so the summary below
+                    totals the same way in every layout rather than the script
+                    needing to know which one it is looking at.
+                --}}
+                @foreach ($products as $product)
+                    <input type="hidden" name="quantities[{{ $product->getKey() }}]" value="1"
+                           data-gio-line data-unit-price="{{ $product->price }}">
+                @endforeach
+            @endif
 
             {{--
-                How the parcel gets to the door, in the merchant's own words and at
-                their own prices. Rendered only where there is a decision to make: a
-                page offering one arrangement charges it, and a page offering none
-                charges nothing, and neither is a question worth putting in front of
-                a customer whose only possible answer is the one they would be given.
-
-                Radios rather than a select, because the amounts have to be readable
-                without opening anything — the choice is a price as much as it is a
-                delivery method. The first is already chosen so the total below is
-                truthful from the first paint; the server refuses a submission that
-                names none of them regardless.
+                Where an order for nothing is refused, beside the boxes that
+                were never ticked. Only a page that asks the question has
+                anywhere to show the answer being wrong; on any other, the
+                island's fallback puts it in the page-level slot instead.
             --}}
-            @if (count($deliveryOptions) > 1)
-                <div class="gio-checkout-field">
+            @if ($picksProducts)
+                <p class="gio-checkout-error" data-gio-error-for="selected"></p>
+            @endif
+
+            {{--
+                The questions, their wording and their order come from this
+                Page's own Checkout Config — the same list the server compiles
+                its rules from, so a visitor is never blocked from typing
+                something the Capture would have accepted.
+
+                One loop for both kinds of field. A question the merchant added
+                of their own is drawn by its type exactly as a built-in of that
+                type is, and sits wherever the list puts it, including between
+                two built-ins (ADR-0006).
+
+                The grid they sit in is what lets two short questions share a
+                row; the delivery choice sits beneath it in the same section,
+                as the design draws the details.
+            --}}
+            <div class="gio-checkout-section">
+                @if ($layout->draws(WordSlot::StackedDetailsHeadline))
+                    <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedDetailsHeadline) }}</h3>
+                @endif
+
+                <div class="gio-checkout-fields">
+                    @foreach ($fields as $field)
+                        @php
+                            $id = 'gio-'.$field->key();
+
+                            /** The id is the view's to invent, so it is the view that ties the two together. */
+                            $control = $field->controlAttributes()->merge(array_filter([
+                                'aria-describedby' => $field->help === null ? null : $id.'-help',
+                            ]));
+                        @endphp
+
+                        {{--
+                            One wrapper per question, carrying nothing but how
+                            wide it sits: a flat class the sheet above already
+                            has, meaning something only above the breakpoint,
+                            and blank for a full-width question so a page where
+                            nobody paired anything renders the markup it always
+                            did. Blank too on a layout that pairs nothing — the
+                            layout's to say — while the width itself stays in
+                            the Config for the day the page is arranged another
+                            way. No question restyles itself, so no wrapper
+                            carries a style of its own.
+                        --}}
+                        <div class="gio-checkout-field{{ $layout->pairsQuestions() ? $field->width->classSuffix() : '' }}">
+                            {{--
+                                A radio group and a checkbox carry their own
+                                wording — a legend over the choices, and the
+                                text beside the box — so neither takes the label
+                                block above it. Labelling both would ask the
+                                same question twice, and a stray <label>
+                                pointing at nothing is worse than no label at
+                                all.
+                            --}}
+                            @if ($field->type() === CheckoutFieldType::Radio)
+                                <fieldset class="gio-checkout-choices">
+                                    <legend class="gio-checkout-label">{{ $field->label }}</legend>
+
+                                    @if ($field->help !== null)
+                                        <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                                    @endif
+
+                                    {{--
+                                        Nothing chosen to begin with, even where
+                                        an answer is compulsory: a pre-ticked
+                                        answer is one the customer never gave.
+                                        The browser's own check asks for one,
+                                        and the server refuses a value the list
+                                        does not hold.
+                                    --}}
+                                    @foreach ($field->options() as $option)
+                                        <label class="gio-checkout-choice">
+                                            <input class="gio-checkout-tick" name="{{ $field->key() }}" value="{{ $option->value }}"
+                                                   {{ $control }} @required($field->required)>
+                                            <span class="gio-checkout-choice-label">{{ $option->label }}</span>
+                                        </label>
+                                    @endforeach
+                                </fieldset>
+                            @elseif ($field->type() === CheckoutFieldType::Checkbox)
+                                @if ($field->help !== null)
+                                    <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                                @endif
+
+                                <label class="gio-checkout-choice">
+                                    <input class="gio-checkout-tick" name="{{ $field->key() }}" {{ $control }} @required($field->required)>
+                                    <span class="gio-checkout-choice-label">{{ $field->label }}</span>
+                                </label>
+                            @else
+                                <label class="gio-checkout-label" for="{{ $id }}">{{ $field->label }}</label>
+
+                                @if ($field->help !== null)
+                                    <p class="gio-checkout-help" id="{{ $id }}-help">{{ $field->help }}</p>
+                                @endif
+
+                                @switch ($field->type())
+                                    @case (CheckoutFieldType::Textarea)
+                                        <textarea class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                                  {{ $control }} @required($field->required)></textarea>
+                                        @break
+
+                                    @case (CheckoutFieldType::Select)
+                                        <select class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                                {{ $control }} @required($field->required)>
+                                            {{--
+                                                Unpickable only where an answer is compulsory, so a browser can
+                                                submit what the server would accept. It is rendered even with no
+                                                placeholder to word it: a required select has to be able to start
+                                                on nothing chosen, rather than on whichever district sorts first.
+                                            --}}
+                                            <option value="" selected @disabled($field->required)>{{ $field->placeholder }}</option>
+                                            @foreach ($field->options() as $option)
+                                                <option value="{{ $option->value }}">{{ $option->label }}</option>
+                                            @endforeach
+                                        </select>
+                                        @break
+
+                                    @default
+                                        <input class="gio-checkout-input" id="{{ $id }}" name="{{ $field->key() }}"
+                                               {{ $control }} @required($field->required)>
+                                @endswitch
+                            @endif
+
+                            <p class="gio-checkout-error" data-gio-error-for="{{ $field->key() }}"></p>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{--
+                    How the parcel gets to the door, in the merchant's own words
+                    and at their own prices. Rendered only where there is a
+                    decision to make: a page offering one arrangement charges
+                    it, and a page offering none charges nothing, and neither
+                    is a question worth putting in front of a customer whose
+                    only possible answer is the one they would be given.
+
+                    Radios rather than a select, because the amounts have to be
+                    readable without opening anything — the choice is a price
+                    as much as it is a delivery method. The first is already
+                    chosen so the total below is truthful from the first paint;
+                    the server refuses a submission that names none of them
+                    regardless.
+                --}}
+                @if (count($deliveryOptions) > 1)
                     <fieldset class="gio-checkout-delivery">
-                        <legend class="gio-checkout-label">Delivery</legend>
+                        <legend class="gio-checkout-label gio-checkout-hidden-label">Delivery</legend>
 
                         @foreach ($deliveryOptions as $index => $option)
                             <label class="gio-checkout-choice">
-                                <input type="radio"
+                                <input class="gio-checkout-tick"
+                                       type="radio"
                                        name="delivery_option"
                                        value="{{ $option->label }}"
                                        data-gio-delivery-option
                                        data-amount="{{ $option->amount }}"
                                        @checked($index === 0) required>
                                 {{--
-                                    The detail line sits inside the words' span, on
-                                    one line with the name, so a row with none emits
-                                    exactly the bytes it always did and a row with
-                                    one keeps the row's reading order: name, detail,
-                                    figure. Copy, not a figure — the script reads
-                                    `data-amount` and never this.
+                                    The detail line sits inside the words' span,
+                                    on one line with the name, so a row with none
+                                    emits exactly the bytes it always did and a
+                                    row with one keeps the row's reading order:
+                                    name, detail, figure. Drawn only where the
+                                    layout has room for a second line — the
+                                    layout's to say — and kept in the Config
+                                    either way. Copy, not a figure: the script
+                                    reads `data-amount` and never this.
                                 --}}
-                                <span class="gio-checkout-choice-label">{{ $option->label }}@if ($option->detail !== null)<span class="gio-checkout-choice-detail">{{ $option->detail }}</span>@endif</span>
+                                <span class="gio-checkout-choice-label">{{ $option->label }}@if ($option->detail !== null && $layout->drawsDeliveryDetail())<span class="gio-checkout-choice-detail">{{ $option->detail }}</span>@endif</span>
                                 <span class="gio-checkout-choice-amount">{{ \App\Support\Money::format($option->amount) }}</span>
                             </label>
                         @endforeach
                     </fieldset>
 
                     <p class="gio-checkout-error" data-gio-error-for="delivery_option"></p>
-                </div>
-            @endif
+                @endif
+            </div>
 @if ($paymentChooser->isDrawn())
-                {{--
-                    At column 0, and so is its @endif: Blade swallows the
-                    newline after a directive but not the indent before it, so
-                    an indented @if leaves a line of spaces in the bytes of
-                    every page that draws no chooser. Written flush left, a
-                    page with a default Config emits exactly what it did
-                    before a method could be chosen.
+            {{--
+                At column 0, and so is its @endif: Blade swallows the newline
+                after a directive but not the indent before it, so an indented
+                @if leaves a line of spaces in the bytes of every page that
+                draws no chooser. Written flush left, a page with a default
+                Config emits exactly what it did before a method could be
+                chosen.
 
-                    How the customer will pay, in the merchant's order. Drawn
-                    only where there is a decision worth putting in front of
-                    them: a page offering nothing but cash on delivery with the
-                    choice hidden draws the form it always did and posts no
-                    method, and the server places the order under cash on
-                    delivery. The comment sits inside the branch for the same
-                    reason, so a page drawing no chooser emits no line for it.
+                How the customer will pay, in the merchant's order, as the
+                design's third section. Drawn only where there is a decision
+                worth putting in front of them: a page offering nothing but
+                cash on delivery with the choice hidden draws the form it
+                always did and posts no method, and the server places the
+                order under cash on delivery. The comment sits inside the
+                branch for the same reason, so a page drawing no chooser
+                emits no line for it.
 
-                    Radios like the delivery choice above, and drawn as the
-                    same row: the control, then the logo where the page shows
-                    them, then the name. The first is already picked so a page
-                    with one preferred method needs no extra tap, and so a
-                    plain form post with no script carries a method
-                    regardless. The server refuses a name the page never
-                    listed.
+                Radios like the delivery choice above, and drawn as the same
+                row: the control, the name, then the logo at the far end where
+                the page shows them, as the design's slot sits. The first is
+                already picked so a page with one preferred method needs no
+                extra tap, and so a plain form post with no script carries a
+                method regardless. The server refuses a name the page never
+                listed. Which of a method's two labels names it is the
+                layout's to say.
 
-                    The logo is decorative beside a name that says the same
-                    thing, so its alt is empty and a screen reader hears the
-                    method once.
-                --}}
-                <div class="gio-checkout-field">
-                    <fieldset class="gio-checkout-choices gio-checkout-payment">
-                        <legend class="gio-checkout-label">Payment</legend>
+                The logo is decorative beside a name that says the same thing,
+                so its alt is empty and a screen reader hears the method once.
+            --}}
+            <div class="gio-checkout-section">
+                @if ($layout->draws(WordSlot::StackedPaymentHeadline))
+                    <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedPaymentHeadline) }}</h3>
+                @endif
 
-                        @foreach ($paymentChooser->methods as $index => $method)
-                            <label class="gio-checkout-choice">
-                                <input type="radio"
-                                       name="payment_method"
-                                       value="{{ $method->value }}"
-                                       @checked($index === 0) required>
-                                @if ($paymentChooser->showsLogos)
-                                    <img class="gio-checkout-logo" src="{{ $method->logoUrl() }}" alt="" loading="lazy">
-                                @endif
-                                <span class="gio-checkout-choice-label">{{ $words->paymentLabel($method) }}</span>
-                            </label>
-                        @endforeach
-                    </fieldset>
+                <fieldset class="gio-checkout-choices gio-checkout-payment">
+                    <legend class="gio-checkout-label gio-checkout-hidden-label">Payment</legend>
 
-                    <p class="gio-checkout-error" data-gio-error-for="payment_method"></p>
-                </div>
+                    @foreach ($paymentChooser->methods as $index => $method)
+                        <label class="gio-checkout-choice">
+                            <input class="gio-checkout-tick"
+                                   type="radio"
+                                   name="payment_method"
+                                   value="{{ $method->value }}"
+                                   @checked($index === 0) required>
+                            <span class="gio-checkout-choice-label">{{ $layout->drawsShortPaymentLabels() ? $words->shortPaymentLabel($method) : $words->paymentLabel($method) }}</span>
+                            @if ($paymentChooser->showsLogos)
+                                <img class="gio-checkout-logo" src="{{ $method->logoUrl() }}" alt="" loading="lazy">
+                            @endif
+                        </label>
+                    @endforeach
+                </fieldset>
+
+                <p class="gio-checkout-error" data-gio-error-for="payment_method"></p>
+            </div>
 @endif
-        </div>
 
-        {{--
-            One of everything, which is what the quantity boxes above start on,
-            plus the delivery arrangement that is already selected. The script
-            keeps these truthful as the visitor changes them; a visitor whose
-            scripts never run reads the figures the page was rendered with, and
-            the Order Complete Page after Capture is where they see what they
-            actually owe.
+            {{--
+                One of everything, which is what the quantity boxes above start
+                on, plus the delivery arrangement that is already selected. The
+                script keeps these truthful as the visitor changes them; a
+                visitor whose scripts never run reads the figures the page was
+                rendered with, and the Order Complete Page after Capture is
+                where they see what they actually owe.
 
-            Where the customer picks, only what the form opens ticked: totalling
-            the whole shelf would quote a figure no order could ever come to,
-            and totalling nothing where a merchant has pre-ticked would put a
-            zero beside boxes that are visibly ticked. Read through the same
-            test the boxes were drawn from, so the figure and the ticks cannot
-            disagree. The script retotals on load and on every touch after it,
-            but a visitor whose scripts never run reads these bytes and orders
-            from them, which is what this figure has to be right for.
-        --}}
-        @php($subtotal = (int) ($picksProducts ? $products->filter($opensTicked) : $products)->sum('price'))
-        @php($total = $subtotal + ($preselected?->amount ?? 0))
+                Where the customer picks, only what the form opens ticked:
+                totalling the whole shelf would quote a figure no order could
+                ever come to, and totalling nothing where a merchant has
+                pre-ticked would put a zero beside boxes that are visibly
+                ticked. Read through the same test the boxes were drawn from,
+                so the figure and the ticks cannot disagree.
+            --}}
+            @php($subtotal = (int) ($picksProducts ? $products->filter($opensTicked) : $products)->sum('price'))
+            @php($total = $subtotal + ($preselected?->amount ?? 0))
 
-        {{--
-            Three rows in the merchant's words or the design's. The delivery
-            row is labelled as a charge rather than after the arrangement:
-            the arrangement's own name is on the radio above, where it is
-            chosen, and the row beneath it is what that choice costs. Nothing
-            at all where the page charges for no delivery.
-        --}}
-        <div class="gio-checkout-summary">
-            <p class="gio-checkout-row">
-                <span>{{ $words->subtotalLabel() }}</span>
-                <span data-gio-subtotal>{{ \App\Support\Money::format($subtotal) }}</span>
-            </p>
-
-            @if ($preselected !== null)
+            {{--
+                Three rows in the merchant's words or the design's. The
+                delivery row is labelled as a charge rather than after the
+                arrangement: the arrangement's own name is on the radio above,
+                where it is chosen, and the row beneath it is what that choice
+                costs. Nothing at all where the page charges for no delivery.
+            --}}
+            <div class="gio-checkout-summary">
                 <p class="gio-checkout-row">
-                    <span>{{ $words->deliveryLabel() }}</span>
-                    <span data-gio-delivery>{{ \App\Support\Money::format($preselected->amount) }}</span>
+                    <span>{{ $words->subtotalLabel() }}</span>
+                    <span data-gio-subtotal>{{ \App\Support\Money::format($subtotal) }}</span>
                 </p>
-            @endif
 
-            <p class="gio-checkout-row gio-checkout-total">
-                <span>{{ $words->totalLabel() }}</span>
-                <span data-gio-total>{{ \App\Support\Money::format($total) }}</span>
-            </p>
-        </div>
+                @if ($preselected !== null)
+                    <p class="gio-checkout-row">
+                        <span>{{ $words->deliveryLabel() }}</span>
+                        <span data-gio-delivery>{{ \App\Support\Money::format($preselected->amount) }}</span>
+                    </p>
+                @endif
 
-        {{--
-            The merchant's words, or the design's. Where the wording names the
-            total it is filled in here from the same figure the summary shows,
-            so a visitor whose scripts never run reads a price and never a
-            placeholder; the template then rides on the button for the script,
-            which refills it every time it retotals. No template where nothing
-            is named, so the script leaves a plain button alone.
-        --}}
-        <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $words->orderButton->carriesTotal() ? ' data-gio-submit-wording="'.e($words->orderButton->wording()).'"' : '' !!}>{{ $words->orderButton->wordingFor(\App\Support\Money::format($total)) }}</button>
+                <p class="gio-checkout-row gio-checkout-total">
+                    <span>{{ $words->totalLabel() }}</span>
+                    <span data-gio-total>{{ \App\Support\Money::format($total) }}</span>
+                </p>
+            </div>
 
-        <p class="gio-checkout-note">{{ $words->orderButton->note() }}</p>
-    </form>
+            {{--
+                The merchant's words, or the layout's. Where the wording names
+                the total it is filled in here from the same figure the summary
+                shows, so a visitor whose scripts never run reads a price and
+                never a placeholder; the template then rides on the button for
+                the script, which refills it every time it retotals. No
+                template where nothing is named, so the script leaves a plain
+                button alone.
+            --}}
+            <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $button->carriesTotal() ? ' data-gio-submit-wording="'.e($button->wording()).'"' : '' !!}>{{ $button->wordingFor(\App\Support\Money::format($total)) }}</button>
+
+            <p class="gio-checkout-note">{{ $button->note() }}</p>
+        </form>
+    </div>
 </div>
 
 <script>
@@ -917,18 +999,12 @@
     }
 
     /*
-     * The subtotal of one line, from the price rendered into it. Read off the
-     * line rather than off a single price on the form: a page may sell several
-     * products, each at its own price and its own quantity.
-     *
-     * Nothing for a line the customer has not ticked, so the summary only ever
-     * totals up what they are actually ordering.
+     * What one line comes to at its current quantity, from the price rendered
+     * into it. Read off the line rather than off a single price on the form:
+     * a page may sell several products, each at its own price and its own
+     * quantity. This is what the line's own total shows, ticked or not.
      */
-    function lineSubtotal(line) {
-        var pick = line.querySelector('[data-gio-pick]');
-
-        if (pick && !pick.checked) { return 0; }
-
+    function lineAmount(line) {
         var unitPrice = parseInt(line.dataset.unitPrice, 10) || 0;
         var input = line.querySelector('[data-gio-quantity]');
         var quantity = Math.max(1, parseInt(input ? input.value : '', 10) || 1);
@@ -936,11 +1012,28 @@
         return unitPrice * quantity;
     }
 
+    /*
+     * What one line adds to the order: nothing for a line the customer has
+     * not ticked, so the summary only ever totals up what they are actually
+     * ordering.
+     */
+    function lineSubtotal(line) {
+        var pick = line.querySelector('[data-gio-pick]');
+
+        if (pick && !pick.checked) { return 0; }
+
+        return lineAmount(line);
+    }
+
     /* The figure the customer hands over in cash, kept truthful as they type. */
     function retotal(form) {
         var subtotal = 0;
 
         form.querySelectorAll('[data-gio-line]').forEach(function (line) {
+            var lineTotal = line.querySelector('[data-gio-line-total]');
+
+            if (lineTotal) { lineTotal.textContent = money(form, lineAmount(line)); }
+
             subtotal += lineSubtotal(line);
         });
 
@@ -971,8 +1064,8 @@
 
     /*
      * The island the form sits in, which is what the error slots are looked
-     * up in: the banner is a child of the island and not of the form, so that
-     * no layout has to make room for it.
+     * up in: the banner is the form's sibling and not its child, so that no
+     * layout has to make room for it.
      */
     function islandFor(form) {
         return form.closest('[data-gio-checkout]');
@@ -1232,7 +1325,7 @@
      * The way back from a page that moved under the customer: a fresh copy of
      * it, with the current prices in it. Delegated like everything else, and
      * from the island rather than the form, because the banner is the
-     * island's child.
+     * island's and not the form's.
      */
     document.addEventListener('click', function (event) {
         var reload = event.target.closest ? event.target.closest('[data-gio-reload]') : null;

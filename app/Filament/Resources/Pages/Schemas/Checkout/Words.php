@@ -4,8 +4,10 @@ namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
 use App\Enums\PaymentMethod;
 use App\Filament\Resources\Pages\Schemas\RefusedBy;
+use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\CheckoutWords;
 use App\Support\Checkout\OrderButton;
+use App\Support\Checkout\WordSlot;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Section;
@@ -20,10 +22,11 @@ use Filament\Schemas\Components\Utilities\Get;
  * saving to find out. A sentence is not a Style Token, which is why none of
  * this sits beside the colours.
  *
- * Three sections, contributed separately because a concern hands over one
- * component at a time and never a list; `CheckoutTab` is where their order
- * lives. A layout's own slots — a numbered heading, a step label — are added
- * by the layout that draws them, as a section shown only while it is chosen.
+ * Three shared sections, then one per layout that owns words of its own,
+ * contributed separately because a concern hands over one component at a time
+ * and never a list; `CheckoutTab` is where their order lives. A layout's
+ * section is shown only while that layout is chosen, and rides along unseen
+ * otherwise, so a word written for a layout survives a move away and back.
  */
 class Words
 {
@@ -35,7 +38,13 @@ class Words
             ->schema([
                 TextInput::make('checkout_config.words.order_button.wording')
                     ->label('Button text')
-                    ->placeholder(OrderButton::DEFAULT_WORDING)
+                    /**
+                     * The layout's own default, because several designs put
+                     * the total on the button: the placeholder is the sentence
+                     * the island will draw, following the layout card as it
+                     * is chosen.
+                     */
+                    ->placeholder(fn (Get $get): string => LayoutChoice::selected($get)->defaultButtonWording())
                     ->helperText('Write '.OrderButton::TOTAL_PLACEHOLDER.' anywhere in it to put the live total on the button, e.g. "Order for '.OrderButton::TOTAL_PLACEHOLDER.'".')
                     ->rules([RefusedBy::rule(OrderButton::wordingRefusal(...))]),
 
@@ -83,6 +92,35 @@ class Words
             ->description('What each payment method is called: a long label for layouts with room and a short one for tight layouts. The layout decides which it draws.')
             ->columns(1)
             ->schema(array_map(self::labelsFor(...), PaymentMethod::cases()));
+    }
+
+    /**
+     * The words one layout owns of its own, as a section shown only while
+     * that layout is chosen.
+     *
+     * Hidden by the section and dehydrated-when-hidden on the section, not on
+     * each box: `Component::isHidden()` never consults its parent, so the
+     * boxes inside would carry no hint of their own, and a merchant switching
+     * layouts and saving would silently lose the words they wrote for the one
+     * they left — see `.ai/rules/schemas-order-complete.md`. Headed by the
+     * layout's name, so the section says which arrangement is being worded.
+     */
+    public static function ownedBy(CheckoutLayout $layout): Section
+    {
+        return Section::make($layout->label())
+            ->description('The words only the '.$layout->label().' layout draws. Anything left empty keeps the design\'s words.')
+            ->columns(1)
+            ->visible(fn (Get $get): bool => LayoutChoice::selected($get) === $layout)
+            ->dehydratedWhenHidden()
+            ->schema(array_map(self::slot(...), $layout->wordSlots()));
+    }
+
+    private static function slot(WordSlot $slot): TextInput
+    {
+        return TextInput::make('checkout_config.words.'.$slot->value)
+            ->label($slot->label())
+            ->placeholder($slot->defaultValue())
+            ->rules([RefusedBy::rule($slot->refusal(...))]);
     }
 
     /**

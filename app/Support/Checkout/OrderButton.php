@@ -98,6 +98,23 @@ class OrderButton
     }
 
     /**
+     * The same button with a layout's own default wording standing in where
+     * the Merchant has said nothing.
+     *
+     * Several designs put the live total on the button and one words it
+     * differently altogether, so what a silent button says is the layout's to
+     * decide (`CheckoutLayout::defaultButtonWording()`). Resolved here rather
+     * than in the view so that `wording()`, `carriesTotal()` and
+     * `wordingFor()` read one sentence — and the Words tab shows the same
+     * sentence as its placeholder. A Merchant's own wording is left exactly as
+     * written; only the gap is filled.
+     */
+    public function forLayout(CheckoutLayout $layout): self
+    {
+        return new self($this->wording ?? $layout->defaultButtonWording(), $this->note);
+    }
+
+    /**
      * What the button says, with the total placeholder still in it — the
      * template the script substitutes into as the figure moves.
      */

@@ -2,46 +2,47 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Filament\Forms\Components\LayoutCards;
 use App\Support\Checkout\CheckoutLayout;
-use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Utilities\Get;
 
 /**
  * How this Page's checkout is arranged.
  *
  * One control, and the reading of it every other concern goes through:
- * Questions asks here whether the arrangement pairs half-width questions,
- * rather than reading the box itself. Whether products are drawn is not the
- * layout's to say — that is the Product List switch on the Products tab.
+ * Questions asks here whether the arrangement pairs half-width questions, and
+ * Words asks here which layout-owned slots to show, rather than reading the
+ * box themselves. Whether products are drawn is not the layout's to say — that
+ * is the Product List switch on the Products tab.
  */
 class LayoutChoice
 {
-    public static function control(): Select
+    public static function control(): LayoutCards
     {
         /**
-         * How the checkout is arranged. It changes how
-         * the form is drawn and nothing about what it
-         * asks for or what it charges — every question,
-         * the delivery choice, the summary and the error
-         * slots are rendered by every one of them, and
-         * the appearance tab is read the same way by all
-         * of them.
+         * The ten, as a grid of cards: a thumbnail, the
+         * name and one line on what the layout looks like,
+         * so a merchant sees what they are choosing before
+         * they choose it. It changes how the form is drawn
+         * and nothing about what it asks for or what it
+         * charges — every question, the delivery choice,
+         * the summary and the error slots are rendered by
+         * every one of them, and the Look tab is read the
+         * same way by all of them.
          */
-        return Select::make('checkout_config.layout')
+        return LayoutCards::make('checkout_config.layout')
             ->label('Layout')
             ->options(CheckoutLayout::labels())
+            ->descriptions(CheckoutLayout::descriptions())
+            ->thumbnails(CheckoutLayout::thumbnails())
             ->default(CheckoutLayout::Stacked->value)
             /**
-             * Not `required`, for the reason a
-             * question's width is not: the list has no
-             * empty option to pick, and a Config that
-             * arrives without one is read as the
-             * arrangement the checkout has always had.
+             * Not `required`, for the reason a question's
+             * width is not: a Config that arrives without
+             * one is read as the arrangement the checkout
+             * has always had.
              */
-            ->selectablePlaceholder(false)
-            ->live()
-            /** The chosen layout describes itself, so what it does reads without saving to find out. */
-            ->helperText(fn (Get $get): string => self::selected($get)->helperText());
+            ->live();
     }
 
     /**

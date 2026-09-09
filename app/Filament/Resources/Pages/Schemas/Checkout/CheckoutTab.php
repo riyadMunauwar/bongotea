@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Support\Checkout\CheckoutLayout;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 
@@ -126,6 +127,17 @@ class CheckoutTab
                                 Words::totals(),
 
                                 Words::payment(),
+
+                                /**
+                                 * Then one section per layout that
+                                 * owns words of its own, in the
+                                 * design's order, each shown only
+                                 * while its layout is chosen. Read
+                                 * off the enum, so a layout gaining
+                                 * words is a change to the layout
+                                 * and not to this arrangement.
+                                 */
+                                ...array_map(Words::ownedBy(...), CheckoutLayout::owningWords()),
                             ]),
 
                         Tab::make('Look')

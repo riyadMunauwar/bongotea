@@ -2,6 +2,7 @@
 
 use App\Enums\PageStatus;
 use App\Enums\PaymentMethod;
+use App\Filament\Forms\Components\LayoutCards;
 use App\Filament\Resources\Pages\Pages\CreatePage;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Filament\Resources\Pages\Pages\ListPages;
@@ -19,6 +20,7 @@ use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
+use App\Support\Checkout\WordSlot;
 use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
@@ -1342,33 +1344,33 @@ it('refuses a product list switch that is neither on nor off on the box that hol
         ->and(CheckoutConfig::fromArray(['show_products' => false])->showProducts)->toBeFalse();
 });
 
-it('lets a merchant lead the checkout with the total', function () {
+it('lets a merchant choose any of the ten layouts from the card picker and serves the page so', function (CheckoutLayout $layout) {
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach(Product::factory()->create(['name' => 'Winter Jacket']));
 
     $this->cache->put('promo', '<h1>stale</h1>');
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::SummaryFirst->value]])
+        ->fillForm(['checkout_config' => ['layout' => $layout->value]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /** A different arrangement is different bytes, so the written HTML has to go. */
     expect($this->cache->has('promo'))->toBeFalse()
-        ->and($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::SummaryFirst);
+        ->and($page->refresh()->checkout_config->layout)->toBe($layout);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
-     * Picked from the same list as every other arrangement, and the page the
+     * Picked from the same grid as every other arrangement, and the page the
      * merchant is served back is the one they picked: the jacket still sold and
      * still priced, under a root naming the arrangement. What that arrangement
      * then draws is LandingPageTest's to pin; what is pinned here is that a
      * choice made on the tab reaches a visitor at all.
      */
-    expect($html)->toContain('gio-checkout-summary-first')
+    expect($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
         ->and($html)->toContain('Winter Jacket');
-});
+})->with(fn () => CheckoutLayout::cases());
 
 it('lets a merchant put the checkout form beside what it sells', function () {
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
@@ -1595,9 +1597,9 @@ it('lets a merchant sit two short questions side by side', function () {
     ))->toBe(2);
 });
 
-it('says where the widths are set that a compact page will not pair them', function () {
+it('says where the widths are set that a narrow-column layout will not pair them', function (CheckoutLayout $narrow) {
     $page = Page::factory()->create([
-        'checkout_config' => CheckoutConfig::fromArray(['layout' => CheckoutLayout::Compact->value]),
+        'checkout_config' => CheckoutConfig::fromArray(['layout' => $narrow->value]),
     ]);
 
     $compact = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
@@ -1615,9 +1617,12 @@ it('says where the widths are set that a compact page will not pair them', funct
      */
     expect($compact)->toContain('asks every question across the whole row')
         ->and($paired)->not->toContain('asks every question across the whole row');
-});
+})->with([
+    'compact embed' => CheckoutLayout::CompactEmbed,
+    'split reversed' => CheckoutLayout::SplitReversed,
+]);
 
-it('gives a compacted page back its pairing when the merchant moves it off compact', function () {
+it('gives a page back its pairing when the merchant moves it off a narrow-column layout', function () {
     $product = Product::factory()->create();
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
@@ -1628,23 +1633,25 @@ it('gives a compacted page back its pairing when the merchant moves it off compa
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => [
-            'layout' => CheckoutLayout::Compact->value,
+            'layout' => CheckoutLayout::CompactEmbed->value,
             'fields' => $rows,
         ]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /**
-     * Compact asks every question across the whole row, and says nothing back
-     * to the config about it: a merchant who compacts a page has not thrown
-     * away the pairing they arranged, and the control they can still see on the
-     * questions tab still means what it says.
+     * Compact embed asks every question across the whole row, and says nothing
+     * back to the config about it: a merchant who compacts a page has not
+     * thrown away the pairing they arranged, and the control they can still
+     * see on the questions tab still means what it says. Meanwhile the page
+     * draws no half-width class at all.
      */
     $compacted = $page->refresh()->checkout_config;
 
-    expect($compacted->layout)->toBe(CheckoutLayout::Compact)
+    expect($compacted->layout)->toBe(CheckoutLayout::CompactEmbed)
         ->and($compacted->fields[0]->width)->toBe(FieldWidth::Half)
-        ->and($compacted->fields[1]->width)->toBe(FieldWidth::Half);
+        ->and($compacted->fields[1]->width)->toBe(FieldWidth::Half)
+        ->and($this->get('/promo')->assertOk()->getContent())->not->toContain('class="gio-checkout-field gio-checkout-field-half"');
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Stacked->value]])
@@ -1662,7 +1669,7 @@ it('gives a compacted page back its pairing when the merchant moves it off compa
     $html = $this->get('/promo')->assertOk()->getContent();
 
     expect(substr_count($html, 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
-        ->and($html)->not->toContain('gio-checkout-compact');
+        ->and($html)->not->toContain('gio-checkout-compact-embed');
 });
 
 it('sets the checkout in the page\'s own typeface from the look tab', function () {
@@ -2434,14 +2441,18 @@ it('asks for the totals labels and the payment labels on the words tab, with the
         ->filter(fn (Component $component): bool => $component instanceof Section)
         ->keyBy(fn (Section $section): string => (string) $section->getHeading());
 
-    /** Three sections, in the order the customer meets them on the form: the button they tap, the totals above it, how they pay. */
-    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment']);
+    /**
+     * Three shared sections, in the order the customer meets them on the form
+     * — the button they tap, the totals above it, how they pay — then one per
+     * layout that owns words of its own, hidden unless that layout is chosen.
+     */
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked']);
 
     /**
      * Bilingual, Bangla first and English second, exactly as designed — shown
      * as the placeholder so what is in force reads without saving to find out.
      */
-    expect(fieldInside($sections['Button'], 'checkout_config.words.order_button.wording')?->getPlaceholder())->toBe('অর্ডার করুন / Order Now')
+    expect(fieldInside($sections['Button'], 'checkout_config.words.order_button.wording')?->getPlaceholder())->toBe('অর্ডার করুন / Order Now · {total}')
         ->and(fieldInside($sections['Totals'], 'checkout_config.words.subtotal')?->getPlaceholder())->toBe('সাবটোটাল / Subtotal')
         ->and(fieldInside($sections['Totals'], 'checkout_config.words.delivery')?->getPlaceholder())->toBe('ডেলিভারি চার্জ / Delivery')
         ->and(fieldInside($sections['Totals'], 'checkout_config.words.total')?->getPlaceholder())->toBe('মোট / Total')
@@ -3003,4 +3014,140 @@ it('lets a merchant choose an order complete layout and word its status line, an
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
         ->assertSee('Order confirmed');
+});
+
+/*
+|--------------------------------------------------------------------------
+| The card picker and a layout's own words
+|--------------------------------------------------------------------------
+|
+| Ten layouts chosen from a grid of cards, and the words only one of them
+| draws asked for only while it is chosen.
+|
+*/
+
+it('offers the ten layouts as a grid of cards, each with a name, a line on its look and a thumbnail slot', function () {
+    $page = Page::factory()->create();
+
+    $picker = fieldInside(checkoutTabsOf($page)['Layout'], 'checkout_config.layout');
+
+    /**
+     * A radio drawn as cards, so a merchant sees what they are choosing before
+     * they choose it: the ten in the design's order, each named, each with a
+     * line on what it looks like, and each with a thumbnail slot — filled for
+     * the layouts drawn to their designs so far, empty for the rest. Live,
+     * because the words tab and the questions tab follow it without a save.
+     */
+    expect($picker)->toBeInstanceOf(LayoutCards::class)
+        ->and($picker->isLive())->toBeTrue()
+        ->and($picker->getOptions())->toBe([
+            'stacked' => 'Stacked',
+            'split' => 'Split',
+            'split_reversed' => 'Split reversed',
+            'stepper' => 'Stepper',
+            'accordion' => 'Accordion',
+            'bento_grid' => 'Bento grid',
+            'compact_embed' => 'Compact embed',
+            'chips' => 'Chips',
+            'invoice' => 'Invoice',
+            'dark_panel' => 'Dark panel',
+        ])
+        ->and(array_keys($picker->getDescriptions()))->toBe(array_keys($picker->getOptions()))
+        ->and($picker->getDescription('stacked'))->toContain('numbered sections')
+        ->and($picker->getThumbnail('stacked'))->toBe('images/checkout-layouts/stacked.svg')
+        ->and($picker->getThumbnail('split'))->toBeNull();
+
+    foreach ($picker->getDescriptions() as $description) {
+        expect((string) $description)->not->toBeEmpty();
+    }
+
+    /** The picture is shipped with the app and drawn on the card the merchant is served. */
+    expect(file_exists(public_path('images/checkout-layouts/stacked.svg')))->toBeTrue()
+        ->and(file_get_contents(public_path('images/checkout-layouts/stacked.svg')))->toContain('<svg');
+
+    $html = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+
+    expect($html)->toContain('gp-layout-cards')
+        ->and($html)->toContain('images/checkout-layouts/stacked.svg')
+        ->and(substr_count($html, 'gp-layout-card-thumbnail'))->toBe(10);
+});
+
+it('asks for the stacked headlines only while stacked is chosen, and keeps them across a move away and back', function () {
+    $page = Page::factory()->create();
+
+    $stackedSection = fn (Page $page): Section => collect(checkoutTabsOf($page)['Words']->getChildSchema()->getComponents(withHidden: true))
+        ->filter(fn (Component $component): bool => $component instanceof Section)
+        ->sole(fn (Section $section): bool => (string) $section->getHeading() === 'Stacked');
+
+    /**
+     * A stacked page is asked for its three headlines, in the order the
+     * customer meets them, with the design's words in the boxes; the section
+     * rides along unseen on any other layout, so the words survive a move
+     * away and are there again when the page comes back.
+     */
+    $shown = $stackedSection($page);
+
+    expect($shown->isHidden())->toBeFalse()
+        ->and($shown->isDehydratedWhenHidden())->toBeTrue()
+        ->and(statePathsInside($shown))->toBe([
+            'checkout_config.words.stacked_products_headline',
+            'checkout_config.words.stacked_details_headline',
+            'checkout_config.words.stacked_payment_headline',
+        ])
+        ->and(fieldInside($shown, 'checkout_config.words.stacked_products_headline')?->getPlaceholder())->toBe('প্রোডাক্ট নির্বাচন করুন / Select products')
+        ->and(fieldInside($shown, 'checkout_config.words.stacked_details_headline')?->getPlaceholder())->toBe('ডেলিভারি তথ্য / Delivery details')
+        ->and(fieldInside($shown, 'checkout_config.words.stacked_payment_headline')?->getPlaceholder())->toBe('পেমেন্ট / Payment method');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['words' => ['stacked_products_headline' => 'কী কিনবেন / What to buy']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->words->slot(WordSlot::StackedProductsHeadline))->toBe('কী কিনবেন / What to buy');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Split->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($stackedSection($page->refresh())->isHidden())->toBeTrue()
+        ->and($page->checkout_config->words->slot(WordSlot::StackedProductsHeadline))->toBe('কী কিনবেন / What to buy');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Stacked->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet(['checkout_config.words.stacked_products_headline' => 'কী কিনবেন / What to buy']);
+});
+
+it('refuses a stacked headline the checkout could not draw, on the box that holds it', function () {
+    $page = Page::factory()->create();
+
+    /** Worded on the tab, where there is a merchant to tell; the silent half is LandingPageTest's to pin. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['words' => ['stacked_details_headline' => str_repeat('h', 61)]]])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.words.stacked_details_headline']);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['words' => ['stacked_details_headline' => "Two\nlines"]]])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.words.stacked_details_headline']);
+});
+
+it('shows the chosen layout\'s own button wording in the box while the merchant says nothing', function () {
+    $stacked = Page::factory()->create();
+    $split = Page::factory()->create(['checkout_config' => ['layout' => 'split']]);
+
+    $placeholder = fn (Page $page): string => (string) fieldInside(checkoutTabsOf($page)['Words'], 'checkout_config.words.order_button.wording')?->getPlaceholder();
+
+    /**
+     * The stacked design puts the total on the button; the placeholder is
+     * the sentence the island will draw for that layout, so what is in force
+     * reads without saving to find out.
+     */
+    expect($placeholder($stacked))->toBe('অর্ডার করুন / Order Now · {total}')
+        ->and($placeholder($split))->toBe('অর্ডার করুন / Order Now');
 });

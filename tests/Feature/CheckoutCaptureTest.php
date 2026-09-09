@@ -1419,10 +1419,10 @@ it('draws a question the merchant added with the control its type names', functi
         ->toMatch('/<textarea[^>]*name="directions"/')
         ->toMatch('/<input[^>]*name="floor"[^>]*type="number"/')
         ->toContain('<option value="sky">Sky blue</option>')
-        ->toMatch('/<input name="wrapping" value="paper"[^>]*type="radio"/')
+        ->toMatch('/<input[^>]*name="wrapping" value="paper"[^>]*type="radio"/')
         ->toContain('Brown paper')
         /** A checkbox is worded beside the box rather than above it. */
-        ->toMatch('/<input name="terms"[^>]*type="checkbox"[^>]*value="1"/')
+        ->toMatch('/<input[^>]*name="terms"[^>]*type="checkbox"[^>]*value="1"/')
         ->toContain('I agree to the terms');
 });
 

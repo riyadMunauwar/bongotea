@@ -6,7 +6,8 @@ use App\Enums\PaymentMethod;
 
 /**
  * Everything a Checkout says in the Merchant's own words: the Order Button,
- * the totals labels, and each Payment Method's long and short label.
+ * the totals labels, each Payment Method's long and short label, and the
+ * slots a Checkout Layout owns of its own.
  *
  * Every word has a default drawn from the designs, Bangla first and English
  * second, so a Page that says nothing reads the way the design does. The
@@ -22,8 +23,10 @@ use App\Enums\PaymentMethod;
  * refuse is dropped rather than drawn: the refusals are worded here once and
  * asked from the Words tab, where there is a Merchant to tell, and from
  * `fromArray()`, where there is not, so the two cannot disagree about what a
- * Checkout may say. The slots a layout owns of its own are not here yet; the
- * layout that draws each one adds it.
+ * Checkout may say. A slot a layout owns is stored flat here under the slot's
+ * own key whatever layout the Page is arranged in, so a word written for a
+ * layout the Page has moved off is kept unseen and comes back when the layout
+ * does.
  */
 final class CheckoutWords
 {
@@ -44,6 +47,7 @@ final class CheckoutWords
 
     /**
      * @param  array<string, array{long: ?string, short: ?string}>  $paymentLabels  One entry per Payment Method, keyed by its stored name.
+     * @param  array<string, ?string>  $slots  One entry per WordSlot, keyed by its stored name; null for the design's words.
      */
     private function __construct(
         public readonly OrderButton $orderButton,
@@ -58,6 +62,8 @@ final class CheckoutWords
         public readonly ?string $total,
 
         private readonly array $paymentLabels,
+
+        private readonly array $slots,
     ) {}
 
     /**
@@ -94,12 +100,19 @@ final class CheckoutWords
             ];
         }
 
+        $slots = [];
+
+        foreach (WordSlot::cases() as $slot) {
+            $slots[$slot->value] = self::kept($stored[$slot->value] ?? null, $slot->refusal(...));
+        }
+
         return new self(
             OrderButton::fromArray((array) ($stored['order_button'] ?? [])),
             self::kept($stored['subtotal'] ?? null, self::labelRefusal(...)),
             self::kept($stored['delivery'] ?? null, self::labelRefusal(...)),
             self::kept($stored['total'] ?? null, self::labelRefusal(...)),
             $paymentLabels,
+            $slots,
         );
     }
 
@@ -161,6 +174,18 @@ final class CheckoutWords
     }
 
     /**
+     * What a layout's own slot says: the Merchant's words, or the design's.
+     *
+     * Answered for any slot whatever layout the Page is arranged in; whether
+     * the slot is drawn at all is the layout's to say (`CheckoutLayout::draws()`),
+     * and the view asks that first.
+     */
+    public function slot(WordSlot $slot): string
+    {
+        return $this->slots[$slot->value] ?? $slot->defaultValue();
+    }
+
+    /**
      * The design's long label for a method. Exhaustive, so a method added to
      * the enum has to be given its words here before anything draws it.
      */
@@ -191,7 +216,10 @@ final class CheckoutWords
     }
 
     /**
-     * @return array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>}
+     * The stored shape: the shared words under their own keys, and every
+     * layout-owned slot flat beside them under the slot's key.
+     *
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -201,6 +229,7 @@ final class CheckoutWords
             'delivery' => $this->delivery,
             'total' => $this->total,
             'payment' => $this->paymentLabels,
+            ...$this->slots,
         ];
     }
 

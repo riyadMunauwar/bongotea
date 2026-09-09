@@ -51,10 +51,10 @@ enum StyleToken: string
      *
      * The design's own tokens (the handoff README's `--gp-*` set): the accent
      * blue, ink for text and its third shade for what is meant to recede, the
-     * input border, white surfaces, and the two-pixel radius the designs draw
-     * on every input and button. The background is the one that paints
-     * nothing: the island sits inside a Page the Merchant already designed, and
-     * a ground of its own is the layout's to add where a design has one.
+     * input border, white surfaces, the grey the designs paint behind the
+     * card, and the two-pixel radius the designs draw on every input and
+     * button. A Merchant whose Page already paints a ground types
+     * `transparent` into the background to let it show through.
      */
     public function defaultValue(): string
     {
@@ -64,7 +64,7 @@ enum StyleToken: string
             self::Muted => '#6b7280',
             self::Border => '#d9dde5',
             self::Surface => '#ffffff',
-            self::Background => 'transparent',
+            self::Background => '#f7f8fa',
             self::Radius => '2px',
             self::Font => CheckoutFont::stack(),
             self::ButtonBackground => '#2451d6',
@@ -126,9 +126,9 @@ enum StyleToken: string
             self::Text => 'Every word in the form.',
             self::Muted => 'The quieter words: help under a question, a product\'s description, and the line beneath the order button.',
             self::Border => 'Every line the form draws — around the boxes and the rows, and between the sections.',
-            self::Surface => 'What the boxes a customer types into and the rows they pick from are filled with.',
-            self::Background => 'The ground the whole form sits on. Left empty, nothing is painted and the page shows through.',
-            self::Radius => 'How round the corners are, on everything in the form.',
+            self::Surface => 'What the card, the boxes a customer types into and the rows they pick from are filled with.',
+            self::Background => 'The ground the whole form sits on, behind the card. Type transparent to let the page show through.',
+            self::Radius => 'How round the corners are on the boxes a customer types into, the stepper and the pictures. The card and the rows stay square, as designed.',
             self::Font => 'The typeface the whole form is set in, as a list of names to try in order. Hind Siliguri is served from this site, so Bangla reads well without a request to anyone else. Type inherit to use the page\'s own font instead.',
             self::ButtonBackground => 'The order button.',
             self::ButtonText => 'The words on the order button.',

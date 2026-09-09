@@ -10,6 +10,7 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\OrderButton;
 use App\Support\Checkout\StyleToken;
+use App\Support\Checkout\WordSlot;
 use App\Support\Money;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
@@ -817,7 +818,7 @@ it('reads a background stored before the surface token existed as the boxes\' fi
      * form on upgrade; a page that says both is read as it says.
      */
     expect($old)->toContain('--gio-surface: #000000;')
-        ->and($old)->toContain('--gio-background: transparent;')
+        ->and($old)->toContain('--gio-background: '.StyleToken::Background->defaultValue().';')
         ->and($new)->toContain('--gio-surface: #ffffff;')
         ->and($new)->toContain('--gio-background: #000000;');
 });
@@ -1018,10 +1019,11 @@ it('fills every box a thumb has to hit with the surface token', function () {
     /**
      * The boxes a customer types into, the stepper, the product rows and the
      * delivery rows are the same kind of thing — something a thumb has to hit
-     * — so one token fills all of them, and the ground behind them is the
-     * background token's, painting nothing until a merchant says otherwise.
+     * — so one token fills all of them, the card they sit in included, and
+     * the ground behind the card is the background token's: the design's grey
+     * until a merchant says otherwise, or `transparent` to let the page show.
      */
-    foreach (['.gio-checkout-input', '.gio-checkout-stepper', '.gio-checkout-product', '.gio-checkout-choice'] as $selector) {
+    foreach (['.gio-checkout-input', '.gio-checkout-quantity-stepper', '.gio-checkout-product', '.gio-checkout-choice', '.gio-checkout-card'] as $selector) {
         preg_match('/'.preg_quote($selector, '/').' \{([^}]*)\}/', $styles, $rule);
 
         expect($rule[1] ?? '')->toContain('background: var(--gio-surface)');
@@ -1030,7 +1032,7 @@ it('fills every box a thumb has to hit with the surface token', function () {
     preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
 
     expect($root[1] ?? '')->toContain('background: var(--gio-background)')
-        ->and($root[1] ?? '')->toContain('--gio-background: transparent;');
+        ->and($root[1] ?? '')->toContain('--gio-background: #f7f8fa;');
 });
 
 it('writes the quieter words in the muted token', function () {
@@ -1079,22 +1081,26 @@ it('draws the quantity stepper narrow rather than the width of the form', functi
 |
 */
 
-it('draws no panel around the island', function () {
+it('draws the panel on the card and never on the root', function () {
     pageStyled([]);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
     preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
 
     /**
-     * The island asserts no box. A merchant who wants one adds it in their own
-     * stylesheet, which is what the flat single-class sheet exists to allow —
-     * and with nothing to inset from, the root carries no padding either, so
-     * the form sits flush with whatever element the shortcode was dropped in.
+     * The root is the section the design paints behind the card and asserts
+     * no box of its own: no border, no radius. The card is the one bordered
+     * panel, square-cornered as the design draws it, and everything a
+     * customer reads sits inside it. A merchant who wants the root boxed
+     * adds it in their own stylesheet, which is what the flat single-class
+     * sheet exists to allow.
      */
     expect($root[1] ?? '')->not->toMatch('/(^|;)\s*border:/')
-        ->and($root[1] ?? '')->not->toMatch('/(^|;)\s*padding:/')
-        ->and($root[1] ?? '')->not->toContain('border-radius:');
+        ->and($root[1] ?? '')->not->toContain('border-radius:')
+        ->and($card[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
+        ->and($card[1] ?? '')->not->toContain('border-radius:');
 });
 
 it('borders each product row and rules off the sections around it', function () {
@@ -1108,17 +1114,20 @@ it('borders each product row and rules off the sections around it', function () 
 
     /**
      * A product row is a thing being bought, and it is boxed like the boxes a
-     * customer types into: the same border token, the same width, the same
-     * radius, so one redeclaration restyles all of them together.
+     * customer types into: the same border token, the same width, so one
+     * redeclaration restyles all of them together. Square, as the design
+     * draws every row; the radius token is for the boxes, the stepper and the
+     * pictures.
      */
     expect($row[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
-        ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)');
+        ->and($row[1] ?? '')->not->toContain('border-radius');
 
     /**
-     * Between the sections, a rule and nothing heavier: beneath the products
-     * and above the summary, read from the same border tokens.
+     * One rule in the whole card, above the totals, read from the border
+     * token; the sections above it are set apart by whitespace, and the
+     * product panel draws no rule of its own beneath.
      */
-    expect($panel[1] ?? '')->toContain('border-bottom: 1px solid var(--gio-border)')
+    expect($panel[1] ?? '')->not->toContain('border')
         ->and($summary[1] ?? '')->toContain('border-top: 1px solid var(--gio-border)');
 });
 
@@ -1129,7 +1138,7 @@ it('flanks a real numeric quantity with a minus and a plus', function () {
     $html = $this->get('/promo')->assertOk()->getContent();
     $markup = checkoutMarkup($html);
 
-    preg_match('/<div class="gio-checkout-stepper">(.*?)<\/div>/s', $markup, $stepper);
+    preg_match('/<div class="gio-checkout-quantity-stepper">(.*?)<\/div>/s', $markup, $stepper);
 
     expect($stepper)->not->toBeEmpty();
 
@@ -1139,7 +1148,7 @@ it('flanks a real numeric quantity with a minus and a plus', function () {
      * submits it unless told otherwise, and a customer tapping plus must never
      * place an order.
      */
-    expect($stepper[1])->toMatch('/<button class="gio-checkout-step" type="button"[^>]*data-gio-step="-1".*<input[^>]*data-gio-quantity.*<button class="gio-checkout-step" type="button"[^>]*data-gio-step="1"/s');
+    expect($stepper[1])->toMatch('/<button class="gio-checkout-quantity-step" type="button"[^>]*data-gio-step="-1".*<input[^>]*data-gio-quantity.*<button class="gio-checkout-quantity-step" type="button"[^>]*data-gio-step="1"/s');
 
     /**
      * What the buttons flank is the same numeric input the form has always
@@ -1214,12 +1223,13 @@ it('draws each delivery option as a row with the control and label left and the 
 
     /**
      * Boxed like a product row and like the boxes a customer types into: the
-     * same border token, width and radius. The words take what is left of the
-     * row so the figure sits at the far end, and the figure never wraps — a
-     * price broken across two lines is a price misread.
+     * same border token and width, and square like every row the design
+     * draws. The words take what is left of the row so the figure sits at the
+     * far end, and the figure never wraps — a price broken across two lines
+     * is a price misread.
      */
     expect($row[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
-        ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)')
+        ->and($row[1] ?? '')->not->toContain('border-radius')
         ->and($words[1] ?? '')->toContain('flex: 1')
         ->and($words[1] ?? '')->toContain('min-width: 0')
         ->and($price[1] ?? '')->toContain('white-space: nowrap');
@@ -1269,16 +1279,15 @@ it('marks the chosen delivery row apart from the others', function () {
 
     /**
      * The row that is picked reads as picked from across the room, not only
-     * from the dot inside its radio: border, ring and a light tint of its
-     * ground, all read from the accent. Where a browser
-     * cannot read `:has()` the radio still shows, so nothing is lost that was
-     * there before.
+     * from the dot inside its radio: its border takes the accent, as the
+     * design draws a chosen option, and nothing heavier — no ring, no shadow.
+     * Where a browser cannot read `:has()` the radio still shows, so nothing
+     * is lost that was there before.
      */
     expect($chosen[1] ?? '')->toContain('border-color: var(--gio-accent)')
-        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)')
-        ->and($chosen[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-accent\)[^;]*transparent\)/');
+        ->and($chosen[1] ?? '')->not->toContain('box-shadow');
 
-    preg_match_all('/<input type="radio"[^>]*name="delivery_option"[^>]*>/s', checkoutMarkup($html), $radios);
+    preg_match_all('/<input[^>]*type="radio"[^>]*name="delivery_option"[^>]*>/s', checkoutMarkup($html), $radios);
 
     expect($radios[0])->toHaveCount(2)
         ->and($radios[0][0])->toContain('checked')
@@ -1299,13 +1308,14 @@ it('marks a picked product with the same token as a chosen delivery row', functi
      * parcel and courier fees both ways, so a customer must be able to tell
      * at a glance what they have committed to. The accent paints the whole of
      * the selected state — the tick, the row's border and a tint of its
-     * ground — for a product and a delivery row alike, so a merchant changes
-     * what "picked" looks like in one place. The tick is `accent-color` on
-     * the root, and nothing below it redeclares the token.
+     * ground mixed from the accent and the surface — for a product as for a
+     * delivery row, so a merchant changes what "picked" looks like in one
+     * place. No ring and no shadow, as the design draws it. The tick is
+     * `accent-color` on the root, and nothing below it redeclares the token.
      */
     expect($picked[1] ?? '')->toContain('border-color: var(--gio-accent)')
-        ->and($picked[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)')
-        ->and($picked[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-accent\)[^;]*transparent\)/')
+        ->and($picked[1] ?? '')->not->toContain('box-shadow')
+        ->and($picked[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-accent\)[^;]*var\(--gio-surface\)\)/')
         ->and($root[1] ?? '')->toContain('accent-color: var(--gio-accent)')
         ->and($field[1] ?? '')->not->toContain('accent-color');
 });
@@ -1391,8 +1401,8 @@ it('draws the products while the product list is shown and omits the panel while
         ->and($bare)->not->toContain('data-gio-quantity');
 });
 
-it('hides the product list on any layout, and draws everything else the layout draws', function (string $layout) {
-    $page = pageStyled(['layout' => $layout, 'show_products' => false]);
+it('hides the product list on any layout, and draws everything else the layout draws', function (CheckoutLayout $layout) {
+    $page = pageStyled(['layout' => $layout->value, 'show_products' => false]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
@@ -1402,12 +1412,12 @@ it('hides the product list on any layout, and draws everything else the layout d
      * can do, so the arrangement keeps its class and its rules and loses only
      * the panel.
      */
-    expect($html)->toContain('class="gio-checkout '.CheckoutLayout::from($layout)->modifierClass().'"')
+    expect($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
         ->and(checkoutMarkup($html))->not->toContain('class="gio-checkout-products"')
         ->and($html)->toContain('name="quantities['.$page->products->first()->getKey().']" value="1"')
         ->and($html)->toContain('data-gio-subtotal')
         ->and($html)->toContain('data-gio-error-for="page"');
-})->with(['stacked', 'split', 'compact', 'summary_first']);
+})->with(fn () => CheckoutLayout::cases());
 
 it('reads a page stored under the retired form-only layout as stacked with its product list hidden, and draws it as it always drew', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
@@ -1446,52 +1456,74 @@ it('reads a page stored under the retired form-only layout as stacked with its p
         ->and($retiredHtml)->toContain('name="quantities['.$product->getKey().']" value="1"');
 });
 
+it('reads the names the checkout first stored its layouts under as the ten it draws now', function (string $stored, CheckoutLayout $layout) {
+    pageStyled(['layout' => $stored]);
+
+    $page = Page::where('slug', 'promo')->sole();
+
+    /**
+     * A Page published under one of the first layouts keeps working after the
+     * upgrade: the old name is read as the one of the ten nearest to what it
+     * drew, the root names that one, the first save writes the new name, and
+     * the old name is drawn nowhere.
+     */
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($page->checkout_config->layout)->toBe($layout)
+        ->and($page->checkout_config->toArray()['layout'])->toBe($layout->value)
+        ->and($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
+        ->and($html)->not->toContain('gio-checkout-summary-first')
+        ->and($html)->not->toContain('class="gio-checkout gio-checkout-compact"');
+})->with([
+    'stacked' => ['stacked', CheckoutLayout::Stacked],
+    'split' => ['split', CheckoutLayout::Split],
+    'compact, now compact embed' => ['compact', CheckoutLayout::CompactEmbed],
+    'summary first, now split reversed' => ['summary_first', CheckoutLayout::SplitReversed],
+]);
+
 it('posts one of everything a checkout with its product list hidden sells', function () {
     $page = pageStyled(['show_products' => false]);
-    $page->products()->attach(Product::factory()->create());
+    $page->products()->attach(Product::factory()->create(['price' => 25000]));
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
-     * The panel is what goes; the Order is not. Every product the page sells
-     * still posts a quantity, keyed by product id like the stepper it stands in
-     * for, so the Capture checks and writes exactly what it would from the
-     * stacked form.
+     * Every product the page sells, once each, as the capture will read them:
+     * the markup a customer never sees is still the markup an Order is made
+     * from, so the whole shelf has to be on it.
      */
     foreach ($page->refresh()->products as $product) {
-        expect($html)->toContain('name="quantities['.$product->getKey().']" value="1"');
+        expect($html)->toContain('<input type="hidden" name="quantities['.$product->getKey().']" value="1"');
     }
-
-    expect($page->products)->toHaveCount(2);
 });
 
 it('totals a checkout with its product list hidden off the same line markers as one showing it', function () {
     $page = pageStyled(['show_products' => false]);
+    $product = $page->refresh()->products->first();
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
-     * The script totals what it finds, and what it finds is the same in both
-     * layouts. A layout the island had to branch on would be a second summary
-     * to keep truthful, and a total reading low by anything is a parcel refused
-     * at the door.
+     * The hidden inputs carry the line markers, so the summary below totals the
+     * same way in every layout rather than the script needing to know which
+     * one it is looking at — and the rendered subtotal is already the price of
+     * everything sold.
      */
-    expect(substr_count(checkoutMarkup($html), 'data-gio-line'))->toBe($page->products->count())
-        ->and($html)->toContain('data-unit-price="'.$page->products->first()->price.'"')
-        ->and($html)->toContain('data-gio-subtotal')
-        ->and($html)->toContain('data-gio-total');
+    expect($html)->toContain('data-gio-line data-unit-price="'.$product->price.'"')
+        ->and($html)->toContain('<span data-gio-subtotal>'.Money::format($product->price).'</span>');
 });
 
-it('draws every question, the delivery choice, the summary and the error slots in every layout', function (string $layout) {
+it('draws every question, the delivery choice, the summary and the error slots in every layout', function (CheckoutLayout $layout) {
     $page = pageStyled([
-        'layout' => $layout,
+        'layout' => $layout->value,
         'fields' => [
+            ['key' => 'name', 'label' => 'Your name'],
             ['key' => 'phone', 'label' => 'Phone number'],
-            ['key' => 'district', 'label' => 'District'],
-            ['key' => 'note', 'label' => 'Gift note', 'type' => 'textarea'],
+            ['key' => 'address', 'label' => 'Address'],
             ['key' => 'floor', 'label' => 'Floor', 'type' => 'number'],
-            ['key' => 'size', 'label' => 'Size', 'type' => 'radio', 'options' => [['value' => 's'], ['value' => 'm']]],
-            ['key' => 'wrap', 'label' => 'Gift wrap it', 'type' => 'checkbox'],
+            ['key' => 'district', 'label' => 'District'],
+            ['key' => 'wrapping', 'label' => 'Wrapping', 'type' => 'radio', 'options' => [['value' => 'paper', 'label' => 'Brown paper']]],
+            ['key' => 'terms', 'label' => 'I agree', 'type' => 'checkbox'],
         ],
         'delivery_options' => [
             ['label' => 'Inside Dhaka', 'amount' => 6000],
@@ -1523,7 +1555,54 @@ it('draws every question, the delivery choice, the summary and the error slots i
     foreach ($page->checkout_config->enabledFields() as $field) {
         expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
     }
-})->with(['stacked', 'split', 'compact', 'summary_first']);
+})->with(fn () => CheckoutLayout::cases());
+
+it('writes the document in the same order in every layout', function (CheckoutLayout $layout) {
+    $page = pageStyled([
+        'layout' => $layout->value,
+        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+        'hide_lone_cash_choice' => false,
+    ]);
+
+    $product = $page->refresh()->products->first();
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The same island drawn by the same loop, and the bytes in the same order
+     * whichever arrangement was chosen: the products, the questions, the
+     * delivery choice, the payment choice, the summary, then the button. What
+     * a layout moves, it moves in the sheet — a second template would be a
+     * second total to keep truthful about a form that takes money, and the
+     * order the bytes are in is the order a customer whose stylesheet never
+     * arrives, or who is listening rather than looking, reads them in
+     * (ADR-0015).
+     */
+    $landmarks = [
+        'class="gio-checkout-products"',
+        $product->name,
+        'name="phone"',
+        'name="delivery_option"',
+        'name="payment_method"',
+        'class="gio-checkout-summary"',
+        'data-gio-submit',
+    ];
+
+    $positions = array_map(fn (string $landmark): int => (int) strpos($markup, $landmark), $landmarks);
+
+    foreach ($landmarks as $landmark) {
+        expect($markup)->toContain($landmark);
+    }
+
+    $sorted = $positions;
+    sort($sorted);
+
+    expect($positions)->toBe($sorted);
+})->with(fn () => CheckoutLayout::cases());
 
 /**
  * The slug a page arranged in one layout is published at.
@@ -1591,6 +1670,7 @@ it('ships the same base sheet whichever layout the page is arranged in', functio
 
     foreach ($bases as $base) {
         expect($base)->toContain('.gio-checkout {')
+            ->and($base)->toContain('.gio-checkout-card {')
             ->and($base)->toContain('.gio-checkout-input {');
     }
 });
@@ -1609,7 +1689,9 @@ it('ships no other layout\'s rules to a page that does not draw them', function 
          * The guard is on the negative half alone: every string contains the
          * empty one, so an arrangement adding nothing has nothing to look for.
          * The positive half is left unguarded so that it starts holding the
-         * first block to an appearance the day one is written.
+         * first block to an appearance the day one is written. A class is
+         * matched as a whole word, because one layout's class is the start of
+         * another's (`split`, `split-reversed`).
          */
         foreach (CheckoutLayout::cases() as $other) {
             if ($other === $layout || $other->styleRules() === '') {
@@ -1621,7 +1703,7 @@ it('ships no other layout\'s rules to a page that does not draw them', function 
 
         foreach (CheckoutLayout::cases() as $other) {
             if ($other !== $layout) {
-                expect($styles)->not->toContain($other->modifierClass());
+                expect($styles)->not->toMatch('/\.'.preg_quote($other->modifierClass(), '/').'(?![a-z-])/');
             }
         }
 
@@ -1651,6 +1733,21 @@ it('writes the chosen layout\'s rules into the one sheet, last', function () {
         ->and($emission)->toBeLessThan(strpos($view, '</style>'))
         ->and(substr_count($view, '<style>'))->toBe(1);
 });
+
+it('ends the served sheet with the chosen layout\'s block, after the base', function (CheckoutLayout $layout) {
+    $styles = emittedStylesFor($layout);
+
+    /**
+     * The half of "last inside the one sheet" that is read out of a served
+     * page rather than the template: whatever the arrangement adds is the
+     * tail of the sheet, after the base's last rule. A block emitted before
+     * the base would leave a page drawn at the spacing it was arranged out
+     * of, with nothing failing. Trivially true of an arrangement adding
+     * nothing, and holding for each of the nine the day its block is written.
+     */
+    expect(str_ends_with(trim($styles), trim($layout->styleRules())))->toBeTrue()
+        ->and(strrpos($styles, '.gio-checkout-note {'))->toBeGreaterThan(strpos($styles, '.gio-checkout {'));
+})->with(fn () => CheckoutLayout::cases());
 
 it('generates no selector for any layout', function () {
     $many = array_map(fn (int $index): array => [
@@ -1687,14 +1784,20 @@ it('names the layout on the checkout root in every layout', function (string $la
     /**
      * A modifier beside the base class, always emitted, so a merchant writing
      * their own CSS has a stable thing to hang it on and a layout added later
-     * is a rule rather than a copy.
+     * is a rule rather than a copy. The ten, in the design's order.
      */
     expect($this->get('/promo')->getContent())->toContain('class="gio-checkout '.$class.'"');
 })->with([
     'stacked' => ['stacked', 'gio-checkout-stacked'],
     'split' => ['split', 'gio-checkout-split'],
-    'compact' => ['compact', 'gio-checkout-compact'],
-    'summary first' => ['summary_first', 'gio-checkout-summary-first'],
+    'split reversed' => ['split_reversed', 'gio-checkout-split-reversed'],
+    'stepper' => ['stepper', 'gio-checkout-stepper'],
+    'accordion' => ['accordion', 'gio-checkout-accordion'],
+    'bento grid' => ['bento_grid', 'gio-checkout-bento-grid'],
+    'compact embed' => ['compact_embed', 'gio-checkout-compact-embed'],
+    'chips' => ['chips', 'gio-checkout-chips'],
+    'invoice' => ['invoice', 'gio-checkout-invoice'],
+    'dark panel' => ['dark_panel', 'gio-checkout-dark-panel'],
 ]);
 
 it('reads a layout it cannot draw as the one the checkout has always had', function () {
@@ -1726,8 +1829,29 @@ it('never asks a checkout whose product list is hidden which products to buy', f
         ->and($page->refresh()->offersProductChoice())->toBeFalse();
 });
 
-it('draws a compact checkout as one dense row per product', function () {
-    $page = pageStyled(['layout' => 'compact']);
+/*
+|--------------------------------------------------------------------------
+| Stacked, as designed
+|--------------------------------------------------------------------------
+|
+| The one layout drawn to its design so far, and what the base sheet draws: a
+| grey section holding a white card, three numbered sections, and a footer of
+| totals under a button carrying the total. The other nine are chosen from the
+| same list and draw as the base does under a class of their own, until each
+| one's own block lands.
+|
+*/
+
+it('draws the stacked checkout as three numbered sections, the totals and a button carrying the total', function () {
+    $page = pageStyled([
+        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+        'hide_lone_cash_choice' => false,
+    ]);
+
     $product = $page->refresh()->products->first();
 
     $html = $this->get('/promo')->assertOk()->getContent();
@@ -1735,30 +1859,214 @@ it('draws a compact checkout as one dense row per product', function () {
     $styles = styleBlock($html);
 
     /**
-     * Compact is an arrangement of the same markup and never a second template.
-     * The customer still meets a picture, a name, a price and a stepper of
-     * their own for every product the page sells — what a merchant chose is how
-     * that row is drawn, not whether they can see what they are about to buy.
+     * The three headlines the design numbers, in the design's words — Bangla
+     * first, English second — each a badge and a heading over its section:
+     * the products, then the details with the delivery choice beneath them,
+     * then the payment choice. In document order, which is the order every
+     * layout writes them in.
      */
-    expect($markup)->toContain('class="gio-checkout-products"')
-        ->and($markup)->toContain($product->name)
-        ->and($markup)->toContain('gio-checkout-product-head')
-        ->and($markup)->toContain('data-gio-quantity');
+    preg_match_all('/<h3 class="gio-checkout-heading"><span class="gio-checkout-number">(\d)<\/span>([^<]+)<\/h3>/', $markup, $headings, PREG_SET_ORDER);
+
+    expect(array_map(fn (array $heading): array => [$heading[1], $heading[2]], $headings))->toBe([
+        ['1', 'প্রোডাক্ট নির্বাচন করুন / Select products'],
+        ['2', 'ডেলিভারি তথ্য / Delivery details'],
+        ['3', 'পেমেন্ট / Payment method'],
+    ]);
+
+    expect(strpos($markup, 'Select products'))->toBeLessThan(strpos($markup, $product->name))
+        ->and(strpos($markup, 'Delivery details'))->toBeLessThan(strpos($markup, 'name="phone"'))
+        ->and(strpos($markup, 'name="phone"'))->toBeLessThan(strpos($markup, 'name="delivery_option"'))
+        ->and(strpos($markup, 'Payment method'))->toBeLessThan(strpos($markup, 'name="payment_method"'))
+        ->and(strpos($markup, 'name="payment_method"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-summary"'));
 
     /**
-     * The density itself is the block, and the block is the whole of it: the
-     * row laid out along one line, the picture cut down, the name and the price
-     * beside each other, and the description out of the way. A second template
-     * would be a second thing to keep truthful about a form that takes money.
+     * The badge is a circle in the text colour with the digit in the surface
+     * colour, as the design draws it, and the heading sits beside it.
      */
-    expect($styles)->toContain('.gio-checkout-compact .gio-checkout-product { display: flex;')
-        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-image {')
-        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-price { font-size: 1em; }')
-        ->and($styles)->toContain('.gio-checkout-compact .gio-checkout-description { display: none; }');
+    preg_match('/\.gio-checkout-number \{([^}]*)\}/', $styles, $badge);
+
+    expect($badge[1] ?? '')->toContain('border-radius: 50%')
+        ->and($badge[1] ?? '')->toContain('background: var(--gio-text)')
+        ->and($badge[1] ?? '')->toContain('color: var(--gio-surface)');
+
+    /**
+     * The total sits on the button in the design's words, filled in at render
+     * from the same figure the summary prints, with the template riding on
+     * the button for the script to refill: the price is on the button at the
+     * moment a customer taps it.
+     */
+    $total = Money::format($product->price + 6000);
+
+    expect($markup)->toContain('data-gio-submit-wording="অর্ডার করুন / Order Now · {total}"')
+        ->and($markup)->toContain('>অর্ডার করুন / Order Now · '.$total.'</button>')
+        ->and($markup)->toContain('<span data-gio-total>'.$total.'</span>');
+
+    /**
+     * And the payment rows carry the design's logo slot at the far end of the
+     * row, after the method's name.
+     */
+    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $markup, $rows);
+
+    $cash = array_values(array_filter($rows[1], fn (string $row): bool => str_contains($row, 'value="cash_on_delivery"')));
+
+    expect($cash)->toHaveCount(1)
+        ->and($cash[0])->toMatch('/gio-checkout-choice-label">[^<]*Cash on Delivery<\/span>\s*<img class="gio-checkout-logo"/');
 });
 
-it('lets a compact page still ask which products to buy', function () {
-    $page = pageStyled(['layout' => 'compact', 'product_picker' => true]);
+it('numbers the stacked sections by what is on the page', function () {
+    pageStyled(['show_products' => false]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The design numbers three fixed sections; a page may hide its product
+     * list or draw no payment choice. A customer never reads a "2" with no
+     * "1" above it: the sections are numbered as they are drawn, so a page
+     * showing only its details opens on one.
+     */
+    preg_match_all('/<span class="gio-checkout-number">(\d)<\/span>/', $markup, $numbers);
+
+    expect($numbers[1])->toBe(['1'])
+        ->and($markup)->toContain('Delivery details')
+        ->and($markup)->not->toContain('Select products');
+});
+
+it('draws the stacked headlines only on the stacked layout, in the merchant\'s words where there are any', function (CheckoutLayout $layout) {
+    pageStyled([
+        'layout' => $layout->value,
+        'words' => [
+            'stacked_products_headline' => 'কী কিনবেন / What to buy',
+            'stacked_details_headline' => 'কোথায় পাঠাব / Where to send it',
+        ],
+    ]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * A layout's own words are drawn by that layout and no other: the merchant
+     * who reworded the stacked headlines sees them on a stacked page, in
+     * their words where they wrote some and the design's where they did not,
+     * and a page arranged any other way draws no numbered heading at all.
+     * The words stay in the Config either way, for the day the page comes
+     * back.
+     */
+    if ($layout === CheckoutLayout::Stacked) {
+        expect($markup)->toContain('<span class="gio-checkout-number">1</span>কী কিনবেন / What to buy</h3>')
+            ->and($markup)->toContain('<span class="gio-checkout-number">2</span>কোথায় পাঠাব / Where to send it</h3>');
+    } else {
+        expect($markup)->not->toContain('gio-checkout-heading')
+            ->and($markup)->not->toContain('What to buy');
+    }
+
+    expect(Page::where('slug', 'promo')->sole()->checkout_config->words->slot(WordSlot::StackedProductsHeadline))->toBe('কী কিনবেন / What to buy');
+})->with(fn () => CheckoutLayout::cases());
+
+it('draws the design\'s headline where a stored headline is one the words tab would refuse', function () {
+    pageStyled(['hide_lone_cash_choice' => false, 'words' => ['stacked_payment_headline' => str_repeat('p', 61)]]);
+
+    /** Refused silently on read, the way every Config value is: the design's words stand rather than a page answering with a 500. */
+    expect(checkoutMarkup($this->get('/promo')->assertOk()->getContent()))
+        ->toContain('পেমেন্ট / Payment method')
+        ->not->toContain(str_repeat('p', 61));
+});
+
+it('sizes the card at the design\'s width and paints the section behind it', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /**
+     * The root is the section the design paints behind the card, from the
+     * background token, with the design's padding around it; the card inside
+     * is what is bordered, filled from the surface token and held to the
+     * design's width. Neither figure is a token: how wide the form sits is
+     * the design's to say.
+     */
+    expect($root[1] ?? '')->toContain('background: var(--gio-background)')
+        ->and($root[1] ?? '')->toContain('padding: 2.5rem 1.5rem')
+        ->and($root[1] ?? '')->not->toMatch('/(^|;)\s*border:/')
+        ->and($card[1] ?? '')->toContain('max-width: 35rem')
+        ->and($card[1] ?? '')->toContain('margin: 0 auto')
+        ->and($card[1] ?? '')->toContain('padding: 1.75rem')
+        ->and($card[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
+        ->and($card[1] ?? '')->toContain('background: var(--gio-surface)')
+        ->and($card[1] ?? '')->not->toContain('border-radius')
+        ->and($card[1] ?? '')->not->toContain('box-shadow');
+});
+
+it('closes the section and the card in on a phone without reordering anything', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/@media \(max-width: 37\.5rem\) \{(.*?)\} \}/s', $styles, $phone);
+
+    /**
+     * The design's 375: the section and the card lose their air, a product's
+     * line total drops under the name, and the button loses a little padding.
+     * The same island, tighter — nothing in the phone rules hides, clips or
+     * reorders a thing.
+     */
+    expect($phone[1] ?? '')->toContain('.gio-checkout { padding: 1.25rem 1rem; }')
+        ->and($phone[1] ?? '')->toContain('.gio-checkout-card { padding: 1.25rem 1rem; }')
+        ->and($phone[1] ?? '')->toContain('.gio-checkout-line-total { flex: 1 0 100%;')
+        ->and($phone[1] ?? '')->not->toContain('display: none')
+        ->and($phone[1] ?? '')->not->toContain('order:');
+});
+
+it('rules the footer off from the sections above it and spaces the sections by whitespace alone', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-summary \{([^}]*)\}/', $styles, $summary);
+    preg_match('/\.gio-checkout-products \{([^}]*)\}/', $styles, $panel);
+    preg_match('/\.gio-checkout-section \+ \.gio-checkout-section \{([^}]*)\}/', $styles, $between);
+
+    /**
+     * One hairline in the whole card, above the totals, as the design draws
+     * it; the numbered sections are set apart by their headings and the
+     * design's gap, and the product panel draws no rule of its own beneath.
+     */
+    expect($summary[1] ?? '')->toContain('border-top: 1px solid var(--gio-border)')
+        ->and($panel[1] ?? '')->not->toContain('border')
+        ->and($between[1] ?? '')->toContain('margin: 1.75rem 0 0');
+});
+
+it('draws every product row as one line with its total at the far end', function () {
+    $page = pageStyled([]);
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    preg_match('/<div class="gio-checkout-product"[^>]*>(.*?)<p class="gio-checkout-line-total"/s', $markup, $row);
+
+    /**
+     * The picture, the name with its price beneath, the stepper, then what the
+     * line comes to — in that order along one row, as the design draws it.
+     * The line total is the price of one until the customer touches the
+     * stepper, and the script keeps it truthful after.
+     */
+    expect($row)->not->toBeEmpty()
+        ->and($row[1])->toMatch('/gio-checkout-product-head.*gio-checkout-name.*gio-checkout-price.*gio-checkout-quantity-stepper/s')
+        ->and($markup)->toContain('<p class="gio-checkout-line-total" data-gio-line-total>'.Money::format($product->price).'</p>')
+        ->and(checkoutScript($html))->toContain('[data-gio-line-total]');
+
+    preg_match('/\.gio-checkout-product \{([^}]*)\}/', $styles, $rule);
+    preg_match('/\n\s*\.gio-checkout-line-total \{([^}]*)\}/', $styles, $total);
+
+    expect($rule[1] ?? '')->toContain('display: flex')
+        ->and($total[1] ?? '')->toContain('text-align: right')
+        ->and($total[1] ?? '')->toContain('white-space: nowrap');
+});
+
+it('lets a stacked page still ask which products to buy, and fades the line total of one not picked', function () {
+    $page = pageStyled(['product_picker' => true]);
 
     /** A choice of one is not a choice, so the page has to sell two before it asks. */
     $page->products()->attach(Product::factory()->create());
@@ -1767,76 +2075,136 @@ it('lets a compact page still ask which products to buy', function () {
     $markup = checkoutMarkup($html);
 
     /**
-     * Compact lays a product row out along one line rather than down a grid,
-     * and the tick has to survive the change of arrangement: the box is still
-     * drawn, still beside the row it picks, and the stepper it reveals is still
-     * revealed by it. The rule that does the revealing reads siblings, which is
-     * what makes it hold in a flex row as it did in the grid — a picker that
-     * quietly stopped hiding steppers would ask a customer how many of
-     * something they have not chosen.
+     * The tick sits at the head of the row, the stepper it reveals is still
+     * revealed by it, and the line total of an item not ticked fades as the
+     * design draws it rather than disappearing — a customer reads what
+     * ticking it would add. The rules read siblings, which is what makes them
+     * hold in a flex row as they did in a grid.
      */
     expect($markup)->toContain('name="selected[]"')
         ->and($markup)->toContain('class="gio-checkout-product gio-checkout-pickable"')
         ->and(styleBlock($html))->toContain('.gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }')
+        ->and(styleBlock($html))->toContain('.gio-checkout-pick:not(:checked) ~ .gio-checkout-line-total { opacity: .45; }')
         ->and($page->refresh()->checkout_config->picksProducts())->toBeTrue();
 });
 
-it('puts the compact block after the base sheet in the page it serves', function () {
-    pageStyled(['layout' => 'compact']);
+it('declares the font faces once, at the top of the sheet', function () {
+    pageStyled([]);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
-    /**
-     * The half of "last inside the one sheet" that could not be read out of a
-     * served page while every block was empty, and can be now: compact narrows
-     * the root's own padding and margin at one class, exactly as the base
-     * declares them, so what makes it the one that applies is that it is
-     * written afterwards. A block emitted before the base would leave a
-     * compacted page drawn at the spacing it was compacted out of, with nothing
-     * failing.
-     */
-    expect(strpos($styles, '.gio-checkout-compact {'))
-        ->toBeGreaterThan(strpos($styles, '.gio-checkout-note {'))
-        ->and(strpos($styles, '.gio-checkout-compact {'))
-        ->toBeGreaterThan(strpos($styles, '.gio-checkout {'));
+    /** One block of faces, before the root rule that reads the token, and never a second copy anywhere in the sheet. */
+    expect(substr_count($styles, '@font-face { font-family: "Hind Siliguri"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/hind-siliguri/hind-siliguri-400-bengali.woff2)'))->toBe(1)
+        ->and(strpos($styles, '@font-face'))->toBeLessThan(strpos($styles, '.gio-checkout {'));
 });
 
-it('fills every question\'s row on a compact checkout, at every width and whatever the merchant chose', function () {
+/*
+|--------------------------------------------------------------------------
+| What a layout says about itself
+|--------------------------------------------------------------------------
+|
+| Each of the ten answers the same questions — whether it draws a delivery
+| detail line, which payment label it names a method by, whether it pairs
+| half-width questions — and the view draws by the answers. Read as what a
+| customer sees on each arrangement, never as the predicates themselves.
+|
+*/
+
+it('draws a delivery option\'s detail line only on a layout with room for it', function (CheckoutLayout $layout, bool $drawn) {
+    pageStyled([
+        'layout' => $layout->value,
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+    ]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * A roomy arrangement draws the choice as a boxed row with a second line;
+     * a segmented one draws it as a button a word wide, where a second line
+     * has nowhere to go. The line stays in the Config either way, so a page
+     * moved to a roomy layout draws it again.
+     */
+    expect($markup)->toContain('Inside Dhaka')
+        ->and(str_contains($markup, '<span class="gio-checkout-choice-detail">1–2 days</span>'))->toBe($drawn)
+        ->and(Page::where('slug', 'promo')->sole()->checkout_config->deliveryOptions[0]->detail)->toBe('1–2 days');
+})->with([
+    'stacked' => [CheckoutLayout::Stacked, true],
+    'split' => [CheckoutLayout::Split, true],
+    'split reversed' => [CheckoutLayout::SplitReversed, false],
+    'stepper' => [CheckoutLayout::Stepper, true],
+    'accordion' => [CheckoutLayout::Accordion, true],
+    'bento grid' => [CheckoutLayout::BentoGrid, false],
+    'compact embed' => [CheckoutLayout::CompactEmbed, false],
+    'chips' => [CheckoutLayout::Chips, false],
+    'invoice' => [CheckoutLayout::Invoice, true],
+    'dark panel' => [CheckoutLayout::DarkPanel, true],
+]);
+
+it('names a payment method by the label the layout has room for', function (CheckoutLayout $layout, bool $short) {
+    pageStyled([
+        'layout' => $layout->value,
+        'hide_lone_cash_choice' => false,
+        'words' => ['payment' => ['cash_on_delivery' => ['long' => 'হাতে হাতে / Pay at the door', 'short' => 'Door']]],
+    ]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The merchant wrote both labels once; which one names the method is the
+     * layout's decision. A segmented control or a two-by-two grid draws the
+     * short one and a boxed row draws the long one, and the other is kept for
+     * the day the page is arranged differently.
+     */
+    expect($markup)->toContain($short ? '>Door</span>' : '>হাতে হাতে / Pay at the door</span>')
+        ->and($markup)->not->toContain($short ? 'Pay at the door' : '>Door</span>');
+})->with([
+    'stacked' => [CheckoutLayout::Stacked, false],
+    'split' => [CheckoutLayout::Split, false],
+    'split reversed' => [CheckoutLayout::SplitReversed, false],
+    'stepper' => [CheckoutLayout::Stepper, false],
+    'accordion' => [CheckoutLayout::Accordion, false],
+    'bento grid' => [CheckoutLayout::BentoGrid, true],
+    'compact embed' => [CheckoutLayout::CompactEmbed, true],
+    'chips' => [CheckoutLayout::Chips, false],
+    'invoice' => [CheckoutLayout::Invoice, false],
+    'dark panel' => [CheckoutLayout::DarkPanel, true],
+]);
+
+it('fills every question\'s row on a layout that pairs nothing, and keeps the width the merchant chose', function (CheckoutLayout $layout, bool $paired) {
     $page = pageStyled([
-        'layout' => 'compact',
+        'layout' => $layout->value,
         'fields' => [
             ['key' => 'name', 'label' => 'Your name', 'width' => 'half'],
             ['key' => 'phone', 'label' => 'Phone number', 'width' => 'half'],
         ],
     ]);
 
-    $html = $this->get('/promo')->assertOk()->getContent();
-    $styles = styleBlock($html);
-
-    preg_match('/@media \(min-width: [^)]+\) \{.*?\} \}/s', $styles, $wide);
-
-    /** Or the sheet below is the whole sheet, and what it is read for goes unread. */
-    expect($wide)->not->toBeEmpty();
-
-    $narrow = str_replace($wide[0], '', $styles);
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
 
     /**
-     * Both halves of the pairing undone, and undone outside the media query, so
-     * a compact page is one column at every screen size rather than at phone
-     * sizes only. The span goes with the second column: a question still told
-     * to cross two columns of a one-column grid would grow the second one back.
+     * The narrow-column arrangements pair nothing: a merchant choosing one has
+     * already said what they want the form to do, so a half-width question
+     * fills its row there whatever the merchant set. The width itself stays
+     * in the Config, untouched, which is what a page moved back reads to
+     * pair its questions the way it always did.
      */
-    expect($narrow)->toContain('.gio-checkout-compact .gio-checkout-fields { grid-template-columns: 1fr;')
-        ->and($narrow)->toContain('.gio-checkout-compact .gio-checkout-field { grid-column: auto; }');
-
-    /**
-     * And the width the merchant set is still on the wrapper and still in the
-     * Config. Compact ignores it; it does not rewrite it — which is what a page
-     * moved back off compact reads to pair its questions the way it always did.
-     */
-    expect(substr_count(checkoutMarkup($html), 'class="gio-checkout-field gio-checkout-field-half"'))->toBe(2)
+    expect(substr_count($markup, 'class="gio-checkout-field gio-checkout-field-half"'))->toBe($paired ? 2 : 0)
         ->and($page->refresh()->checkout_config->fields[0]->width)->toBe(FieldWidth::Half);
-});
+})->with([
+    'stacked' => [CheckoutLayout::Stacked, true],
+    'split' => [CheckoutLayout::Split, true],
+    'split reversed' => [CheckoutLayout::SplitReversed, false],
+    'stepper' => [CheckoutLayout::Stepper, true],
+    'accordion' => [CheckoutLayout::Accordion, true],
+    'bento grid' => [CheckoutLayout::BentoGrid, true],
+    'compact embed' => [CheckoutLayout::CompactEmbed, false],
+    'chips' => [CheckoutLayout::Chips, true],
+    'invoice' => [CheckoutLayout::Invoice, true],
+    'dark panel' => [CheckoutLayout::DarkPanel, true],
+]);
 
 /**
  * The script the island ships beside its markup, from wherever in the page it
@@ -1852,266 +2220,54 @@ function checkoutScript(string $html): string
     return implode('', $blocks[1]);
 }
 
-it('leads a summary-first checkout with the total and leaves the questions beneath it', function () {
-    $page = pageStyled([
-        'layout' => 'summary_first',
-        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
-    ]);
+it('never puts a total behind an interaction on any layout', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
+    pageStyled([], slug: 'plain-stacked');
 
-    $product = $page->refresh()->products->first();
-
-    $html = $this->get('/promo')->assertOk()->getContent();
-    $markup = checkoutMarkup($html);
-    $styles = styleBlock($html);
-
-    /**
-     * The same island drawn by the same loop, and the bytes are still in the
-     * order every other arrangement writes them: the products, the questions,
-     * then the summary. What a summary-first page moves, it moves in the sheet
-     * — a second template would be a second total to keep truthful about a form
-     * that takes money, and the order the bytes are in is the order a customer
-     * whose stylesheet never arrives reads them in.
-     */
-    expect($markup)->toContain('class="gio-checkout-products"')
-        ->and($markup)->toContain($product->name)
-        ->and($markup)->toContain('name="phone"')
-        ->and($markup)->toContain('data-gio-total')
-        ->and(strpos($markup, 'class="gio-checkout-fields"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-summary"'));
-
-    /**
-     * The questions and the two things below them are what move, rather than
-     * the summary being pulled to the top: a total follows the lines it totals,
-     * and the rule the base draws above it is what sets it apart from them. So
-     * the products keep the top of the island, the summary keeps its place
-     * under them, and exactly three things are pushed below it — the questions,
-     * the button and the line beneath the button. A fourth carrying an order
-     * would be something drawn out of the place the arrangement puts it.
-     */
-    preg_match_all('/\.gio-checkout-summary-first (\.[a-z-]+) \{[^}]*order:/', $styles, $ordered);
-
-    expect($styles)->toContain('.gio-checkout-summary-first .gio-checkout-form { display: flex; flex-direction: column; }')
-        ->and($ordered[1])->toBe(['.gio-checkout-fields', '.gio-checkout-submit', '.gio-checkout-note']);
-});
-
-it('never puts a summary-first total behind an interaction', function () {
-    pageStyled(['layout' => 'summary_first'], slug: 'summary-first');
-    pageStyled([], slug: 'stacked');
-
-    $html = $this->get('/summary-first')->assertOk()->getContent();
+    $html = $this->get('/'.layoutSlug($layout))->assertOk()->getContent();
     $markup = checkoutMarkup($html);
 
-    preg_match_all('/\.gio-checkout-summary-first [^{]*\{[^}]*\}/', styleBlock($html), $rules);
-
-    /** Or the arrangement adds nothing, and what is read below goes unread. */
-    expect($rules[0])->not->toBeEmpty();
-
     /**
-     * Expanded, always, and nothing anywhere to collapse it: no disclosure in
-     * the markup, and nothing in the block this arrangement adds that hides,
-     * clips or measures anything. A page arranged this way leads with the
-     * figure a customer is agreeing to hand over in cash at their door, and a
-     * disclosure would put that figure behind a tap — on the one arrangement
-     * chosen because the selling is already done.
+     * Expanded, always, and nothing in the markup to collapse it: a page leads
+     * with the figure a customer is agreeing to hand over in cash at their
+     * door, and a disclosure would put that figure behind a tap. A layout
+     * that behaves (Stepper, Accordion) hides by script and never by markup
+     * alone, so without script every panel shows (ADR-0015).
      */
     expect($markup)->toContain('data-gio-subtotal')
         ->and($markup)->toContain('data-gio-total')
         ->and($markup)->not->toContain('<details')
         ->and($markup)->not->toContain('<summary')
-        ->and(implode('', $rules[0]))->not->toContain('display: none')
-        ->and(implode('', $rules[0]))->not->toContain('max-height')
-        ->and(implode('', $rules[0]))->not->toContain('overflow');
+        ->and($markup)->not->toContain('gio-checkout-section" hidden');
 
     /**
-     * And the arrangement asks for no script of its own: the island ships the
-     * same bytes it ships to a stacked page, so a summary-first checkout on a
-     * phone whose scripts never ran still leads with its total.
+     * And the arrangement ships the one script every page ships, so a page
+     * whose scripts never ran still leads with its total in the document's
+     * order.
      */
-    expect(checkoutScript($html))->toBe(checkoutScript($this->get('/stacked')->assertOk()->getContent()));
-});
+    expect(checkoutScript($html))->toBe(checkoutScript($this->get('/plain-stacked')->assertOk()->getContent()));
+})->with(fn () => CheckoutLayout::cases());
 
-/**
- * The rules a split page's sheet carries, keyed by the selector that opens
- * each one.
- *
- * Read as a map rather than matched as bytes so that what a test pins is which
- * column a thing lands in, rather than the order the declarations happen to be
- * written in.
- *
- * @return array<string, string>
- */
-function splitRules(string $styles): array
-{
-    preg_match_all('/(\.gio-checkout-split[^{]*)\{([^}]*)\}/', $styles, $rules, PREG_SET_ORDER);
+it('draws the nine layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
+    pageStyled([], slug: 'plain-stacked');
 
-    return array_combine(
-        array_map(fn (array $rule): string => trim($rule[1]), $rules),
-        array_map(fn (array $rule): string => trim($rule[2]), $rules),
-    );
-}
-
-it('sets a split checkout\'s form beside what the customer is buying and keeps the total on screen', function () {
-    $page = pageStyled([
-        'layout' => 'split',
-        'fields' => [['key' => 'phone', 'label' => 'Phone number']],
-    ]);
-
-    $product = $page->refresh()->products->first();
-
-    $html = $this->get('/promo')->assertOk()->getContent();
-    $markup = checkoutMarkup($html);
-    $rules = splitRules(styleBlock($html));
+    $html = $this->get('/'.layoutSlug($layout))->assertOk()->getContent();
+    $stacked = $this->get('/plain-stacked')->assertOk()->getContent();
 
     /**
-     * The same island drawn by the same loop, and the bytes still in the order
-     * every other arrangement writes them: the products, the questions, then
-     * the summary. Two columns are made in the sheet — a second template would
-     * be a second total to keep truthful about a form that takes money, and
-     * this order is the one a customer whose stylesheet never arrives reads.
+     * Selectable today, drawn to its design when its own ticket lands: until
+     * then the page carries the base sheet and nothing added, the class the
+     * layout will hang its rules on, and — because none of the nine owns the
+     * stacked headlines — no numbered heading. Everything else a customer
+     * meets is the same island.
      */
-    expect($markup)->toContain('class="gio-checkout-products"')
-        ->and($markup)->toContain($product->name)
-        ->and($markup)->toContain('name="phone"')
-        ->and(strpos($markup, 'class="gio-checkout-products"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-fields"'))
-        ->and(strpos($markup, 'class="gio-checkout-fields"'))->toBeLessThan(strpos($markup, 'class="gio-checkout-summary"'));
-
-    expect($rules['.gio-checkout-split .gio-checkout-form'])->toContain('display: grid');
-
-    /**
-     * The form column first and everything a customer answers, is refused in,
-     * or taps kept in it. The failure slots are named outright rather than
-     * left to auto-placement: they are `display: none` until the island writes
-     * to them, so the first one a customer ever saw would be placed into
-     * whatever cell happened to be free — which is the panel.
-     */
-    foreach (['.gio-checkout-fields', '.gio-checkout-error', '.gio-checkout-submit', '.gio-checkout-note'] as $answered) {
-        expect($rules['.gio-checkout-split '.$answered])->toContain('grid-column: 1');
-    }
-
-    /**
-     * And the panel beside it, in the order the bytes are in: what is being
-     * bought above the figure it comes to, the summary opening directly under
-     * the products rather than as far down the page as the form is long.
-     */
-    expect($rules['.gio-checkout-split .gio-checkout-products'])->toContain('grid-column: 2')
-        ->and($rules['.gio-checkout-split .gio-checkout-products'])->toContain('grid-row: 1')
-        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('grid-column: 2')
-        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('grid-row: 2');
-
-    /**
-     * The pin, which is the whole reason for the arrangement: a customer
-     * working down the questions never loses sight of the figure they are
-     * agreeing to hand over in cash. It is on the summary rather than on the
-     * panel above it because a sticky box is bounded by its own area, and the
-     * area as tall as the form is the one the summary shares with it.
-     */
-    expect($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('position: sticky')
-        ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('align-self: start');
-});
-
-it('sizes a split checkout by the form column and derives the container from it', function () {
-    pageStyled(['layout' => 'split']);
-
-    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
-    $rules = splitRules($styles);
-
-    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
-
-    /**
-     * How wide the part a customer types into sits is the layout's figure and
-     * not a token, so it is written in the base once. Split reads that same
-     * figure as the form column and works the container out from it rather
-     * than the other way round — two columns too narrow to type in, on the one
-     * arrangement, is the kind of thing nobody reports because nothing failed.
-     */
-    expect($root[1] ?? '')->toContain('max-width: 30rem;')
-        ->and($rules['.gio-checkout-split'])->toContain('max-width: calc(30rem +');
-});
-
-it('reserves around a split checkout\'s form column exactly what it takes back out', function () {
-    pageStyled(['layout' => 'split']);
-
-    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
-    $rules = splitRules($styles);
-
-    preg_match('/\.gio-checkout \{[^}]*padding: ([^;]+);/', $styles, $padding);
-    preg_match('/max-width: calc\(30rem \+ (\d+)rem/', $rules['.gio-checkout-split'], $reserved);
-    preg_match('/minmax\(0, calc\(100% - (\d+)rem\)\)/', $rules['.gio-checkout-split .gio-checkout-form'], $taken);
-
-    /** Or the arithmetic below is read off nothing, and agrees with itself for that reason. */
-    expect($reserved)->not->toBeEmpty()
-        ->and($taken)->not->toBeEmpty();
-
-    /**
-     * The container is the base's figure plus what stands beside it, and the
-     * form column is the container's own box with that same thing taken back
-     * out — so the figure comes out as the form column, and the column is
-     * never sized off a second copy of it.
-     */
-    expect($rules['.gio-checkout-split .gio-checkout-form'])->not->toContain('30rem');
-
-    /**
-     * The two figures are the same figure, because the root has no edges of
-     * its own for them to differ by — no padding and no border, since the
-     * island draws no panel. Read rather than assumed, because the file that
-     * would break this arrangement is not the file this arrangement is
-     * written in: a padding put back on the root has to be added to what the
-     * container reserves, or the form column comes out narrower than the
-     * merchant's figure by exactly that much.
-     */
-    expect($padding)->toBeEmpty()
-        ->and((int) $reserved[1])->toBe((int) $taken[1]);
-});
-
-it('draws one rule between the products and the total wherever the two meet', function (CheckoutLayout $layout) {
-    pageStyled(['layout' => $layout->value]);
-
-    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
-
-    preg_match('/\.'.$layout->modifierClass().' \.gio-checkout-products \{([^}]*)\}/', $styles, $panel);
-
-    /**
-     * The base rules the products off beneath them and the summary off above
-     * it, which is one hairline between each pair of sections on a stacked
-     * page. These two arrangements put the summary directly beneath the
-     * products, so the base's two rules would meet as a double line — the
-     * panel gives its own up, and the summary's stands.
-     */
-    expect($panel[1] ?? '')->toContain('border-bottom: 0')
-        ->and($panel[1] ?? '')->toContain('padding: 0');
-})->with(['split' => CheckoutLayout::Split, 'summary first' => CheckoutLayout::SummaryFirst]);
-
-it('draws a split checkout as the stacked one below the breakpoint', function () {
-    pageStyled(['layout' => 'split'], slug: 'split');
-    pageStyled([], slug: 'stacked');
-
-    $html = $this->get('/split')->assertOk()->getContent();
-    $styles = styleBlock($html);
-    $added = CheckoutLayout::Split->styleRules();
-
-    /**
-     * Every rule the arrangement adds is inside one media query, which is the
-     * whole of the fallback: below it there is nothing to apply, so a customer
-     * on a phone reads the products, the questions, the summary and the button
-     * exactly as the base sheet draws them. There is no second arrangement to
-     * maintain for the device most of this traffic arrives on.
-     */
-    preg_match('/^@media \(min-width: [^)]+\) \{(.+)\}$/s', trim($added), $inside);
-
-    expect($inside)->not->toBeEmpty();
-
-    foreach (array_filter(array_map(trim(...), explode('}', $inside[1]))) as $rule) {
-        expect($rule)->toContain('.gio-checkout-split');
-    }
-
-    /** Nothing of the arrangement outside that one block, in the sheet actually served. */
-    expect(str_replace($added, '', $styles))->not->toContain('gio-checkout-split');
-
-    /**
-     * And the arrangement asks for no script of its own, so a split page whose
-     * scripts never ran takes the same order the stacked one does.
-     */
-    expect(checkoutScript($html))->toBe(checkoutScript($this->get('/stacked')->assertOk()->getContent()));
-});
+    expect($layout->styleRules())->toBe('')
+        ->and(styleBlock($html))->toBe(styleBlock($stacked))
+        ->and($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
+        ->and(checkoutMarkup($html))->not->toContain('gio-checkout-heading')
+        ->and(checkoutMarkup($html))->toContain('class="gio-checkout-summary"');
+})->with(fn () => array_values(array_filter(CheckoutLayout::cases(), fn (CheckoutLayout $layout): bool => $layout !== CheckoutLayout::Stacked)));
 
 it('marks a half-width question with one flat class and generates nothing for it', function () {
     pageStyled([
@@ -2238,12 +2394,11 @@ it('says the design\'s words, Bangla first and English second, on a page that sa
 
     /**
      * Blank is the merchant saying nothing, and a page that says nothing reads
-     * the way the design does. No template rides on the button either: there
-     * is no placeholder for the script to fill.
+     * the way the design does — and the stacked design puts the total on the
+     * button, so the template rides on it for the script to refill.
      */
-    expect($markup)->toContain('data-gio-submit>অর্ডার করুন / Order Now</button>')
+    expect($markup)->toContain('data-gio-submit-wording="অর্ডার করুন / Order Now · {total}">অর্ডার করুন / Order Now · ৳')
         ->and($markup)->toContain('<p class="gio-checkout-note">পার্সেল হাতে পেয়ে নগদে পরিশোধ করুন / Pay in cash when the parcel reaches you.</p>')
-        ->and($markup)->not->toContain('data-gio-submit-wording')
         ->and($markup)->toContain('<span>সাবটোটাল / Subtotal</span>')
         ->and($markup)->toContain('<span>মোট / Total</span>')
         ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<');
@@ -2328,7 +2483,9 @@ it('drops button copy the checkout tab would refuse and draws the words it alway
      * Refused twice, like every value a Config holds: worded on the tab, and
      * silent here where a Config written by another route has nobody to tell.
      */
-    expect($markup)->toContain('data-gio-submit>অর্ডার করুন / Order Now</button>')
+    expect($markup)->toContain('>অর্ডার করুন / Order Now · ৳')
+        ->and($markup)->not->toContain('xxxxx')
+        ->and($markup)->not->toContain('Order\nnow')
         ->and($markup)->toContain('<p class="gio-checkout-note">পার্সেল হাতে পেয়ে নগদে পরিশোধ করুন / Pay in cash when the parcel reaches you.</p>');
 })->with([
     'copy too long for the button and the line beneath it' => [['wording' => str_repeat('x', 81), 'note' => str_repeat('y', 201)]],
@@ -2362,13 +2519,14 @@ it('draws a single cash on delivery row with its logo once the page unhides the 
 
     /**
      * One row, already picked, drawn as a delivery row is: the control, then
-     * the logo, then the words — and inside the grid of questions, so every
-     * layout arranges it with them. The radio is a real one in a real form,
-     * so a visitor whose script never runs still posts a method.
+     * the words, then the logo at the far end as the design's slot sits — in
+     * the payment section every layout draws in the same place. The radio is
+     * a real one in a real form, so a visitor whose script never runs still
+     * posts a method.
      */
-    expect($payment[1] ?? '')->toContain('<legend class="gio-checkout-label">Payment</legend>')
+    expect($payment[1] ?? '')->toContain('<legend class="gio-checkout-label gio-checkout-hidden-label">Payment</legend>')
         ->and($rows[1])->toHaveCount(1)
-        ->and($rows[1][0])->toMatch('/type="radio"[^>]*name="payment_method"[^>]*value="cash_on_delivery"[^>]*checked required>.*<img class="gio-checkout-logo" src="[^"]*\/images\/payment-methods\/cash-on-delivery\.svg" alt="".*gio-checkout-choice-label">ক্যাশ অন ডেলিভারি \/ Cash on Delivery</s')
+        ->and($rows[1][0])->toMatch('/type="radio"[^>]*name="payment_method"[^>]*value="cash_on_delivery"[^>]*checked required>.*gio-checkout-choice-label">ক্যাশ অন ডেলিভারি \/ Cash on Delivery<\/span>.*<img class="gio-checkout-logo" src="[^"]*\/images\/payment-methods\/cash-on-delivery\.svg" alt=""/s')
         ->and($markup)->toContain('data-gio-error-for="payment_method"');
 
     /** The logo rule rides only on a page that draws one, sized in em like everything else below the root. */
@@ -2410,16 +2568,23 @@ it('generates no selector for the payment chooser', function () {
         ->toBe(styleBlock($this->get('/plain')->assertOk()->getContent()));
 });
 
-it('keeps the layout block last when a chooser adds its own', function () {
-    pageStyled(['hide_lone_cash_choice' => false, 'layout' => CheckoutLayout::Compact->value]);
+it('keeps the layout block last when a chooser adds its own', function (CheckoutLayout $layout) {
+    pageStyled(['hide_lone_cash_choice' => false, 'layout' => $layout->value]);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
-    /** The layout still sits last so that what it narrows it narrows by order, the chooser's rule included. */
-    expect(strpos($styles, '.gio-checkout-logo {'))->toBeLessThan((int) strpos($styles, '.gio-checkout-compact {'))
-        ->and(baseSheet($styles, CheckoutLayout::Compact))->toContain('.gio-checkout-logo {')
-        ->and(baseSheet($styles, CheckoutLayout::Compact))->not->toContain('.gio-checkout-compact');
-});
+    /**
+     * The chooser's rule comes after the base's last rule and before the
+     * layout's block, so the layout still sits last and what it narrows it
+     * narrows by order, the chooser's rule included. With no layout adding
+     * anything yet the chooser's rule is the tail of the sheet; the day a
+     * layout's block lands, the base sheet read back out of the page still
+     * holds the chooser's rule and nothing of the layout's.
+     */
+    expect(strpos($styles, '.gio-checkout-logo {'))->toBeGreaterThan((int) strpos($styles, '.gio-checkout-note {'))
+        ->and(str_ends_with(trim($styles), trim('.gio-checkout-logo { height: 1.5em; width: auto; flex: none; }'.$layout->styleRules())))->toBeTrue()
+        ->and(baseSheet($styles, $layout))->toContain('.gio-checkout-logo {');
+})->with(fn () => CheckoutLayout::cases());
 
 it('hands the visitor, the disk and the fallback reader the same bytes with a chooser drawn', function () {
     pageStyled(['hide_lone_cash_choice' => false]);
