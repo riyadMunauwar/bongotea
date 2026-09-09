@@ -2697,10 +2697,71 @@ it('draws the status line only in the layouts that have one, in the merchant\'s 
     'editorial, left empty' => [OrderCompleteLayout::Editorial, null, 'Order confirmed'],
     'cards grid, in the merchant\'s words' => [OrderCompleteLayout::CardsGrid, 'Confirmed', 'Confirmed'],
     'cards grid, left empty' => [OrderCompleteLayout::CardsGrid, null, 'Order confirmed'],
+    'dark hero, in the merchant\'s words' => [OrderCompleteLayout::DarkHero, 'Booked', 'Booked'],
+    'dark hero, left empty' => [OrderCompleteLayout::DarkHero, null, 'Order confirmed'],
+    'minimal, in the merchant\'s words' => [OrderCompleteLayout::Minimal, 'Done', 'Done'],
+    'minimal, left empty' => [OrderCompleteLayout::Minimal, '', 'Order confirmed'],
     'centered classic draws none' => [OrderCompleteLayout::CenteredClassic, 'Placed', null],
     'accent band draws none' => [OrderCompleteLayout::AccentBand, 'Placed', null],
     'timeline draws none' => [OrderCompleteLayout::Timeline, 'Placed', null],
+    'receipt draws none' => [OrderCompleteLayout::Receipt, 'Placed', null],
+    'compact draws none' => [OrderCompleteLayout::Compact, 'Placed', null],
 ]);
+
+it('draws a print button in the receipt layout only, and the document carries no script beyond the print call', function () {
+    $page = arrangedAs(sellingPage(Product::factory()->create()), OrderCompleteLayout::Receipt);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    /** A real button, so a keyboard reaches it; the one line of script is the handler on it, and there is no other. */
+    expect($html)->toContain('<button type="button" class="gio-order-complete-button gio-order-complete-button-secondary gio-order-complete-print" onclick="window.print()">Print</button>')
+        ->and(substr_count($html, 'print()'))->toBe(1)
+        ->and(substr_count($html, 'onclick'))->toBe(1)
+        ->and($html)->not->toContain('<script');
+
+    expectNoExternalRequestIn($html);
+
+    /** No print button and no handler on a Page arranged any other way. */
+    foreach (OrderCompleteLayout::cases() as $layout) {
+        if ($layout === OrderCompleteLayout::Receipt) {
+            continue;
+        }
+
+        arrangedAs($page, $layout);
+
+        $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+        expect($html)->not->toContain('gio-order-complete-print')
+            ->and($html)->not->toContain('onclick')
+            ->and($html)->not->toContain('print()');
+    }
+});
+
+it('paints the dark hero band in its own fixed navy whatever the page\'s accent', function () {
+    $product = Product::factory()->create();
+    $page = arrangedAs(sellingPage($product), OrderCompleteLayout::DarkHero);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'style_tokens' => ['accent' => '#ff0000'],
+    ])]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $html = $this->get(route('checkout.order-complete', Order::sole()->order_number))->assertOk()->getContent();
+
+    $styles = styleBlock($html);
+
+    /** The accent is declared, and reaches the buttons; the band does not read it. */
+    expect($html)->toContain('--gio-accent: #ff0000;')
+        ->and($styles)->toContain('.gio-order-complete-dark-hero .gio-order-complete-head { ')
+        ->and($styles)->toMatch('/\.gio-order-complete-dark-hero \.gio-order-complete-head \{[^}]*background: #0f1d4f;/')
+        ->and($styles)->not->toMatch('/\.gio-order-complete-dark-hero \.gio-order-complete-head \{[^}]*var\(--gio-accent\)/');
+});
 
 it('draws the four steps and the capture time in the timeline layout only, in the merchant\'s words or the built-in ones', function () {
     $page = arrangedAs(sellingPage(Product::factory()->create()), OrderCompleteLayout::Timeline, [

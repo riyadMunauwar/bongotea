@@ -29,9 +29,171 @@ enum OrderCompleteLayout: string
     case CenteredClassic = 'centered_classic';
     case Split = 'split';
     case Timeline = 'timeline';
+    case Receipt = 'receipt';
+    case DarkHero = 'dark_hero';
+    case Minimal = 'minimal';
     case CardsGrid = 'cards_grid';
     case Editorial = 'editorial';
     case AccentBand = 'accent_band';
+    case Compact = 'compact';
+
+    /**
+     * What the receipt arrangement adds to the base sheet.
+     *
+     * A narrow card with square corners, the way a till prints one: the
+     * badge goes, the headline and message stay in the page's own face, and
+     * everything that is a figure — the order number, the summary, the
+     * Deliver-to block — is set in monospace. The number becomes a ruled
+     * line between two dashed rules, in capitals; the summary's rows are tight, the total
+     * ruled off in the text colour rather than the border colour with its
+     * label in capitals; the Deliver-to block opens with a dashed rule of
+     * its own. The buttons sit in a row, the first taking the room and the
+     * Print button — the slot this layout has of its own — beside it, a
+     * real button in the secondary button's clothes. When the page is
+     * printed the buttons and the grey ground go, leaving the receipt.
+     */
+    private const RECEIPT_RULES = <<<'CSS'
+        .gio-order-complete-receipt .gio-order-complete-card { max-width: 30rem; padding: 2rem; border-radius: 0; gap: 1.25rem; }
+        .gio-order-complete-receipt .gio-order-complete-head { gap: 0; }
+        .gio-order-complete-receipt .gio-order-complete-badge { display: none; }
+        .gio-order-complete-receipt .gio-order-complete-headline { font-size: 1.5em; }
+        .gio-order-complete-receipt .gio-order-complete-number { box-sizing: border-box; width: 100%; margin: 1.25rem 0 0; padding: .75rem 0; border: 0; border-top: var(--gio-border-width) dashed var(--gio-border); border-bottom: var(--gio-border-width) dashed var(--gio-border); border-radius: 0; font-size: .8125em; text-transform: uppercase; }
+        .gio-order-complete-receipt .gio-order-complete-summary, .gio-order-complete-receipt .gio-order-complete-deliver-to { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; }
+        .gio-order-complete-receipt .gio-order-complete-summary { gap: .5rem; padding: 0; border-top: 0; }
+        .gio-order-complete-receipt .gio-order-complete-total { margin-top: .25rem; padding-top: .625rem; border-top: var(--gio-border-width) solid var(--gio-text); font-size: 1.25em; text-transform: uppercase; }
+        .gio-order-complete-receipt .gio-order-complete-deliver-to { padding-top: .75rem; border-top: var(--gio-border-width) dashed var(--gio-border); }
+        .gio-order-complete-receipt .gio-order-complete-eyebrow { font-family: inherit; font-size: inherit; font-weight: 400; letter-spacing: 0; }
+        .gio-order-complete-receipt .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
+        .gio-order-complete-receipt .gio-order-complete-button { flex: 1 1 10rem; }
+        .gio-order-complete-receipt .gio-order-complete-print { flex: 0 0 auto; font-family: inherit; line-height: inherit; cursor: pointer; }
+        @media (max-width: 30rem) {
+        .gio-order-complete-receipt .gio-order-complete-card { padding: 1.5rem 1.125rem; }
+        }
+        @media print {
+        .gio-order-complete-receipt { padding: 0; background: #fff; }
+        .gio-order-complete-receipt .gio-order-complete-card { max-width: none; border: 0; }
+        .gio-order-complete-receipt .gio-order-complete-actions { display: none; }
+        }
+        CSS;
+
+    /**
+     * What the dark hero arrangement adds to the base sheet.
+     *
+     * The head becomes a band the full width of a wide card in a navy of
+     * its own — the one colour on the page that is not the Page's, kept
+     * because a confirmation band is meant to read as the same thing on
+     * every Page arranged this way, and the accent still reaches the
+     * buttons beneath it. The badge goes: the band is the tick. The status
+     * line is the eyebrow, the headline is set large, the message is set in
+     * a paler white at a measure, and the order number sits under them in a
+     * translucent box. Below the band, in white, the summary and the
+     * Deliver-to block are two columns on a wide screen, each with its
+     * eyebrow — the summary's written by a rule — and the note and the
+     * buttons under them. A stranger's page has no Deliver-to block, and
+     * its summary is widened to both columns by a `:has()` rule; on a phone
+     * the columns stack.
+     */
+    private const DARK_HERO_RULES = <<<'CSS'
+        .gio-order-complete-dark-hero .gio-order-complete-card { max-width: 57.5rem; padding: 0 0 2rem; overflow: hidden; align-items: stretch; gap: 1.5rem; text-align: left; }
+        .gio-order-complete-dark-hero .gio-order-complete-head { gap: 1rem; padding: 3.5rem 2.5rem; background: #0f1d4f; color: #fff; text-align: center; }
+        .gio-order-complete-dark-hero .gio-order-complete-badge { display: none; }
+        .gio-order-complete-dark-hero .gio-order-complete-words { max-width: 36rem; }
+        .gio-order-complete-dark-hero .gio-order-complete-status { margin-bottom: .875rem; color: #9fb0e8; letter-spacing: .1em; }
+        .gio-order-complete-dark-hero .gio-order-complete-headline { font-size: 2.25em; line-height: 1.15; }
+        .gio-order-complete-dark-hero .gio-order-complete-message { font-size: 1em; color: #c5d0f2; opacity: 1; }
+        .gio-order-complete-dark-hero .gio-order-complete-number { border: 0; background: rgba(255, 255, 255, .14); color: #fff; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary, .gio-order-complete-dark-hero .gio-order-complete-deliver-to, .gio-order-complete-dark-hero .gio-order-complete-note, .gio-order-complete-dark-hero .gio-order-complete-actions { box-sizing: border-box; width: auto; margin: 0 2.5rem; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary { padding: 0; border-top: 0; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary::before { content: "Items"; display: block; margin: 0 0 .125rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
+        .gio-order-complete-dark-hero .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
+        .gio-order-complete-dark-hero .gio-order-complete-button { flex: 1 1 10rem; }
+        @media (min-width: 40rem) {
+        .gio-order-complete-dark-hero .gio-order-complete-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2rem; row-gap: 1.5rem; }
+        .gio-order-complete-dark-hero .gio-order-complete-head { grid-column: 1 / -1; grid-row: 1; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary { grid-column: 1; grid-row: 2; margin-right: 0; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary:not(:has(+ .gio-order-complete-deliver-to)) { grid-column: 1 / -1; margin-right: 2.5rem; }
+        .gio-order-complete-dark-hero .gio-order-complete-deliver-to { grid-column: 2; grid-row: 2; margin-left: 0; }
+        .gio-order-complete-dark-hero .gio-order-complete-note { grid-column: 1 / -1; grid-row: 3; }
+        .gio-order-complete-dark-hero .gio-order-complete-actions { grid-column: 1 / -1; grid-row: 4; }
+        .gio-order-complete-dark-hero .gio-order-complete-button { flex: 0 0 auto; }
+        }
+        @media (max-width: 30rem) {
+        .gio-order-complete-dark-hero .gio-order-complete-head { padding: 2.5rem 1.25rem; }
+        .gio-order-complete-dark-hero .gio-order-complete-headline { font-size: 1.75em; }
+        .gio-order-complete-dark-hero .gio-order-complete-summary, .gio-order-complete-dark-hero .gio-order-complete-deliver-to, .gio-order-complete-dark-hero .gio-order-complete-note, .gio-order-complete-dark-hero .gio-order-complete-actions { margin: 0 1.25rem; }
+        }
+        CSS;
+
+    /**
+     * What the minimal arrangement adds to the base sheet.
+     *
+     * The card gives up its box and becomes the page: no border, and the
+     * page painted in the card's colour rather than the grey ground, centred
+     * on a narrow measure. The badge goes and the status line is the tick,
+     * in the accent colour; the words box is dissolved with `display:
+     * contents` so that the order number can be moved up under the status
+     * line with `order`, where it is set very large in monospace with no
+     * box round it and the word "Order" hidden — the number is the page,
+     * and with the word it would not fit on one line.
+     * The headline is small beneath it and the message is the one
+     * paragraph. The summary is a quiet list without its rule, the
+     * Deliver-to block is centred, and the buttons sit in a row with the
+     * second as an underlined link. On a phone the number comes down to a
+     * size that fits the width and breaks if it must.
+     */
+    private const MINIMAL_RULES = <<<'CSS'
+        .gio-order-complete.gio-order-complete-minimal { background: var(--gio-background); }
+        .gio-order-complete-minimal .gio-order-complete-card { max-width: 30rem; padding: 3rem 1rem; border: 0; gap: 1.25rem; }
+        .gio-order-complete-minimal .gio-order-complete-head { gap: 1.25rem; }
+        .gio-order-complete-minimal .gio-order-complete-badge { display: none; }
+        .gio-order-complete-minimal .gio-order-complete-words { display: contents; }
+        .gio-order-complete-minimal .gio-order-complete-status { order: -2; margin: 0; color: var(--gio-accent); letter-spacing: .1em; }
+        .gio-order-complete-minimal .gio-order-complete-status::before { content: "✓ "; }
+        .gio-order-complete-minimal .gio-order-complete-number { order: -1; max-width: 100%; margin: 0; padding: 0; border: 0; font-size: 4.5em; font-weight: 700; line-height: 1; letter-spacing: -.02em; overflow-wrap: anywhere; }
+        .gio-order-complete-minimal .gio-order-complete-number-word { display: none; }
+        .gio-order-complete-minimal .gio-order-complete-headline { margin: 0; font-size: 1.25em; }
+        .gio-order-complete-minimal .gio-order-complete-message { max-width: 30rem; margin: 0; font-size: 1em; }
+        .gio-order-complete-minimal .gio-order-complete-summary { max-width: 24rem; margin: 0 auto; padding: 0; border-top: 0; }
+        .gio-order-complete-minimal .gio-order-complete-deliver-to { max-width: 24rem; margin: 0 auto; text-align: center; }
+        .gio-order-complete-minimal .gio-order-complete-actions { width: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; }
+        .gio-order-complete-minimal .gio-order-complete-button { padding: .875rem 2.25rem; }
+        .gio-order-complete-minimal .gio-order-complete-button-secondary { border: 0; padding: .875rem .5rem; text-decoration: underline; }
+        @media (max-width: 30rem) {
+        .gio-order-complete-minimal .gio-order-complete-card { padding: 2rem .5rem; }
+        .gio-order-complete-minimal .gio-order-complete-number { font-size: 2.75em; }
+        }
+        CSS;
+
+    /**
+     * What the compact arrangement adds to the base sheet.
+     *
+     * The narrow card, centred on the full page at every width, with
+     * everything ranged left and set a size down: the head is a small grid
+     * with a smaller tick on the left spanning both rows, the headline
+     * beside it and the order number as a grey line under the headline,
+     * losing its box, and the message under all three — the words box is
+     * dissolved with `display: contents` so the three can be placed apart;
+     * the summary is boxed with tight rows, the total set
+     * a little larger; the Deliver-to block is small; the buttons stack,
+     * the second as a centred underlined link. There is no breakpoint: a
+     * card this narrow is the same card on a phone.
+     */
+    private const COMPACT_RULES = <<<'CSS'
+        .gio-order-complete-compact .gio-order-complete-card { max-width: 25rem; padding: 1.5rem; align-items: stretch; gap: .875rem; text-align: left; }
+        .gio-order-complete-compact .gio-order-complete-head { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: .75rem; row-gap: .125rem; align-items: center; }
+        .gio-order-complete-compact .gio-order-complete-badge { grid-column: 1; grid-row: 1 / span 2; width: 2.5rem; height: 2.5rem; }
+        .gio-order-complete-compact .gio-order-complete-badge svg { width: 1.25rem; height: 1.25rem; }
+        .gio-order-complete-compact .gio-order-complete-words { display: contents; }
+        .gio-order-complete-compact .gio-order-complete-headline { grid-column: 2; grid-row: 1; margin: 0; font-size: 1.125em; }
+        .gio-order-complete-compact .gio-order-complete-message { grid-column: 1 / -1; grid-row: 3; margin-top: .625rem; font-size: .875em; }
+        .gio-order-complete-compact .gio-order-complete-number { grid-column: 2; grid-row: 2; justify-self: start; margin: 0; padding: 0; border: 0; font-family: inherit; font-size: .8125em; font-weight: 400; opacity: .72; }
+        .gio-order-complete-compact .gio-order-complete-summary { gap: .375rem; padding: .75rem .875rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-size: .8125em; }
+        .gio-order-complete-compact .gio-order-complete-total { margin-top: .125rem; padding-top: .5rem; font-size: 1.125em; }
+        .gio-order-complete-compact .gio-order-complete-deliver-to { font-size: .8125em; }
+        .gio-order-complete-compact .gio-order-complete-note { font-size: .8125em; }
+        .gio-order-complete-compact .gio-order-complete-actions { gap: .375rem; }
+        .gio-order-complete-compact .gio-order-complete-button-secondary { border: 0; padding: .5rem; text-decoration: underline; font-size: .8125em; }
+        CSS;
 
     /**
      * What the timeline arrangement adds to the base sheet.
@@ -341,9 +503,13 @@ enum OrderCompleteLayout: string
             self::CenteredClassic => 'gio-order-complete-centered-classic',
             self::Split => 'gio-order-complete-split',
             self::Timeline => 'gio-order-complete-timeline',
+            self::Receipt => 'gio-order-complete-receipt',
+            self::DarkHero => 'gio-order-complete-dark-hero',
+            self::Minimal => 'gio-order-complete-minimal',
             self::CardsGrid => 'gio-order-complete-cards-grid',
             self::Editorial => 'gio-order-complete-editorial',
             self::AccentBand => 'gio-order-complete-accent-band',
+            self::Compact => 'gio-order-complete-compact',
         };
     }
 
@@ -359,25 +525,30 @@ enum OrderCompleteLayout: string
             self::CenteredClassic => '',
             self::Split => self::SPLIT_RULES,
             self::Timeline => self::TIMELINE_RULES,
+            self::Receipt => self::RECEIPT_RULES,
+            self::DarkHero => self::DARK_HERO_RULES,
+            self::Minimal => self::MINIMAL_RULES,
             self::CardsGrid => self::CARDS_GRID_RULES,
             self::Editorial => self::EDITORIAL_RULES,
             self::AccentBand => self::ACCENT_BAND_RULES,
+            self::Compact => self::COMPACT_RULES,
         };
     }
 
     /**
      * Whether this layout draws the status line above the headline.
      *
-     * Split and editorial draw one in place of the badge: a short line in
-     * the accent colour that says the Order is in before the headline does.
-     * Cards grid draws it beside the order number as the eyebrow. Centered
-     * classic, timeline and accent band say it with the tick.
+     * Split, editorial and minimal draw one in place of the badge: a short
+     * line in the accent colour that says the Order is in before the
+     * headline does. Cards grid draws it beside the order number as the
+     * eyebrow, and dark hero as the eyebrow of its band. Centered classic,
+     * timeline, receipt, accent band and compact say it with the tick.
      */
     public function drawsStatusLine(): bool
     {
         return match ($this) {
-            self::Split, self::CardsGrid, self::Editorial => true,
-            self::CenteredClassic, self::Timeline, self::AccentBand => false,
+            self::Split, self::DarkHero, self::Minimal, self::CardsGrid, self::Editorial => true,
+            self::CenteredClassic, self::Timeline, self::Receipt, self::AccentBand, self::Compact => false,
         };
     }
 
@@ -386,7 +557,7 @@ enum OrderCompleteLayout: string
     {
         return match ($this) {
             self::Timeline => true,
-            self::CenteredClassic, self::Split, self::CardsGrid, self::Editorial, self::AccentBand => false,
+            self::CenteredClassic, self::Split, self::Receipt, self::DarkHero, self::Minimal, self::CardsGrid, self::Editorial, self::AccentBand, self::Compact => false,
         };
     }
 
@@ -401,7 +572,7 @@ enum OrderCompleteLayout: string
     {
         return match ($this) {
             self::Timeline => true,
-            self::CenteredClassic, self::Split, self::CardsGrid, self::Editorial, self::AccentBand => false,
+            self::CenteredClassic, self::Split, self::Receipt, self::DarkHero, self::Minimal, self::CardsGrid, self::Editorial, self::AccentBand, self::Compact => false,
         };
     }
 
@@ -410,15 +581,23 @@ enum OrderCompleteLayout: string
     {
         return match ($this) {
             self::CardsGrid => true,
-            self::CenteredClassic, self::Split, self::Timeline, self::Editorial, self::AccentBand => false,
+            self::CenteredClassic, self::Split, self::Timeline, self::Receipt, self::DarkHero, self::Minimal, self::Editorial, self::AccentBand, self::Compact => false,
         };
     }
 
-    /** Whether this layout draws a button that opens the browser's print dialog. */
+    /**
+     * Whether this layout draws a button that opens the browser's print
+     * dialog.
+     *
+     * Receipt does, because a receipt is for keeping: the one line of script
+     * on the page is that button's handler, and the document carries no
+     * other.
+     */
     public function drawsPrintButton(): bool
     {
         return match ($this) {
-            self::CenteredClassic, self::Split, self::Timeline, self::CardsGrid, self::Editorial, self::AccentBand => false,
+            self::Receipt => true,
+            self::CenteredClassic, self::Split, self::Timeline, self::DarkHero, self::Minimal, self::CardsGrid, self::Editorial, self::AccentBand, self::Compact => false,
         };
     }
 
@@ -431,9 +610,13 @@ enum OrderCompleteLayout: string
             self::CenteredClassic => 'One centred card: a tick in your accent colour, the headline and message, the order number, the lines and total, where it is going, your note, and the buttons.',
             self::Split => 'Two columns on a wide screen: your status line, a big headline, the message, the note and the buttons on the left, and a grey panel on the right with the lines, the total and where it is going. On a phone it stacks, ranged left.',
             self::Timeline => 'A tick, the headline and message, and the order number with the time it was placed, then a four-step tracker of what happens next in your own words, with the lines and total and where it is going as two boxes beneath, and the buttons last. On a phone the tracker stacks.',
+            self::Receipt => 'A narrow till receipt: the headline and message, then the order number, the lines, the total and where it is going in typewriter figures between dashed rules, your note, and the first button with a Print button beside it that opens the browser\'s print dialog.',
+            self::DarkHero => 'A navy band across the top, the same navy whatever your accent, holding your status line, a big headline, the message and the order number in white, then the lines and total beside where it is going on white, your note, and the buttons. On a phone the two stack.',
+            self::Minimal => 'The order number set very large under your status line, a small headline and one paragraph, then the lines and total as a quiet list, where it is going, your note, and the buttons centred, the second as a link.',
             self::CardsGrid => 'The order number and your status line over a big headline, with the first button beside it, then three tiles in your own words, the lines with the total set large, and where it is going, each a white card on a grey page. On a phone the tiles stack.',
             self::Editorial => 'Ranged left with hairline rules: your status line with a tick, the headline, the message and the order number, then the lines, delivery, payment and the total as a labelled list with where it is going beneath, and the buttons last.',
             self::AccentBand => 'A strip in your accent colour across the top holding the tick, the headline, the message and the order number, with the lines and total as a ruled table beneath, then where it is going beside the buttons.',
+            self::Compact => 'One narrow card centred on the page at every width: a small tick beside the headline and order number, the message, the lines and total in a box, where it is going, your note, and the buttons stacked, the second as a link.',
         };
     }
 
@@ -448,9 +631,13 @@ enum OrderCompleteLayout: string
             self::CenteredClassic->value => 'Centered classic',
             self::Split->value => 'Split',
             self::Timeline->value => 'Timeline',
+            self::Receipt->value => 'Receipt',
+            self::DarkHero->value => 'Dark hero',
+            self::Minimal->value => 'Minimal',
             self::CardsGrid->value => 'Cards grid',
             self::Editorial->value => 'Editorial',
             self::AccentBand->value => 'Accent band',
+            self::Compact->value => 'Compact',
         ];
     }
 }

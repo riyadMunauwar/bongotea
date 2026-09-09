@@ -2215,9 +2215,13 @@ it('asks about the order complete page on its own tab beside checkout, in five s
             'centered_classic' => 'Centered classic',
             'split' => 'Split',
             'timeline' => 'Timeline',
+            'receipt' => 'Receipt',
+            'dark_hero' => 'Dark hero',
+            'minimal' => 'Minimal',
             'cards_grid' => 'Cards grid',
             'editorial' => 'Editorial',
             'accent_band' => 'Accent band',
+            'compact' => 'Compact',
         ])
         ->and((string) $helperText->getContent())->toBe(OrderCompleteLayout::CenteredClassic->helperText());
 });
@@ -2449,7 +2453,11 @@ it('asks for the status line only on a layout that draws one, and keeps it which
     'centered classic' => ['centered_classic', false],
     'split' => ['split', true],
     'editorial' => ['editorial', true],
+    'dark hero' => ['dark_hero', true],
+    'minimal' => ['minimal', true],
     'accent band' => ['accent_band', false],
+    'receipt' => ['receipt', false],
+    'compact' => ['compact', false],
     'a layout nothing draws' => ['hero_video', false],
 ]);
 

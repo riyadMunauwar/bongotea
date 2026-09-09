@@ -97,9 +97,11 @@
                 The capture time is the one fact a layout may add to the
                 number: a tracker that starts at "Order placed" starts from a
                 real time. Written in the app's own timezone, machine-readable
-                for a browser that wants to show it in the Customer's.
+                for a browser that wants to show it in the Customer's. The
+                word before the number is in a span of its own so a layout
+                that sets the number very large can hide it.
             --}}
-            <p class="gio-order-complete-number">Order {{ $order->order_number }}@if ($layout->drawsCaptureTime()) <time class="gio-order-complete-capture-time" datetime="{{ $order->created_at->toIso8601String() }}">{{ $order->created_at->format('j M Y, g:i A') }}</time>@endif</p>
+            <p class="gio-order-complete-number"><span class="gio-order-complete-number-word">Order </span>{{ $order->order_number }}@if ($layout->drawsCaptureTime()) <time class="gio-order-complete-capture-time" datetime="{{ $order->created_at->toIso8601String() }}">{{ $order->created_at->format('j M Y, g:i A') }}</time>@endif</p>
         </header>
 
         {{--
@@ -216,6 +218,16 @@
             <a class="gio-order-complete-button" href="{{ $words->primaryButtonLink() }}">{{ $words->primaryButtonLabel() }}</a>
             @if ($words->drawsSecondaryButton())
                 <a class="gio-order-complete-button gio-order-complete-button-secondary" href="{{ $words->secondaryButtonLink() }}">{{ $words->secondaryButtonLabel() }}</a>
+            @endif
+            {{--
+                The one line of script this document may carry: a receipt is
+                for keeping, and the button's handler is the whole of it. A
+                real button rather than a link, so a keyboard reaches it and
+                nothing is navigated to; its words are fixed, since it names
+                what the browser will do and not what the Merchant would say.
+            --}}
+            @if ($layout->drawsPrintButton())
+                <button type="button" class="gio-order-complete-button gio-order-complete-button-secondary gio-order-complete-print" onclick="window.print()">Print</button>
             @endif
         </nav>
     </main>
