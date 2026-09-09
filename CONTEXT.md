@@ -33,23 +33,31 @@ Everything one Page decides about its own Checkout: what it asks for, what it ch
 _Avoid_: settings, preset, theme, template
 
 **Checkout Layout**:
-How a Checkout is arranged: what it draws, and nothing about what it asks for or what it charges. Five of them — stacked, split, compact, summary-first, and a form-only one with no product panel, for a Page whose own markup has already sold the Product above the fold. Every question, the delivery choice, the summary and the failure slots are drawn by all five, and a form-only Checkout captures the same complete Order: it sells everything the Page sells, one of each.
-_Avoid_: template, theme, skin, variant
+How a Checkout is arranged and how it looks: what it draws and where, and nothing about what it asks for or what it charges. Ten of them — Stacked, Split, Split reversed, Stepper, Accordion, Bento grid, Compact embed, Chips, Invoice and Dark panel. Every question, the Product List when it is shown, the delivery choice, the payment choice, the totals and the failure slots are drawn by all ten, in the same order, and every one captures the same complete Order. A layout may own a slot of its own — a numbered heading, a step label, a card title, an empty-state line — and only a Page arranged in that layout is asked what the slot says. Two layouts behave as well as arrange: Stepper shows one panel at a time and Accordion opens one section at a time, and without script both fall back to every panel in order, so what is captured never depends on the behaviour. Dark panel's navy is its own, the one colour on the form that is not the Page's. Half-width pairing of questions is refused by the narrow-column layouts, Compact embed and Split reversed.
+_Avoid_: template, theme, skin, variant, form-only, summary-first
 
 **Field Width**:
-How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized. A compact Checkout Layout fills the row at every width, because a Merchant choosing compact has already said what they want the form to do and paired questions work against it. A width is kept either way, so a Page moved off compact asks its questions the way it always did.
+How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized. A narrow-column Checkout Layout fills the row at every width, because a Merchant choosing one has already said what they want the form to do and paired questions work against it. A width is kept either way, so a Page moved off a narrow-column layout asks its questions the way it always did.
 _Avoid_: column, span, size, grid
 
 **Style Token**:
-One thing about a Checkout a Merchant can restyle — a colour, a length, a size. Every token is set once for the whole Checkout and may be overridden by a single Checkout Field, so a form is styled in one place and a question that must look different says only how it differs. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
-_Avoid_: theme, variable, style setting, CSS variable
+One thing about a Checkout a Merchant can restyle — a colour, a length, a typeface. Every token is set once for the whole Checkout and applies to every Checkout Layout alike; no single Checkout Field restyles itself, so a form is styled in exactly one place. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
+_Avoid_: theme, variable, style setting, CSS variable, field appearance
+
+**Checkout Words**:
+Everything a Checkout says in the Merchant's own words: the Order Button, the totals labels, each Payment Method's long and short label, and the slots a Checkout Layout owns. Every word has a default drawn from the designs, Bangla first and English second, so a Page that says nothing reads the way the design does. Words are copy and never figures, so none is in the Pricing Fingerprint. A word belonging to a layout the Page is not arranged in is kept unseen and comes back when the layout does.
+_Avoid_: labels, copy, content, microcopy, translations
+
+**Product List**:
+The part of a Checkout that draws the Page's Products with their pictures, quantities and line totals. Shown unless the Merchant hides it, on any Checkout Layout, for a Page whose own markup has already sold the Product above the fold. A Checkout whose Product List is hidden sells everything the Page sells, one of each, and captures the same complete Order; it can offer no Product Picker, because there is nothing drawn to pick between.
+_Avoid_: product panel, cart, form-only, summary
 
 **Order Button**:
 What a Checkout's button says, and the line beneath it, in the Merchant's own words. The wording may carry a total placeholder, filled in with what the courier will collect so the price sits on the button at the moment a Customer taps it. Both belong to one Page's Checkout Config; a Page that says nothing keeps the words the button has always had. Copy and not a figure, so neither is in the Pricing Fingerprint: a Merchant editing a word on a live Page never turns away an Order somebody has half-typed.
 _Avoid_: CTA, call to action, submit label, microcopy
 
 **Product Picker**:
-Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. What it opens with is the Page's Default Selection. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout Layout that draws no Products to pick between.
+Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. What it opens with is the Page's Default Selection. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout whose Product List is hidden.
 _Avoid_: cart, add-on, bundle, upsell toggle
 
 **Default Selection**:
@@ -107,7 +115,7 @@ The delivery region agreed with the Customer at Capture, distinct from the free-
 _Avoid_: zone, area, thana, city
 
 **Delivery Option**:
-One delivery arrangement a Page offers, named and priced by the Merchant — "Inside Dhaka", "Outside Dhaka", "Free". A Page may offer none, one or several; which one is agreed at Capture is what a Delivery Charge comes from.
+One delivery arrangement a Page offers, named and priced by the Merchant — "Inside Dhaka", "Outside Dhaka", "Free" — with an optional detail line beneath the name, "1–2 days", that layouts with room draw and segmented ones leave out. A Page may offer none, one or several; which one is agreed at Capture is what a Delivery Charge comes from. The detail is copy, not a figure, and is outside the Pricing Fingerprint.
 _Avoid_: shipping method, delivery zone, tier, rate
 
 **Delivery Charge**:
@@ -121,7 +129,7 @@ _Avoid_: rejected, void, failed, refunded
 ### Paying
 
 **Payment Method**:
-One of the named ways an Order can be paid, known to the system by name: Cash on Delivery and the online gateways. The Merchant switches each on for the installation and supplies what the gateway needs; a Page then chooses which of the switched-on ones it offers, and in what order. A method the installation has not switched on, or cannot reach, is offered nowhere, whatever a Page says.
+One of the named ways an Order can be paid, known to the system by name: Cash on Delivery and the online gateways. The Merchant switches each on for the installation and supplies what the gateway needs; a Page then chooses which of the switched-on ones it offers, and in what order. A method the installation has not switched on, or cannot reach, is offered nowhere, whatever a Page says. On a Checkout each method is drawn under a long label or a short one, both among the Page's Checkout Words; which one a Checkout Layout draws is the layout's decision.
 _Avoid_: gateway, payment option, payment provider, driver
 
 **Cash on Delivery**:
