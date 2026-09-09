@@ -201,7 +201,7 @@ it('shows the unpaid order by number alone on the retry page, with the page\'s m
         ->not->toContain('value="cash_on_delivery" checked');
 });
 
-it('sends an order that is not unpaid from the retry page to its Order Complete Page', function () {
+it('sends an order that is not unpaid from the retry page to its order complete page', function () {
     $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
 
     $order = Order::sole();
@@ -212,7 +212,7 @@ it('sends an order that is not unpaid from the retry page to its Order Complete 
         ->assertRedirect(route('checkout.order-complete', $order->order_number));
 });
 
-it('switches an unpaid order to cash on delivery, logs it, and lands on the Order Complete Page', function () {
+it('switches an unpaid order to cash on delivery, logs it, and lands on the order complete page', function () {
     $order = unpaidOrder();
 
     $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => 'cash_on_delivery'])

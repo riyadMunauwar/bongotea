@@ -155,7 +155,7 @@ it('renders the processing page on the gateway\'s return, outside request-forger
     expect($response->getContent())->toContain('role="status"');
 })->with('online gateways');
 
-it('verifies with the gateway, marks the payment paid, and sends the customer to the Order Complete Page showing paid', function (GatewayScript $gateway) {
+it('verifies with the gateway, marks the payment paid, and sends the customer to the order complete page showing paid', function (GatewayScript $gateway) {
     $payment = capturedFor($gateway);
 
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
@@ -178,11 +178,15 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
         /** Paid is the Payment's axis; the Order still starts New and needs the confirmation call (ADR-0013). */
         ->and($order->status)->toBe(OrderStatus::New);
 
+    /** An online Order's figure is a total, not something to pay at the door; and the page shows the Order, never the Customer. */
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
         ->assertSee('Your order is confirmed')
         ->assertSee('Paid')
         ->assertSee($gateway->method()->getLabel())
+        ->assertSee('Total')
+        ->assertDontSee('Pay on delivery')
+        ->assertDontSee('Rahim Uddin')
         ->assertDontSee(route('checkout.retry', $order->order_number));
 
     /** Nothing to retry once Paid. */
@@ -521,7 +525,7 @@ it('does not read one paid payment as paid twice', function () {
         ->and(Activity::query()->where('event', 'paid_twice')->exists())->toBeFalse();
 });
 
-it('starts no payment for an order that is already paid, and sends the customer to the Order Complete Page', function (GatewayScript $gateway) {
+it('starts no payment for an order that is already paid, and sends the customer to the order complete page', function (GatewayScript $gateway) {
     $payment = capturedFor($gateway);
 
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
