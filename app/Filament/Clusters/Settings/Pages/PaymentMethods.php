@@ -128,20 +128,49 @@ class PaymentMethods extends SettingsPage
                     self::logo(PaymentMethod::AamarPay),
                 ]),
 
-            /** Named from the group's own shape: a method with no settings there yet is one still to come. */
-            Section::make('Coming later')
-                ->description('These arrive with their own settings and cannot be switched on yet.')
+            Section::make(PaymentMethod::PayStation->getLabel())
+                ->description('Cards, mobile wallets and internet banking through your PayStation merchant account. Offered on a page only once it is switched on here and both credentials are filled in.')
                 ->columns(1)
                 ->schema([
-                    Text::make(implode(', ', array_map(
-                        fn (PaymentMethod $method): string => $method->getLabel(),
-                        array_values(array_filter(
-                            PaymentMethod::cases(),
-                            fn (PaymentMethod $method): bool => ! PaymentSettings::hasSettings($method),
-                        )),
-                    ))),
+                    self::switch(PaymentMethod::PayStation),
+
+                    TextInput::make('paystationMerchantId')
+                        ->label('Merchant id')
+                        ->maxLength(255)
+                        ->helperText('Issued by PayStation with your merchant account, beside the password.'),
+
+                    TextInput::make('paystationPassword')
+                        ->label('Password')
+                        ->maxLength(255),
+
+                    self::sandbox(PaymentMethod::PayStation),
+                    self::notificationUrl(PaymentMethod::PayStation),
+                    self::logo(PaymentMethod::PayStation),
                 ]),
+
+            self::comingLater(),
         ];
+    }
+
+    /**
+     * The methods still to come, named from the group's own shape: one with
+     * no settings there yet. Drawn only while there is one, so a page with
+     * every method's settings says nothing about later.
+     */
+    private static function comingLater(): Section
+    {
+        $labels = array_map(
+            fn (PaymentMethod $method): string => $method->getLabel(),
+            array_filter(PaymentMethod::cases(), fn (PaymentMethod $method): bool => ! PaymentSettings::hasSettings($method)),
+        );
+
+        return Section::make('Coming later')
+            ->description('These arrive with their own settings and cannot be switched on yet.')
+            ->columns(1)
+            ->visible($labels !== [])
+            ->schema([
+                Text::make(implode(', ', $labels)),
+            ]);
     }
 
     /**

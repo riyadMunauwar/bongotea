@@ -6,6 +6,7 @@ use App\Support\Payments\AamarPay;
 use App\Support\Payments\Bkash;
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
+use App\Support\Payments\PayStation;
 use App\Support\Payments\SslCommerz;
 use App\Support\Settings\PaymentSettings;
 use Filament\Support\Contracts\HasLabel;
@@ -114,10 +115,11 @@ enum PaymentMethod: string implements HasLabel
     /**
      * The driver this method pays through, or null while it has none.
      *
-     * A method with no driver cannot start a Payment and cannot verify one,
-     * so an Order placed under it stays Unpaid until the driver arrives. It
-     * can still be offered once its settings are filled in: whether it is
-     * offered is `isUsable()`'s answer, not this one's.
+     * Every case has one now; the null stays in the contract because a
+     * method with no driver cannot start a Payment and cannot verify one,
+     * so an Order placed under a later one would stay Unpaid until its
+     * driver arrived. Whether a method is offered is `isUsable()`'s answer,
+     * not this one's.
      */
     public function gateway(): ?PaymentGateway
     {
@@ -126,7 +128,7 @@ enum PaymentMethod: string implements HasLabel
             self::SslCommerz => app(SslCommerz::class),
             self::Bkash => app(Bkash::class),
             self::AamarPay => app(AamarPay::class),
-            self::PayStation => null,
+            self::PayStation => app(PayStation::class),
         };
     }
 
@@ -135,9 +137,9 @@ enum PaymentMethod: string implements HasLabel
      * Thank-you Page, and so whether an Order placed under it is Unpaid until
      * a Payment is Paid. False is the whole of what Cash on Delivery is.
      *
-     * Answered here rather than by the driver because one of the four
-     * online methods has none yet and is already Unpaid when chosen; a
-     * driver's `isOnline()` must agree with this.
+     * Answered here rather than by the driver so that a method whose driver
+     * has not arrived yet is already Unpaid when chosen; a driver's
+     * `isOnline()` must agree with this.
      */
     public function isOnline(): bool
     {

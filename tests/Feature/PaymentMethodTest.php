@@ -8,6 +8,7 @@ use App\Support\Payments\AamarPay;
 use App\Support\Payments\Bkash;
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
+use App\Support\Payments\PayStation;
 use App\Support\Payments\SslCommerz;
 use App\Support\Payments\Verification;
 use App\Support\Settings\PaymentSettings;
@@ -32,12 +33,12 @@ it('knows every payment method by name, with a label and a default logo each', f
     ]);
 });
 
-it('resolves cash on delivery, SSLCommerz, bKash and aamarPay to drivers, and offers only cash until Settings say otherwise', function () {
+it('resolves every method to a driver, and offers only cash until Settings say otherwise', function () {
     /**
-     * The four online cases exist so a Page can already name them. Three have
-     * a driver so far, and on an installation with no Payment settings saved
-     * no online method is usable — so they are offered nowhere whatever a
-     * Page says. `PaymentSettingsTest` is where one becomes usable.
+     * Every case has a driver, and on an installation with no Payment
+     * settings saved no online method is usable — so they are offered
+     * nowhere whatever a Page says. `PaymentSettingsTest` is where one
+     * becomes usable.
      */
     expect(PaymentMethod::CashOnDelivery->gateway())->toBeInstanceOf(CashOnDelivery::class)
         ->and(PaymentMethod::CashOnDelivery->isUsable())->toBeTrue()
@@ -55,9 +56,12 @@ it('resolves cash on delivery, SSLCommerz, bKash and aamarPay to drivers, and of
         ->and(PaymentMethod::AamarPay->gateway()->credentialProperties())->toBe(app(PaymentSettings::class)->credentialsFor(PaymentMethod::AamarPay))
         /** Registered once through aamarPay's support desk, never sent with a Payment. */
         ->and(PaymentMethod::AamarPay->gateway()->takesNotificationUrl())->toBeFalse()
+        ->and(PaymentMethod::PayStation->gateway())->toBeInstanceOf(PayStation::class)
+        ->and(PaymentMethod::PayStation->gateway()->isOnline())->toBeTrue()
+        ->and(PaymentMethod::PayStation->gateway()->credentialProperties())->toBe(app(PaymentSettings::class)->credentialsFor(PaymentMethod::PayStation))
+        /** Registered once per merchant through PayStation's support desk, never sent with a Payment. */
+        ->and(PaymentMethod::PayStation->gateway()->takesNotificationUrl())->toBeFalse()
         ->and(PaymentMethod::online())->toBe([PaymentMethod::Bkash, PaymentMethod::SslCommerz, PaymentMethod::AamarPay, PaymentMethod::PayStation]);
-
-    expect(PaymentMethod::PayStation->gateway())->toBeNull();
 
     foreach (PaymentMethod::online() as $online) {
         expect($online->isUsable())->toBeFalse();

@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
-it('sits in the Settings cluster beside General, one section per method, with the rest named as coming later', function () {
+it('sits in the Settings cluster beside General, one section per method, with nothing left to come', function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 
     $this->get(PaymentMethods::getUrl())
@@ -41,9 +41,11 @@ it('sits in the Settings cluster beside General, one section per method, with th
         ->assertSee('aamarPay')
         ->assertSee('Signature key')
         ->assertSee(route('payment.notify', ['method' => 'aamarpay']))
-        ->assertSee('Coming later')
         ->assertSee('PayStation')
-        ->assertDontSee('aamarPay, PayStation');
+        ->assertSee('Merchant id')
+        ->assertSee(route('payment.notify', ['method' => 'paystation']))
+        /** Every method has its settings now, so nothing is named as still to come. */
+        ->assertDontSee('Coming later');
 
     $subNavigation = collect(SettingsCluster::getClusteredComponents())->map(fn (string $page): string => $page::getNavigationLabel());
 
@@ -72,8 +74,43 @@ it('loads the defaults when nothing has been saved, with the credentials blank',
             'aamarpaySandbox' => true,
             'aamarpayStoreId' => null,
             'aamarpaySignatureKey' => null,
+            'paystationEnabled' => false,
+            'paystationSandbox' => true,
+            'paystationMerchantId' => null,
+            'paystationPassword' => null,
         ])
         ->assertDontSee('A value is stored');
+});
+
+it('saves the PayStation section with both credentials sealed', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(PaymentMethods::class)
+        ->fillForm([
+            'paystationEnabled' => true,
+            'paystationMerchantId' => '204-16537301811',
+            'paystationPassword' => 'paystation_pw_live_1',
+            'paystationSandbox' => false,
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertSet('data.paystationMerchantId', null)
+        ->assertSet('data.paystationPassword', null)
+        ->assertDontSee('paystation_pw_live_1');
+
+    $row = (string) DB::table('settings')->where('key', PaymentSettings::key())->value('value');
+
+    expect($row)->not->toContain('204-16537301811')
+        ->and($row)->not->toContain('paystation_pw_live_1')
+        ->and($row)->toContain('"paystationEnabled":true')
+        ->and($row)->not->toContain('paystationNotificationUrl');
+
+    app()->forgetInstance(PaymentSettings::class);
+
+    expect(app(PaymentSettings::class)->paystationMerchantId)->toBe('204-16537301811')
+        ->and(app(PaymentSettings::class)->paystationPassword)->toBe('paystation_pw_live_1')
+        ->and(app(PaymentSettings::class)->paystationSandbox)->toBeFalse()
+        ->and(PaymentMethod::PayStation->isUsable())->toBeTrue();
 });
 
 it('saves the aamarPay section with both credentials sealed', function () {

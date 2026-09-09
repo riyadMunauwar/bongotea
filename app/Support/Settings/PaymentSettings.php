@@ -112,6 +112,21 @@ class PaymentSettings extends SettingsGroup
     /** A replacement logo for aamarPay; blank draws the default. */
     public string $aamarpayLogo = '';
 
+    /** PayStation: off until the Merchant has typed their merchant credentials. */
+    public bool $paystationEnabled = false;
+
+    /** Whether Payments go to PayStation's sandbox rather than to real money. */
+    public bool $paystationSandbox = true;
+
+    /** The merchant id PayStation issued. A credential, and so sealed and write-only. */
+    public string $paystationMerchantId = '';
+
+    /** The password PayStation issued beside the merchant id. */
+    public string $paystationPassword = '';
+
+    /** A replacement logo for PayStation; blank draws the default. */
+    public string $paystationLogo = '';
+
     public static function key(): string
     {
         return 'payment';
@@ -120,10 +135,10 @@ class PaymentSettings extends SettingsGroup
     /**
      * Every credential, and nothing else: the store id is a credential too,
      * since together with the password it is the whole of what SSLCommerz
-     * asks for, bKash's four are what its token grant takes, and aamarPay's
-     * store id and signature key sign every call. A host is not a
-     * credential. What a gateway's `credentialProperties()` names must be
-     * here.
+     * asks for, bKash's four are what its token grant takes, aamarPay's
+     * store id and signature key sign every call, and PayStation's merchant
+     * id and password start one. A host is not a credential. What a
+     * gateway's `credentialProperties()` names must be here.
      *
      * @return list<string>
      */
@@ -138,6 +153,8 @@ class PaymentSettings extends SettingsGroup
             'bkashPassword',
             'aamarpayStoreId',
             'aamarpaySignatureKey',
+            'paystationMerchantId',
+            'paystationPassword',
         ];
     }
 
@@ -165,8 +182,8 @@ class PaymentSettings extends SettingsGroup
 
     /**
      * Whether a method has its settings here yet: an `Enabled` property by
-     * the naming rule. The gateways still to come have none, which is how
-     * they are held off without a list anywhere.
+     * the naming rule. A gateway still to come has none, which is how one is
+     * held off without a list anywhere; every method has them now.
      */
     public static function hasSettings(PaymentMethod $method): bool
     {
