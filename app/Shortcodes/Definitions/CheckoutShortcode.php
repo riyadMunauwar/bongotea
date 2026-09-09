@@ -149,15 +149,16 @@ class CheckoutShortcode implements ShortcodeDefinition
             'styleTokens' => $page->checkout_config->styleTokens->completed(),
 
             /**
-             * What the order button says and the line beneath it, in the
-             * Merchant's words or the words it has always carried. The
+             * Everything the island says, in the Merchant's words or the
+             * design's: the order button and the line beneath it, the totals
+             * labels, and what each Payment Method is called. The button's
              * wording may name the total, which the view fills in from the
              * same figure the summary shows.
              *
              * Copy and not a figure, so like the Default Selection it is
              * deliberately absent from the fingerprint below.
              */
-            'orderButton' => $page->checkout_config->orderButton,
+            'words' => $page->checkout_config->words,
 
             /**
              * How the Customer is asked to pay, if they are asked at all: the

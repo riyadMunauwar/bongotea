@@ -747,11 +747,11 @@ it('adds a single delivery option to the total without asking anything', functio
         ['label' => 'Home delivery', 'amount' => 8000],
     ]);
 
-    /** Nothing to choose between is nothing to ask about. */
+    /** Nothing to choose between is nothing to ask about: only the charge is drawn, on the summary's delivery row. */
     $this->get('/promo')
         ->assertOk()
         ->assertDontSee('name="delivery_option"', escape: false)
-        ->assertSee('Home delivery');
+        ->assertSee('<span>ডেলিভারি চার্জ / Delivery</span>', escape: false);
 
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
@@ -2322,7 +2322,7 @@ it('leaves the fingerprint alone when the products are only rearranged', functio
     expect(Order::sole()->subtotal)->toBe(248000);
 });
 
-it('leaves the fingerprint alone when the order button is reworded', function () {
+it('leaves the fingerprint alone when the checkout is reworded', function () {
     $jacket = Product::factory()->create(['price' => 99000]);
     $page = sellingPage($jacket);
 
@@ -2333,19 +2333,27 @@ it('leaves the fingerprint alone when the order button is reworded', function ()
 
     $page->update(['checkout_config' => CheckoutConfig::fromArray([
         ...$page->checkout_config->toArray(),
-        'order_button' => ['wording' => 'Order for {total}', 'note' => 'You pay the courier.'],
+        'words' => [
+            'order_button' => ['wording' => 'Order for {total}', 'note' => 'You pay the courier.'],
+            'subtotal' => 'Items',
+            'delivery' => 'Courier',
+            'total' => 'Grand total',
+            'payment' => ['cash_on_delivery' => ['long' => 'At the door', 'short' => 'Door']],
+        ],
     ])]);
 
     $page = $page->refresh();
 
     /**
-     * What the button says is configuration and not a figure handed over at
-     * the door. Fingerprinting it would turn away everyone mid-form every time
-     * a merchant edited a word on a live page, on traffic they are paying for.
+     * What the checkout says is configuration and not a figure handed over at
+     * the door. Fingerprinting any of it would turn away everyone mid-form
+     * every time a merchant edited a word on a live page, on traffic they are
+     * paying for.
      */
     expect(PricingFingerprint::for($page))->toBe($before)
-        ->and($page->checkout_config->orderButton->wording)->toBe('Order for {total}')
-        ->and($page->checkout_config->orderButton->note)->toBe('You pay the courier.');
+        ->and($page->checkout_config->words->orderButton->wording)->toBe('Order for {total}')
+        ->and($page->checkout_config->words->orderButton->note)->toBe('You pay the courier.')
+        ->and($page->checkout_config->words->totalLabel())->toBe('Grand total');
 
     $this->postJson(route('checkout.store'), $payload)->assertCreated();
 

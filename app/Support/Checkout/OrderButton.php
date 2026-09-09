@@ -16,17 +16,18 @@ namespace App\Support\Checkout;
  * Fingerprint, so a Merchant editing a word on a live Page never turns away an
  * Order somebody is half-way through typing (ADR-0007).
  *
- * Blank is the Merchant saying nothing, and a Page that says nothing keeps the
- * words the button has always had. So `null` here means "the default", and the
- * defaults live here rather than in the view for that reason: what the tab
- * shows as the placeholder and what the island draws have to be the same
- * sentence.
+ * Blank is the Merchant saying nothing, and a Page that says nothing reads the
+ * way the design does, Bangla first and English second. So `null` here means
+ * "the default", and the defaults live here rather than in the view for that
+ * reason: what the tab shows as the placeholder and what the island draws have
+ * to be the same sentence. One of the Checkout Words, held by `CheckoutWords`
+ * beside the totals and payment labels.
  */
 class OrderButton
 {
-    public const DEFAULT_WORDING = 'Order now — Cash on delivery';
+    public const DEFAULT_WORDING = 'অর্ডার করুন / Order Now';
 
-    public const DEFAULT_NOTE = 'Pay in cash when the parcel reaches you.';
+    public const DEFAULT_NOTE = 'পার্সেল হাতে পেয়ে নগদে পরিশোধ করুন / Pay in cash when the parcel reaches you.';
 
     /** The placeholder the live total stands in for, spelled the one way the tab documents. */
     public const TOTAL_PLACEHOLDER = '{total}';
@@ -71,12 +72,9 @@ class OrderButton
      */
     public static function fromArray(array $stored): self
     {
-        $wording = self::cleaned($stored['wording'] ?? null);
-        $note = self::cleaned($stored['note'] ?? null);
-
         return new self(
-            $wording !== null && self::wordingRefusal($wording) === null ? $wording : null,
-            $note !== null && self::noteRefusal($note) === null ? $note : null,
+            CheckoutWords::kept($stored['wording'] ?? null, self::wordingRefusal(...)),
+            CheckoutWords::kept($stored['note'] ?? null, self::noteRefusal(...)),
         );
     }
 
@@ -88,15 +86,7 @@ class OrderButton
      */
     public static function wordingRefusal(string $wording): ?string
     {
-        if (preg_match('/[\r\n]/', $wording) === 1) {
-            return 'The button\'s wording is one line.';
-        }
-
-        if (mb_strlen($wording) > self::WORDING_MAX_LENGTH) {
-            return 'The button\'s wording is at most '.self::WORDING_MAX_LENGTH.' characters.';
-        }
-
-        return null;
+        return CheckoutWords::lineRefusal('The button\'s wording', $wording, self::WORDING_MAX_LENGTH);
     }
 
     /**
@@ -104,11 +94,7 @@ class OrderButton
      */
     public static function noteRefusal(string $note): ?string
     {
-        if (mb_strlen($note) > self::NOTE_MAX_LENGTH) {
-            return 'The line beneath the button is at most '.self::NOTE_MAX_LENGTH.' characters.';
-        }
-
-        return null;
+        return CheckoutWords::textRefusal('The line beneath the button', $note, self::NOTE_MAX_LENGTH);
     }
 
     /**
@@ -152,20 +138,5 @@ class OrderButton
             'wording' => $this->wording,
             'note' => $this->note,
         ];
-    }
-
-    /**
-     * A stored value trimmed, or null where there was nothing but whitespace
-     * or something that is not text at all.
-     */
-    private static function cleaned(mixed $value): ?string
-    {
-        if (! is_scalar($value)) {
-            return null;
-        }
-
-        $value = trim((string) $value);
-
-        return $value === '' ? null : $value;
     }
 }

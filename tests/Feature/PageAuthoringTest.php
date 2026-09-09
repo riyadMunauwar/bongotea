@@ -1728,7 +1728,7 @@ it('splits the checkout tab into one nested tab per concern', function () {
      * is met before the picker it gates.
      */
     expect(checkoutTabsOf(Page::factory()->create())->keys()->all())
-        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Appearance']);
+        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Appearance']);
 });
 
 it('keeps everything the checkout decides inside the checkout tab', function () {
@@ -1789,6 +1789,12 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
             'saved' => fn (CheckoutConfig $config): bool => $config->hideLoneCashChoice,
             'expected' => false,
         ],
+        'Words' => [
+            'control' => 'checkout_config.words.total',
+            'typed' => ['checkout_config' => ['words' => ['total' => 'সর্বমোট / Grand total']]],
+            'saved' => fn (CheckoutConfig $config): string => $config->words->totalLabel(),
+            'expected' => 'সর্বমোট / Grand total',
+        ],
         'Appearance' => [
             'control' => 'checkout_config.style_tokens.accent',
             'typed' => ['checkout_config' => ['style_tokens' => ['accent' => '#ff0000']]],
@@ -1811,7 +1817,7 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
 
     /** And still written where it always was: no stored Config changed shape. */
     expect(($setting['saved'])($page->refresh()->checkout_config))->toBe($setting['expected']);
-})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Appearance']);
+})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Appearance']);
 
 it('puts the checkout-wide appearance controls where no question stands in front of them', function () {
     $tabs = checkoutTabsOf(Page::factory()->create());
@@ -2030,16 +2036,20 @@ it('lets a merchant word the order button and the line beneath it', function () 
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
 
-    /** Asked where the rest of how the checkout looks is asked, and nowhere else. */
-    expect(statePathsInside(checkoutTabsOf($page)['Appearance']))
-        ->toContain('checkout_config.order_button.wording')
-        ->toContain('checkout_config.order_button.note');
+    $tabs = checkoutTabsOf($page);
+
+    /** Asked where everything the checkout says is asked, and no longer beside the colours. */
+    expect(statePathsInside($tabs['Words']))
+        ->toContain('checkout_config.words.order_button.wording')
+        ->toContain('checkout_config.words.order_button.note')
+        ->and(statePathsInside($tabs['Appearance']))->not->toContain('checkout_config.words.order_button.wording')
+        ->and(statePathsInside($tabs['Appearance']))->not->toContain('checkout_config.order_button.wording');
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['order_button' => [
+        ->fillForm(['checkout_config' => ['words' => ['order_button' => [
             'wording' => 'Order for {total}',
             'note' => 'You pay the courier when it arrives.',
-        ]]])
+        ]]]])
         ->call('save')
         ->assertHasNoFormErrors();
 
@@ -2049,31 +2059,117 @@ it('lets a merchant word the order button and the line beneath it', function () 
         ->and($html)->toContain('<p class="gio-checkout-note">You pay the courier when it arrives.</p>');
 });
 
-it('keeps button copy the merchant left alone out of the stored config', function () {
+it('keeps words the merchant left alone out of the stored config', function () {
     $page = Page::factory()->create();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['order_button' => ['wording' => '  ', 'note' => '']]])
+        ->fillForm(['checkout_config' => ['words' => [
+            'order_button' => ['wording' => '  ', 'note' => ''],
+            'subtotal' => '',
+            'delivery' => ' ',
+            'total' => '',
+            'payment' => ['cash_on_delivery' => ['long' => '', 'short' => '  ']],
+        ]]])
         ->call('save')
         ->assertHasNoFormErrors();
 
+    $words = $page->refresh()->checkout_config->words;
+
     /** Blank is the merchant saying nothing, so the page keeps the words it always had rather than storing a blank. */
-    expect($page->refresh()->checkout_config->orderButton->wording)->toBeNull()
-        ->and($page->checkout_config->orderButton->note)->toBeNull();
+    expect($words->orderButton->wording)->toBeNull()
+        ->and($words->orderButton->note)->toBeNull()
+        ->and($words->subtotal)->toBeNull()
+        ->and($words->delivery)->toBeNull()
+        ->and($words->total)->toBeNull()
+        ->and($words->toArray()['payment']['cash_on_delivery'])->toBe(['long' => null, 'short' => null]);
 });
 
-it('refuses button copy on the box that holds it', function (array $typed, string $box) {
+it('refuses checkout words on the box that holds them', function (array $typed, string $box) {
     $page = Page::factory()->create();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['order_button' => $typed]])
+        ->fillForm(['checkout_config' => ['words' => $typed]])
         ->call('save')
         ->assertHasFormErrors([$box]);
 })->with([
-    'a wording too long for a button' => [['wording' => str_repeat('x', 81)], 'checkout_config.order_button.wording'],
-    'a wording broken over two lines' => [['wording' => "Order\nnow"], 'checkout_config.order_button.wording'],
-    'a note too long for one line beneath the button' => [['note' => str_repeat('y', 201)], 'checkout_config.order_button.note'],
+    'a wording too long for a button' => [['order_button' => ['wording' => str_repeat('x', 81)]], 'checkout_config.words.order_button.wording'],
+    'a wording broken over two lines' => [['order_button' => ['wording' => "Order\nnow"]], 'checkout_config.words.order_button.wording'],
+    'a note too long for one line beneath the button' => [['order_button' => ['note' => str_repeat('y', 201)]], 'checkout_config.words.order_button.note'],
+    'a subtotal label too long' => [['subtotal' => str_repeat('s', 41)], 'checkout_config.words.subtotal'],
+    'a delivery label broken over two lines' => [['delivery' => "Delivery\ncharge"], 'checkout_config.words.delivery'],
+    'a total label too long' => [['total' => str_repeat('t', 41)], 'checkout_config.words.total'],
+    'a long payment label too long' => [['payment' => ['cash_on_delivery' => ['long' => str_repeat('l', 61)]]], 'checkout_config.words.payment.cash_on_delivery.long'],
+    'a short payment label too long' => [['payment' => ['cash_on_delivery' => ['short' => str_repeat('c', 21)]]], 'checkout_config.words.payment.cash_on_delivery.short'],
+    'a short payment label broken over two lines' => [['payment' => ['cash_on_delivery' => ['short' => "C\nOD"]]], 'checkout_config.words.payment.cash_on_delivery.short'],
 ]);
+
+it('asks for the totals labels and the payment labels on the words tab, with the design\'s words in the boxes', function () {
+    $words = checkoutTabsOf(Page::factory()->create())['Words'];
+
+    $sections = collect($words->getChildSchema()->getComponents(withHidden: true))
+        ->filter(fn (Component $component): bool => $component instanceof Section)
+        ->keyBy(fn (Section $section): string => (string) $section->getHeading());
+
+    /** Three sections, in the order the customer meets them on the form: the button they tap, the totals above it, how they pay. */
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment']);
+
+    /**
+     * Bilingual, Bangla first and English second, exactly as designed — shown
+     * as the placeholder so what is in force reads without saving to find out.
+     */
+    expect(fieldInside($sections['Button'], 'checkout_config.words.order_button.wording')?->getPlaceholder())->toBe('অর্ডার করুন / Order Now')
+        ->and(fieldInside($sections['Totals'], 'checkout_config.words.subtotal')?->getPlaceholder())->toBe('সাবটোটাল / Subtotal')
+        ->and(fieldInside($sections['Totals'], 'checkout_config.words.delivery')?->getPlaceholder())->toBe('ডেলিভারি চার্জ / Delivery')
+        ->and(fieldInside($sections['Totals'], 'checkout_config.words.total')?->getPlaceholder())->toBe('মোট / Total')
+        ->and(fieldInside($sections['Payment'], 'checkout_config.words.payment.cash_on_delivery.long')?->getPlaceholder())->toBe('ক্যাশ অন ডেলিভারি / Cash on Delivery')
+        ->and(fieldInside($sections['Payment'], 'checkout_config.words.payment.cash_on_delivery.short')?->getPlaceholder())->toBe('COD');
+
+    /** No colour, corner or size is asked here: those are the Appearance tab's, and a sentence is none of them. */
+    expect(statePathsInside($words))->each->not->toStartWith('checkout_config.style_tokens.');
+});
+
+it('asks for a long and a short label only for the payment methods the page offers, and keeps the others', function () {
+    app(PaymentSettings::class)->with(['sslcommerzEnabled' => true])->save();
+
+    $cashOnly = Page::factory()->create();
+    $both = Page::factory()->create(['checkout_config' => [
+        ...CheckoutConfig::default()->toArray(),
+        'payment_methods' => ['cash_on_delivery', 'sslcommerz'],
+        'words' => ['payment' => ['bkash' => ['long' => 'বিকাশে দিন / Pay by bKash', 'short' => 'bKash']]],
+    ]]);
+
+    /**
+     * A page offering cash on delivery alone is asked for its two labels and
+     * nobody else's; list a second method and its boxes appear. The boxes for
+     * a method the page does not list ride along unseen, so a label written
+     * for bKash survives every save made while bKash is off the page.
+     */
+    $groups = fn (Page $page): Collection => collect(
+        collect(checkoutTabsOf($page)['Words']->getChildSchema()->getComponents(withHidden: true))
+            ->filter(fn (Component $component): bool => $component instanceof Section)
+            ->keyBy(fn (Section $section): string => (string) $section->getHeading())['Payment']
+            ->getChildSchema()
+            ->getComponents(withHidden: true),
+    )->keyBy(fn (Component $group): string => (string) $group->getLabel());
+
+    expect($groups($cashOnly)->keys()->all())->toBe(['Cash on Delivery', 'bKash', 'SSLCommerz', 'aamarPay', 'PayStation'])
+        ->and($groups($cashOnly)['Cash on Delivery']->isHidden())->toBeFalse()
+        ->and($groups($cashOnly)['SSLCommerz']->isHidden())->toBeTrue()
+        ->and($groups($cashOnly)['SSLCommerz']->isDehydratedWhenHidden())->toBeTrue()
+        ->and($groups($both)['SSLCommerz']->isHidden())->toBeFalse()
+        ->and($groups($both)['bKash']->isHidden())->toBeTrue();
+
+    Livewire::test(EditPage::class, ['record' => $both->getKey()])
+        ->fillForm(['checkout_config' => ['words' => ['payment' => ['sslcommerz' => ['long' => 'কার্ডে দিন / Pay by card', 'short' => 'Card']]]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $words = $both->refresh()->checkout_config->words;
+
+    expect($words->paymentLabel(PaymentMethod::SslCommerz))->toBe('কার্ডে দিন / Pay by card')
+        ->and($words->shortPaymentLabel(PaymentMethod::SslCommerz))->toBe('Card')
+        ->and($words->paymentLabel(PaymentMethod::Bkash))->toBe('বিকাশে দিন / Pay by bKash');
+});
 
 it('starts a new page off offering cash on delivery alone with the choice hidden', function () {
     $page = Page::factory()->create();
@@ -2176,7 +2272,7 @@ it('lets a merchant unhide the lone cash on delivery choice and switch its logo 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     expect($html)->toContain('name="payment_method"')
-        ->and($html)->toContain('gio-checkout-choice-label">Cash on Delivery<')
+        ->and($html)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<')
         ->and($html)->not->toContain('gio-checkout-logo');
 });
 

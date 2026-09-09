@@ -784,7 +784,7 @@
                                 @if ($paymentChooser->showsLogos)
                                     <img class="gio-checkout-logo" src="{{ $method->logoUrl() }}" alt="" loading="lazy">
                                 @endif
-                                <span class="gio-checkout-choice-label">{{ $method->getLabel() }}</span>
+                                <span class="gio-checkout-choice-label">{{ $words->paymentLabel($method) }}</span>
                             </label>
                         @endforeach
                     </fieldset>
@@ -814,43 +814,43 @@
         @php($subtotal = (int) ($picksProducts ? $products->filter($opensTicked) : $products)->sum('price'))
         @php($total = $subtotal + ($preselected?->amount ?? 0))
 
+        {{--
+            Three rows in the merchant's words or the design's. The delivery
+            row is labelled as a charge rather than after the arrangement:
+            the arrangement's own name is on the radio above, where it is
+            chosen, and the row beneath it is what that choice costs. Nothing
+            at all where the page charges for no delivery.
+        --}}
         <div class="gio-checkout-summary">
             <p class="gio-checkout-row">
-                <span>Subtotal</span>
+                <span>{{ $words->subtotalLabel() }}</span>
                 <span data-gio-subtotal>{{ \App\Support\Money::format($subtotal) }}</span>
             </p>
 
-            {{--
-                Named after the arrangement rather than after the word
-                "delivery": the customer agreed to "Inside Dhaka", and that is
-                what the row they are asked to pay should say. Nothing at all
-                where the page charges for no delivery.
-            --}}
             @if ($preselected !== null)
                 <p class="gio-checkout-row">
-                    <span data-gio-delivery-label>{{ $preselected->label }}</span>
+                    <span>{{ $words->deliveryLabel() }}</span>
                     <span data-gio-delivery>{{ \App\Support\Money::format($preselected->amount) }}</span>
                 </p>
             @endif
 
             <p class="gio-checkout-row gio-checkout-total">
-                <span>Total</span>
+                <span>{{ $words->totalLabel() }}</span>
                 <span data-gio-total>{{ \App\Support\Money::format($total) }}</span>
             </p>
         </div>
 
         {{--
-            The merchant's words, or the words the button has always carried.
-            Where the wording names the total it is filled in here from the
-            same figure the summary shows, so a visitor whose scripts never run
-            reads a price and never a placeholder; the template then rides on
-            the button for the script, which refills it every time it retotals.
-            No template where nothing is named, so the script leaves a plain
-            button alone.
+            The merchant's words, or the design's. Where the wording names the
+            total it is filled in here from the same figure the summary shows,
+            so a visitor whose scripts never run reads a price and never a
+            placeholder; the template then rides on the button for the script,
+            which refills it every time it retotals. No template where nothing
+            is named, so the script leaves a plain button alone.
         --}}
-        <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $orderButton->carriesTotal() ? ' data-gio-submit-wording="'.e($orderButton->wording()).'"' : '' !!}>{{ $orderButton->wordingFor(\App\Support\Money::format($total)) }}</button>
+        <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $words->orderButton->carriesTotal() ? ' data-gio-submit-wording="'.e($words->orderButton->wording()).'"' : '' !!}>{{ $words->orderButton->wordingFor(\App\Support\Money::format($total)) }}</button>
 
-        <p class="gio-checkout-note">{{ $orderButton->note() }}</p>
+        <p class="gio-checkout-note">{{ $words->orderButton->note() }}</p>
     </form>
 </div>
 
@@ -901,10 +901,10 @@
         var picked = form.querySelector('[data-gio-delivery-option]:checked');
 
         if (picked) {
-            return { label: picked.value, amount: parseInt(picked.dataset.amount, 10) || 0 };
+            return { amount: parseInt(picked.dataset.amount, 10) || 0 };
         }
 
-        return { label: null, amount: parseInt(form.dataset.deliveryAmount, 10) || 0 };
+        return { amount: parseInt(form.dataset.deliveryAmount, 10) || 0 };
     }
 
     /* Whether this form asks the customer which products to buy. */
@@ -968,9 +968,6 @@
         if (button && !button.disabled) {
             button.textContent = button.dataset.gioSubmitWording.split(TOTAL_PLACEHOLDER).join(total);
         }
-
-        /* The row is named after the arrangement the customer just chose. */
-        if (delivery.label !== null) { set('delivery-label', delivery.label); }
     }
 
     /*

@@ -66,7 +66,7 @@ it('draws the chooser with a usable online method first, as the page lists it', 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     expect($html)->toContain('name="payment_method"')
-        ->and(strpos($html, 'gio-checkout-choice-label">SSLCommerz<'))->toBeLessThan(strpos($html, 'gio-checkout-choice-label">Cash on Delivery<'))
+        ->and(strpos($html, 'gio-checkout-choice-label">কার্ড / Card (SSLCommerz)<'))->toBeLessThan(strpos($html, 'gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<'))
         ->and($html)->toContain('value="sslcommerz"')
         ->and($page->checkout_config->offeredMethods())->toBe([PaymentMethod::SslCommerz, PaymentMethod::CashOnDelivery]);
 });

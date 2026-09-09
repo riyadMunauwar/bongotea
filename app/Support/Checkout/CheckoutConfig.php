@@ -96,14 +96,16 @@ class CheckoutConfig implements Arrayable
         public readonly CheckoutLayout $layout,
 
         /**
-         * What the order button says and the line beneath it.
+         * Everything the Checkout says: the order button and the line
+         * beneath it, the totals labels, and what each Payment Method is
+         * called.
          *
          * Copy, not a figure: like the layout and the Default Selection it
          * stays out of the Pricing Fingerprint, so a Merchant editing a word
          * on a live Page never turns away an Order somebody is half-way
          * through typing.
          */
-        public readonly OrderButton $orderButton,
+        public readonly CheckoutWords $words,
 
         /**
          * Which Payment Methods this Page offers, by name and in the order
@@ -184,8 +186,8 @@ class CheckoutConfig implements Arrayable
              */
             layout: CheckoutLayout::Stacked,
 
-            /** The words the button has always carried. */
-            orderButton: OrderButton::default(),
+            /** The design's words, Bangla first and English second. */
+            words: CheckoutWords::default(),
 
             /**
              * Cash on Delivery alone, with the choice hidden: every Page that
@@ -284,8 +286,8 @@ class CheckoutConfig implements Arrayable
             /** Absent, or a name nothing draws, is the arrangement it has always had. */
             layout: CheckoutLayout::fromStored($stored['layout'] ?? null),
 
-            /** Absent, blank, or something the tab would refuse, is the wording it has always had. */
-            orderButton: OrderButton::fromArray((array) ($stored['order_button'] ?? [])),
+            /** Absent, blank, or something the tab would refuse, is the design's words. */
+            words: CheckoutWords::fromArray(self::wordsFromArray($stored)),
 
             /**
              * Absent is Cash on Delivery alone, with the choice hidden and
@@ -329,6 +331,32 @@ class CheckoutConfig implements Arrayable
         }
 
         return $methods;
+    }
+
+    /**
+     * The stored shape of a Config's words, with the order button read from
+     * where it was stored before the words existed.
+     *
+     * The button's wording and note once sat at the top level under
+     * `order_button`; they live under `words` now, beside the rest of what
+     * the Checkout says. A Config written before the move is read from the
+     * old key, and the first save from the tab writes the new shape. No data
+     * migration: the reading is what carries it, as it does for the retired
+     * form-only layout. Where a stored shape somehow holds both, the words
+     * object wins, because it is the shape the tab writes.
+     *
+     * @param  array<string, mixed>  $stored
+     * @return array<string, mixed>
+     */
+    private static function wordsFromArray(array $stored): array
+    {
+        $words = (array) ($stored['words'] ?? []);
+
+        if (! array_key_exists('order_button', $words) && array_key_exists('order_button', $stored)) {
+            $words['order_button'] = $stored['order_button'];
+        }
+
+        return $words;
     }
 
     /**
@@ -692,7 +720,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, words: array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
      */
     public function toArray(): array
     {
@@ -704,7 +732,7 @@ class CheckoutConfig implements Arrayable
             'product_picker' => $this->productPicker,
             'default_selection' => $this->defaultSelection,
             'layout' => $this->layout->value,
-            'order_button' => $this->orderButton->toArray(),
+            'words' => $this->words->toArray(),
             'payment_methods' => PaymentMethod::names($this->paymentMethods),
             'show_payment_logos' => $this->showPaymentLogos,
             'hide_lone_cash_choice' => $this->hideLoneCashChoice,

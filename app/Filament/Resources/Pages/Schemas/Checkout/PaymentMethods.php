@@ -143,9 +143,14 @@ class PaymentMethods
      * The methods the form's state lists, read totally: a name nothing knows
      * is skipped here as it is on read.
      *
+     * Public because it is the seam Words reads the list through, the way
+     * `LayoutChoice::selected()` is for the layout: the Words tab asks for a
+     * label per listed method rather than reading the box itself, so the two
+     * tabs cannot disagree about what is listed.
+     *
      * @return list<PaymentMethod>
      */
-    private static function listedMethods(mixed $listed): array
+    public static function listedMethods(mixed $listed): array
     {
         $methods = [];
 

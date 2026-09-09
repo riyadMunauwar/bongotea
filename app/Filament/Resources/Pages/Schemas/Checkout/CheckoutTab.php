@@ -104,18 +104,34 @@ class CheckoutTab
                                 PaymentMethods::loneCash(),
                             ]),
 
+                        /**
+                         * After payment, because the last of what
+                         * the checkout says is what each method is
+                         * called; and before the colours, because a
+                         * merchant reads a page before they restyle
+                         * it. Every string the checkout says lives
+                         * here and nowhere else.
+                         */
+                        Tab::make('Words')
+                            ->columns(1)
+                            ->schema([
+                                /**
+                                 * In the order the customer meets
+                                 * them on the form: the button they
+                                 * tap, the totals above it, and how
+                                 * they pay.
+                                 */
+                                Words::button(),
+
+                                Words::totals(),
+
+                                Words::payment(),
+                            ]),
+
                         Tab::make('Appearance')
                             ->columns(1)
                             ->schema([
                                 Appearance::section(),
-
-                                /**
-                                 * After the tokens, because it is
-                                 * the smaller change: a merchant
-                                 * restyling a checkout reaches for
-                                 * a colour before a sentence.
-                                 */
-                                OrderButtonCopy::section(),
                             ]),
                     ]),
             ]);

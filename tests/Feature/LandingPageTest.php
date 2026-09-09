@@ -1267,15 +1267,17 @@ it('lists the summary line by line with a rule above an emphasised total', funct
     preg_match_all('/class="gio-checkout-row[^"]*"/', $summary[1] ?? '', $rows);
 
     /**
-     * Subtotal, then the arrangement by its own name, then the total, each a
-     * row with the words left and the figure right — a receipt a customer can
-     * read down to what the courier will collect.
+     * Subtotal, then the delivery charge, then the total, each a row with the
+     * words left and the figure right — a receipt a customer can read down to
+     * what the courier will collect. The arrangement's own name is on the
+     * radio above, where it is chosen, as the designs draw it.
      */
     expect($rows[0])->toBe([
         'class="gio-checkout-row"',
         'class="gio-checkout-row"',
         'class="gio-checkout-row gio-checkout-total"',
-    ])->and($summary[1] ?? '')->toMatch('/Subtotal.*Inside Dhaka.*Total/s');
+    ])->and($summary[1] ?? '')->toMatch('/Subtotal.*Delivery.*Total/s')
+        ->and($summary[1] ?? '')->not->toContain('Inside Dhaka');
 
     preg_match('/\.gio-checkout-total \{([^}]*)\}/', $styles, $total);
 
@@ -2205,10 +2207,10 @@ it('lets a paired question be narrower than the box it types in', function () {
 });
 
 it('puts the merchant\'s words on the order button and beneath it', function () {
-    pageStyled(['order_button' => [
+    pageStyled(['words' => ['order_button' => [
         'wording' => 'Send me the jacket',
         'note' => 'You pay the courier, not us.',
-    ]]);
+    ]]]);
 
     $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
 
@@ -2216,23 +2218,87 @@ it('puts the merchant\'s words on the order button and beneath it', function () 
         ->and($markup)->toContain('<p class="gio-checkout-note">You pay the courier, not us.</p>');
 });
 
-it('keeps the wording the button has always had on a page that says nothing about it', function () {
-    pageStyled([]);
+it('still reads the order button from where a config stored it before the words existed', function () {
+    pageStyled(['order_button' => [
+        'wording' => 'Send me the jacket',
+        'note' => 'You pay the courier, not us.',
+    ]]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * No data migration: a Config written before the button's words moved
+     * under `words` is read from the key it was stored under, and the first
+     * save from the tab writes the new shape.
+     */
+    expect($markup)->toContain('data-gio-submit>Send me the jacket</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">You pay the courier, not us.</p>');
+});
+
+it('says the design\'s words, Bangla first and English second, on a page that says nothing', function () {
+    pageStyled(['payment_methods' => ['cash_on_delivery'], 'hide_lone_cash_choice' => false]);
 
     $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
 
     /**
      * Blank is the merchant saying nothing, and a page that says nothing reads
-     * exactly as it did before the button could be reworded. No template rides
-     * on the button either: there is no placeholder for the script to fill.
+     * the way the design does. No template rides on the button either: there
+     * is no placeholder for the script to fill.
      */
-    expect($markup)->toContain('data-gio-submit>Order now — Cash on delivery</button>')
-        ->and($markup)->toContain('<p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>')
-        ->and($markup)->not->toContain('data-gio-submit-wording');
+    expect($markup)->toContain('data-gio-submit>অর্ডার করুন / Order Now</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">পার্সেল হাতে পেয়ে নগদে পরিশোধ করুন / Pay in cash when the parcel reaches you.</p>')
+        ->and($markup)->not->toContain('data-gio-submit-wording')
+        ->and($markup)->toContain('<span>সাবটোটাল / Subtotal</span>')
+        ->and($markup)->toContain('<span>মোট / Total</span>')
+        ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<');
+});
+
+it('puts the merchant\'s words on the totals rows and beside each payment method', function () {
+    pageStyled([
+        'delivery_options' => [['label' => 'Inside Dhaka', 'amount' => 6000]],
+        'payment_methods' => ['cash_on_delivery'],
+        'hide_lone_cash_choice' => false,
+        'words' => [
+            'subtotal' => 'পণ্যের দাম / Items',
+            'delivery' => 'কুরিয়ার / Courier',
+            'total' => 'সর্বমোট / Grand total',
+            'payment' => ['cash_on_delivery' => ['long' => 'হাতে হাতে / At the door', 'short' => 'Door']],
+        ],
+    ]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The summary rows and the payment row in the merchant's words. The long
+     * label is the one drawn for now; which of the two a layout draws is the
+     * layout's decision, and every layout as it stands has the room for it.
+     */
+    expect($markup)->toContain('<span>পণ্যের দাম / Items</span>')
+        ->and($markup)->toContain('<span>কুরিয়ার / Courier</span>')
+        ->and($markup)->toContain('<span>সর্বমোট / Grand total</span>')
+        ->and($markup)->toContain('gio-checkout-choice-label">হাতে হাতে / At the door<')
+        ->and($markup)->not->toContain('Door<');
+});
+
+it('draws the words it always had where a stored word is one the checkout tab would refuse', function () {
+    pageStyled(['words' => [
+        'subtotal' => str_repeat('s', 41),
+        'delivery' => "Delivery\ncharge",
+        'total' => str_repeat('t', 41),
+        'payment' => ['cash_on_delivery' => ['long' => str_repeat('l', 61)]],
+    ], 'delivery_options' => [['label' => 'Inside Dhaka', 'amount' => 6000]], 'hide_lone_cash_choice' => false]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /** Refused twice: worded on the tab, silent here where a Config written by another route has nobody to tell. */
+    expect($markup)->toContain('<span>সাবটোটাল / Subtotal</span>')
+        ->and($markup)->toContain('<span>ডেলিভারি চার্জ / Delivery</span>')
+        ->and($markup)->toContain('<span>মোট / Total</span>')
+        ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<');
 });
 
 it('puts the live total on the button where the merchant asked for it', function () {
-    $page = pageStyled(['order_button' => ['wording' => 'Order for {total}']]);
+    $page = pageStyled(['words' => ['order_button' => ['wording' => 'Order for {total}']]]);
     $page->products()->sync([Product::factory()->create(['price' => 99000])->getKey()]);
     $page->checkout_config = CheckoutConfig::fromArray([
         ...$page->checkout_config->toArray(),
@@ -2258,7 +2324,7 @@ it('puts the live total on the button where the merchant asked for it', function
 });
 
 it('drops button copy the checkout tab would refuse and draws the words it always had', function (array $stored) {
-    pageStyled(['order_button' => $stored]);
+    pageStyled(['words' => ['order_button' => $stored]]);
 
     $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
 
@@ -2266,8 +2332,8 @@ it('drops button copy the checkout tab would refuse and draws the words it alway
      * Refused twice, like every value a Config holds: worded on the tab, and
      * silent here where a Config written by another route has nobody to tell.
      */
-    expect($markup)->toContain('data-gio-submit>Order now — Cash on delivery</button>')
-        ->and($markup)->toContain('<p class="gio-checkout-note">Pay in cash when the parcel reaches you.</p>');
+    expect($markup)->toContain('data-gio-submit>অর্ডার করুন / Order Now</button>')
+        ->and($markup)->toContain('<p class="gio-checkout-note">পার্সেল হাতে পেয়ে নগদে পরিশোধ করুন / Pay in cash when the parcel reaches you.</p>');
 })->with([
     'copy too long for the button and the line beneath it' => [['wording' => str_repeat('x', 81), 'note' => str_repeat('y', 201)]],
     'a wording broken over two lines' => [['wording' => "Order\nnow"]],
@@ -2306,7 +2372,7 @@ it('draws a single cash on delivery row with its logo once the page unhides the 
      */
     expect($payment[1] ?? '')->toContain('<legend class="gio-checkout-label">Payment</legend>')
         ->and($rows[1])->toHaveCount(1)
-        ->and($rows[1][0])->toMatch('/type="radio"[^>]*name="payment_method"[^>]*value="cash_on_delivery"[^>]*checked required>.*<img class="gio-checkout-logo" src="[^"]*\/images\/payment-methods\/cash-on-delivery\.svg" alt="".*gio-checkout-choice-label">Cash on Delivery</s')
+        ->and($rows[1][0])->toMatch('/type="radio"[^>]*name="payment_method"[^>]*value="cash_on_delivery"[^>]*checked required>.*<img class="gio-checkout-logo" src="[^"]*\/images\/payment-methods\/cash-on-delivery\.svg" alt="".*gio-checkout-choice-label">ক্যাশ অন ডেলিভারি \/ Cash on Delivery</s')
         ->and($markup)->toContain('data-gio-error-for="payment_method"');
 
     /** The logo rule rides only on a page that draws one, sized in em like everything else below the root. */
@@ -2319,7 +2385,7 @@ it('lists payment methods by name alone when the page switches logos off', funct
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /** No logo drawn, and no rule for one either: the block appears only where it applies. */
-    expect(checkoutMarkup($html))->toContain('gio-checkout-choice-label">Cash on Delivery<')
+    expect(checkoutMarkup($html))->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<')
         ->and($html)->not->toContain('gio-checkout-logo');
 });
 
