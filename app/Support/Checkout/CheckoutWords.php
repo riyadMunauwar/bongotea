@@ -219,7 +219,7 @@ final class CheckoutWords
      * The stored shape: the shared words under their own keys, and every
      * layout-owned slot flat beside them under the slot's key.
      *
-     * @return array<string, mixed>
+     * @return array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>, ...<string, ?string>}
      */
     public function toArray(): array
     {

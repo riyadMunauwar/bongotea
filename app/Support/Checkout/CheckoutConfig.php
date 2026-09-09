@@ -720,7 +720,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, words: array<string, mixed>, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, words: array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>, ...<string, ?string>}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
      */
     public function toArray(): array
     {

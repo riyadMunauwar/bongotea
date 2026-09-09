@@ -112,10 +112,10 @@ class Words
             ->columns(1)
             ->visible(fn (Get $get): bool => LayoutChoice::selected($get) === $layout)
             ->dehydratedWhenHidden()
-            ->schema(array_map(self::slot(...), $layout->wordSlots()));
+            ->schema(array_map(self::boxFor(...), $layout->wordSlots()));
     }
 
-    private static function slot(WordSlot $slot): TextInput
+    private static function boxFor(WordSlot $slot): TextInput
     {
         return TextInput::make('checkout_config.words.'.$slot->value)
             ->label($slot->label())

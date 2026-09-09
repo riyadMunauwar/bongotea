@@ -271,7 +271,7 @@
         --}}
         .gio-checkout-quantity-stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); background: var(--gio-surface); overflow: hidden; }
         .gio-checkout-quantity-step { flex: none; width: 1.875rem; height: 1.875rem; padding: 0; border: 0; background: transparent; color: inherit; font-family: inherit; font-size: 1rem; line-height: 1; cursor: pointer; }
-        .gio-checkout-quantity-input { width: 2rem; padding: 0; border: 0; border-radius: 0; font-size: .8125rem; font-weight: 600; text-align: center; }
+        .gio-checkout-quantity-input { width: 1.625rem; padding: 0; border: 0; border-radius: 0; font-size: .8125rem; font-weight: 600; text-align: center; }
         {{--
             The delivery choice is two boxes side by side beneath the
             questions, each taking half the row and wrapping to a row of its

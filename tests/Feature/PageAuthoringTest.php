@@ -1602,7 +1602,7 @@ it('says where the widths are set that a narrow-column layout will not pair them
         'checkout_config' => CheckoutConfig::fromArray(['layout' => $narrow->value]),
     ]);
 
-    $compact = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+    $narrowed = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
 
     $page->update(['checkout_config' => CheckoutConfig::fromArray([])]);
 
@@ -1615,7 +1615,7 @@ it('says where the widths are set that a narrow-column layout will not pair them
      * tab the merchant has already moved on from — and it goes away again the
      * moment the page is arranged in something that pairs.
      */
-    expect($compact)->toContain('asks every question across the whole row')
+    expect($narrowed)->toContain('asks every question across the whole row')
         ->and($paired)->not->toContain('asks every question across the whole row');
 })->with([
     'compact embed' => CheckoutLayout::CompactEmbed,

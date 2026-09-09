@@ -2263,7 +2263,7 @@ it('draws the nine layouts not yet drawn to their designs as the base does, unde
      * meets is the same island.
      */
     expect($layout->styleRules())->toBe('')
-        ->and(styleBlock($html))->toBe(styleBlock($stacked))
+        ->and(baseSheet(styleBlock($html), $layout))->toBe(baseSheet(styleBlock($stacked), CheckoutLayout::Stacked))
         ->and($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
         ->and(checkoutMarkup($html))->not->toContain('gio-checkout-heading')
         ->and(checkoutMarkup($html))->toContain('class="gio-checkout-summary"');
