@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\Page;
 use App\Models\Payment;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Orders\OrderOwnership;
 use App\Support\Settings\PaymentSettings;
 use Illuminate\Support\Facades\Http;
 use Spatie\Activitylog\Models\Activity;
@@ -67,6 +68,36 @@ it('captures the order, starts a pending payment for its total, and sends the cu
 
     /** The mandatory fields were filled from the Order, and every way back is the Processing Page addressed by our reference. */
     $gateway->assertStartedFor($payment, processingUrl($payment), notificationUrl($payment));
+
+    /** The ownership cookie is handed over here, before the browser leaves for the gateway (ADR-0014). */
+    $response->assertCookie(OrderOwnership::COOKIE, json_encode([$order->order_number]));
+})->with('online gateways');
+
+it('lands the browser that ordered on the full page after the gateway sends it back with no cookies', function (GatewayScript $gateway) {
+    $gateway->fakeStart();
+
+    $capture = $this->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
+        ->assertCreated();
+    $ownership = $capture->getCookie(OrderOwnership::COOKIE)->getValue();
+    $payment = Payment::sole();
+
+    /** The return is a cross-site POST carrying nothing: no session, no cookie of ours. */
+    $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
+
+    $gateway->fakeVerifiedPaid($payment);
+
+    $this->postJson(verifyUrl($payment))
+        ->assertOk()
+        ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
+
+    /** The same-origin visit that follows carries what Capture handed over, and that is what unlocks the Customer. */
+    $this->withCookie(OrderOwnership::COOKIE, $ownership)
+        ->get(route('checkout.order-complete', $payment->order->order_number))
+        ->assertOk()
+        ->assertSee('Paid')
+        ->assertSee('Deliver to')
+        ->assertSee('Rahim Uddin')
+        ->assertSee('01712345678');
 })->with('online gateways');
 
 it('answers a plain form post with a 303 to the gateway', function (GatewayScript $gateway) {

@@ -6,6 +6,7 @@ use App\Http\Requests\RetryPaymentRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
 use App\Support\Orders\OrderCapture;
+use App\Support\Orders\OrderOwnership;
 use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,14 @@ class CheckoutController extends Controller
     {
         $order = $capture->capture($request->page(), $request->details());
 
-        return $this->sendOn($request, $order);
+        /**
+         * The browser that placed the Order is handed ownership of it here,
+         * on the Capture response itself, so it is in hand before the browser
+         * leaves for a gateway (ADR-0014). The Retry Page's choice sets no
+         * cookie: the browser choosing again is the one that already has it.
+         */
+        return $this->sendOn($request, $order)
+            ->withCookie(OrderOwnership::fromRequest($request)->placing($order->order_number)->cookie());
     }
 
     /**
@@ -47,20 +55,23 @@ class CheckoutController extends Controller
      * show and one thing to do, which is the Retry Page, so it is sent there
      * rather than drawn as "saved".
      *
-     * Addressed by `order_number` alone, so it deliberately shows the *order*
-     * and not the *customer*: what was bought, what it costs, and that someone
-     * will call. Printing the name, phone or address here would put personal
-     * details behind a URL that lives in browser history, Referer headers and
-     * anything else that sees a link — for no gain, since the visitor typed
-     * them moments ago.
+     * Addressed by `order_number` alone, and that address ends up in browser
+     * history and Referer headers, so it is not what unlocks the Customer's
+     * details. What does is the cookie Capture handed the browser that placed
+     * the Order (ADR-0014): a request carrying it sees the Order in full, and
+     * any other request sees the Order and not the Customer. A stranger is
+     * shown less, never refused.
      */
-    public function orderComplete(Order $order): Response|RedirectResponse
+    public function orderComplete(Request $request, Order $order): Response|RedirectResponse
     {
         if ($order->isUnpaid()) {
             return redirect()->route('checkout.retry', $order->order_number);
         }
 
-        return $this->uncachedPage('checkout.order-complete', ['order' => $order->load('lines')]);
+        return $this->uncachedPage('checkout.order-complete', [
+            'order' => $order->load('lines'),
+            'placedByThisBrowser' => OrderOwnership::fromRequest($request)->owns($order->order_number),
+        ]);
     }
 
     /**

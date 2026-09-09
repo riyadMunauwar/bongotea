@@ -7,10 +7,11 @@
     it — so it carries its own minimal styles inline. It is never cached: it is
     addressed per order and hit once.
 
-    It deliberately shows the Order and not the Customer. This URL is a bearer
-    handle that ends up in browser history and Referer headers, and the visitor
-    typed their own name and address moments ago, so printing them back gains
-    nothing and puts personal details behind a link.
+    It shows the Customer only to the browser that placed the Order. This URL
+    ends up in browser history and Referer headers, so the address unlocks
+    nothing; what does is the cookie Capture handed that browser, which the
+    controller reads into `$placedByThisBrowser` (ADR-0014). Anyone else sees
+    the Order and not the Customer: shown less, never refused.
 --}}
 <!doctype html>
 <html lang="en">
@@ -38,6 +39,11 @@
         .grand { margin: .5rem 0 0; font-size: 1.125rem; font-weight: 700; }
         .paid { display: inline-block; margin-left: .5rem; padding: .125rem .5rem; background: #dcfce7; color: #166534; border-radius: 999px; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
         .note { margin: 1.25rem 0 0; padding: .75rem; background: #ecfdf5; border-radius: .375rem; font-size: .875rem; color: #065f46; text-align: center; }
+        .deliver-to { margin: 1.25rem 0 0; padding: .75rem 0 0; border-top: 1px solid #e5e7eb; font-size: .9375rem; }
+        .deliver-to h2 { margin: 0 0 .5rem; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; font-weight: 600; }
+        .deliver-to p { margin: 0 0 .25rem; }
+        .deliver-to .deliver-to-name { font-weight: 600; }
+        .deliver-to .deliver-to-note { margin-top: .5rem; color: #4b5563; }
     </style>
 </head>
 <body>
@@ -112,6 +118,30 @@
                 <span>{{ \App\Support\Money::format($order->total) }}</span>
             </p>
         </div>
+
+        {{--
+            Where the Order is going, for the browser that placed it and nobody
+            else. Omitted rather than blanked for any other reader, so the
+            page closes up and gives no hint that a block is missing. The
+            address and district come from the Order as captured, which may
+            be blank on a Page that stopped asking; a blank line is skipped.
+        --}}
+        @if ($placedByThisBrowser)
+            <section class="deliver-to" aria-labelledby="deliver-to">
+                <h2 id="deliver-to">Deliver to</h2>
+                <p class="deliver-to-name">{{ $order->customer_name }}</p>
+                <p>{{ $order->customer_phone }}</p>
+                @if (filled($order->customer_address))
+                    <p>{{ $order->customer_address }}</p>
+                @endif
+                @if (filled($order->customer_district))
+                    <p>{{ $order->customer_district }}</p>
+                @endif
+                @if ($order->deliveryNote() !== null)
+                    <p class="deliver-to-note">Note: {{ $order->deliveryNote() }}</p>
+                @endif
+            </section>
+        @endif
 
         <p class="note">We will call you shortly on the number you gave to confirm your order.</p>
     </div>

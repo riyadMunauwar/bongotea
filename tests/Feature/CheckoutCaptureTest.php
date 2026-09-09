@@ -11,7 +11,9 @@ use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\Orders\CapturedAnswer;
+use App\Support\Orders\OrderOwnership;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 
 it('captures an order at the price agreed on the page', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
@@ -326,7 +328,59 @@ it('answers a plain form post with a redirect the browser will not resubmit', fu
     expect($response->getStatusCode())->toBe(303);
 });
 
-it('shows the visitor their order without printing their details back', function () {
+/**
+ * The ownership cookie a Capture response handed the browser, as the browser
+ * would send it back: the test client decrypts it, and `withCookie()` encrypts
+ * it again on the way in.
+ */
+function ownershipHandedBy(TestResponse $capture): string
+{
+    return $capture->getCookie(OrderOwnership::COOKIE)->getValue();
+}
+
+it('hands the browser that ordered an encrypted cookie naming the order, and nothing else', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $response = $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $response->assertCookie(OrderOwnership::COOKIE, json_encode([$order->order_number]));
+
+    /** Encrypted by the framework on the way out, so the number is not readable off the wire. */
+    $cookie = $response->getCookie(OrderOwnership::COOKIE, decrypt: false);
+
+    expect($cookie->getValue())->not->toContain($order->order_number)
+        ->and($cookie->isHttpOnly())->toBeTrue()
+        ->and($cookie->getSameSite())->toBe('lax')
+        ->and($cookie->getExpiresTime())->toBeGreaterThan(now()->addDays(29)->getTimestamp())
+        ->and($cookie->getExpiresTime())->toBeLessThanOrEqual(now()->addDays(30)->getTimestamp());
+});
+
+it('shows the browser that ordered where the order is going', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $page = sellingPage($product);
+
+    $capture = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => 2],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
+        ->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee($order->order_number)
+        ->assertSee('Winter Jacket')
+        ->assertSee('৳2040.00')
+        ->assertSee('Deliver to')
+        ->assertSee('Rahim Uddin')
+        ->assertSee('01712345678')
+        ->assertSee('House 4, Road 12, Banani')
+        ->assertSee('Dhaka');
+});
+
+it('shows anyone else the order and not the customer', function (?array $placed) {
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
     $page = sellingPage($product);
 
@@ -336,28 +390,95 @@ it('shows the visitor their order without printing their details back', function
 
     $order = Order::sole();
 
-    $response = $this->get(route('checkout.order-complete', $order->order_number));
-
-    $response->assertOk()
-        ->assertSee($order->order_number)
-        ->assertSee('Winter Jacket')
-        ->assertSee('৳2040.00');
+    $reader = $placed === null ? $this : $this->withCookie(OrderOwnership::COOKIE, json_encode($placed));
 
     /**
      * This URL is a bearer handle that ends up in browser history and Referer
-     * headers, so the page shows the order and not the customer.
+     * headers, so the address unlocks nothing: a stranger is shown less, and
+     * never refused (ADR-0014).
      */
-    $response->assertDontSee('Rahim Uddin')
+    $reader->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee($order->order_number)
+        ->assertSee('Winter Jacket')
+        ->assertSee('৳2040.00')
+        ->assertDontSee('Deliver to')
+        ->assertDontSee('Rahim Uddin')
         ->assertDontSee('01712345678')
         ->assertDontSee('Banani');
+})->with([
+    'no cookie' => [null],
+    'a cookie naming another order' => [[['ZZZZ9999']]],
+    'a cookie naming nothing' => [[[]]],
+]);
+
+it('shows the customer their note beside the address when they left one', function () {
+    $page = checkoutAlsoAsking(sellingPage(Product::factory()->create()), [
+        question('note', 'textarea', ['label' => 'Note for the courier']),
+    ]);
+
+    $capture = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'note' => 'Ring the bell twice',
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    /** Before the cookie is presented: `withCookie()` keeps it for every later request in the test. */
+    $this->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertDontSee('Ring the bell twice');
+
+    $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
+        ->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee('Note: Ring the bell twice');
+});
+
+it('remembers the most recent orders a browser placed and drops the oldest first', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $cookie = null;
+    $placed = [];
+
+    /** The test client sends no cookies on a JSON request unless told to. */
+    $this->withCredentials();
+
+    foreach (range(1, OrderOwnership::KEEP + 1) as $ignored) {
+        $browser = $cookie === null ? $this : $this->withCookie(OrderOwnership::COOKIE, $cookie);
+        $cookie = ownershipHandedBy($browser->postJson(route('checkout.store'), capturePayload($page))->assertCreated());
+        $placed[] = Order::latest('id')->value('order_number');
+    }
+
+    expect(json_decode($cookie, true))->toBe(array_slice($placed, 1));
+
+    $this->withCookie(OrderOwnership::COOKIE, $cookie)
+        ->get(route('checkout.order-complete', $placed[0]))
+        ->assertOk()
+        ->assertDontSee('Deliver to');
+
+    $this->withCookie(OrderOwnership::COOKIE, $cookie)
+        ->get(route('checkout.order-complete', end($placed)))
+        ->assertOk()
+        ->assertSee('Deliver to');
+});
+
+it('starts the list afresh from a cookie it cannot read', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $this->withCredentials()
+        ->withCookie(OrderOwnership::COOKIE, 'not a list')
+        ->postJson(route('checkout.store'), capturePayload($page))
+        ->assertCreated()
+        ->assertCookie(OrderOwnership::COOKIE, json_encode([Order::sole()->order_number]));
 });
 
 it('does not keep the order complete page anywhere it could be seen again', function () {
     $page = sellingPage(Product::factory()->create());
 
-    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+    $capture = $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
-    $response = $this->get(route('checkout.order-complete', Order::sole()->order_number));
+    $response = $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
+        ->get(route('checkout.order-complete', Order::sole()->order_number));
 
     expect($response->headers->get('Cache-Control'))->toContain('no-store')
         ->and($response->headers->get('X-Robots-Tag'))->toContain('noindex');

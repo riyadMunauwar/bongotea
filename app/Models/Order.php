@@ -70,6 +70,12 @@ class Order extends Model
     private const PAID_FLAG = 'is_paid';
 
     /**
+     * The key of the Merchant's question whose answer is the Customer's note
+     * for the courier; see `deliveryNote()`.
+     */
+    private const NOTE_ANSWER_KEY = 'note';
+
+    /**
      * Mirrors the database defaults, because an Order exists before its lines
      * do: Capture inserts the Order and then attaches the line that gives it a
      * subtotal, and the total invariant has to hold over an integer in between.
@@ -310,6 +316,26 @@ class Order extends Model
     public function isUnpaid(): bool
     {
         return $this->payment_method->isOnline() && ! $this->isPaid();
+    }
+
+    /**
+     * What the Customer wrote for the courier, when the Page asked and they
+     * answered.
+     *
+     * The Checkout has no built-in note; a Merchant who wants one adds a
+     * question keyed `note`, and this is that answer as a person reads it.
+     * Null where the Page never asked, or the Customer left it blank, so the
+     * Order Complete Page draws a line only when there is one to draw.
+     */
+    public function deliveryNote(): ?string
+    {
+        foreach ($this->answers ?? [] as $answer) {
+            if ($answer->key === self::NOTE_ANSWER_KEY && $answer->display !== '') {
+                return $answer->display;
+            }
+        }
+
+        return null;
     }
 
     /**

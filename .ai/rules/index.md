@@ -12,3 +12,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/** | .ai/rules/settings.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | tests/** | .ai/rules/tests.md |
+| app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
