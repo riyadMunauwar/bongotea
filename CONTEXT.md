@@ -153,15 +153,23 @@ A gateway telling the system on its own that something happened to a Payment. Tr
 _Avoid_: webhook, IPN, callback
 
 **Processing Page**:
-Where a gateway sends a Customer back. It says the Payment is being verified, runs the Verification, then sends the Customer to the Thank-you Page or the Retry Page. It prints nothing about the Customer, because it is the one address a gateway's own logs hold.
+Where a gateway sends a Customer back. It says the Payment is being verified, runs the Verification, then sends the Customer to the Order Complete Page or the Retry Page. It prints nothing about the Customer, because it is the one address a gateway's own logs hold.
 _Avoid_: callback page, return URL, success page
 
-**Thank-you Page**:
-Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone, and shows the Order and not the Customer.
-_Avoid_: confirmation page, success page, receipt
+**Order Complete Page**:
+Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone. It shows the Order in full — the Customer's name, number and address included — only to the browser that placed it, for as long as that browser keeps what Capture handed it; anyone else holding the address sees the Order and not the Customer. The address itself unlocks nothing, so it may sit in history and Referer headers without giving anything away.
+_Avoid_: thank-you page, confirmation page, success page, receipt
+
+**Order Complete Config**:
+Everything one Page decides about its own Order Complete Page: how it is arranged, and what it says in the Merchant's own words. It belongs to a single Page and is complete on its own, like a Checkout Config, and is not part of one: the Checkout captures the Order, and this is where the Customer lands afterwards. A Page that says nothing keeps the words the page has always had.
+_Avoid_: thank-you settings, success page settings, template, theme
+
+**Order Complete Layout**:
+How an Order Complete Page is arranged: what it draws, and nothing about what the Order contains. Every layout draws the order number, the Order's lines and totals, how it is paid, and where it is delivered when the browser is the one that placed it. A layout may draw a slot of its own — a row of steps, a set of tiles — and only a Page arranged in that layout is asked what the slot says.
+_Avoid_: template, theme, skin, variant, design
 
 **Retry Page**:
-Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Thank-you Page.
+Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Order Complete Page.
 _Avoid_: failure page, error page, payment page
 
 ### People
