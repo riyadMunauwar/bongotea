@@ -157,7 +157,7 @@ Where a gateway sends a Customer back. It says the Payment is being verified, ru
 _Avoid_: callback page, return URL, success page
 
 **Order Complete Page**:
-Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone. It shows the Order in full — the Customer's name, number and address included — only to the browser that placed it, for as long as that browser keeps what Capture handed it; anyone else holding the address sees the Order and not the Customer. The address itself unlocks nothing, so it may sit in history and Referer headers without giving anything away.
+Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone. It shows the Order in full — the Customer's name, number and address included, and their note where the Page asked a question keyed `note` — only to the browser that placed it, for as long as that browser keeps what Capture handed it; anyone else holding the address sees the Order and not the Customer. The address itself unlocks nothing, so it may sit in history and Referer headers without giving anything away.
 _Avoid_: thank-you page, confirmation page, success page, receipt
 
 **Order Complete Config**:

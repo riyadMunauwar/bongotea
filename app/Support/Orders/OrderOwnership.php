@@ -88,7 +88,9 @@ final class OrderOwnership
      * HttpOnly because nothing in the page's script needs it; SameSite Lax
      * because the one cross-site request in the flow, the gateway's POST
      * return, has no use for it, and the same-origin visit that follows is
-     * exactly what Lax sends it on. The framework encrypts the value.
+     * exactly what Lax sends it on. The framework encrypts the value, and
+     * the Secure flag follows the session cookie's (`session.secure`), so
+     * production over HTTPS marks it and a local HTTP install still works.
      */
     public function cookie(): Cookie
     {

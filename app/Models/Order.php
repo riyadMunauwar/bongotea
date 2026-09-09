@@ -323,15 +323,16 @@ class Order extends Model
      * answered.
      *
      * The Checkout has no built-in note; a Merchant who wants one adds a
-     * question keyed `note`, and this is that answer as a person reads it.
-     * Null where the Page never asked, or the Customer left it blank, so the
-     * Order Complete Page draws a line only when there is one to draw.
+     * question keyed `note`, and this is what the Customer typed into it.
+     * Null where the Page never asked, the Customer left it blank, or the
+     * question keyed so is not one a person types into, so the Order Complete
+     * Page draws a line only when there is one to draw.
      */
     public function deliveryNote(): ?string
     {
-        foreach ($this->answers ?? [] as $answer) {
-            if ($answer->key === self::NOTE_ANSWER_KEY && $answer->display !== '') {
-                return $answer->display;
+        foreach ($this->answers as $answer) {
+            if ($answer->key === self::NOTE_ANSWER_KEY && $answer->optionLabel === null && is_string($answer->value) && trim($answer->value) !== '') {
+                return $answer->value;
             }
         }
 

@@ -137,8 +137,8 @@
                 @if (filled($order->customer_district))
                     <p>{{ $order->customer_district }}</p>
                 @endif
-                @if ($order->deliveryNote() !== null)
-                    <p class="deliver-to-note">Note: {{ $order->deliveryNote() }}</p>
+                @if (($note = $order->deliveryNote()) !== null)
+                    <p class="deliver-to-note">Note: {{ $note }}</p>
                 @endif
             </section>
         @endif
