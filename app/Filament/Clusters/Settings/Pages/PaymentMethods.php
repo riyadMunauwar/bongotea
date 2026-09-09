@@ -7,6 +7,7 @@ use App\Support\Settings\PaymentSettings;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
@@ -65,6 +66,54 @@ class PaymentMethods extends SettingsPage
 
                     self::sandbox(PaymentMethod::SslCommerz),
                     self::logo(PaymentMethod::SslCommerz),
+                ]),
+
+            Section::make(PaymentMethod::Bkash->getLabel())
+                ->description('bKash wallets through your bKash merchant account. Offered on a page only once it is switched on here and all four credentials are filled in. The hosts are the ones bKash gave you at onboarding.')
+                ->columns(1)
+                ->schema([
+                    self::switch(PaymentMethod::Bkash),
+
+                    TextInput::make('bkashAppKey')
+                        ->label('App key')
+                        ->maxLength(255)
+                        ->helperText('Issued by bKash at onboarding, with the app secret.'),
+
+                    TextInput::make('bkashAppSecret')
+                        ->label('App secret')
+                        ->maxLength(255),
+
+                    TextInput::make('bkashUsername')
+                        ->label('Username')
+                        ->maxLength(255)
+                        ->helperText('Your bKash merchant account username, used to obtain a token.'),
+
+                    TextInput::make('bkashPassword')
+                        ->label('Password')
+                        ->maxLength(255),
+
+                    TextInput::make('bkashSandboxHost')
+                        ->label('Sandbox host')
+                        ->url()
+                        ->maxLength(255)
+                        ->helperText('Up to and including the API version, as bKash gave it to you.'),
+
+                    TextInput::make('bkashLiveHost')
+                        ->label('Live host')
+                        ->url()
+                        ->maxLength(255),
+
+                    self::sandbox(PaymentMethod::Bkash),
+
+                    /** Read-only and never saved: an entry, not a field, so it is drawn whatever the form was filled with. */
+                    TextEntry::make('bkashNotificationUrl')
+                        ->label('Notification URL')
+                        ->state(fn (): string => route('payment.notify', ['method' => PaymentMethod::Bkash->value]))
+                        ->copyable()
+                        ->copyMessage('Copied')
+                        ->helperText('Hand this to bKash\'s support desk so they notify this site of every payment taken. bKash does not take it with each payment.'),
+
+                    self::logo(PaymentMethod::Bkash),
                 ]),
 
             /** Named from the group's own shape: a method with no settings there yet is one still to come. */

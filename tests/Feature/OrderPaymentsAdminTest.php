@@ -60,7 +60,9 @@ function orderWithPendingPayment(GatewayScript $gateway, array $attributes = [])
 
     $order = orderUnder($gateway->method(), $attributes);
 
-    Payment::factory()->for($order)->create(['method' => $gateway->method()]);
+    /** With the gateway's start answer on record, as a Capture would have left it: a driver may ask by what the start issued. */
+    $payment = Payment::factory()->for($order)->create(['method' => $gateway->method()]);
+    $payment->update(['start_response' => $gateway->startResponseFor($payment)]);
 
     return $order->refresh();
 }

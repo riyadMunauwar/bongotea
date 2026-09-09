@@ -98,12 +98,7 @@ it('fills fixed placeholders for the fields the checkout did not ask, rather tha
         ->and($order->customer_address)->toBeNull();
 
     /** Every mandatory field was sent filled: a gateway refusing a blank is the Customer refused for a question the Merchant chose not to ask. */
-    Http::assertSent(fn ($request): bool => $request['tran_id'] === Payment::sole()->invoice_reference
-        && filled($request['cus_name'])
-        && filled($request['cus_email'])
-        && filled($request['cus_add1'])
-        && filled($request['cus_city'])
-        && $request['cus_phone'] === $order->customer_phone);
+    $gateway->assertStartedWithEveryMandatoryFieldFilled(Payment::sole());
 })->with('online gateways');
 
 it('marks the payment failed and lands on the retry page with the order kept when the gateway cannot be reached at capture', function (GatewayScript $gateway) {
@@ -268,7 +263,7 @@ it('never settles a payment on a reference that names another transaction, and a
     $gateway->assertVerificationsSent(2);
 
     expect($payment->refresh()->state)->toBe(PaymentState::Paid)
-        ->and($payment->verification_response['element'][0]['tran_id'] ?? null)->toBe($payment->invoice_reference);
+        ->and($gateway->invoiceReferenceNamedBy($payment->verification_response))->toBe($payment->invoice_reference);
 })->with('online gateways');
 
 it('marks the payment cancelled and lands on the retry page when the customer cancelled at the gateway', function (GatewayScript $gateway) {
@@ -469,7 +464,7 @@ it('refuses a second payment while one is pending and only seconds old, and says
         ->and($payment->refresh()->state)->toBe(PaymentState::Pending);
 
     /** Asked once, at Capture; the refused attempt never reached the gateway. */
-    Http::assertSentCount(1);
+    $gateway->assertStartsSent(1);
 
     /** A minute on, the same choice starts the next attempt. */
     $retry = secondPaymentStartedAfterTheWait($gateway, $payment);

@@ -66,6 +66,37 @@ class PaymentSettings extends SettingsGroup
     /** A replacement logo for SSLCommerz; blank draws the default. */
     public string $sslcommerzLogo = '';
 
+    /** bKash: off until the Merchant has typed their merchant account's credentials. */
+    public bool $bkashEnabled = false;
+
+    /** Whether Payments go to bKash's sandbox rather than to real money. */
+    public bool $bkashSandbox = true;
+
+    /** The application key bKash issued at onboarding. A credential, and so sealed and write-only. */
+    public string $bkashAppKey = '';
+
+    /** The application secret bKash issued at onboarding. */
+    public string $bkashAppSecret = '';
+
+    /** The merchant account username bKash's token grant takes. */
+    public string $bkashUsername = '';
+
+    /** The merchant account password bKash's token grant takes. */
+    public string $bkashPassword = '';
+
+    /**
+     * Where bKash's sandbox answers, up to and including the API version.
+     * bKash hands the hosts over at onboarding rather than printing them in
+     * its documentation, so each is a setting with the usual one as default.
+     */
+    public string $bkashSandboxHost = 'https://tokenized.sandbox.bka.sh/v1.2.0-beta';
+
+    /** Where bKash answers for real money. */
+    public string $bkashLiveHost = 'https://tokenized.pay.bka.sh/v1.2.0-beta';
+
+    /** A replacement logo for bKash; blank draws the default. */
+    public string $bkashLogo = '';
+
     public static function key(): string
     {
         return 'payment';
@@ -74,13 +105,22 @@ class PaymentSettings extends SettingsGroup
     /**
      * Every credential, and nothing else: the store id is a credential too,
      * since together with the password it is the whole of what SSLCommerz
-     * asks for. What a gateway's `credentialProperties()` names must be here.
+     * asks for, and bKash's four are what its token grant takes. A host is
+     * not a credential. What a gateway's `credentialProperties()` names must
+     * be here.
      *
      * @return list<string>
      */
     public static function secrets(): array
     {
-        return ['sslcommerzStoreId', 'sslcommerzStorePassword'];
+        return [
+            'sslcommerzStoreId',
+            'sslcommerzStorePassword',
+            'bkashAppKey',
+            'bkashAppSecret',
+            'bkashUsername',
+            'bkashPassword',
+        ];
     }
 
     /**
@@ -107,8 +147,8 @@ class PaymentSettings extends SettingsGroup
 
     /**
      * Whether a method has its settings here yet: an `Enabled` property by
-     * the naming rule. The three gateways still to come have none, which is
-     * how they are held off without a list anywhere.
+     * the naming rule. The gateways still to come have none, which is how
+     * they are held off without a list anywhere.
      */
     public static function hasSettings(PaymentMethod $method): bool
     {

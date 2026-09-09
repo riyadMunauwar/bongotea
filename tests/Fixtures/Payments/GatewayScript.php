@@ -31,6 +31,15 @@ abstract class GatewayScript
     /** Fake the gateway accepting a Payment and answering with its page. */
     abstract public function fakeStart(): void;
 
+    /**
+     * What the gateway answered when this Payment was started, for a Payment
+     * a test made without a Capture: the record a driver may need to ask
+     * about it by (bKash asks by the id its create issued).
+     *
+     * @return array<string, mixed>
+     */
+    abstract public function startResponseFor(Payment $payment): array;
+
     /** Fake the gateway refusing to start a Payment. */
     abstract public function fakeStartRefused(): void;
 
@@ -39,6 +48,12 @@ abstract class GatewayScript
 
     /** Assert the start request carried the mandatory fields for this Payment, filled from its Order, and the Notification URL where the gateway takes one per request. */
     abstract public function assertStartedFor(Payment $payment, string $returnUrl, string $notificationUrl): void;
+
+    /** Assert the gateway was asked to start a Payment exactly this many times since the last fake was laid. */
+    abstract public function assertStartsSent(int $count): void;
+
+    /** Assert the start request carried every field the gateway calls mandatory filled, for a Payment whose Checkout asked for a phone and nothing else. */
+    abstract public function assertStartedWithEveryMandatoryFieldFilled(Payment $payment): void;
 
     /**
      * What the gateway posts to the Notification URL on its own once the
@@ -103,4 +118,12 @@ abstract class GatewayScript
 
     /** Assert the gateway was asked about the Payment exactly this many times. */
     abstract public function assertVerificationsSent(int $count): void;
+
+    /**
+     * Our invoice reference as the recorded Verification answer names it, in
+     * the gateway's own field, or null where the answer names none.
+     *
+     * @param  array<string, mixed>  $verificationResponse
+     */
+    abstract public function invoiceReferenceNamedBy(array $verificationResponse): ?string;
 }

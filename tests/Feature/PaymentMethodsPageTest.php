@@ -28,8 +28,18 @@ it('sits in the Settings cluster beside General, one section per method, with th
         ->assertSee('Store id')
         ->assertSee('Store password')
         ->assertSee('Sandbox')
+        ->assertSee('bKash')
+        ->assertSee('App key')
+        ->assertSee('App secret')
+        ->assertSee('Username')
+        ->assertSee('Password')
+        ->assertSee('Sandbox host')
+        ->assertSee('Live host')
+        ->assertSee('Notification URL')
+        /** What the Merchant hands to bKash's support desk, read-only and never saved. */
+        ->assertSee(route('payment.notify', ['method' => 'bkash']))
         ->assertSee('Coming later')
-        ->assertSee('bKash, aamarPay, PayStation');
+        ->assertSee('aamarPay, PayStation');
 
     $subNavigation = collect(SettingsCluster::getClusteredComponents())->map(fn (string $page): string => $page::getNavigationLabel());
 
@@ -46,8 +56,54 @@ it('loads the defaults when nothing has been saved, with the credentials blank',
             'sslcommerzSandbox' => true,
             'sslcommerzStoreId' => null,
             'sslcommerzStorePassword' => null,
+            'bkashEnabled' => false,
+            'bkashSandbox' => true,
+            'bkashAppKey' => null,
+            'bkashAppSecret' => null,
+            'bkashUsername' => null,
+            'bkashPassword' => null,
+            'bkashSandboxHost' => 'https://tokenized.sandbox.bka.sh/v1.2.0-beta',
+            'bkashLiveHost' => 'https://tokenized.pay.bka.sh/v1.2.0-beta',
         ])
         ->assertDontSee('A value is stored');
+});
+
+it('saves the bKash section with its four credentials sealed and the hosts readable', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(PaymentMethods::class)
+        ->fillForm([
+            'bkashEnabled' => true,
+            'bkashAppKey' => 'app_key_live_1',
+            'bkashAppSecret' => 'app_secret_live_1',
+            'bkashUsername' => 'merchant_live_1',
+            'bkashPassword' => 'pw_live_1',
+            'bkashLiveHost' => 'https://tokenized.pay.bka.sh/v1.2.0-beta/',
+            'bkashSandbox' => false,
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertSet('data.bkashAppKey', null)
+        ->assertSet('data.bkashAppSecret', null)
+        ->assertSet('data.bkashUsername', null)
+        ->assertSet('data.bkashPassword', null)
+        ->assertDontSee('app_secret_live_1');
+
+    $row = (string) DB::table('settings')->where('key', PaymentSettings::key())->value('value');
+
+    expect($row)->not->toContain('app_key_live_1')
+        ->and($row)->not->toContain('app_secret_live_1')
+        ->and($row)->not->toContain('merchant_live_1')
+        ->and($row)->not->toContain('pw_live_1')
+        ->and($row)->toContain('"bkashLiveHost":"https:\/\/tokenized.pay.bka.sh\/v1.2.0-beta\/"')
+        ->and($row)->not->toContain('bkashNotificationUrl');
+
+    app()->forgetInstance(PaymentSettings::class);
+
+    expect(app(PaymentSettings::class)->bkashAppKey)->toBe('app_key_live_1')
+        ->and(app(PaymentSettings::class)->bkashPassword)->toBe('pw_live_1')
+        ->and(app(PaymentSettings::class)->bkashSandbox)->toBeFalse()
+        ->and(PaymentMethod::Bkash->isUsable())->toBeTrue();
 });
 
 it('saves one row, seals the credentials, keeps them out of the browser, and logs them as rotated', function () {

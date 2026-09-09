@@ -140,16 +140,22 @@ it('ignores a notification that names no payment at all, and answers 200', funct
     expect(Payment::sole()->state)->toBe(PaymentState::Pending);
 })->with('online gateways');
 
-it('answers 404 under another method\'s address and for a method that is not online', function (GatewayScript $gateway) {
+it('answers 404 for a method with no driver and for a method that is not online, and hears but ignores a notification under another driver\'s address', function (GatewayScript $gateway) {
     $payment = capturedFor($gateway);
 
     Http::fake();
 
-    $other = collect(PaymentMethod::cases())
-        ->first(fn (PaymentMethod $method): bool => $method->isOnline() && $method !== $gateway->method());
+    $driverless = collect(PaymentMethod::cases())
+        ->first(fn (PaymentMethod $method): bool => $method->isOnline() && $method->gateway() === null);
 
-    $this->post(route('payment.notify', ['method' => $other->value]), $gateway->paidNotification($payment))->assertNotFound();
+    $this->post(route('payment.notify', ['method' => $driverless->value]), $gateway->paidNotification($payment))->assertNotFound();
     $this->post('/pay/cash_on_delivery/notify', $gateway->paidNotification($payment))->assertNotFound();
+
+    /** Another gateway's driver reads its own shapes off it, finds no Payment of its own, and is not asked about. */
+    $otherDriver = collect(PaymentMethod::cases())
+        ->first(fn (PaymentMethod $method): bool => $method->isOnline() && $method !== $gateway->method() && $method->gateway() !== null);
+
+    $this->post(route('payment.notify', ['method' => $otherDriver->value]), $gateway->paidNotification($payment))->assertOk();
 
     Http::assertNothingSent();
 

@@ -75,6 +75,11 @@ final class SslCommerzScript extends GatewayScript
         ])]);
     }
 
+    public function startResponseFor(Payment $payment): array
+    {
+        return ['status' => 'SUCCESS', 'sessionkey' => self::SESSION_KEY, 'GatewayPageURL' => $this->gatewayPageUrl()];
+    }
+
     public function fakeStartRefused(): void
     {
         Http::fake([self::HOST.'/gwprocess/v4/api.php' => Http::response([
@@ -115,6 +120,21 @@ final class SslCommerzScript extends GatewayScript
             && $request['product_category'] !== ''
             && $request['product_profile'] === 'general'
             && $request['shipping_method'] === 'NO');
+    }
+
+    public function assertStartsSent(int $count): void
+    {
+        Http::assertSentCount($count);
+    }
+
+    public function assertStartedWithEveryMandatoryFieldFilled(Payment $payment): void
+    {
+        Http::assertSent(fn (Request $request): bool => $request['tran_id'] === $payment->invoice_reference
+            && filled($request['cus_name'])
+            && filled($request['cus_email'])
+            && filled($request['cus_add1'])
+            && filled($request['cus_city'])
+            && $request['cus_phone'] === $payment->order->customer_phone);
     }
 
     public function paidReturn(Payment $payment): array
@@ -203,6 +223,15 @@ final class SslCommerzScript extends GatewayScript
     public function assertVerificationsSent(int $count): void
     {
         Http::assertSentCount($count);
+    }
+
+    /**
+     * The transaction query answers a list of attempts; the first is the one
+     * the driver settled on.
+     */
+    public function invoiceReferenceNamedBy(array $verificationResponse): ?string
+    {
+        return $verificationResponse['element'][0]['tran_id'] ?? $verificationResponse['tran_id'] ?? null;
     }
 
     /**
