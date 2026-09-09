@@ -57,11 +57,11 @@ enum OrderCompleteLayout: string
         .gio-order-complete-receipt .gio-order-complete-head { gap: 0; }
         .gio-order-complete-receipt .gio-order-complete-badge { display: none; }
         .gio-order-complete-receipt .gio-order-complete-headline { font-size: 1.5em; }
-        .gio-order-complete-receipt .gio-order-complete-number { box-sizing: border-box; width: 100%; margin: 1.25rem 0 0; padding: .75rem 0; border: 0; border-top: var(--gio-border-width) dashed var(--gio-border); border-bottom: var(--gio-border-width) dashed var(--gio-border); border-radius: 0; font-size: .8125em; text-transform: uppercase; }
+        .gio-order-complete-receipt .gio-order-complete-number { box-sizing: border-box; width: 100%; margin: 1.25rem 0 0; padding: .75rem 0; border: 0; border-top: 1px dashed var(--gio-border); border-bottom: 1px dashed var(--gio-border); border-radius: 0; font-size: .8125em; text-transform: uppercase; }
         .gio-order-complete-receipt .gio-order-complete-summary, .gio-order-complete-receipt .gio-order-complete-deliver-to { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; }
         .gio-order-complete-receipt .gio-order-complete-summary { gap: .5rem; padding: 0; border-top: 0; }
-        .gio-order-complete-receipt .gio-order-complete-total { margin-top: .25rem; padding-top: .625rem; border-top: var(--gio-border-width) solid var(--gio-text); font-size: 1.25em; text-transform: uppercase; }
-        .gio-order-complete-receipt .gio-order-complete-deliver-to { padding-top: .75rem; border-top: var(--gio-border-width) dashed var(--gio-border); }
+        .gio-order-complete-receipt .gio-order-complete-total { margin-top: .25rem; padding-top: .625rem; border-top: 1px solid var(--gio-text); font-size: 1.25em; text-transform: uppercase; }
+        .gio-order-complete-receipt .gio-order-complete-deliver-to { padding-top: .75rem; border-top: 1px dashed var(--gio-border); }
         .gio-order-complete-receipt .gio-order-complete-eyebrow { font-family: inherit; font-size: inherit; font-weight: 400; letter-spacing: 0; }
         .gio-order-complete-receipt .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
         .gio-order-complete-receipt .gio-order-complete-button { flex: 1 1 10rem; }
@@ -142,7 +142,7 @@ enum OrderCompleteLayout: string
      * size that fits the width and breaks if it must.
      */
     private const MINIMAL_RULES = <<<'CSS'
-        .gio-order-complete.gio-order-complete-minimal { background: var(--gio-background); }
+        .gio-order-complete.gio-order-complete-minimal { background: var(--gio-surface); }
         .gio-order-complete-minimal .gio-order-complete-card { max-width: 30rem; padding: 3rem 1rem; border: 0; gap: 1.25rem; }
         .gio-order-complete-minimal .gio-order-complete-head { gap: 1.25rem; }
         .gio-order-complete-minimal .gio-order-complete-badge { display: none; }
@@ -187,7 +187,7 @@ enum OrderCompleteLayout: string
         .gio-order-complete-compact .gio-order-complete-headline { grid-column: 2; grid-row: 1; margin: 0; font-size: 1.125em; }
         .gio-order-complete-compact .gio-order-complete-message { grid-column: 1 / -1; grid-row: 3; margin-top: .625rem; font-size: .875em; }
         .gio-order-complete-compact .gio-order-complete-number { grid-column: 2; grid-row: 2; justify-self: start; margin: 0; padding: 0; border: 0; font-family: inherit; font-size: .8125em; font-weight: 400; opacity: .72; }
-        .gio-order-complete-compact .gio-order-complete-summary { gap: .375rem; padding: .75rem .875rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-size: .8125em; }
+        .gio-order-complete-compact .gio-order-complete-summary { gap: .375rem; padding: .75rem .875rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); font-size: .8125em; }
         .gio-order-complete-compact .gio-order-complete-total { margin-top: .125rem; padding-top: .5rem; font-size: 1.125em; }
         .gio-order-complete-compact .gio-order-complete-deliver-to { font-size: .8125em; }
         .gio-order-complete-compact .gio-order-complete-note { font-size: .8125em; }
@@ -236,7 +236,7 @@ enum OrderCompleteLayout: string
         .gio-order-complete-timeline .gio-order-complete-step::before { content: ""; position: absolute; top: .8125rem; right: 50%; left: -50%; height: 2px; background: var(--gio-border); }
         .gio-order-complete-timeline .gio-order-complete-step:first-child::before { display: none; }
         .gio-order-complete-timeline .gio-order-complete-step:nth-child(2)::before { background: var(--gio-accent); }
-        .gio-order-complete-timeline .gio-order-complete-step-mark { box-sizing: border-box; position: relative; z-index: 1; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 2px solid var(--gio-border); background: var(--gio-background); color: var(--gio-text); display: grid; place-items: center; font-size: .75rem; font-weight: 700; }
+        .gio-order-complete-timeline .gio-order-complete-step-mark { box-sizing: border-box; position: relative; z-index: 1; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 2px solid var(--gio-border); background: var(--gio-surface); color: var(--gio-text); display: grid; place-items: center; font-size: .75rem; font-weight: 700; }
         .gio-order-complete-timeline .gio-order-complete-step:first-child .gio-order-complete-step-mark { border-color: var(--gio-accent); background: var(--gio-accent); color: #fff; }
         .gio-order-complete-timeline .gio-order-complete-step-mark svg { width: .875rem; height: .875rem; }
         .gio-order-complete-timeline .gio-order-complete-step:nth-child(2) .gio-order-complete-step-mark { border-color: var(--gio-accent); color: var(--gio-accent); }
@@ -244,7 +244,7 @@ enum OrderCompleteLayout: string
         .gio-order-complete-timeline .gio-order-complete-step-words { min-width: 0; overflow-wrap: anywhere; }
         .gio-order-complete-timeline .gio-order-complete-step-label { margin: 0; }
         .gio-order-complete-timeline .gio-order-complete-step-timing { margin: 0; font-weight: 400; opacity: .72; }
-        .gio-order-complete-timeline .gio-order-complete-summary, .gio-order-complete-timeline .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.125rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-order-complete-timeline .gio-order-complete-summary, .gio-order-complete-timeline .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.125rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); }
         .gio-order-complete-timeline .gio-order-complete-summary::before { content: "Items"; display: block; margin: 0 0 .125rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
         .gio-order-complete-timeline .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
         .gio-order-complete-timeline .gio-order-complete-button { flex: 1 1 10rem; }
@@ -305,13 +305,13 @@ enum OrderCompleteLayout: string
         .gio-order-complete-cards-grid .gio-order-complete-headline { order: 1; flex: 1 0 100%; margin: 0; font-size: 1.875em; line-height: 1.15; }
         .gio-order-complete-cards-grid .gio-order-complete-message { order: 2; flex: 1 0 100%; }
         .gio-order-complete-cards-grid .gio-order-complete-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .875rem; margin: 0; padding: 0; list-style: none; }
-        .gio-order-complete-cards-grid .gio-order-complete-tile { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; gap: .625rem; padding: 1.25rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); overflow-wrap: anywhere; }
-        .gio-order-complete-cards-grid .gio-order-complete-tile-mark { box-sizing: border-box; width: 2rem; height: 2rem; border-radius: 50%; border: var(--gio-border-width) solid var(--gio-border); display: grid; place-items: center; font-size: .8125rem; font-weight: 700; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; gap: .625rem; padding: 1.25rem; background: var(--gio-surface); border: 1px solid var(--gio-border); border-radius: var(--gio-radius); overflow-wrap: anywhere; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile-mark { box-sizing: border-box; width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid var(--gio-border); display: grid; place-items: center; font-size: .8125rem; font-weight: 700; }
         .gio-order-complete-cards-grid .gio-order-complete-tile-mark svg { width: 1rem; height: 1rem; }
         .gio-order-complete-cards-grid .gio-order-complete-tile:first-child .gio-order-complete-tile-mark { border-color: var(--gio-accent); background: var(--gio-accent); color: #fff; }
         .gio-order-complete-cards-grid .gio-order-complete-tile-title { margin: 0; font-size: .9375em; font-weight: 700; }
         .gio-order-complete-cards-grid .gio-order-complete-tile-line { margin: 0; font-size: .8125em; opacity: .72; }
-        .gio-order-complete-cards-grid .gio-order-complete-summary, .gio-order-complete-cards-grid .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.25rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-order-complete-cards-grid .gio-order-complete-summary, .gio-order-complete-cards-grid .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.25rem; background: var(--gio-surface); border: 1px solid var(--gio-border); border-radius: var(--gio-radius); }
         .gio-order-complete-cards-grid .gio-order-complete-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1.25rem; row-gap: 0; align-items: start; }
         .gio-order-complete-cards-grid .gio-order-complete-row { grid-column: 1; padding: .1875rem 0; }
         .gio-order-complete-cards-grid .gio-order-complete-total { grid-column: 2; grid-row: 1 / span 40; display: flex; flex-direction: column; align-items: flex-end; gap: 0; padding: 0; border: 0; text-align: right; }
@@ -337,7 +337,7 @@ enum OrderCompleteLayout: string
         .gio-order-complete-cards-grid .gio-order-complete-actions { flex-direction: column; }
         .gio-order-complete-cards-grid .gio-order-complete-button { flex: 0 0 auto; }
         .gio-order-complete-cards-grid .gio-order-complete-summary { grid-template-columns: minmax(0, 1fr); }
-        .gio-order-complete-cards-grid .gio-order-complete-total { grid-column: 1; grid-row: auto; flex-direction: row; justify-content: space-between; align-items: baseline; gap: .75rem; margin-top: .375rem; padding-top: .625rem; border-top: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-cards-grid .gio-order-complete-total { grid-column: 1; grid-row: auto; flex-direction: row; justify-content: space-between; align-items: baseline; gap: .75rem; margin-top: .375rem; padding-top: .625rem; border-top: 1px solid var(--gio-border); }
         }
         CSS;
 
@@ -377,12 +377,12 @@ enum OrderCompleteLayout: string
         .gio-order-complete-split .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
         .gio-order-complete-split .gio-order-complete-button { flex: 1 1 10rem; }
         @media (min-width: 56rem) {
-        .gio-order-complete-split .gio-order-complete-card { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; grid-template-rows: auto 1fr auto; gap: 0; padding: 0; background: linear-gradient(90deg, var(--gio-background) calc(100% - 22rem), color-mix(in srgb, var(--gio-text) 6%, var(--gio-background)) calc(100% - 22rem)); }
+        .gio-order-complete-split .gio-order-complete-card { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; grid-template-rows: auto 1fr auto; gap: 0; padding: 0; background: linear-gradient(90deg, var(--gio-surface) calc(100% - 22rem), color-mix(in srgb, var(--gio-text) 6%, var(--gio-surface)) calc(100% - 22rem)); }
         .gio-order-complete-split .gio-order-complete-head { grid-column: 1; grid-row: 1; padding: 3rem 2.5rem 0; }
         .gio-order-complete-split .gio-order-complete-note { grid-column: 1; grid-row: 2; align-self: start; padding: 1.25rem 2.5rem 0; }
         .gio-order-complete-split .gio-order-complete-actions { grid-column: 1; grid-row: 3; align-self: start; width: auto; padding: 1.5rem 2.5rem 3rem; }
-        .gio-order-complete-split .gio-order-complete-summary { grid-column: 2; grid-row: 1 / 3; width: auto; padding: 2.5rem 2rem 1.25rem; border-top: 0; border-left: var(--gio-border-width) solid var(--gio-border); }
-        .gio-order-complete-split .gio-order-complete-deliver-to { grid-column: 2; grid-row: 3; width: auto; padding: 0 2rem 2.5rem; border-left: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-split .gio-order-complete-summary { grid-column: 2; grid-row: 1 / 3; width: auto; padding: 2.5rem 2rem 1.25rem; border-top: 0; border-left: 1px solid var(--gio-border); }
+        .gio-order-complete-split .gio-order-complete-deliver-to { grid-column: 2; grid-row: 3; width: auto; padding: 0 2rem 2.5rem; border-left: 1px solid var(--gio-border); }
         }
         CSS;
 
@@ -414,10 +414,10 @@ enum OrderCompleteLayout: string
         .gio-order-complete-editorial .gio-order-complete-headline { font-size: 2.125em; line-height: 1.15; }
         .gio-order-complete-editorial .gio-order-complete-number { padding: 0; border: 0; font-family: inherit; font-size: .9375em; font-weight: 400; opacity: .72; }
         .gio-order-complete-editorial .gio-order-complete-summary { gap: 0; padding: 0; }
-        .gio-order-complete-editorial .gio-order-complete-row { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); justify-content: start; padding: .75rem 0; border-bottom: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-editorial .gio-order-complete-row { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); justify-content: start; padding: .75rem 0; border-bottom: 1px solid var(--gio-border); }
         .gio-order-complete-editorial .gio-order-complete-row-amount { text-align: left; white-space: normal; }
         .gio-order-complete-editorial .gio-order-complete-total { padding: .75rem 0; border-top: 0; font-size: 1.125em; }
-        .gio-order-complete-editorial .gio-order-complete-deliver-to { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); margin-top: -1.75rem; padding: .75rem 0; border-bottom: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-editorial .gio-order-complete-deliver-to { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); margin-top: -1.75rem; padding: .75rem 0; border-bottom: 1px solid var(--gio-border); }
         .gio-order-complete-editorial .gio-order-complete-eyebrow { grid-column: 1; grid-row: 1 / span 5; margin: 0; font-size: 1em; font-weight: 400; letter-spacing: 0; text-transform: none; }
         .gio-order-complete-editorial .gio-order-complete-deliver-to-line, .gio-order-complete-editorial .gio-order-complete-deliver-to-note { grid-column: 2; }
         .gio-order-complete-editorial .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; align-items: center; }
@@ -458,8 +458,8 @@ enum OrderCompleteLayout: string
         .gio-order-complete-accent-band .gio-order-complete-message { opacity: .85; }
         .gio-order-complete-accent-band .gio-order-complete-number { padding: .5rem .875rem; border: 0; background: rgba(255, 255, 255, .14); color: #fff; }
         .gio-order-complete-accent-band .gio-order-complete-summary, .gio-order-complete-accent-band .gio-order-complete-deliver-to, .gio-order-complete-accent-band .gio-order-complete-note, .gio-order-complete-accent-band .gio-order-complete-actions { box-sizing: border-box; width: auto; margin: 0 2.5rem; }
-        .gio-order-complete-accent-band .gio-order-complete-summary { gap: 0; padding: 0; border: var(--gio-border-width) solid var(--gio-border); }
-        .gio-order-complete-accent-band .gio-order-complete-row { padding: .75rem 1rem; border-bottom: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-accent-band .gio-order-complete-summary { gap: 0; padding: 0; border: 1px solid var(--gio-border); }
+        .gio-order-complete-accent-band .gio-order-complete-row { padding: .75rem 1rem; border-bottom: 1px solid var(--gio-border); }
         .gio-order-complete-accent-band .gio-order-complete-total { padding: .875rem 1rem; border: 0; font-size: 1.0625em; }
         .gio-order-complete-accent-band .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
         .gio-order-complete-accent-band .gio-order-complete-button { flex: 1 1 10rem; }

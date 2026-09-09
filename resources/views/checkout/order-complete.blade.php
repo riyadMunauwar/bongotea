@@ -38,8 +38,8 @@
             the page has always been written in for the root to inherit from.
         --}}
         :root { color-scheme: light; color: #111318; }
-        .gio-order-complete { {{ $styleTokens->declarations() }} box-sizing: border-box; min-height: 100vh; margin: 0; padding: 3.5rem 1.5rem; background: #f7f8fa; color: var(--gio-text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: var(--gio-font-size); line-height: 1.5; }
-        .gio-order-complete-card { box-sizing: border-box; max-width: 32.5rem; margin: 0 auto; padding: 2.25rem 2rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); display: flex; flex-direction: column; align-items: center; gap: 1.125rem; text-align: center; }
+        .gio-order-complete { {{ $styleTokens->declarations() }} box-sizing: border-box; min-height: 100vh; margin: 0; padding: 3.5rem 1.5rem; background: #f7f8fa; color: var(--gio-text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 1rem; line-height: 1.5; }
+        .gio-order-complete-card { box-sizing: border-box; max-width: 32.5rem; margin: 0 auto; padding: 2.25rem 2rem; background: var(--gio-surface); border: 1px solid var(--gio-border); border-radius: var(--gio-radius); display: flex; flex-direction: column; align-items: center; gap: 1.125rem; text-align: center; }
         .gio-order-complete-head { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1.125rem; }
         .gio-order-complete-badge { flex: none; width: 4rem; height: 4rem; border-radius: 50%; background: var(--gio-accent); color: #fff; display: grid; place-items: center; }
         .gio-order-complete-badge svg { width: 2rem; height: 2rem; }
@@ -47,12 +47,12 @@
         .gio-order-complete-status { margin: 0 0 .5rem; font-size: .75em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
         .gio-order-complete-headline { margin: 0 0 .375rem; font-size: 1.75em; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
         .gio-order-complete-message { margin: 0; font-size: .9375em; opacity: .72; }
-        .gio-order-complete-number { flex: none; margin: 0; padding: .5rem .875rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; font-weight: 600; }
-        .gio-order-complete-summary { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 1.125rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); display: flex; flex-direction: column; gap: .625rem; text-align: left; font-size: .875em; }
+        .gio-order-complete-number { flex: none; margin: 0; padding: .5rem .875rem; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; font-weight: 600; }
+        .gio-order-complete-summary { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 1.125rem 0 0; border-top: 1px solid var(--gio-border); display: flex; flex-direction: column; gap: .625rem; text-align: left; font-size: .875em; }
         .gio-order-complete-row { display: flex; justify-content: space-between; gap: .75rem; margin: 0; }
         .gio-order-complete-row-label { min-width: 0; overflow-wrap: anywhere; opacity: .72; }
         .gio-order-complete-row-amount { font-weight: 600; white-space: nowrap; }
-        .gio-order-complete-total { margin: 0; padding: .625rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); font-size: 1.2em; font-weight: 700; }
+        .gio-order-complete-total { margin: 0; padding: .625rem 0 0; border-top: 1px solid var(--gio-border); font-size: 1.2em; font-weight: 700; }
         .gio-order-complete-total .gio-order-complete-row-label { opacity: 1; }
         .gio-order-complete-paid { display: inline-block; margin-left: .5rem; padding: .125rem .5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .75em; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; }
         .gio-order-complete-deliver-to { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; text-align: left; font-size: .875em; overflow-wrap: anywhere; }
@@ -63,7 +63,7 @@
         .gio-order-complete-note { min-width: 0; margin: 0; font-size: .875em; opacity: .72; overflow-wrap: anywhere; }
         .gio-order-complete-actions { box-sizing: border-box; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: .625rem; }
         .gio-order-complete-button { box-sizing: border-box; display: flex; justify-content: center; align-items: center; padding: .875rem 1.25rem; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); text-decoration: none; font-weight: 700; font-size: .9375em; }
-        .gio-order-complete-button-secondary { background: transparent; color: inherit; border: var(--gio-border-width) solid var(--gio-border); }
+        .gio-order-complete-button-secondary { background: transparent; color: inherit; border: 1px solid var(--gio-border); }
         @media (max-width: 30rem) {
         .gio-order-complete { padding: 1.5rem .75rem; }
         .gio-order-complete-card { padding: 1.5rem 1.125rem; }

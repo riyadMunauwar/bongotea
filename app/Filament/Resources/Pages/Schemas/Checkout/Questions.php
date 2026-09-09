@@ -109,9 +109,9 @@ class Questions
              * A row carrying a refusal still opens itself: Filament walks up
              * from the first `[data-validation-error]` on a failed save
              * dispatching `expand`, which a repeater item listens for. That is
-             * a repeater item only — the `Answers` and `Appearance` sections
-             * inside one stay shut, which is why neither may raise a refusal a
-             * merchant cannot see (see .ai/rules/resources.md).
+             * a repeater item only — the `Answers` section inside one stays
+             * shut, which is why it may not raise a refusal a merchant cannot
+             * see (see .ai/rules/resources.md).
              */
             ->collapsible()
             ->collapsed()
@@ -347,9 +347,10 @@ class Questions
                  * decides its wording and its two flags
                  * and no more (ADR-0006).
                  *
-                 * Collapsed for the reason Appearance
-                 * is: nearly every question takes any
-                 * answer it is given. A refusal inside
+                 * Collapsed because nearly every question
+                 * takes any answer it is given, so the
+                 * boxes are shut for nearly every row.
+                 * A refusal inside
                  * cannot be one nobody sees — the pair
                  * that raises it has to be typed with
                  * the section open, and nothing
@@ -467,35 +468,6 @@ class Questions
                             ->visible(self::rowConstrainsNumber(...))
                             ->helperText('A floor number is a whole number; a weight is not.'),
                     ]),
-
-                /**
-                 * How this one question differs from the
-                 * rest, for the field a merchant wants to
-                 * draw attention to.
-                 *
-                 * The same token set the checkout as a
-                 * whole is styled with, because an
-                 * override is that token redeclared with
-                 * a smaller reach rather than a second
-                 * kind of styling. Every box left empty
-                 * is the question following the
-                 * checkout, which is nearly all of them
-                 * — hence collapsed.
-                 *
-                 * A refusal inside a collapsed section
-                 * would be a refusal nobody can see. It
-                 * cannot arise from one: a value only
-                 * gets typed with the section open, and
-                 * nothing collapses it again on a failed
-                 * save (see .ai/rules/resources.md).
-                 */
-                Section::make('Appearance')
-                    ->description('Leave these empty and the question looks like the rest of the checkout.')
-                    ->collapsible()
-                    ->collapsed()
-                    ->columnSpanFull()
-                    ->columns(3)
-                    ->schema(Appearance::controls('style_tokens.', overridesOneField: true)),
             ]);
     }
 

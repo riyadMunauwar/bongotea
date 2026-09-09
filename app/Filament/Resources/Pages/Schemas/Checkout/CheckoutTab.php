@@ -128,10 +128,10 @@ class CheckoutTab
                                 Words::payment(),
                             ]),
 
-                        Tab::make('Appearance')
+                        Tab::make('Look')
                             ->columns(1)
                             ->schema([
-                                Appearance::section(),
+                                Look::section(),
                             ]),
                     ]),
             ]);

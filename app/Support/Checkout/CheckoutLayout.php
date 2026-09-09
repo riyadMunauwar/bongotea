@@ -34,14 +34,13 @@ enum CheckoutLayout: string
      * which is what keeps this an arrangement rather than a sixth one to
      * maintain for the device most of this traffic arrives on.
      *
-     * The width token sizes the form column and the container is worked out
-     * from it, never the other way round. `--gio-max-width` means one thing in
-     * every arrangement: how wide the part a Customer types into sits. Letting
-     * it widen the container here and the columns fall where they may would
-     * quietly turn it into something else — a Merchant who set a narrow form
-     * and then chose split would get that figure honoured as two columns too
-     * narrow to type in, and a setting that stops meaning what it says on one
-     * arrangement is the kind of thing nobody reports, because nothing failed.
+     * The base's thirty rem is how wide the part a Customer types into sits,
+     * in every arrangement, and the container is worked out from it, never the
+     * other way round. Letting the container widen and the columns fall where
+     * they may would quietly turn the figure into something else — two columns
+     * too narrow to type in, on the one arrangement, which is the kind of thing
+     * nobody reports because nothing failed. (How wide a form sits is not a
+     * Style Token: it is the layout's to say, so the figure is written here.)
      * So the container is the form column plus the eighteen rem beside it — a
      * sixteen rem panel and the two rem between them. Nothing for the root's
      * own edges, because the island draws no panel and so has no padding and
@@ -110,7 +109,7 @@ enum CheckoutLayout: string
      */
     private const SPLIT_RULES = <<<'CSS'
         @media (min-width: 60rem) {
-        .gio-checkout-split { max-width: calc(var(--gio-max-width) + 18rem); }
+        .gio-checkout-split { max-width: calc(30rem + 18rem); }
         .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, calc(100% - 18rem)) minmax(12rem, 1fr); grid-template-rows: auto 1fr; column-gap: 2rem; }
         .gio-checkout-split .gio-checkout-fields { grid-column: 1; grid-row: 1 / 3; }
         .gio-checkout-split .gio-checkout-error { grid-column: 1; }
@@ -197,7 +196,7 @@ enum CheckoutLayout: string
         .gio-checkout-compact .gio-checkout-price { font-size: 1em; }
         .gio-checkout-compact .gio-checkout-description { display: none; }
         .gio-checkout-compact .gio-checkout-quantity { margin: 0; }
-        .gio-checkout-compact .gio-checkout-quantity-input { width: calc(2.5rem * var(--gio-input-size)); }
+        .gio-checkout-compact .gio-checkout-quantity-input { width: 2.5rem; }
         .gio-checkout-compact .gio-checkout-fields { grid-template-columns: 1fr; gap: .5rem; }
         .gio-checkout-compact .gio-checkout-field { grid-column: auto; }
         .gio-checkout-compact .gio-checkout-choice + .gio-checkout-choice { margin: .25rem 0 0; }

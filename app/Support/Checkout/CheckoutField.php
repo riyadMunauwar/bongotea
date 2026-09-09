@@ -31,17 +31,6 @@ use Illuminate\View\ComponentAttributeBag;
 abstract class CheckoutField
 {
     /**
-     * What this one field looks like, where the Merchant wanted it to differ
-     * from the rest.
-     *
-     * Sparse: only the tokens they redeclared for it. The view writes them onto
-     * the field's own wrapper and the cascade confines them to it, so drawing
-     * attention to one question costs one redeclaration and no selector — see
-     * `StyleTokens`.
-     */
-    public readonly StyleTokens $styleTokens;
-
-    /**
      * How much of a row this question takes on a wide screen.
      *
      * Not a style token, because it is not a property anything declares: the
@@ -60,10 +49,8 @@ abstract class CheckoutField
         public readonly bool $required,
         public readonly ?string $placeholder = null,
         public readonly ?string $help = null,
-        ?StyleTokens $styleTokens = null,
         ?FieldWidth $width = null,
     ) {
-        $this->styleTokens = $styleTokens ?? StyleTokens::none();
         $this->width = $width ?? FieldWidth::Full;
     }
 

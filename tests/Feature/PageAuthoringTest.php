@@ -17,12 +17,15 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
+use App\Support\Checkout\StyleTokenKind;
 use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
+use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
@@ -983,7 +986,7 @@ it('asks nothing about bounds on a question there is nothing to bound', function
         ->and($stored['name']['constraints'])->toBe([]);
 });
 
-it('restyles a checkout from the checkout tab', function () {
+it('restyles a checkout from the look tab', function () {
     $product = Product::factory()->create();
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
@@ -995,7 +998,7 @@ it('restyles a checkout from the checkout tab', function () {
             'accent' => '#ff0000',
             'button_background' => '#101010',
             'radius' => '12px',
-            'input_size' => '1.125',
+            'font' => 'Georgia, serif',
         ]]])
         ->call('save')
         ->assertHasNoFormErrors();
@@ -1008,7 +1011,7 @@ it('restyles a checkout from the checkout tab', function () {
     expect($html)->toContain('--gio-accent: #ff0000;')
         ->and($html)->toContain('--gio-button-background: #101010;')
         ->and($html)->toContain('--gio-radius: 12px;')
-        ->and($html)->toContain('--gio-input-size: 1.125;');
+        ->and($html)->toContain('--gio-font: Georgia, serif;');
 });
 
 it('keeps a token the merchant left alone out of the stored config', function () {
@@ -1044,15 +1047,13 @@ it('refuses a style value on the box that holds it', function (string $token, st
 })->with([
     'a colour that does not parse' => ['accent', 'reddish'],
     'a colour that would close the declaration' => ['button_background', 'red; } body { display: none } .x {'],
-    'an error colour that does not parse' => ['error', 'reddish'],
-    'a selected colour that names another token' => ['selected', 'var(--gio-accent)'],
+    'a surface colour that names another token' => ['surface', 'var(--gio-accent)'],
     'a length whose unit is not allowed' => ['radius', '4pt'],
-    'a length that is not a length' => ['border_width', 'thin'],
-    'a negative length' => ['font_size', '-1rem'],
-    'a size nobody was offered' => ['input_size', '9'],
-    /** A width the form would escape the merchant's own layout with. */
-    'a width measured against the phone' => ['max_width', '100vw'],
-    'a width that is not a width' => ['max_width', 'full'],
+    'a length that is not a length' => ['button_radius', 'thin'],
+    'a negative length' => ['button_radius', '-1rem'],
+    'a font in quotes' => ['font', '"Hind Siliguri", serif'],
+    'a font that would close the declaration' => ['font', 'Georgia; } body { display: none } .x {'],
+    'a font that is a url' => ['font', 'url(https://example.com/a.woff2)'],
 ]);
 
 it('lets every style box be left empty', function () {
@@ -1070,96 +1071,86 @@ it('lets every style box be left empty', function () {
     expect($page->refresh()->checkout_config->styleTokens->isEmpty())->toBeTrue();
 });
 
-it('lets a merchant restyle one question on its own', function () {
+it('drops a question\'s stored appearance on read and offers no box for it', function () {
     $product = Product::factory()->create();
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
 
+    /** A Config written before styling became the checkout's alone, one question restyled and one restyled badly. */
     $rows = $page->checkout_config->fieldsToArray();
-    $rows[0]['style_tokens'] = ['border' => '#ff0000', 'border_width' => '2px'];
-
-    Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['fields' => $rows]])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    $html = $this->get('/promo')->assertOk()->getContent();
-
-    /**
-     * The one question the merchant wanted picked out, and nothing else. The
-     * override reaches that field alone through the cascade, so drawing
-     * attention to it costs a redeclaration and no selector.
-     */
-    expect($page->refresh()->checkout_config->fields[0]->styleTokens->toArray())
-        ->toBe(['border' => '#ff0000', 'border_width' => '2px'])
-        ->and(substr_count($html, '--gio-border: #ff0000;'))->toBe(1);
-});
-
-it('refuses a style value on the row of the question it was typed on', function () {
-    $page = Page::factory()->create();
-
-    $rows = $page->checkout_config->fieldsToArray();
+    $rows[0]['style_tokens'] = ['border' => '#ff0000', 'text' => '#00ff00'];
     $rows[1]['style_tokens'] = ['accent' => 'reddish'];
 
-    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['fields' => $rows]])
-        ->call('save')
-        ->assertHasFormErrors();
-
-    expect($component->errors()->messages())
-        ->toHaveCount(1)
-        ->and(array_key_first($component->errors()->messages()))->toEndWith('.style_tokens.accent');
-});
-
-it('restyles one question in the checkout tab and serves it that way', function () {
-    $product = Product::factory()->create();
-    $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
-    $page->products()->attach($product);
-
-    $rows = $page->checkout_config->fieldsToArray();
-    $rows[0]['style_tokens'] = ['text' => '#ff0000', 'input_size' => '1.125'];
-
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => ['fields' => $rows]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /**
-     * Text colour and size are the two a merchant reaches for to pick a
-     * question out, and both are inherited properties the root also declares —
-     * so this is the case that would silently do nothing if the field wrapper
-     * did not read the tokens itself.
+     * Nothing on the row asks about it, so nothing on the row can refuse it —
+     * the badly restyled question saves without a word — and the saved
+     * question carries no styling of its own: a page that once restyled one
+     * question follows the checkout now.
      */
-    expect($this->get('/promo')->assertOk()->getContent())
-        ->toContain('style="--gio-text: #ff0000; --gio-input-size: 1.125;"');
+    expect($page->refresh()->checkout_config->fields[0]->toArray())->not->toHaveKey('style_tokens')
+        ->and($this->get('/promo')->assertOk()->getContent())->not->toContain('#ff0000');
 });
 
-it('asks a question about no token nothing inside it reads', function () {
-    /**
-     * A question holds no order button, so the three tokens that dress one are
-     * not offered on a field row — nor is the width, which for a question is
-     * the grid's to decide and is chosen from two rather than typed. A control
-     * that provably does nothing is worse than no control: a merchant would set
-     * the button colour on a question, see no change, and have nothing to tell
-     * them why.
-     */
-    $inert = array_filter(StyleToken::cases(), fn (StyleToken $token): bool => ! $token->appliesToOneField());
+it('shows exactly the eleven style tokens on the look tab and none anywhere else', function () {
+    $tabs = checkoutTabsOf(Page::factory()->create());
 
-    expect(array_map(fn (StyleToken $token): string => $token->value, array_values($inert)))
-        ->toBe(['max_width', 'button_background', 'button_text', 'button_radius']);
-
-    $page = Page::factory()->create();
-
-    $rendered = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
+    $look = array_values(array_filter(
+        statePathsInside($tabs['Look']),
+        fn (string $path): bool => str_starts_with($path, 'checkout_config.style_tokens.'),
+    ));
 
     /**
-     * A border colour is asked for once for the checkout and once on every one
-     * of the five questions; a button colour only for the checkout. Counting
-     * rather than matching a state path, because the path of a repeater row is
-     * a generated id and not something a test should know.
+     * The whole vocabulary, in the token set's own order, and nothing that is
+     * not a token: a merchant is met with eleven boxes rather than a wall of
+     * them, and every one of them changes something they can see.
      */
-    expect(substr_count($rendered, 'style_tokens.border'))
-        ->toBeGreaterThan(substr_count($rendered, 'style_tokens.button_background'));
+    expect($look)->toBe(array_map(
+        fn (StyleToken $token): string => 'checkout_config.style_tokens.'.$token->value,
+        StyleToken::cases(),
+    ))->and($look)->toBe([
+        'checkout_config.style_tokens.accent',
+        'checkout_config.style_tokens.text',
+        'checkout_config.style_tokens.muted',
+        'checkout_config.style_tokens.border',
+        'checkout_config.style_tokens.surface',
+        'checkout_config.style_tokens.background',
+        'checkout_config.style_tokens.radius',
+        'checkout_config.style_tokens.font',
+        'checkout_config.style_tokens.button_background',
+        'checkout_config.style_tokens.button_text',
+        'checkout_config.style_tokens.button_radius',
+    ]);
+
+    /** And a question row carries no appearance box: styling happens in exactly one place. */
+    foreach ($tabs->except('Look') as $tab) {
+        expect(array_filter(statePathsInside($tab), fn (string $path): bool => str_contains($path, 'style_tokens')))
+            ->toBeEmpty();
+    }
+});
+
+it('asks for a token with the control its kind calls for', function () {
+    $look = checkoutTabsOf(Page::factory()->create())['Look'];
+
+    /**
+     * A colour is picked, a length and a font are typed, and every box shows
+     * the value in force while it is empty. The font takes the whole row,
+     * because a list of names in a third of one cannot be read back.
+     */
+    foreach (StyleToken::cases() as $token) {
+        $control = fieldInside($look, 'checkout_config.style_tokens.'.$token->value);
+
+        expect($control)->toBeInstanceOf(match ($token->kind()) {
+            StyleTokenKind::Colour => ColorPicker::class,
+            StyleTokenKind::Length, StyleTokenKind::Font => TextInput::class,
+        })->and($control->getPlaceholder())->toBe($token->defaultValue());
+    }
+
+    expect(fieldInside($look, 'checkout_config.style_tokens.font')->getColumnSpan('default'))->toBe('full');
 });
 
 it('lets a merchant hide the product list', function () {
@@ -1583,23 +1574,25 @@ it('gives a compacted page back its pairing when the merchant moves it off compa
         ->and($html)->not->toContain('gio-checkout-compact');
 });
 
-it('boxes a checkout at the width typed on the checkout tab', function () {
+it('sets the checkout in the page\'s own typeface from the look tab', function () {
     $product = Product::factory()->create();
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['style_tokens' => ['max_width' => '100%']]])
+        ->fillForm(['checkout_config' => ['style_tokens' => ['font' => 'inherit']]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /**
-     * Width is a token like the colours beside it, so it is typed in the same
-     * section, refused by the same closure and emitted as the same kind of
-     * declaration. A percentage resolves against the element the merchant put
-     * [checkout] in, which is what full width means here.
+     * The font is a token like the colours beside it, typed in the same
+     * section and refused by the same closure. `inherit` is the one value that
+     * is not a name: the page's own face, and no font file shipped for it.
      */
-    expect($this->get('/promo')->assertOk()->getContent())->toContain('--gio-max-width: 100%;');
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    expect($html)->toContain('--gio-font: inherit;')
+        ->and($html)->not->toContain('@font-face');
 });
 
 /**
@@ -1728,7 +1721,7 @@ it('splits the checkout tab into one nested tab per concern', function () {
      * is met before the picker it gates.
      */
     expect(checkoutTabsOf(Page::factory()->create())->keys()->all())
-        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Appearance']);
+        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look']);
 });
 
 it('keeps everything the checkout decides inside the checkout tab', function () {
@@ -1795,7 +1788,7 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
             'saved' => fn (CheckoutConfig $config): string => $config->words->totalLabel(),
             'expected' => 'সর্বমোট / Grand total',
         ],
-        'Appearance' => [
+        'Look' => [
             'control' => 'checkout_config.style_tokens.accent',
             'typed' => ['checkout_config' => ['style_tokens' => ['accent' => '#ff0000']]],
             'saved' => fn (CheckoutConfig $config): ?string => $config->styleTokens->value(StyleToken::Accent),
@@ -1817,33 +1810,24 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
 
     /** And still written where it always was: no stored Config changed shape. */
     expect(($setting['saved'])($page->refresh()->checkout_config))->toBe($setting['expected']);
-})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Appearance']);
+})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look']);
 
-it('puts the checkout-wide appearance controls where no question stands in front of them', function () {
+it('puts the style tokens where no question stands in front of them', function () {
     $tabs = checkoutTabsOf(Page::factory()->create());
 
-    $appearance = statePathsInside($tabs['Appearance']);
+    $look = statePathsInside($tabs['Look']);
     $questions = statePathsInside($tabs['Questions']);
 
     /**
      * The whole named token set, on a tab of its own — so a merchant changing
      * a colour no longer scrolls past every question they have ever authored
-     * to reach it.
+     * to reach it — and nothing of it on the questions tab, whose rows are
+     * about what is asked and not about how it looks.
      */
-    expect($appearance)->toContain('checkout_config.style_tokens.accent')
-        ->and($appearance)->toContain('checkout_config.style_tokens.button_background');
-
-    /**
-     * A question's own overrides stay in the question's row, because what is
-     * being restyled there is the question. So the questions tab holds style
-     * boxes too — none of them the checkout's.
-     */
-    expect(array_filter($questions, fn (string $path): bool => str_starts_with($path, 'checkout_config.style_tokens.')))
-        ->toBeEmpty()
-        ->and(array_filter($questions, fn (string $path): bool => (bool) preg_match(
-            '/^checkout_config\.fields\..+\.style_tokens\.border$/',
-            $path,
-        )))->not->toBeEmpty();
+    expect($look)->toContain('checkout_config.style_tokens.accent')
+        ->and($look)->toContain('checkout_config.style_tokens.button_background')
+        ->and(array_filter($questions, fn (string $path): bool => str_contains($path, 'style_tokens')))
+        ->toBeEmpty();
 });
 
 /**
@@ -2042,8 +2026,8 @@ it('lets a merchant word the order button and the line beneath it', function () 
     expect(statePathsInside($tabs['Words']))
         ->toContain('checkout_config.words.order_button.wording')
         ->toContain('checkout_config.words.order_button.note')
-        ->and(statePathsInside($tabs['Appearance']))->not->toContain('checkout_config.words.order_button.wording')
-        ->and(statePathsInside($tabs['Appearance']))->not->toContain('checkout_config.order_button.wording');
+        ->and(statePathsInside($tabs['Look']))->not->toContain('checkout_config.words.order_button.wording')
+        ->and(statePathsInside($tabs['Look']))->not->toContain('checkout_config.order_button.wording');
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->fillForm(['checkout_config' => ['words' => ['order_button' => [
@@ -2124,7 +2108,7 @@ it('asks for the totals labels and the payment labels on the words tab, with the
         ->and(fieldInside($sections['Payment'], 'checkout_config.words.payment.cash_on_delivery.long')?->getPlaceholder())->toBe('ক্যাশ অন ডেলিভারি / Cash on Delivery')
         ->and(fieldInside($sections['Payment'], 'checkout_config.words.payment.cash_on_delivery.short')?->getPlaceholder())->toBe('COD');
 
-    /** No colour, corner or size is asked here: those are the Appearance tab's, and a sentence is none of them. */
+    /** No colour, corner or typeface is asked here: those are the Look tab's, and a sentence is none of them. */
     expect(statePathsInside($words))->each->not->toStartWith('checkout_config.style_tokens.');
 });
 

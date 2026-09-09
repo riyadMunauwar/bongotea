@@ -5,11 +5,11 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Shortcodes\Node;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\CheckoutFont;
 use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\OrderButton;
 use App\Support\Checkout\StyleToken;
-use App\Support\Checkout\StyleTokenKind;
 use App\Support\Money;
 use App\Support\PageCache\FallbackPageCacheReader;
 use Illuminate\Support\Facades\Log;
@@ -707,7 +707,7 @@ it('paints the checkout in the tokens the page carries', function () {
         'accent' => '#ff0000',
         'button_background' => '#101010',
         'radius' => '12px',
-        'input_size' => '1.125',
+        'muted' => '#808080',
     ]]);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
@@ -715,7 +715,7 @@ it('paints the checkout in the tokens the page carries', function () {
     expect($styles)->toContain('--gio-accent: #ff0000;')
         ->and($styles)->toContain('--gio-button-background: #101010;')
         ->and($styles)->toContain('--gio-radius: 12px;')
-        ->and($styles)->toContain('--gio-input-size: 1.125;')
+        ->and($styles)->toContain('--gio-muted: #808080;')
         /**
          * Read by the rules that were already there rather than written into
          * them, which is what makes one redeclaration restyle every use.
@@ -724,39 +724,101 @@ it('paints the checkout in the tokens the page carries', function () {
         ->and($styles)->toContain('border-radius: var(--gio-radius)');
 });
 
-it('sizes an input\'s padding and its text off one scale', function () {
-    pageStyled([]);
+it('sets the checkout in Hind Siliguri served from this site', function (CheckoutLayout $layout) {
+    pageStyled(['layout' => $layout->value]);
 
-    preg_match('/\.gio-checkout-input \{([^}]*)\}/', styleBlock($this->get('/promo')->getContent()), $input);
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
 
     /**
-     * The padding is measured against the font size the scale sets, so there is
-     * no way to ask for a bigger box and get type too small to read back what
-     * was typed into it.
+     * Bangla is most of what a checkout says, and the face that draws it comes
+     * from this site and nowhere else: a landing page answering paid traffic
+     * makes no request to a font service on a visitor's behalf. One block of
+     * faces, declared once whatever the arrangement — the four weights the
+     * designs use, split by script so a browser fetches only what a page draws
+     * — and the root reads the token the default names it in.
      */
-    expect($input[1])->toContain('var(--gio-input-size)')
-        ->and($input[1])->toMatch('/padding:[^;]*em/')
-        ->and(array_filter(
-            StyleToken::cases(),
-            fn (StyleToken $token): bool => $token->kind() === StyleTokenKind::Scale,
-        ))->toHaveCount(1);
+    expect(substr_count($styles, '@font-face'))->toBe(count(CheckoutFont::files()))
+        ->and($styles)->not->toContain('https://')
+        ->and($root[1] ?? '')->toContain('--gio-font: '.CheckoutFont::stack().';')
+        ->and($root[1] ?? '')->toContain('font-family: var(--gio-font)');
+
+    foreach (CheckoutFont::WEIGHTS as $weight) {
+        expect($styles)->toContain('font-weight: '.$weight.';');
+    }
+
+    /** Every file a face points at is shipped under public, and is the woff2 it claims to be. */
+    foreach (CheckoutFont::files() as $file) {
+        expect($styles)->toContain('url(/'.$file.')')
+            ->and(file_exists(public_path($file)))->toBeTrue($file.' is missing')
+            ->and(file_get_contents(public_path($file), length: 4))->toBe('wOF2');
+    }
+})->with(fn () => CheckoutLayout::cases());
+
+it('inherits the page\'s own typeface when the font token says so', function () {
+    pageStyled(['style_tokens' => ['font' => 'inherit']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * A merchant who wants the checkout to blend in asks for the page's font
+     * and gets exactly that — and no font file, because a face nothing reads
+     * is bytes in every cached page for nothing.
+     */
+    expect($styles)->toContain('--gio-font: inherit;')
+        ->and($styles)->not->toContain('@font-face')
+        ->and($styles)->not->toContain(CheckoutFont::DIRECTORY);
 });
 
-it('restyles one question without generating a selector for it', function () {
-    pageStyled(['fields' => [
-        ['key' => 'name', 'label' => 'Your name', 'style_tokens' => ['border' => '#ff0000']],
+it('loads no face for a stack of the merchant\'s own', function () {
+    pageStyled(['style_tokens' => ['font' => 'Georgia, Times New Roman, serif']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /** Names of several words are written bare, as CSS allows, so nothing here needs a quote. */
+    expect($styles)->toContain('--gio-font: Georgia, Times New Roman, serif;')
+        ->and($styles)->not->toContain('@font-face');
+});
+
+it('refuses a font that is not a list of names', function (string $font) {
+    pageStyled(['style_tokens' => ['font' => $font]]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * Refused on the Look tab with a message and dropped again here without
+     * one, falling back to the design's own stack — and never written into
+     * the block, so a quote or a brace typed into the box cannot end the
+     * declaration it would have landed in.
+     */
+    expect($html)->not->toContain('body {')
+        ->and(styleBlock($html))->toContain('--gio-font: '.CheckoutFont::stack().';');
+})->with([
+    'a value that would close the declaration' => 'Georgia; } body { display: none } .x {',
+    'a quoted name' => '"Hind Siliguri", serif',
+    'a url' => 'url(https://example.com/a.woff2)',
+    'a keyword that is not inherit' => 'initial',
+]);
+
+it('ignores a question\'s stored appearance and writes no style on its row', function () {
+    $page = pageStyled(['fields' => [
+        ['key' => 'name', 'label' => 'Your name', 'style_tokens' => ['border' => '#ff0000', 'text' => '#00ff00']],
         ['key' => 'phone', 'label' => 'Phone number'],
     ]]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
-     * The override rides on the field's own wrapper and the cascade keeps it
-     * there. Nothing names the field in the style block, which is what stops
-     * the style editor out-specifying the merchant's own stylesheet.
+     * A field once carried tokens of its own, emitted on its wrapper. Styling
+     * is the checkout's alone now, so a page that restyled one question simply
+     * follows the rest: the stored object is dropped on read, nothing of it
+     * reaches the page, and no field wrapper carries a style attribute.
      */
-    expect(styleBlock($html))->not->toContain('#ff0000')
-        ->and(substr_count($html, '--gio-border: #ff0000;'))->toBe(1);
+    expect($html)->not->toContain('#ff0000')
+        ->and($html)->not->toContain('#00ff00')
+        ->and($html)->not->toMatch('/<div class="gio-checkout-field[^"]*"[^>]*style=/')
+        ->and($page->checkout_config->fields[0]->toArray())->not->toHaveKey('style_tokens');
 });
 
 it('keeps the emitted styles the same length however many questions are asked', function () {
@@ -810,15 +872,15 @@ it('never lets a stored style value break out of the block it is written into', 
     pageStyled(['style_tokens' => [
         'accent' => 'red; } body { display: none } .x {',
         'radius' => '4pt',
-        'input_size' => '9',
-        'error' => 'reddish',
-        'selected' => 'var(--gio-error)',
+        'muted' => 'reddish',
+        'surface' => 'var(--gio-accent)',
+        'font' => 'Georgia; } body { display: none } .x {',
     ]]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
-     * The Checkout tab refuses all three with a message. This is the same
+     * The Look tab refuses every one of these with a message. This is the same
      * refusal made again as the Config is read, for the Config nobody typed
      * on that tab — silent, and falling back to the default rather than
      * rendering a page whose styling has been rewritten by its own data.
@@ -826,28 +888,10 @@ it('never lets a stored style value break out of the block it is written into', 
     expect($html)->not->toContain('body {')
         ->and(styleBlock($html))->toContain('--gio-accent: '.StyleToken::Accent->defaultValue().';')
         ->and(styleBlock($html))->toContain('--gio-radius: '.StyleToken::Radius->defaultValue().';')
-        ->and(styleBlock($html))->toContain('--gio-input-size: '.StyleToken::InputSize->defaultValue().';')
-        ->and(styleBlock($html))->toContain('--gio-error: '.StyleToken::Error->defaultValue().';')
-        /** A `var()` is refused like any other non-colour, so the fallback is the accent and not whatever was named. */
-        ->and(styleBlock($html))->toContain('--gio-selected: var(--gio-accent);');
-});
-
-it('writes a refusal in the error token', function () {
-    pageStyled(['style_tokens' => ['error' => '#ff8080']]);
-
-    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
-
-    preg_match('/\.gio-checkout-error \{([^}]*)\}/', $styles, $error);
-
-    /**
-     * A refusal beside a box reads the same token the banner does, so a
-     * merchant whose page is dark lightens every failure message in one
-     * place — the default is a red drawn for a white page, and on a dark one
-     * it is the one thing in the form a customer cannot read.
-     */
-    expect($styles)->toContain('--gio-error: #ff8080;')
-        ->and($error[1] ?? '')->toContain('color: var(--gio-error)')
-        ->and($error[1] ?? '')->not->toContain('#b91c1c');
+        ->and(styleBlock($html))->toContain('--gio-muted: '.StyleToken::Muted->defaultValue().';')
+        /** A `var()` is refused like any other non-colour: a value naming another token is one the tab cannot show the effect of. */
+        ->and(styleBlock($html))->toContain('--gio-surface: '.StyleToken::Surface->defaultValue().';')
+        ->and(styleBlock($html))->toContain('--gio-font: '.StyleToken::Font->defaultValue().';');
 });
 
 it('puts a whole-form failure in a banner at the top of the island', function (CheckoutLayout $layout) {
@@ -879,12 +923,14 @@ it('puts a whole-form failure in a banner at the top of the island', function (C
     preg_match('/\.gio-checkout-banner\[data-shown\] \{([^}]*)\}/', $styles, $shown);
 
     /**
-     * The banner paints its own ground in the error token and writes on it in
+     * The banner paints its own ground in the refusal red and writes on it in
      * white, so what it says is legible on a page styled dark without the
      * merchant having touched a colour — the one failure message that must
-     * never be invisible is the one that turned the whole order away.
+     * never be invisible is the one that turned the whole order away. The red
+     * is not a token: what a refusal is written in is not a merchant's to
+     * restyle.
      */
-    expect($shown[1] ?? '')->toContain('background: var(--gio-error)')
+    expect($shown[1] ?? '')->toContain('background: #b91c1c')
         ->and($shown[1] ?? '')->toContain('color: #fff');
 
     /** And the button does what it says. */
@@ -943,40 +989,46 @@ it('words each kind of failure for what actually went wrong', function () {
     expect(array_unique($wordings))->toHaveCount(3);
 });
 
-it('lets a field override a token the checkout root also reads', function () {
-    pageStyled(['fields' => [
-        ['key' => 'name', 'label' => 'Your name', 'style_tokens' => ['text' => '#ff0000', 'font_size' => '2rem']],
-    ]]);
+it('fills every box a thumb has to hit with the surface token', function () {
+    pageStyled(['product_picker' => true, 'delivery_options' => [['label' => 'Inside Dhaka', 'amount' => 6000]]]);
 
-    preg_match('/\.gio-checkout-field \{([^}]*)\}/', styleBlock($this->get('/promo')->getContent()), $field);
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
     /**
-     * `color`, `font-size` and `accent-color` are inherited as computed values,
-     * so a wrapper redeclaring the token behind one cannot reach back and
-     * change what the root already worked out. Only a declaration on the
-     * wrapper itself reads what the wrapper carries — which is why these three
-     * are declared twice, and why overriding them on one question does
-     * anything at all.
+     * The boxes a customer types into, the stepper, the product rows and the
+     * delivery rows are the same kind of thing — something a thumb has to hit
+     * — so one token fills all of them, and the ground behind them is the
+     * background token's, painting nothing until a merchant says otherwise.
      */
-    expect($field[1])->toContain('color: var(--gio-text)')
-        ->and($field[1])->toContain('font-size: var(--gio-font-size)')
-        ->and($field[1])->toContain('accent-color: var(--gio-selected)');
+    foreach (['.gio-checkout-input', '.gio-checkout-stepper', '.gio-checkout-product', '.gio-checkout-choice'] as $selector) {
+        preg_match('/'.preg_quote($selector, '/').' \{([^}]*)\}/', $styles, $rule);
+
+        expect($rule[1] ?? '')->toContain('background: var(--gio-surface)');
+    }
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+
+    expect($root[1] ?? '')->toContain('background: var(--gio-background)')
+        ->and($root[1] ?? '')->toContain('--gio-background: transparent;');
 });
 
-it('sizes the rows a customer picks from off the same scale as the boxes', function () {
+it('writes the quieter words in the muted token', function () {
     pageStyled([]);
 
-    $styles = styleBlock($this->get('/promo')->getContent());
-
-    preg_match('/\.gio-checkout-choice \{([^}]*)\}/', $styles, $choice);
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
     /**
-     * A radio row is a box a thumb has to hit, so one size covers both. A form
-     * asked for at Large that grew its text boxes and left its delivery options
-     * where they were would be the mismatch the single scale exists to prevent.
+     * Help under a question, a product's description and the line beneath the
+     * button recede by colour rather than by opacity, so a merchant on a dark
+     * page can make them readable in one place instead of watching them fade
+     * into whatever is behind them.
      */
-    expect($choice[1])->toContain('var(--gio-input-size)')
-        ->and(substr_count($choice[1], 'var(--gio-input-size)'))->toBe(3);
+    foreach (['.gio-checkout-help', '.gio-checkout-description', '.gio-checkout-note'] as $selector) {
+        preg_match('/'.preg_quote($selector, '/').' \{([^}]*)\}/', $styles, $rule);
+
+        expect($rule[1] ?? '')->toContain('color: var(--gio-muted)')
+            ->and($rule[1] ?? '')->not->toContain('opacity');
+    }
 });
 
 it('draws the quantity stepper narrow rather than the width of the form', function () {
@@ -1038,15 +1090,15 @@ it('borders each product row and rules off the sections around it', function () 
      * customer types into: the same border token, the same width, the same
      * radius, so one redeclaration restyles all of them together.
      */
-    expect($row[1] ?? '')->toContain('border: var(--gio-border-width) solid var(--gio-border)')
+    expect($row[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
         ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)');
 
     /**
      * Between the sections, a rule and nothing heavier: beneath the products
      * and above the summary, read from the same border tokens.
      */
-    expect($panel[1] ?? '')->toContain('border-bottom: var(--gio-border-width) solid var(--gio-border)')
-        ->and($summary[1] ?? '')->toContain('border-top: var(--gio-border-width) solid var(--gio-border)');
+    expect($panel[1] ?? '')->toContain('border-bottom: 1px solid var(--gio-border)')
+        ->and($summary[1] ?? '')->toContain('border-top: 1px solid var(--gio-border)');
 });
 
 it('flanks a real numeric quantity with a minus and a plus', function () {
@@ -1145,7 +1197,7 @@ it('draws each delivery option as a row with the control and label left and the 
      * row so the figure sits at the far end, and the figure never wraps — a
      * price broken across two lines is a price misread.
      */
-    expect($row[1] ?? '')->toContain('border: var(--gio-border-width) solid var(--gio-border)')
+    expect($row[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
         ->and($row[1] ?? '')->toContain('border-radius: var(--gio-radius)')
         ->and($words[1] ?? '')->toContain('flex: 1')
         ->and($words[1] ?? '')->toContain('min-width: 0')
@@ -1167,13 +1219,13 @@ it('marks the chosen delivery row apart from the others', function () {
     /**
      * The row that is picked reads as picked from across the room, not only
      * from the dot inside its radio: border, ring and a light tint of its
-     * ground, all read from the one selected-state token. Where a browser
+     * ground, all read from the accent. Where a browser
      * cannot read `:has()` the radio still shows, so nothing is lost that was
      * there before.
      */
-    expect($chosen[1] ?? '')->toContain('border-color: var(--gio-selected)')
-        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-selected)')
-        ->and($chosen[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-selected\)[^;]*transparent\)/');
+    expect($chosen[1] ?? '')->toContain('border-color: var(--gio-accent)')
+        ->and($chosen[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)')
+        ->and($chosen[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-accent\)[^;]*transparent\)/');
 
     preg_match_all('/<input type="radio"[^>]*name="delivery_option"[^>]*>/s', checkoutMarkup($html), $radios);
 
@@ -1194,65 +1246,17 @@ it('marks a picked product with the same token as a chosen delivery row', functi
     /**
      * On a cash-on-delivery page an item nobody meant to choose is a refused
      * parcel and courier fees both ways, so a customer must be able to tell
-     * at a glance what they have committed to. One token paints the whole of
+     * at a glance what they have committed to. The accent paints the whole of
      * the selected state — the tick, the row's border and a tint of its
      * ground — for a product and a delivery row alike, so a merchant changes
-     * what "picked" looks like in one place. The tick is `accent-color`,
-     * which inherits as a computed value, so the field wrapper reads the
-     * token itself the way it already does for text and size.
+     * what "picked" looks like in one place. The tick is `accent-color` on
+     * the root, and nothing below it redeclares the token.
      */
-    expect($picked[1] ?? '')->toContain('border-color: var(--gio-selected)')
-        ->and($picked[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-selected)')
-        ->and($picked[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-selected\)[^;]*transparent\)/')
-        ->and($root[1] ?? '')->toContain('accent-color: var(--gio-selected)')
-        ->and($field[1] ?? '')->toContain('accent-color: var(--gio-selected)');
-});
-
-it('lets the selected state follow the accent until a merchant says otherwise', function () {
-    pageStyled([], slug: 'plain');
-    pageStyled(['style_tokens' => ['selected' => '#ff0000']], slug: 'styled');
-    pageStyled(['fields' => [
-        ['key' => 'colour', 'label' => 'Colour', 'type' => 'radio', 'options' => [['value' => 'red'], ['value' => 'blue']], 'style_tokens' => ['selected' => '#00ff00']],
-    ]], slug: 'one-question');
-
-    $plain = styleBlock($this->get('/plain')->assertOk()->getContent());
-    $styled = styleBlock($this->get('/styled')->assertOk()->getContent());
-    $oneQuestion = $this->get('/one-question')->assertOk()->getContent();
-
-    /**
-     * Unset, the token is declared as the accent rather than as a fixed
-     * colour, so a merchant who set only an accent gets a selected state to
-     * match and a page published before the token existed looks the same as
-     * it did. Set, it is one declaration on the root like every other token:
-     * the block is the same length either way, and a question restyling it
-     * rides on that question's own wrapper with no selector generated for it.
-     */
-    expect($plain)->toContain('--gio-selected: var(--gio-accent);')
-        ->and($styled)->toContain('--gio-selected: #ff0000;')
-        ->and(substr_count($styled, '{'))->toBe(substr_count($plain, '{'))
-        ->and(styleBlock($oneQuestion))->toBe($plain)
-        ->and(substr_count($oneQuestion, '--gio-selected: #00ff00;'))->toBe(1);
-});
-
-it('keeps a question\'s ticks in the accent that question was given', function () {
-    pageStyled(['fields' => [
-        ['key' => 'colour', 'label' => 'Colour', 'type' => 'radio', 'options' => [['value' => 'red'], ['value' => 'blue']], 'style_tokens' => ['accent' => '#ff0000']],
-        ['key' => 'size', 'label' => 'Size', 'type' => 'radio', 'options' => [['value' => 's'], ['value' => 'm']], 'style_tokens' => ['accent' => '#ff0000', 'selected' => '#00ff00']],
-    ]]);
-
-    $html = $this->get('/promo')->assertOk()->getContent();
-
-    /**
-     * The root resolves `--gio-selected` against the accent once, and a
-     * wrapper inherits that resolved colour — so a question redeclaring only
-     * its accent would keep its focus ring and lose its ticks, on a page
-     * published before the selected colour existed. The wrapper therefore
-     * says again that an unset selected colour follows the accent, and only
-     * where the question set an accent for it to follow. A question that set
-     * both is emitted as it said.
-     */
-    expect($html)->toContain('style="--gio-accent: #ff0000; --gio-selected: var(--gio-accent);"')
-        ->and($html)->toContain('style="--gio-accent: #ff0000; --gio-selected: #00ff00;"');
+    expect($picked[1] ?? '')->toContain('border-color: var(--gio-accent)')
+        ->and($picked[1] ?? '')->toContain('box-shadow: 0 0 0 1px var(--gio-accent)')
+        ->and($picked[1] ?? '')->toMatch('/background: color-mix\([^;]*var\(--gio-accent\)[^;]*transparent\)/')
+        ->and($root[1] ?? '')->toContain('accent-color: var(--gio-accent)')
+        ->and($field[1] ?? '')->not->toContain('accent-color');
 });
 
 it('lists the summary line by line with a rule above an emphasised total', function () {
@@ -1287,7 +1291,7 @@ it('lists the summary line by line with a rule above an emphasised total', funct
      * the row's in the sheet, at one class each, so it narrows by order — the
      * same trade the whole sheet makes.
      */
-    expect($total[1] ?? '')->toContain('border-top: var(--gio-border-width) solid var(--gio-border)')
+    expect($total[1] ?? '')->toContain('border-top: 1px solid var(--gio-border)')
         ->and($total[1] ?? '')->toContain('font-weight: 700')
         ->and(strpos($styles, '.gio-checkout-total {'))->toBeGreaterThan(strpos($styles, '.gio-checkout-row {'));
 });
@@ -1953,8 +1957,8 @@ it('sets a split checkout\'s form beside what the customer is buying and keeps t
         ->and($rules['.gio-checkout-split .gio-checkout-summary'])->toContain('align-self: start');
 });
 
-it('sizes a split checkout by the form column the merchant asked for', function () {
-    pageStyled(['layout' => 'split', 'style_tokens' => ['max_width' => '24rem']]);
+it('sizes a split checkout by the form column and derives the container from it', function () {
+    pageStyled(['layout' => 'split']);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
     $rules = splitRules($styles);
@@ -1962,34 +1966,24 @@ it('sizes a split checkout by the form column the merchant asked for', function 
     preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
 
     /**
-     * The width means here exactly what it means everywhere else: how wide the
-     * part the customer types into sits. So it sizes the form column, and the
-     * container is worked out from it rather than the other way round — a
-     * merchant who set a narrow form and then chose split would otherwise get
-     * that figure honoured as two columns too narrow to type in, with nothing
-     * failing and nothing to tell them why.
+     * How wide the part a customer types into sits is the layout's figure and
+     * not a token, so it is written in the base once. Split reads that same
+     * figure as the form column and works the container out from it rather
+     * than the other way round — two columns too narrow to type in, on the one
+     * arrangement, is the kind of thing nobody reports because nothing failed.
      */
-    expect($root[1] ?? '')->toContain('--gio-max-width: 24rem')
-        ->and($rules['.gio-checkout-split'])->toContain('max-width: calc(var(--gio-max-width) +');
-
-    /**
-     * And the token is filled by the merchant and by nobody else. A layout
-     * that quietly redeclared it here would be a default the checkout tab does
-     * not show and the merchant cannot see they are fighting.
-     */
-    foreach ($rules as $declarations) {
-        expect($declarations)->not->toContain('--gio-max-width:');
-    }
+    expect($root[1] ?? '')->toContain('max-width: 30rem;')
+        ->and($rules['.gio-checkout-split'])->toContain('max-width: calc(30rem +');
 });
 
 it('reserves around a split checkout\'s form column exactly what it takes back out', function () {
-    pageStyled(['layout' => 'split', 'style_tokens' => ['max_width' => '50%']]);
+    pageStyled(['layout' => 'split']);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
     $rules = splitRules($styles);
 
     preg_match('/\.gio-checkout \{[^}]*padding: ([^;]+);/', $styles, $padding);
-    preg_match('/max-width: calc\(var\(--gio-max-width\) \+ (\d+)rem/', $rules['.gio-checkout-split'], $reserved);
+    preg_match('/max-width: calc\(30rem \+ (\d+)rem/', $rules['.gio-checkout-split'], $reserved);
     preg_match('/minmax\(0, calc\(100% - (\d+)rem\)\)/', $rules['.gio-checkout-split .gio-checkout-form'], $taken);
 
     /** Or the arithmetic below is read off nothing, and agrees with itself for that reason. */
@@ -1997,15 +1991,12 @@ it('reserves around a split checkout\'s form column exactly what it takes back o
         ->and($taken)->not->toBeEmpty();
 
     /**
-     * The container is the merchant's figure plus what stands beside it, and
-     * the form column is the container's own box with that same thing taken
-     * back out — so the figure comes out as the form column whatever unit it
-     * was typed in. The width the merchant is offered may be a percentage, and
-     * a percentage written into the track instead would be measured against
-     * the container rather than against the element the shortcode sits in:
-     * half of a half, honoured with nothing failing and nothing to tell them.
+     * The container is the base's figure plus what stands beside it, and the
+     * form column is the container's own box with that same thing taken back
+     * out — so the figure comes out as the form column, and the column is
+     * never sized off a second copy of it.
      */
-    expect($rules['.gio-checkout-split .gio-checkout-form'])->not->toContain('var(--gio-max-width)');
+    expect($rules['.gio-checkout-split .gio-checkout-form'])->not->toContain('30rem');
 
     /**
      * The two figures are the same figure, because the root has no edges of
@@ -2142,52 +2133,8 @@ it('lets the half-width rule win by order rather than by specificity', function 
         ->toBeGreaterThan(strpos($styles, '.gio-checkout-field { grid-column'));
 });
 
-it('boxes the checkout at the width the page asks for', function () {
-    pageStyled(['style_tokens' => ['max_width' => '48rem']]);
-
-    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
-
-    /**
-     * Width is a token read by the rule that was already there, not a layout
-     * and not a class. That is what makes "boxed at a maximum" and "full width"
-     * the same declaration carrying a different value.
-     */
-    expect($styles)->toContain('--gio-max-width: 48rem;')
-        ->and($styles)->toContain('max-width: var(--gio-max-width)');
-});
-
-it('fills the element the shortcode sits in when the width says so', function () {
-    pageStyled(['style_tokens' => ['max_width' => '100%']]);
-
-    /**
-     * A percentage resolves against the element the merchant put [checkout] in,
-     * which is exactly what full width means here: the form fills what it was
-     * placed in and stops there.
-     */
-    expect(styleBlock($this->get('/promo')->getContent()))->toContain('--gio-max-width: 100%;');
-});
-
-it('refuses a width that would escape the element the shortcode sits in', function (string $width) {
-    pageStyled(['style_tokens' => ['max_width' => $width]]);
-
-    /**
-     * A viewport unit is the width of the phone rather than of the container,
-     * so a checkout dropped into a padded column would break out of the column
-     * and out of the merchant's design. Refused on the Checkout tab with a
-     * message and dropped again here without one, so the block is safe
-     * whichever route wrote the Config.
-     */
-    expect(styleBlock($this->get('/promo')->assertOk()->getContent()))
-        ->toContain('--gio-max-width: '.StyleToken::MaxWidth->defaultValue().';');
-})->with([
-    'the whole viewport' => '100vw',
-    'the taller side of it' => '80vh',
-    'a form no wider than nothing' => '0',
-    'a value that would close the declaration' => '30rem; } body { display: none } .x {',
-]);
-
 it('lets a paired question be narrower than the box it types in', function () {
-    pageStyled(['style_tokens' => ['max_width' => '20rem']]);
+    pageStyled([]);
 
     $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
 
@@ -2198,12 +2145,10 @@ it('lets a paired question be narrower than the box it types in', function () {
      * width — and an input's is about twenty characters however wide we draw
      * it. Two columns narrower than that would push the grid past the checkout
      * and out of the element the merchant put the shortcode in, which is the
-     * one thing the island must never do. It is reachable by boxing the form
-     * narrow and opening it on a desktop, so the floor is removed rather than
-     * argued with.
+     * one thing the island must never do. It is reachable on a desktop with
+     * two long placeholders, so the floor is removed rather than argued with.
      */
-    expect($field[1])->toContain('min-width: 0;')
-        ->and($styles)->toContain('--gio-max-width: 20rem;');
+    expect($field[1])->toContain('min-width: 0;');
 });
 
 it('puts the merchant\'s words on the order button and beneath it', function () {
