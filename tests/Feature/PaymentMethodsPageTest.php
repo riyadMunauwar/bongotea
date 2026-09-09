@@ -38,8 +38,12 @@ it('sits in the Settings cluster beside General, one section per method, with th
         ->assertSee('Notification URL')
         /** What the Merchant hands to bKash's support desk, read-only and never saved. */
         ->assertSee(route('payment.notify', ['method' => 'bkash']))
+        ->assertSee('aamarPay')
+        ->assertSee('Signature key')
+        ->assertSee(route('payment.notify', ['method' => 'aamarpay']))
         ->assertSee('Coming later')
-        ->assertSee('aamarPay, PayStation');
+        ->assertSee('PayStation')
+        ->assertDontSee('aamarPay, PayStation');
 
     $subNavigation = collect(SettingsCluster::getClusteredComponents())->map(fn (string $page): string => $page::getNavigationLabel());
 
@@ -64,8 +68,43 @@ it('loads the defaults when nothing has been saved, with the credentials blank',
             'bkashPassword' => null,
             'bkashSandboxHost' => 'https://tokenized.sandbox.bka.sh/v1.2.0-beta',
             'bkashLiveHost' => 'https://tokenized.pay.bka.sh/v1.2.0-beta',
+            'aamarpayEnabled' => false,
+            'aamarpaySandbox' => true,
+            'aamarpayStoreId' => null,
+            'aamarpaySignatureKey' => null,
         ])
         ->assertDontSee('A value is stored');
+});
+
+it('saves the aamarPay section with both credentials sealed', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(PaymentMethods::class)
+        ->fillForm([
+            'aamarpayEnabled' => true,
+            'aamarpayStoreId' => 'aamarpay_store_live_1',
+            'aamarpaySignatureKey' => 'sig_live_1',
+            'aamarpaySandbox' => false,
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertSet('data.aamarpayStoreId', null)
+        ->assertSet('data.aamarpaySignatureKey', null)
+        ->assertDontSee('sig_live_1');
+
+    $row = (string) DB::table('settings')->where('key', PaymentSettings::key())->value('value');
+
+    expect($row)->not->toContain('aamarpay_store_live_1')
+        ->and($row)->not->toContain('sig_live_1')
+        ->and($row)->toContain('"aamarpayEnabled":true')
+        ->and($row)->not->toContain('aamarpayNotificationUrl');
+
+    app()->forgetInstance(PaymentSettings::class);
+
+    expect(app(PaymentSettings::class)->aamarpayStoreId)->toBe('aamarpay_store_live_1')
+        ->and(app(PaymentSettings::class)->aamarpaySignatureKey)->toBe('sig_live_1')
+        ->and(app(PaymentSettings::class)->aamarpaySandbox)->toBeFalse()
+        ->and(PaymentMethod::AamarPay->isUsable())->toBeTrue();
 });
 
 it('saves the bKash section with its four credentials sealed and the hosts readable', function () {

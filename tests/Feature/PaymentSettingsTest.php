@@ -34,15 +34,20 @@ it('behaves exactly as before when no row has been saved: cash on delivery on, e
         ->and(PaymentMethod::SslCommerz->isUsable())->toBeFalse();
 });
 
-it('names both SSLCommerz credentials and all four bKash credentials as secrets, the bKash hosts not, and none for cash on delivery', function () {
+it('names both SSLCommerz credentials, all four bKash credentials and both aamarPay credentials as secrets, the bKash hosts not, and none for cash on delivery', function () {
     $settings = app(PaymentSettings::class);
 
-    expect(PaymentSettings::secrets())->toBe(['sslcommerzStoreId', 'sslcommerzStorePassword', 'bkashAppKey', 'bkashAppSecret', 'bkashUsername', 'bkashPassword'])
+    expect(PaymentSettings::secrets())->toBe(['sslcommerzStoreId', 'sslcommerzStorePassword', 'bkashAppKey', 'bkashAppSecret', 'bkashUsername', 'bkashPassword', 'aamarpayStoreId', 'aamarpaySignatureKey'])
         ->and($settings->credentialsFor(PaymentMethod::SslCommerz))->toBe(['sslcommerzStoreId', 'sslcommerzStorePassword'])
         ->and($settings->credentialsFor(PaymentMethod::Bkash))->toBe(['bkashAppKey', 'bkashAppSecret', 'bkashUsername', 'bkashPassword'])
+        ->and($settings->credentialsFor(PaymentMethod::AamarPay))->toBe(['aamarpayStoreId', 'aamarpaySignatureKey'])
         ->and($settings->credentialsFor(PaymentMethod::CashOnDelivery))->toBe([])
         ->and($settings->bkashEnabled)->toBeFalse()
         ->and($settings->bkashSandbox)->toBeTrue()
+        ->and($settings->aamarpayEnabled)->toBeFalse()
+        ->and($settings->aamarpaySandbox)->toBeTrue()
+        ->and($settings->aamarpayStoreId)->toBe('')
+        ->and($settings->aamarpaySignatureKey)->toBe('')
         ->and($settings->bkashSandboxHost)->toBe('https://tokenized.sandbox.bka.sh/v1.2.0-beta')
         ->and($settings->bkashLiveHost)->toBe('https://tokenized.pay.bka.sh/v1.2.0-beta');
 });
@@ -56,6 +61,17 @@ it('offers bKash through the same rule as every method: on, all four credentials
 
     expect($settings->refusal(PaymentMethod::Bkash))->toBeNull()
         ->and($settings->usableMethods())->toBe([PaymentMethod::CashOnDelivery, PaymentMethod::Bkash]);
+});
+
+it('offers aamarPay through the same rule as every method: on, both credentials filled, currency BDT', function () {
+    $settings = app(PaymentSettings::class)->with(['aamarpayEnabled' => true, 'aamarpayStoreId' => 'aamarpaytest']);
+
+    expect($settings->refusal(PaymentMethod::AamarPay))->toBe('aamarPay has blank credentials in Settings.');
+
+    $settings = $settings->with(['aamarpaySignatureKey' => 'k']);
+
+    expect($settings->refusal(PaymentMethod::AamarPay))->toBeNull()
+        ->and($settings->usableMethods())->toBe([PaymentMethod::CashOnDelivery, PaymentMethod::AamarPay]);
 });
 
 it('seals the credentials in the row and leaves the switches readable', function () {
@@ -79,7 +95,8 @@ it('words why a method cannot be offered, and offers it once every condition is 
 
     expect($settings->refusal(PaymentMethod::SslCommerz))->toBe('SSLCommerz is switched off in Settings.')
         ->and($settings->refusal(PaymentMethod::Bkash))->toBe('bKash is switched off in Settings.')
-        ->and($settings->refusal(PaymentMethod::AamarPay))->toBe('aamarPay is not available yet.')
+        ->and($settings->refusal(PaymentMethod::AamarPay))->toBe('aamarPay is switched off in Settings.')
+        ->and($settings->refusal(PaymentMethod::PayStation))->toBe('PayStation is not available yet.')
         ->and($settings->refusal(PaymentMethod::CashOnDelivery))->toBeNull();
 
     $settings = $settings->with(['sslcommerzEnabled' => true, 'sslcommerzStoreId' => 'store_live_1']);

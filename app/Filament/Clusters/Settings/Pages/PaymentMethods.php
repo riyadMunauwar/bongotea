@@ -104,16 +104,28 @@ class PaymentMethods extends SettingsPage
                         ->maxLength(255),
 
                     self::sandbox(PaymentMethod::Bkash),
-
-                    /** Read-only and never saved: an entry, not a field, so it is drawn whatever the form was filled with. */
-                    TextEntry::make('bkashNotificationUrl')
-                        ->label('Notification URL')
-                        ->state(fn (): string => route('payment.notify', ['method' => PaymentMethod::Bkash->value]))
-                        ->copyable()
-                        ->copyMessage('Copied')
-                        ->helperText('Hand this to bKash\'s support desk so they notify this site of every payment taken. bKash does not take it with each payment.'),
-
+                    self::notificationUrl(PaymentMethod::Bkash),
                     self::logo(PaymentMethod::Bkash),
+                ]),
+
+            Section::make(PaymentMethod::AamarPay->getLabel())
+                ->description('Cards, mobile banking and internet banking through your aamarPay store. Offered on a page only once it is switched on here and both credentials are filled in.')
+                ->columns(1)
+                ->schema([
+                    self::switch(PaymentMethod::AamarPay),
+
+                    TextInput::make('aamarpayStoreId')
+                        ->label('Store id')
+                        ->maxLength(255)
+                        ->helperText('Issued by aamarPay with your store, beside the signature key.'),
+
+                    TextInput::make('aamarpaySignatureKey')
+                        ->label('Signature key')
+                        ->maxLength(255),
+
+                    self::sandbox(PaymentMethod::AamarPay),
+                    self::notificationUrl(PaymentMethod::AamarPay),
+                    self::logo(PaymentMethod::AamarPay),
                 ]),
 
             /** Named from the group's own shape: a method with no settings there yet is one still to come. */
@@ -168,6 +180,23 @@ class PaymentMethods extends SettingsPage
         return Toggle::make(PaymentSettings::property($method, 'Sandbox'))
             ->label('Sandbox')
             ->helperText('On, payments go to the gateway\'s sandbox and no real money moves. Switch off to go live.');
+    }
+
+    /**
+     * The Notification URL a gateway has registered once through its support
+     * desk. Read-only and never saved: an entry, not a field, so it is drawn
+     * whatever the form was filled with.
+     */
+    private static function notificationUrl(PaymentMethod $method): TextEntry
+    {
+        $label = $method->getLabel();
+
+        return TextEntry::make(PaymentSettings::property($method, 'NotificationUrl'))
+            ->label('Notification URL')
+            ->state(fn (): string => route('payment.notify', ['method' => $method->value]))
+            ->copyable()
+            ->copyMessage('Copied')
+            ->helperText("Hand this to {$label}'s support desk so they notify this site of every payment taken. {$label} does not take it with each payment.");
     }
 
     /**

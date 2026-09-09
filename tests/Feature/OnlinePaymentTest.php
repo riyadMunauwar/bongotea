@@ -259,8 +259,8 @@ it('never settles a payment on a reference that names another transaction, and a
         ->assertOk()
         ->assertJsonPath('redirect', route('checkout.confirmation', $payment->order->order_number));
 
-    /** Asked twice — once by the id, once by our reference — and settled only on the answer that named this Payment. */
-    $gateway->assertVerificationsSent(2);
+    /** Asked by the id and then by our reference where the gateway takes both, by our reference alone where it takes one; settled only on the answer that named this Payment. */
+    $gateway->assertVerificationsSent($gateway->questionsToSettlePastAnotherReference());
 
     expect($payment->refresh()->state)->toBe(PaymentState::Paid)
         ->and($gateway->invoiceReferenceNamedBy($payment->verification_response))->toBe($payment->invoice_reference);

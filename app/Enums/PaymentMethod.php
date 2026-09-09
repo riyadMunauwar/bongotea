@@ -2,6 +2,7 @@
 
 namespace App\Enums;
 
+use App\Support\Payments\AamarPay;
 use App\Support\Payments\Bkash;
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
@@ -124,7 +125,8 @@ enum PaymentMethod: string implements HasLabel
             self::CashOnDelivery => new CashOnDelivery,
             self::SslCommerz => app(SslCommerz::class),
             self::Bkash => app(Bkash::class),
-            self::AamarPay, self::PayStation => null,
+            self::AamarPay => app(AamarPay::class),
+            self::PayStation => null,
         };
     }
 
@@ -133,8 +135,8 @@ enum PaymentMethod: string implements HasLabel
      * Thank-you Page, and so whether an Order placed under it is Unpaid until
      * a Payment is Paid. False is the whole of what Cash on Delivery is.
      *
-     * Answered here rather than by the driver because two of the four
-     * online methods have none yet and are already Unpaid when chosen; a
+     * Answered here rather than by the driver because one of the four
+     * online methods has none yet and is already Unpaid when chosen; a
      * driver's `isOnline()` must agree with this.
      */
     public function isOnline(): bool

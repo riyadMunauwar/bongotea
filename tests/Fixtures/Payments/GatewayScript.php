@@ -120,6 +120,17 @@ abstract class GatewayScript
     abstract public function assertVerificationsSent(int $count): void;
 
     /**
+     * How many questions the driver asks before settling a Payment whose
+     * return carried another transaction's reference: two for a gateway
+     * asked first by that reference and then by ours, one for a gateway
+     * with a single question by our reference alone.
+     */
+    public function questionsToSettlePastAnotherReference(): int
+    {
+        return 2;
+    }
+
+    /**
      * Our invoice reference as the recorded Verification answer names it, in
      * the gateway's own field, or null where the answer names none.
      *

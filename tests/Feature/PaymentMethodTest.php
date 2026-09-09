@@ -4,6 +4,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Support\Payments\AamarPay;
 use App\Support\Payments\Bkash;
 use App\Support\Payments\CashOnDelivery;
 use App\Support\Payments\PaymentGateway;
@@ -31,9 +32,9 @@ it('knows every payment method by name, with a label and a default logo each', f
     ]);
 });
 
-it('resolves cash on delivery, SSLCommerz and bKash to drivers, and offers only cash until Settings say otherwise', function () {
+it('resolves cash on delivery, SSLCommerz, bKash and aamarPay to drivers, and offers only cash until Settings say otherwise', function () {
     /**
-     * The four online cases exist so a Page can already name them. Two have
+     * The four online cases exist so a Page can already name them. Three have
      * a driver so far, and on an installation with no Payment settings saved
      * no online method is usable — so they are offered nowhere whatever a
      * Page says. `PaymentSettingsTest` is where one becomes usable.
@@ -49,11 +50,14 @@ it('resolves cash on delivery, SSLCommerz and bKash to drivers, and offers only 
         ->and(PaymentMethod::Bkash->gateway()->credentialProperties())->toBe(app(PaymentSettings::class)->credentialsFor(PaymentMethod::Bkash))
         /** Registered once through bKash's support desk, never sent with a Payment. */
         ->and(PaymentMethod::Bkash->gateway()->takesNotificationUrl())->toBeFalse()
+        ->and(PaymentMethod::AamarPay->gateway())->toBeInstanceOf(AamarPay::class)
+        ->and(PaymentMethod::AamarPay->gateway()->isOnline())->toBeTrue()
+        ->and(PaymentMethod::AamarPay->gateway()->credentialProperties())->toBe(app(PaymentSettings::class)->credentialsFor(PaymentMethod::AamarPay))
+        /** Registered once through aamarPay's support desk, never sent with a Payment. */
+        ->and(PaymentMethod::AamarPay->gateway()->takesNotificationUrl())->toBeFalse()
         ->and(PaymentMethod::online())->toBe([PaymentMethod::Bkash, PaymentMethod::SslCommerz, PaymentMethod::AamarPay, PaymentMethod::PayStation]);
 
-    foreach ([PaymentMethod::AamarPay, PaymentMethod::PayStation] as $online) {
-        expect($online->gateway())->toBeNull();
-    }
+    expect(PaymentMethod::PayStation->gateway())->toBeNull();
 
     foreach (PaymentMethod::online() as $online) {
         expect($online->isUsable())->toBeFalse();

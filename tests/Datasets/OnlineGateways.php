@@ -1,5 +1,6 @@
 <?php
 
+use Tests\Fixtures\Payments\AamarPayScript;
 use Tests\Fixtures\Payments\BkashScript;
 use Tests\Fixtures\Payments\SslCommerzScript;
 
@@ -12,4 +13,5 @@ use Tests\Fixtures\Payments\SslCommerzScript;
 dataset('online gateways', [
     'SSLCommerz' => [new SslCommerzScript],
     'bKash' => [new BkashScript],
+    'aamarPay' => [new AamarPayScript],
 ]);

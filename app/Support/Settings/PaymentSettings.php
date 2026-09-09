@@ -97,6 +97,21 @@ class PaymentSettings extends SettingsGroup
     /** A replacement logo for bKash; blank draws the default. */
     public string $bkashLogo = '';
 
+    /** aamarPay: off until the Merchant has typed their store's credentials. */
+    public bool $aamarpayEnabled = false;
+
+    /** Whether Payments go to aamarPay's sandbox rather than to real money. */
+    public bool $aamarpaySandbox = true;
+
+    /** The store id aamarPay issued. A credential, and so sealed and write-only. */
+    public string $aamarpayStoreId = '';
+
+    /** The signature key aamarPay issued. */
+    public string $aamarpaySignatureKey = '';
+
+    /** A replacement logo for aamarPay; blank draws the default. */
+    public string $aamarpayLogo = '';
+
     public static function key(): string
     {
         return 'payment';
@@ -105,9 +120,10 @@ class PaymentSettings extends SettingsGroup
     /**
      * Every credential, and nothing else: the store id is a credential too,
      * since together with the password it is the whole of what SSLCommerz
-     * asks for, and bKash's four are what its token grant takes. A host is
-     * not a credential. What a gateway's `credentialProperties()` names must
-     * be here.
+     * asks for, bKash's four are what its token grant takes, and aamarPay's
+     * store id and signature key sign every call. A host is not a
+     * credential. What a gateway's `credentialProperties()` names must be
+     * here.
      *
      * @return list<string>
      */
@@ -120,6 +136,8 @@ class PaymentSettings extends SettingsGroup
             'bkashAppSecret',
             'bkashUsername',
             'bkashPassword',
+            'aamarpayStoreId',
+            'aamarpaySignatureKey',
         ];
     }
 
