@@ -10,6 +10,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/PageCache/**, public/index.php, public/.htaccess, public/robots.txt, deploy/** | .ai/rules/page-cache.md |
 | app/Support/Payments/**, app/Models/Payment.php, app/Http/Controllers/PaymentController.php, resources/views/checkout/processing.blade.php, tests/Fixtures/Payments/** | .ai/rules/payments.md |
 | app/Filament/Resources/** | .ai/rules/resources.md |
+| app/Filament/Resources/Pages/Schemas/OrderComplete/** | .ai/rules/schemas-order-complete.md |
 | app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/** | .ai/rules/settings.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Support/OrderComplete/** | .ai/rules/support-order-complete.md |

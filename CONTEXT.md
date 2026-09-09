@@ -165,7 +165,7 @@ Everything one Page decides about its own Order Complete Page: how it is arrange
 _Avoid_: thank-you settings, success page settings, template, theme
 
 **Order Complete Layout**:
-How an Order Complete Page is arranged: what it draws, and nothing about what the Order contains. Every layout draws the order number, the Order's lines and totals, how it is paid, and where it is delivered when the browser is the one that placed it. A layout may draw a slot of its own — a row of steps, a set of tiles — and only a Page arranged in that layout is asked what the slot says.
+How an Order Complete Page is arranged: what it draws, and nothing about what the Order contains. Every layout draws the order number, the Order's lines and totals, how it is paid, and where it is delivered when the browser is the one that placed it. A layout may draw a slot of its own — a status line above the headline, a row of steps, a set of tiles — and only a Page arranged in that layout is asked what the slot says. A layout rearranges by its own block of rules and never reorders the document: Centered classic, Split, Editorial and Accent band write the same parts in the same order and differ in where the rules put them.
 _Avoid_: template, theme, skin, variant, design
 
 **Retry Page**:

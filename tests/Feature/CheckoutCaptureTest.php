@@ -10,6 +10,7 @@ use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\PricingFingerprint;
+use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\Orders\OrderOwnership;
 use Illuminate\Support\Str;
@@ -2536,15 +2537,12 @@ it('makes no request to anyone from the order complete page', function () {
 
     $capture = $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 
-    /** A page carrying the Customer's details loads nothing from a third party: no sheet, no font, no script, no picture. */
     $html = $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
         ->get(route('checkout.order-complete', Order::sole()->order_number))
         ->assertOk()
         ->getContent();
 
-    foreach (['<link', '<script', '<img', '<iframe', '<object', '<embed', '<video', '<audio', '<source', 'url(', '@import', ' src='] as $request) {
-        expect($html)->not->toContain($request);
-    }
+    expectNoExternalRequestIn($html);
 });
 
 it('draws the order complete page of an order whose page is gone with the words the page has always had', function () {
@@ -2579,4 +2577,140 @@ it('keeps the merchant\'s words on the order complete page of an order whose pag
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
         ->assertSee('Thanks from the winter sale');
+});
+
+/**
+ * The same Page, arranged in the Order Complete Layout given.
+ *
+ * @param  array<string, mixed>  $words  the rest of the stored Config, as stored
+ */
+function arrangedAs(Page $page, OrderCompleteLayout $layout, array $words = []): Page
+{
+    $page->update(['order_complete_config' => ['layout' => $layout->value, ...$words]]);
+
+    return $page;
+}
+
+/**
+ * A page carrying the Customer's details loads nothing from a third party:
+ * no sheet, no font, no script, no picture.
+ */
+function expectNoExternalRequestIn(string $html): void
+{
+    foreach (['<link', '<script', '<img', '<iframe', '<object', '<embed', '<video', '<audio', '<source', 'url(', '@import', ' src='] as $request) {
+        expect($html)->not->toContain($request);
+    }
+}
+
+it('draws a settled order in every order complete layout, with the fixed slots and the merchant\'s words', function (OrderCompleteLayout $layout) {
+    $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $page = arrangedAs(sellingPage($product), $layout, [
+        'headline' => 'Thanks from the winter sale',
+        'message' => 'A call is coming.',
+        'note' => 'Parcels leave on Sunday.',
+        'secondary_button' => ['label' => 'Track it', 'link' => '/track'],
+    ]);
+
+    $capture = $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => 2],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    /** A stranger first, so the cookie given afterwards is not already on the request. */
+    $stranger = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($stranger)->not->toContain('Deliver to')
+        ->and($stranger)->not->toContain('Rahim Uddin');
+
+    $html = $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
+        ->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->getContent();
+
+    /** The chosen layout's class on the root, and its block at the end of the one sheet — and no other layout's. */
+    $styles = styleBlock($html);
+
+    expect($html)->toContain('class="gio-order-complete '.$layout->modifierClass().'"')
+        ->and($styles)->toContain('.gio-order-complete-card {')
+        ->and($styles)->toContain($layout->styleRules());
+
+    foreach (OrderCompleteLayout::cases() as $other) {
+        if ($other === $layout) {
+            continue;
+        }
+
+        expect($styles)->not->toContain($other->modifierClass());
+
+        if ($other->styleRules() !== '') {
+            expect($styles)->not->toContain($other->styleRules());
+        }
+    }
+
+    /** The fixed slots every layout draws, the Merchant's words, both buttons, and the Deliver-to block for the browser that ordered. */
+    expect($html)->toContain($order->order_number)
+        ->and($html)->toContain('Winter Jacket')
+        ->and($html)->toContain('× 2')
+        ->and($html)->toContain('Subtotal')
+        ->and($html)->toContain('৳1980.00')
+        ->and($html)->toContain('Delivery')
+        ->and($html)->toContain('৳60.00')
+        ->and($html)->toContain('Cash on Delivery')
+        ->and($html)->toContain('Pay on delivery')
+        ->and($html)->toContain('৳2040.00')
+        ->and($html)->toContain('Thanks from the winter sale')
+        ->and($html)->toContain('A call is coming.')
+        ->and($html)->toContain('Parcels leave on Sunday.')
+        ->and($html)->toContain('>Continue shopping<')
+        ->and($html)->toContain('href="/track"')
+        ->and($html)->toContain('>Track it<')
+        ->and($html)->toContain('Deliver to')
+        ->and($html)->toContain('Rahim Uddin')
+        ->and($html)->toContain('01712345678')
+        ->and($html)->toContain('House 4, Road 12, Banani');
+
+    /** Still nothing from anyone else, whichever arrangement. */
+    expectNoExternalRequestIn($html);
+})->with(fn (): array => array_combine(
+    array_map(fn (OrderCompleteLayout $layout): string => $layout->name, OrderCompleteLayout::cases()),
+    array_map(fn (OrderCompleteLayout $layout): array => [$layout], OrderCompleteLayout::cases()),
+));
+
+it('draws the status line only in the layouts that have one, in the merchant\'s words or the built-in ones', function (OrderCompleteLayout $layout, ?string $typed, ?string $drawn) {
+    $page = arrangedAs(sellingPage(Product::factory()->create()), $layout, ['status_line' => $typed]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $html = $this->get(route('checkout.order-complete', Order::sole()->order_number))->assertOk()->getContent();
+
+    if ($drawn === null) {
+        expect($html)->not->toContain('class="gio-order-complete-status"')
+            ->and($html)->not->toContain('Order confirmed');
+    } else {
+        expect($html)->toContain('class="gio-order-complete-status"')
+            ->and($html)->toContain('>'.$drawn.'<');
+    }
+})->with([
+    'split, in the merchant\'s words' => [OrderCompleteLayout::Split, 'Your parcel is booked', 'Your parcel is booked'],
+    'split, left empty' => [OrderCompleteLayout::Split, '', 'Order confirmed'],
+    'editorial, in the merchant\'s words' => [OrderCompleteLayout::Editorial, 'Placed', 'Placed'],
+    'editorial, left empty' => [OrderCompleteLayout::Editorial, null, 'Order confirmed'],
+    'centered classic draws none' => [OrderCompleteLayout::CenteredClassic, 'Placed', null],
+    'accent band draws none' => [OrderCompleteLayout::AccentBand, 'Placed', null],
+]);
+
+it('draws each page\'s order complete page in that page\'s own layout, and no other page\'s', function () {
+    $split = arrangedAs(sellingPage(Product::factory()->create(), slug: 'split'), OrderCompleteLayout::Split);
+    $classic = sellingPage(Product::factory()->create(), slug: 'classic');
+
+    $this->postJson(route('checkout.store'), capturePayload($split))->assertCreated();
+    $this->postJson(route('checkout.store'), capturePayload($classic))->assertCreated();
+
+    [$fromSplit, $fromClassic] = Order::query()->orderBy('id')->get();
+
+    expect($this->get(route('checkout.order-complete', $fromSplit->order_number))->assertOk()->getContent())
+        ->toContain('class="gio-order-complete gio-order-complete-split"');
+
+    expect($this->get(route('checkout.order-complete', $fromClassic->order_number))->assertOk()->getContent())
+        ->toContain('class="gio-order-complete gio-order-complete-centered-classic"');
 });

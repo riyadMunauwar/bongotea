@@ -671,19 +671,6 @@ it('opens no tick on a page down to the one product it sells', function () {
 });
 
 /**
- * The one <style> block a Checkout emits, without the markup around it.
- *
- * Read out of the served page rather than off a class, because what is being
- * pinned is what a visitor's browser receives.
- */
-function styleBlock(string $html): string
-{
-    preg_match('/<style>(.*?)<\/style>/s', $html, $block);
-
-    return $block[1] ?? '';
-}
-
-/**
  * A published page selling one product, with the Checkout Config given.
  *
  * @param  array<string, mixed>  $config

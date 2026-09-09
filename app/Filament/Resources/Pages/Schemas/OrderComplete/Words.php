@@ -8,14 +8,16 @@ use App\Support\OrderComplete\OrderCompleteCopy;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 
 /**
  * What the Order Complete Page says, in the merchant's own words.
  *
- * Three boxes, all optional: an empty one is the merchant saying nothing, and
+ * Four boxes, all optional: an empty one is the merchant saying nothing, and
  * the page keeps the words it has always had. Each shows those words as its
  * placeholder, so what is in force reads without saving to find out. The
- * status line box belongs here too, and arrives with the layouts that draw it.
+ * status line is asked for only on a layout that draws one, following the
+ * live layout select, so the merchant is not asked for words nobody sees.
  */
 class Words
 {
@@ -25,6 +27,20 @@ class Words
             ->description('What the page says. Anything left empty keeps the page\'s own words. Write '.OrderCompleteCopy::ORDER_NUMBER_PLACEHOLDER.' or '.OrderCompleteCopy::TOTAL_PLACEHOLDER.' anywhere to put the order\'s own facts in a sentence.')
             ->columns(1)
             ->schema([
+                TextInput::make('order_complete_config.status_line')
+                    ->label('Status line')
+                    ->placeholder(OrderCompleteConfig::DEFAULT_STATUS_LINE)
+                    ->helperText('The short line above the headline, in capitals.')
+                    ->visible(fn (Get $get): bool => LayoutChoice::selected($get)->drawsStatusLine())
+                    /**
+                     * Riding along while hidden, so the words a merchant
+                     * wrote survive a move to a layout that draws none and
+                     * are there again the day the page is moved back — as a
+                     * question's width does across compact.
+                     */
+                    ->dehydratedWhenHidden()
+                    ->rules([RefusedBy::rule(OrderCompleteConfig::statusLineRefusal(...))]),
+
                 TextInput::make('order_complete_config.headline')
                     ->label('Headline')
                     ->placeholder(OrderCompleteConfig::DEFAULT_HEADLINE)

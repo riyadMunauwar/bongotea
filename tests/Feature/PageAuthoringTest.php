@@ -2156,6 +2156,7 @@ it('reads an order complete config a page had before the column, or one holding 
     /** Read totally: a missing key or an unknown value is the default for that key, and never a 500 in front of a Customer. */
     $this->get(route('checkout.order-complete', Order::sole()->order_number))
         ->assertOk()
+        ->assertSee('class="gio-order-complete gio-order-complete-centered-classic"', false)
         ->assertSee('Your order is confirmed')
         ->assertSee('Continue shopping');
 
@@ -2178,6 +2179,7 @@ it('asks about the order complete page on its own tab beside checkout, in three 
 
     expect(statePathsInside($tab))->toBe([
         'order_complete_config.layout',
+        'order_complete_config.status_line',
         'order_complete_config.headline',
         'order_complete_config.message',
         'order_complete_config.note',
@@ -2195,7 +2197,12 @@ it('asks about the order complete page on its own tab beside checkout, in three 
 
     expect($layout)->toBeInstanceOf(Select::class)
         ->and($layout->isLive())->toBeTrue()
-        ->and($layout->getOptions())->toBe(['centered_classic' => 'Centered classic'])
+        ->and($layout->getOptions())->toBe([
+            'centered_classic' => 'Centered classic',
+            'split' => 'Split',
+            'editorial' => 'Editorial',
+            'accent_band' => 'Accent band',
+        ])
         ->and((string) $helperText->getContent())->toBe(OrderCompleteLayout::CenteredClassic->helperText());
 });
 
@@ -2271,6 +2278,8 @@ it('refuses order complete copy on the box that holds it', function (array $type
         ->call('save')
         ->assertHasFormErrors([$box]);
 })->with([
+    'a status line too long' => [['layout' => 'split', 'status_line' => str_repeat('s', 61)], 'order_complete_config.status_line'],
+    'a status line broken over two lines' => [['layout' => 'split', 'status_line' => "Order\nplaced"], 'order_complete_config.status_line'],
     'a headline too long for one line' => [['headline' => str_repeat('x', 121)], 'order_complete_config.headline'],
     'a headline broken over two lines' => [['headline' => "Thank\nyou"], 'order_complete_config.headline'],
     'a message too long' => [['message' => str_repeat('y', 301)], 'order_complete_config.message'],
@@ -2279,3 +2288,72 @@ it('refuses order complete copy on the box that holds it', function (array $type
     'a link that is not a web address' => [['primary_button' => ['link' => 'javascript:alert(1)']], 'order_complete_config.primary_button.link'],
     'a second link that is not a web address' => [['secondary_button' => ['label' => 'Track', 'link' => 'track it']], 'order_complete_config.secondary_button.link'],
 ]);
+
+it('asks for the status line only on a layout that draws one, and keeps it whichever is chosen', function (string $stored, bool $asked) {
+    $page = Page::factory()->create(['order_complete_config' => ['layout' => $stored, 'status_line' => 'Placed']]);
+
+    $tab = orderCompleteTabOf($page);
+
+    /** A layout that draws no status line is not asked for one; an unknown stored layout reads as Centered classic, which draws none. */
+    expect(fieldInside($tab, 'order_complete_config.status_line')?->isHidden())->toBe(! $asked);
+
+    /** And the select describes whichever layout the Page is read as. */
+    $layout = fieldInside($tab, 'order_complete_config.layout');
+
+    /** @var Text $helperText */
+    $helperText = $layout->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)->getComponents()[0];
+
+    expect((string) $helperText->getContent())->toBe(OrderCompleteLayout::fromStored($stored)->helperText());
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => ['headline' => 'Thanks']])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** The words ride along for the day the Page is moved to a layout that draws them. */
+    expect($page->refresh()->order_complete_config->statusLine)->toBe('Placed');
+})->with([
+    'centered classic' => ['centered_classic', false],
+    'split' => ['split', true],
+    'editorial' => ['editorial', true],
+    'accent band' => ['accent_band', false],
+    'a layout nothing draws' => ['hero_video', false],
+]);
+
+it('lets a merchant choose an order complete layout and word its status line, and serves the page so', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => ['layout' => 'editorial', 'status_line' => 'Order {order_number} placed']])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->order_complete_config;
+
+    expect($config->layout)->toBe(OrderCompleteLayout::Editorial)
+        ->and($config->statusLine)->toBe('Order {order_number} placed');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet(['order_complete_config.layout' => 'editorial', 'order_complete_config.status_line' => 'Order {order_number} placed']);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($html)->toContain('class="gio-order-complete gio-order-complete-editorial"')
+        ->and($html)->toContain('Order '.$order->order_number.' placed');
+
+    /** Emptied again, the page keeps the words it has always had. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => ['status_line' => '  ']])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->order_complete_config->statusLine)->toBeNull();
+
+    $this->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee('Order confirmed');
+});

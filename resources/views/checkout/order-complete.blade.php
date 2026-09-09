@@ -40,25 +40,28 @@
         :root { color-scheme: light; color: #111318; }
         .gio-order-complete { {{ $styleTokens->declarations() }} box-sizing: border-box; min-height: 100vh; margin: 0; padding: 3.5rem 1.5rem; background: #f7f8fa; color: var(--gio-text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: var(--gio-font-size); line-height: 1.5; }
         .gio-order-complete-card { box-sizing: border-box; max-width: 32.5rem; margin: 0 auto; padding: 2.25rem 2rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); display: flex; flex-direction: column; align-items: center; gap: 1.125rem; text-align: center; }
-        .gio-order-complete-badge { width: 4rem; height: 4rem; border-radius: 50%; background: var(--gio-accent); color: #fff; display: grid; place-items: center; }
+        .gio-order-complete-head { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1.125rem; }
+        .gio-order-complete-badge { flex: none; width: 4rem; height: 4rem; border-radius: 50%; background: var(--gio-accent); color: #fff; display: grid; place-items: center; }
         .gio-order-complete-badge svg { width: 2rem; height: 2rem; }
-        .gio-order-complete-headline { margin: 0 0 .375rem; font-size: 1.75em; font-weight: 700; line-height: 1.2; }
+        .gio-order-complete-words { min-width: 0; }
+        .gio-order-complete-status { margin: 0 0 .5rem; font-size: .75em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+        .gio-order-complete-headline { margin: 0 0 .375rem; font-size: 1.75em; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
         .gio-order-complete-message { margin: 0; font-size: .9375em; opacity: .72; }
-        .gio-order-complete-number { margin: 0; padding: .5rem .875rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; font-weight: 600; }
-        .gio-order-complete-summary { width: 100%; margin: 0; padding: 1.125rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); display: flex; flex-direction: column; gap: .625rem; text-align: left; font-size: .875em; }
+        .gio-order-complete-number { flex: none; margin: 0; padding: .5rem .875rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125em; font-weight: 600; }
+        .gio-order-complete-summary { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 1.125rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); display: flex; flex-direction: column; gap: .625rem; text-align: left; font-size: .875em; }
         .gio-order-complete-row { display: flex; justify-content: space-between; gap: .75rem; margin: 0; }
-        .gio-order-complete-row-label { opacity: .72; }
+        .gio-order-complete-row-label { min-width: 0; overflow-wrap: anywhere; opacity: .72; }
         .gio-order-complete-row-amount { font-weight: 600; white-space: nowrap; }
         .gio-order-complete-total { margin: 0; padding: .625rem 0 0; border-top: var(--gio-border-width) solid var(--gio-border); font-size: 1.2em; font-weight: 700; }
         .gio-order-complete-total .gio-order-complete-row-label { opacity: 1; }
         .gio-order-complete-paid { display: inline-block; margin-left: .5rem; padding: .125rem .5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .75em; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; }
-        .gio-order-complete-deliver-to { width: 100%; margin: 0; text-align: left; font-size: .875em; }
+        .gio-order-complete-deliver-to { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; text-align: left; font-size: .875em; overflow-wrap: anywhere; }
         .gio-order-complete-eyebrow { margin: 0 0 .25rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
         .gio-order-complete-deliver-to-line { margin: 0; }
         .gio-order-complete-deliver-to-name { font-weight: 600; }
         .gio-order-complete-deliver-to-note { margin: .375rem 0 0; opacity: .72; }
-        .gio-order-complete-note { margin: 0; font-size: .875em; opacity: .72; }
-        .gio-order-complete-actions { width: 100%; display: flex; flex-direction: column; gap: .625rem; }
+        .gio-order-complete-note { min-width: 0; margin: 0; font-size: .875em; opacity: .72; overflow-wrap: anywhere; }
+        .gio-order-complete-actions { box-sizing: border-box; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: .625rem; }
         .gio-order-complete-button { box-sizing: border-box; display: flex; justify-content: center; align-items: center; padding: .875rem 1.25rem; border-radius: var(--gio-button-radius); background: var(--gio-button-background); color: var(--gio-button-text); text-decoration: none; font-weight: 700; font-size: .9375em; }
         .gio-order-complete-button-secondary { background: transparent; color: inherit; border: var(--gio-border-width) solid var(--gio-border); }
         @media (max-width: 30rem) {
@@ -70,16 +73,28 @@
 </head>
 <body class="gio-order-complete {{ $layout->modifierClass() }}">
     <main class="gio-order-complete-card">
-        <div class="gio-order-complete-badge" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-        </div>
+        {{--
+            The head: the tick, the words and the order number, in one box so
+            that a layout can lay them out as a strip or a column without
+            moving them in the bytes. The status line is the one slot here a
+            layout may or may not draw; only a Page arranged in a layout that
+            draws it is asked what it says, and the layout's block styles it.
+        --}}
+        <header class="gio-order-complete-head">
+            <div class="gio-order-complete-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            </div>
 
-        <div>
-            <h1 class="gio-order-complete-headline">{{ $words->headline() }}</h1>
-            <p class="gio-order-complete-message">{!! nl2br(e($words->message())) !!}</p>
-        </div>
+            <div class="gio-order-complete-words">
+                @if ($layout->drawsStatusLine())
+                    <p class="gio-order-complete-status">{{ $words->statusLine() }}</p>
+                @endif
+                <h1 class="gio-order-complete-headline">{{ $words->headline() }}</h1>
+                <p class="gio-order-complete-message">{!! nl2br(e($words->message())) !!}</p>
+            </div>
 
-        <p class="gio-order-complete-number">Order {{ $order->order_number }}</p>
+            <p class="gio-order-complete-number">Order {{ $order->order_number }}</p>
+        </header>
 
         {{--
             The fixed slots every layout draws, in labels nobody can change,

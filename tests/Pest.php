@@ -282,3 +282,17 @@ function registerShortcode(string $name, Closure $render): void
         }
     });
 }
+
+/**
+ * The one <style> block a served page carries, without the markup around it:
+ * a Checkout's on a landing page, or the Order Complete Page's own.
+ *
+ * Read out of the served page rather than off a class, because what is being
+ * pinned is what a visitor's browser receives.
+ */
+function styleBlock(string $html): string
+{
+    preg_match('/<style>(.*?)<\/style>/s', $html, $block);
+
+    return $block[1] ?? '';
+}
