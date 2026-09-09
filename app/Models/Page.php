@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PageStatus;
 use App\Observers\PageObserver;
 use App\Support\Checkout\AsCheckoutConfig;
+use App\Support\OrderComplete\AsOrderCompleteConfig;
 use Database\Factories\PageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * served at its own flat slug.
  */
 #[ObservedBy(PageObserver::class)]
-#[Fillable(['title', 'slug', 'body', 'status', 'published_at', 'checkout_config'])]
+#[Fillable(['title', 'slug', 'body', 'status', 'published_at', 'checkout_config', 'order_complete_config'])]
 class Page extends Model
 {
     /** @use HasFactory<PageFactory> */
@@ -37,6 +38,13 @@ class Page extends Model
              * Page is seeded with a complete Config as it is created.
              */
             'checkout_config' => AsCheckoutConfig::class,
+
+            /**
+             * Likewise: what the Page says once the Order is placed, seeded
+             * with the Config it is created with and backfilled for every
+             * Page from before the column.
+             */
+            'order_complete_config' => AsOrderCompleteConfig::class,
         ];
     }
 

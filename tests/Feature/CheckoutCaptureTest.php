@@ -2488,3 +2488,95 @@ it('places a plain form post carrying a method under that method', function () {
 
     expect(Order::sole()->payment_method)->toBe(PaymentMethod::CashOnDelivery);
 });
+
+it('draws the order complete page as centered classic in the checkout\'s own colours', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $page = sellingPage($product);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'style_tokens' => ['accent' => '#ff0000', 'button_background' => '#00ff00', 'border' => '#123456'],
+    ])]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        'quantities' => [$product->getKey() => 2],
+    ]))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    /** One base sheet, the chosen layout's class on the root, and the Page's own Checkout Style Tokens declared on it. */
+    expect($html)->toContain('class="gio-order-complete gio-order-complete-centered-classic"')
+        ->and($html)->toContain('--gio-accent: #ff0000;')
+        ->and($html)->toContain('--gio-button-background: #00ff00;')
+        ->and($html)->toContain('--gio-border: #123456;')
+        /** The fixed slots every layout draws, in the labels nobody can change. */
+        ->and($html)->toContain($order->order_number)
+        ->and($html)->toContain('Winter Jacket')
+        ->and($html)->toContain('× 2')
+        ->and($html)->toContain('Subtotal')
+        ->and($html)->toContain('৳1980.00')
+        ->and($html)->toContain('Delivery')
+        ->and($html)->toContain('৳60.00')
+        ->and($html)->toContain('Payment')
+        ->and($html)->toContain('Cash on Delivery')
+        ->and($html)->toContain('Pay on delivery')
+        ->and($html)->toContain('৳2040.00')
+        /** The built-in words, the primary button to the Page, and no second button until a label is typed. */
+        ->and($html)->toContain('Your order is confirmed')
+        ->and($html)->toContain('href="'.route('landing.show', 'promo').'"')
+        ->and($html)->toContain('>Continue shopping<')
+        ->and($html)->not->toContain('class="gio-order-complete-button gio-order-complete-button-secondary"')
+        ->and($html)->toContain('font-family: system-ui');
+});
+
+it('makes no request to anyone from the order complete page', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $capture = $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    /** A page carrying the Customer's details loads nothing from a third party: no sheet, no font, no script, no picture. */
+    $html = $this->withCookie(OrderOwnership::COOKIE, ownershipHandedBy($capture))
+        ->get(route('checkout.order-complete', Order::sole()->order_number))
+        ->assertOk()
+        ->getContent();
+
+    foreach (['<link', '<script', '<img', '<iframe', '<object', '<embed', '<video', '<audio', '<source', 'url(', '@import', ' src='] as $request) {
+        expect($html)->not->toContain($request);
+    }
+});
+
+it('draws the order complete page of an order whose page is gone with the words the page has always had', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $page->forceDelete();
+
+    /** A Customer with an old link is not met with an error: a Page that is gone yields the default Config. */
+    $this->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee($order->order_number)
+        ->assertSee('Your order is confirmed')
+        ->assertSee('Continue shopping');
+});
+
+it('keeps the merchant\'s words on the order complete page of an order whose page is in the bin', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    $page->update(['order_complete_config' => ['headline' => 'Thanks from the winter sale']]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $page->delete();
+
+    /** A soft-deleted Page keeps its slug and its Config, so its Orders keep the words it chose, as the Retry Page keeps its methods. */
+    $this->get(route('checkout.order-complete', $order->order_number))
+        ->assertOk()
+        ->assertSee('Thanks from the winter sale');
+});

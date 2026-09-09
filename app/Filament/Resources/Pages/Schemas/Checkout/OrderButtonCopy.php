@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Filament\Resources\Pages\Schemas\RefusedBy;
 use App\Support\Checkout\OrderButton;
-use Closure;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 
@@ -35,34 +35,13 @@ class OrderButtonCopy
                     /** What is in force while the box is empty, so it reads without saving to find out. */
                     ->placeholder(OrderButton::DEFAULT_WORDING)
                     ->helperText('Write '.OrderButton::TOTAL_PLACEHOLDER.' anywhere in it to put the live total on the button, e.g. "Order for '.OrderButton::TOTAL_PLACEHOLDER.'".')
-                    ->rules([self::refusedBy(OrderButton::wordingRefusal(...))]),
+                    ->rules([RefusedBy::rule(OrderButton::wordingRefusal(...))]),
 
                 TextInput::make('checkout_config.order_button.note')
                     ->label('Line beneath the button')
                     ->placeholder(OrderButton::DEFAULT_NOTE)
                     ->helperText('A line of reassurance about how the customer pays.')
-                    ->rules([self::refusedBy(OrderButton::noteRefusal(...))]),
+                    ->rules([RefusedBy::rule(OrderButton::noteRefusal(...))]),
             ]);
-    }
-
-    /**
-     * The same refusal the Config makes as it reads a stored value, asked of
-     * the domain object so the two cannot disagree about what a button may
-     * say. Worded here, on the box that holds it; silent there, because a
-     * Config written by some other route has nobody to tell.
-     *
-     * Blank is never refused: an empty box is the button at its own words.
-     *
-     * @param  Closure(string): ?string  $refusal
-     */
-    private static function refusedBy(Closure $refusal): Closure
-    {
-        return fn (): Closure => function (string $attribute, mixed $value, Closure $fail) use ($refusal): void {
-            $value = is_scalar($value) ? trim((string) $value) : '';
-
-            if ($value !== '' && ($message = $refusal($value)) !== null) {
-                $fail($message);
-            }
-        };
     }
 }

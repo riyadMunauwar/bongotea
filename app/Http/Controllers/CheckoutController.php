@@ -68,9 +68,19 @@ class CheckoutController extends Controller
             return redirect()->route('checkout.retry', $order->order_number);
         }
 
+        /**
+         * What the page says and how it is arranged is the Page's Order
+         * Complete Config, read as it stands now; what it is coloured with is
+         * the Page's Checkout Style Tokens, so the page after the order
+         * matches the form before it. A Page that is gone yields the defaults
+         * of both, so an old Order still renders.
+         */
         return $this->uncachedPage('checkout.order-complete', [
             'order' => $order->load('lines'),
             'placedByThisBrowser' => OrderOwnership::fromRequest($request)->owns($order->order_number),
+            'layout' => $order->orderCompleteConfig()->layout,
+            'words' => $order->orderCompleteWords(),
+            'styleTokens' => $order->pageStyleTokens()->completed(),
         ]);
     }
 

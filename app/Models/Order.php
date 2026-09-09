@@ -6,6 +6,10 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Observers\OrderObserver;
+use App\Support\Checkout\StyleTokens;
+use App\Support\Money;
+use App\Support\OrderComplete\OrderCompleteConfig;
+use App\Support\OrderComplete\OrderCompleteWords;
 use App\Support\Orders\AsCapturedAnswers;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -350,6 +354,43 @@ class Order extends Model
         return $this->isUnpaid()
             ? route('checkout.retry', $this->order_number)
             : route('checkout.order-complete', $this->order_number);
+    }
+
+    /**
+     * What this Order's Order Complete Page says and how it is arranged: the
+     * Config of the Page it was captured on, read as it stands now rather than
+     * snapshotted. The default Config where the Page is gone, because a
+     * Customer with an old link is owed the page and never an error.
+     */
+    public function orderCompleteConfig(): OrderCompleteConfig
+    {
+        return $this->page?->order_complete_config ?? OrderCompleteConfig::default();
+    }
+
+    /**
+     * What this Order's Order Complete Page says: the Config's words with this
+     * Order's own number and total in place of the placeholders, and the Page
+     * it was captured on as the address a button with no link of its own goes
+     * to. That address survives the Page: `page_slug` is the attribution kept
+     * for exactly that.
+     */
+    public function orderCompleteWords(): OrderCompleteWords
+    {
+        return $this->orderCompleteConfig()->wordsFor(
+            $this->order_number,
+            Money::format($this->total),
+            route('landing.show', $this->page_slug),
+        );
+    }
+
+    /**
+     * What this Order's Page styles its Checkout with, for the page after the
+     * order to match the form before it. Nothing said where the Page is gone,
+     * which completes to the look the page has always had.
+     */
+    public function pageStyleTokens(): StyleTokens
+    {
+        return $this->page?->checkout_config->styleTokens ?? StyleTokens::none();
     }
 
     /**

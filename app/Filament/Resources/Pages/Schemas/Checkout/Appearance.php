@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Filament\Resources\Pages\Schemas\RefusedBy;
 use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
-use Closure;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
@@ -103,14 +103,6 @@ class Appearance
             /** What is in force while the box is empty, so it reads without saving to find out. */
             ->placeholder($overridesOneField ? 'Follows the checkout' : $token->defaultHint())
             ->helperText($overridesOneField ? null : $token->helperText())
-            ->rules([
-                fn (): Closure => function (string $attribute, mixed $value, Closure $fail) use ($token): void {
-                    $value = is_scalar($value) ? trim((string) $value) : '';
-
-                    if ($value !== '' && ($refusal = $token->refusal($value)) !== null) {
-                        $fail($refusal);
-                    }
-                },
-            ]);
+            ->rules([RefusedBy::rule($token->refusal(...))]);
     }
 }

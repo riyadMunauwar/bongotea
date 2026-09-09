@@ -7,6 +7,7 @@ use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Filament\Resources\Pages\Pages\ListPages;
 use App\Filament\Resources\Pages\Schemas\Checkout\Questions;
 use App\Filament\Resources\Products\Pages\CreateProduct;
+use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
@@ -16,6 +17,7 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\FieldOption;
 use App\Support\Checkout\FieldWidth;
 use App\Support\Checkout\StyleToken;
+use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
@@ -23,10 +25,13 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -1643,12 +1648,15 @@ it('splits the checkout tab into one nested tab per concern', function () {
 it('keeps everything the checkout decides inside the checkout tab', function () {
     /**
      * A Checkout Config is one thing a Page decides, so splitting it up inside
-     * the tab must not promote its parts to sit beside the Page itself.
+     * the tab must not promote its parts to sit beside the Page itself. The
+     * Order Complete Config is another thing a Page decides, and sits beside
+     * it rather than inside it: the Checkout captures the Order, and that is
+     * where the Customer lands afterwards.
      */
     expect(array_map(
         fn (Tab $tab): string => (string) $tab->getLabel(),
         tabsInside(editFormOf(Page::factory()->create())),
-    ))->toBe(['Page', 'Checkout']);
+    ))->toBe(['Page', 'Checkout', 'Order complete']);
 });
 
 it('reaches and saves a setting on every nested checkout tab', function (string $tab) {
@@ -2103,3 +2111,171 @@ it('keeps offering cash on delivery when the merchant empties the list', functio
     expect($config->paymentMethods)->toBe([])
         ->and($config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
 });
+
+/**
+ * The outer tab the Order Complete Page is configured on.
+ */
+function orderCompleteTabOf(Page $page): Tab
+{
+    return collect(tabsInside(editFormOf($page)))
+        ->sole(fn (Tab $tab): bool => (string) $tab->getLabel() === 'Order complete');
+}
+
+it('gives a new page a complete order complete config nobody had to configure', function () {
+    Livewire::test(CreatePage::class)
+        ->fillForm([
+            'title' => 'Winter Promo',
+            'slug' => 'winter-promo',
+            'body' => '<h1>Winter</h1>',
+            'status' => PageStatus::Draft->value,
+            'products' => [],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $config = Page::where('slug', 'winter-promo')->sole()->order_complete_config;
+
+    /**
+     * Seeded on create and never partial: nothing was typed, so every word is
+     * the built-in one and the page is drawn as Centered classic.
+     */
+    expect($config->layout)->toBe(OrderCompleteLayout::CenteredClassic)
+        ->and($config->headline)->toBeNull()
+        ->and($config->headline())->toBe('Your order is confirmed')
+        ->and($config->primaryButton->label)->toBeNull()
+        ->and($config->secondaryButton->label)->toBeNull();
+});
+
+it('reads an order complete config a page had before the column, or one holding what nothing draws, as the default', function (string $stored) {
+    $page = sellingPage(Product::factory()->create());
+
+    DB::table('pages')->where('id', $page->getKey())->update(['order_complete_config' => $stored]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    /** Read totally: a missing key or an unknown value is the default for that key, and never a 500 in front of a Customer. */
+    $this->get(route('checkout.order-complete', Order::sole()->order_number))
+        ->assertOk()
+        ->assertSee('Your order is confirmed')
+        ->assertSee('Continue shopping');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertOk()
+        ->assertFormSet(['order_complete_config.headline' => null]);
+})->with([
+    'nothing stored' => ['{}'],
+    'a layout nothing draws and a headline that is not text' => [json_encode(['layout' => 'hero_video', 'headline' => ['not' => 'text'], 'primary_button' => 'nope'])],
+]);
+
+it('asks about the order complete page on its own tab beside checkout, in three sections', function () {
+    $tab = orderCompleteTabOf(Page::factory()->create());
+
+    /** Layout first, because it decides which words the later sections will ask for. */
+    expect(array_values(array_map(
+        fn (Component $section): string => (string) $section->getHeading(),
+        array_filter($tab->getChildSchema()->getComponents(), fn (Component $component): bool => $component instanceof Section),
+    )))->toBe(['Layout', 'Words', 'Buttons']);
+
+    expect(statePathsInside($tab))->toBe([
+        'order_complete_config.layout',
+        'order_complete_config.headline',
+        'order_complete_config.message',
+        'order_complete_config.note',
+        'order_complete_config.primary_button.label',
+        'order_complete_config.primary_button.link',
+        'order_complete_config.secondary_button.label',
+        'order_complete_config.secondary_button.link',
+    ]);
+
+    /** The layout describes itself, so what it draws reads without saving to find out. */
+    $layout = fieldInside($tab, 'order_complete_config.layout');
+
+    /** @var Text $helperText */
+    $helperText = $layout->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)->getComponents()[0];
+
+    expect($layout)->toBeInstanceOf(Select::class)
+        ->and($layout->isLive())->toBeTrue()
+        ->and($layout->getOptions())->toBe(['centered_classic' => 'Centered classic'])
+        ->and((string) $helperText->getContent())->toBe(OrderCompleteLayout::CenteredClassic->helperText());
+});
+
+it('lets a merchant word the order complete page and serves it in their words', function () {
+    $page = sellingPage(Product::factory()->create(['price' => 99000]));
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => [
+            'headline' => 'Thanks for order {order_number}',
+            'message' => "We have your {total}.\nExpect a call.",
+            'note' => '',
+            'primary_button' => ['label' => 'Back to the shop', 'link' => 'https://shop.example/thanks?order={order_number}'],
+            'secondary_button' => ['label' => 'Track {order_number}', 'link' => '/track'],
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->order_complete_config;
+
+    expect($config->headline)->toBe('Thanks for order {order_number}')
+        ->and($config->primaryButton->link)->toBe('https://shop.example/thanks?order={order_number}')
+        ->and($config->secondaryButton->label)->toBe('Track {order_number}');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    /** Every customizable string carries the Order's own facts in place of the placeholders, and the one box left empty keeps the built-in words. */
+    expect($html)->toContain('Thanks for order '.$order->order_number)
+        ->and($html)->toContain('We have your ৳1050.00.')
+        ->and($html)->toContain('We will call you shortly to confirm your order.')
+        ->and($html)->toContain('href="https://shop.example/thanks?order='.$order->order_number.'"')
+        ->and($html)->toContain('>Back to the shop<')
+        ->and($html)->toContain('href="/track"')
+        ->and($html)->toContain('>Track '.$order->order_number.'<')
+        ->and($html)->not->toContain('{order_number}')
+        ->and($html)->not->toContain('{total}');
+});
+
+it('keeps order complete copy the merchant left alone out of the stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => [
+            'headline' => '  ',
+            'message' => '',
+            'note' => null,
+            'primary_button' => ['label' => '', 'link' => ' '],
+            'secondary_button' => ['label' => '', 'link' => ''],
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->order_complete_config;
+
+    /** Blank is the merchant saying nothing, so the page keeps its own words rather than storing a blank. */
+    expect($config->headline)->toBeNull()
+        ->and($config->message)->toBeNull()
+        ->and($config->note)->toBeNull()
+        ->and($config->primaryButton->label)->toBeNull()
+        ->and($config->primaryButton->link)->toBeNull()
+        ->and($config->secondaryButton->label)->toBeNull()
+        ->and($config->secondaryButton->link)->toBeNull();
+});
+
+it('refuses order complete copy on the box that holds it', function (array $typed, string $box) {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => $typed])
+        ->call('save')
+        ->assertHasFormErrors([$box]);
+})->with([
+    'a headline too long for one line' => [['headline' => str_repeat('x', 121)], 'order_complete_config.headline'],
+    'a headline broken over two lines' => [['headline' => "Thank\nyou"], 'order_complete_config.headline'],
+    'a message too long' => [['message' => str_repeat('y', 301)], 'order_complete_config.message'],
+    'a note too long' => [['note' => str_repeat('z', 301)], 'order_complete_config.note'],
+    'a button label too long' => [['primary_button' => ['label' => str_repeat('b', 61)]], 'order_complete_config.primary_button.label'],
+    'a link that is not a web address' => [['primary_button' => ['link' => 'javascript:alert(1)']], 'order_complete_config.primary_button.link'],
+    'a second link that is not a web address' => [['secondary_button' => ['label' => 'Track', 'link' => 'track it']], 'order_complete_config.secondary_button.link'],
+]);

@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Enums\PageStatus;
 use App\Models\Page;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\OrderComplete\OrderCompleteConfig;
 use App\Support\PageCache\PageCacheInvalidator;
 
 /**
@@ -26,9 +27,9 @@ class PageObserver
     public function __construct(private readonly PageCacheInvalidator $invalidator) {}
 
     /**
-     * Every Page is born with a complete Checkout Config, so a Merchant can
-     * publish without opening the Checkout settings and nothing anywhere has to
-     * ask whether a Page has been configured yet.
+     * Every Page is born with a complete Checkout Config and a complete Order
+     * Complete Config, so a Merchant can publish without opening either tab
+     * and nothing anywhere has to ask whether a Page has been configured yet.
      *
      * Here rather than in the Filament form for the same reason the publish
      * stamp is: it is a fact about a Page, so one created by a seeder, a
@@ -42,6 +43,10 @@ class PageObserver
     {
         if (! array_key_exists('checkout_config', $page->getAttributes())) {
             $page->checkout_config = CheckoutConfig::default();
+        }
+
+        if (! array_key_exists('order_complete_config', $page->getAttributes())) {
+            $page->order_complete_config = OrderCompleteConfig::default();
         }
     }
 

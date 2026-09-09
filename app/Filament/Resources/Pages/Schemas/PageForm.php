@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Pages\Schemas;
 
 use App\Enums\PageStatus;
 use App\Filament\Resources\Pages\Schemas\Checkout\CheckoutTab;
+use App\Filament\Resources\Pages\Schemas\OrderComplete\OrderCompleteTab;
 use App\Shortcodes\PageBodyValidator;
 use Closure;
 use Filament\Forms\Components\CodeEditor;
@@ -78,6 +79,13 @@ class PageForm
                          * rather than a block in the middle of this one.
                          */
                         CheckoutTab::make(),
+
+                        /**
+                         * Where the Customer lands once the Order is
+                         * placed: a second thing a Page decides, so a
+                         * tab beside Checkout rather than inside it.
+                         */
+                        OrderCompleteTab::make(),
                     ]),
 
                 Section::make('Publishing')
