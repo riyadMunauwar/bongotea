@@ -9,14 +9,16 @@ use Filament\Schemas\Components\Tabs\Tab;
  * merchant reads it.
  *
  * One class per concern beside this one — how it is arranged, what it says,
- * where the buttons go — and this class holds the arrangement and nothing
- * else. A top-level tab beside Checkout rather than a nested one inside it,
- * because an Order Complete Config is a second thing a Page decides: the
- * Checkout captures the Order, and this is where the Customer lands
- * afterwards.
+ * where the buttons go, and the slot a layout may have of its own — and this
+ * class holds the arrangement and nothing else. A top-level tab beside
+ * Checkout rather than a nested one inside it, because an Order Complete
+ * Config is a second thing a Page decides: the Checkout captures the Order,
+ * and this is where the Customer lands afterwards.
  *
- * Sections rather than nested tabs, because three short sections read on one
- * scroll and a tab per section would hide two of them for nothing.
+ * Sections rather than nested tabs, because a few short sections read on one
+ * scroll and a tab per section would hide the rest for nothing. At most four
+ * are on screen: Steps and Tiles each follow the layout select, and no layout
+ * draws both.
  */
 class OrderCompleteTab
 {
@@ -36,6 +38,15 @@ class OrderCompleteTab
                 Words::section(),
 
                 Buttons::section(),
+
+                /**
+                 * Last, and one at a time: each is the slot
+                 * of a single layout, and is shown only when
+                 * that layout is the one chosen above.
+                 */
+                Steps::section(),
+
+                Tiles::section(),
             ]);
     }
 }

@@ -72,6 +72,8 @@
     </style>
 </head>
 <body class="gio-order-complete {{ $layout->modifierClass() }}">
+    {{-- The one tick, drawn inline wherever a mark says "done": the badge, the first step, the first tile. --}}
+    @php($tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>')
     <main class="gio-order-complete-card">
         {{--
             The head: the tick, the words and the order number, in one box so
@@ -81,9 +83,7 @@
             draws it is asked what it says, and the layout's block styles it.
         --}}
         <header class="gio-order-complete-head">
-            <div class="gio-order-complete-badge" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-            </div>
+            <div class="gio-order-complete-badge" aria-hidden="true">{!! $tick !!}</div>
 
             <div class="gio-order-complete-words">
                 @if ($layout->drawsStatusLine())
@@ -93,8 +93,49 @@
                 <p class="gio-order-complete-message">{!! nl2br(e($words->message())) !!}</p>
             </div>
 
-            <p class="gio-order-complete-number">Order {{ $order->order_number }}</p>
+            {{--
+                The capture time is the one fact a layout may add to the
+                number: a tracker that starts at "Order placed" starts from a
+                real time. Written in the app's own timezone, machine-readable
+                for a browser that wants to show it in the Customer's.
+            --}}
+            <p class="gio-order-complete-number">Order {{ $order->order_number }}@if ($layout->drawsCaptureTime()) <time class="gio-order-complete-capture-time" datetime="{{ $order->created_at->toIso8601String() }}">{{ $order->created_at->format('j M Y, g:i A') }}</time>@endif</p>
         </header>
+
+        {{--
+            The slots a layout may have of its own, under the head: a row of
+            steps saying what happens next, or a set of tiles. Each is a fixed
+            number of positions read from the Page's Config, with the
+            built-in words in any the Merchant left alone, and only the
+            layout that draws one is asked what it says. The first position
+            is the one already done — the Order is placed — and is marked
+            with the tick; the rest are numbered.
+        --}}
+        @if ($layout->drawsSteps())
+            <ol class="gio-order-complete-steps" aria-label="What happens next">
+                @foreach ($words->steps() as $step)
+                    <li class="gio-order-complete-step">
+                        <span class="gio-order-complete-step-mark" aria-hidden="true">@if ($loop->first){!! $tick !!}@else{{ $loop->iteration }}@endif</span>
+                        <div class="gio-order-complete-step-words">
+                            <p class="gio-order-complete-step-label">{{ $step['label'] }}</p>
+                            <p class="gio-order-complete-step-timing">{{ $step['timing'] }}</p>
+                        </div>
+                    </li>
+                @endforeach
+            </ol>
+        @endif
+
+        @if ($layout->drawsTiles())
+            <ul class="gio-order-complete-tiles">
+                @foreach ($words->tiles() as $tile)
+                    <li class="gio-order-complete-tile">
+                        <span class="gio-order-complete-tile-mark" aria-hidden="true">@if ($loop->first){!! $tick !!}@else{{ $loop->iteration }}@endif</span>
+                        <h2 class="gio-order-complete-tile-title">{{ $tile['title'] }}</h2>
+                        <p class="gio-order-complete-tile-line">{!! nl2br(e($tile['line'])) !!}</p>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
 
         {{--
             The fixed slots every layout draws, in labels nobody can change,

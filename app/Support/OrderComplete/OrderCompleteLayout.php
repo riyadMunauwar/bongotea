@@ -19,16 +19,165 @@ namespace App\Support\OrderComplete;
  *
  * Every block is a set of descendants of its own modifier class, so all of it
  * is inert on a Page arranged any other way, and none of it reorders the
- * bytes: the head, the summary, the Deliver-to block, the note and the
- * buttons are written in that order in every arrangement, and a Customer
- * listening to the page rather than looking at it reads them so.
+ * bytes: the head, the slot a layout has of its own where it has one, the
+ * summary, the Deliver-to block, the note and the buttons are written in
+ * that order in every arrangement, and a Customer listening to the page
+ * rather than looking at it reads them so.
  */
 enum OrderCompleteLayout: string
 {
     case CenteredClassic = 'centered_classic';
     case Split = 'split';
+    case Timeline = 'timeline';
+    case CardsGrid = 'cards_grid';
     case Editorial = 'editorial';
     case AccentBand = 'accent_band';
+
+    /**
+     * What the timeline arrangement adds to the base sheet.
+     *
+     * A wide card whose head is a small grid: a smaller tick on the left
+     * spanning both rows, the headline and message beside it, and under
+     * them one grey line holding the order number and the capture time —
+     * the number losing its box, the time written inside it by the view,
+     * and the dot between them drawn by a rule. The status line is not
+     * drawn here.
+     *
+     * The tracker is the slot this layout has of its own: four steps in a
+     * row, each a numbered disc over a label over a timing, joined by a rule
+     * drawn as each step's `::before` across the gap to its left — the first
+     * step has none. The first disc is filled in the accent colour with a
+     * tick, the second outlined in it, the rest outlined in the border
+     * colour and muted, because the Order is placed and the call is next.
+     *
+     * The summary and the Deliver-to block are two boxed panels side by side
+     * on a wide screen, each with its eyebrow — the summary's is written by
+     * a rule, since the base has no "Items" heading — and the buttons sit
+     * side by side under them. A stranger's page has no Deliver-to block,
+     * and its summary is widened to both columns by a `:has()` rule rather
+     * than left beside a blank; a browser without `:has()` shows the one
+     * panel at half width, which still reads. On a phone the panels stack
+     * and so does the tracker: each step becomes a row, disc then words,
+     * with the rules between them gone.
+     */
+    private const TIMELINE_RULES = <<<'CSS'
+        .gio-order-complete-timeline .gio-order-complete-card { max-width: 46.5rem; padding: 3rem 2rem; align-items: stretch; gap: 2rem; text-align: left; }
+        .gio-order-complete-timeline .gio-order-complete-head { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1rem; row-gap: .25rem; align-items: center; }
+        .gio-order-complete-timeline .gio-order-complete-badge { grid-column: 1; grid-row: 1 / span 2; width: 3rem; height: 3rem; }
+        .gio-order-complete-timeline .gio-order-complete-badge svg { width: 1.5rem; height: 1.5rem; }
+        .gio-order-complete-timeline .gio-order-complete-words { grid-column: 2; grid-row: 1; }
+        .gio-order-complete-timeline .gio-order-complete-headline { margin: 0 0 .25rem; font-size: 1.625em; }
+        .gio-order-complete-timeline .gio-order-complete-number { grid-column: 2; grid-row: 2; justify-self: start; margin: 0; padding: 0; border: 0; font-family: inherit; font-size: .875em; font-weight: 400; opacity: .72; }
+        .gio-order-complete-timeline .gio-order-complete-capture-time::before { content: " · "; }
+        .gio-order-complete-timeline .gio-order-complete-steps { display: flex; align-items: flex-start; margin: 0; padding: 0; list-style: none; }
+        .gio-order-complete-timeline .gio-order-complete-step { flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: .5rem; text-align: center; font-size: .8125em; font-weight: 600; }
+        .gio-order-complete-timeline .gio-order-complete-step::before { content: ""; position: absolute; top: .8125rem; right: 50%; left: -50%; height: 2px; background: var(--gio-border); }
+        .gio-order-complete-timeline .gio-order-complete-step:first-child::before { display: none; }
+        .gio-order-complete-timeline .gio-order-complete-step:nth-child(2)::before { background: var(--gio-accent); }
+        .gio-order-complete-timeline .gio-order-complete-step-mark { box-sizing: border-box; position: relative; z-index: 1; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 2px solid var(--gio-border); background: var(--gio-background); color: var(--gio-text); display: grid; place-items: center; font-size: .75rem; font-weight: 700; }
+        .gio-order-complete-timeline .gio-order-complete-step:first-child .gio-order-complete-step-mark { border-color: var(--gio-accent); background: var(--gio-accent); color: #fff; }
+        .gio-order-complete-timeline .gio-order-complete-step-mark svg { width: .875rem; height: .875rem; }
+        .gio-order-complete-timeline .gio-order-complete-step:nth-child(2) .gio-order-complete-step-mark { border-color: var(--gio-accent); color: var(--gio-accent); }
+        .gio-order-complete-timeline .gio-order-complete-step:nth-child(n+3) { opacity: .72; }
+        .gio-order-complete-timeline .gio-order-complete-step-words { min-width: 0; overflow-wrap: anywhere; }
+        .gio-order-complete-timeline .gio-order-complete-step-label { margin: 0; }
+        .gio-order-complete-timeline .gio-order-complete-step-timing { margin: 0; font-weight: 400; opacity: .72; }
+        .gio-order-complete-timeline .gio-order-complete-summary, .gio-order-complete-timeline .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.125rem; border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-order-complete-timeline .gio-order-complete-summary::before { content: "Items"; display: block; margin: 0 0 .125rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
+        .gio-order-complete-timeline .gio-order-complete-actions { flex-direction: row; flex-wrap: wrap; }
+        .gio-order-complete-timeline .gio-order-complete-button { flex: 1 1 10rem; }
+        @media (min-width: 40rem) {
+        .gio-order-complete-timeline .gio-order-complete-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1rem; row-gap: 2rem; }
+        .gio-order-complete-timeline .gio-order-complete-head { grid-column: 1 / -1; grid-row: 1; }
+        .gio-order-complete-timeline .gio-order-complete-steps { grid-column: 1 / -1; grid-row: 2; }
+        .gio-order-complete-timeline .gio-order-complete-summary { grid-column: 1; grid-row: 3; }
+        .gio-order-complete-timeline .gio-order-complete-summary:not(:has(+ .gio-order-complete-deliver-to)) { grid-column: 1 / -1; }
+        .gio-order-complete-timeline .gio-order-complete-deliver-to { grid-column: 2; grid-row: 3; }
+        .gio-order-complete-timeline .gio-order-complete-note { grid-column: 1 / -1; grid-row: 4; margin-top: -1rem; }
+        .gio-order-complete-timeline .gio-order-complete-actions { grid-column: 1 / -1; grid-row: 5; margin-top: -1rem; }
+        .gio-order-complete-timeline .gio-order-complete-button { flex: 0 0 auto; }
+        }
+        @media (max-width: 30rem) {
+        .gio-order-complete-timeline .gio-order-complete-card { padding: 1.5rem 1.125rem; gap: 1.5rem; }
+        .gio-order-complete-timeline .gio-order-complete-steps { flex-direction: column; gap: .875rem; }
+        .gio-order-complete-timeline .gio-order-complete-step { flex-direction: row; align-items: center; gap: .75rem; text-align: left; }
+        .gio-order-complete-timeline .gio-order-complete-step::before { display: none; }
+        .gio-order-complete-timeline .gio-order-complete-step-mark { flex: none; }
+        }
+        CSS;
+
+    /**
+     * What the cards grid arrangement adds to the base sheet.
+     *
+     * The card gives up its box and becomes the page: no border and no
+     * background of its own, so the tiles and the summary sit as white
+     * panels on the grey ground the way the design draws them. The head
+     * loses the badge, and its words box is dissolved with `display:
+     * contents` so that the order number and the status line can read as
+     * one grey eyebrow — the number moved first with `order`, the status
+     * line after it with a dot drawn by a rule — over a large headline. The
+     * buttons sit on the right of the headline rather than at the foot: the
+     * actions box is placed in the head's row of the card's grid, so the
+     * two share a row and a second button, when there is one, sits beside
+     * the first.
+     *
+     * The tiles are the slot this layout has of its own: three panels in a
+     * row, each a numbered disc over a title over a line, the first disc
+     * filled in the accent colour with a tick. The summary beneath is one
+     * wide panel with the lines down the left and the total set large on
+     * the right, which is a two-column grid with the total spanning every
+     * row the lines could fill — the rows nothing is written into take no
+     * height, and the grid has no row gap so that they take no space
+     * either. The Deliver-to block is a panel of its own beneath. On a
+     * phone everything stacks, the buttons under the headline at full width
+     * and the total back under the lines.
+     */
+    private const CARDS_GRID_RULES = <<<'CSS'
+        .gio-order-complete-cards-grid .gio-order-complete-card { max-width: 50rem; padding: 0; border: 0; background: transparent; align-items: stretch; gap: 1.5rem; text-align: left; }
+        .gio-order-complete-cards-grid .gio-order-complete-head { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: .375rem; }
+        .gio-order-complete-cards-grid .gio-order-complete-badge { display: none; }
+        .gio-order-complete-cards-grid .gio-order-complete-words { display: contents; }
+        .gio-order-complete-cards-grid .gio-order-complete-number { order: -1; margin: 0; padding: 0; border: 0; font-family: inherit; font-size: .75em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .72; }
+        .gio-order-complete-cards-grid .gio-order-complete-status { margin: 0; opacity: .72; }
+        .gio-order-complete-cards-grid .gio-order-complete-status::before { content: "· "; }
+        .gio-order-complete-cards-grid .gio-order-complete-headline { order: 1; flex: 1 0 100%; margin: 0; font-size: 1.875em; line-height: 1.15; }
+        .gio-order-complete-cards-grid .gio-order-complete-message { order: 2; flex: 1 0 100%; }
+        .gio-order-complete-cards-grid .gio-order-complete-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .875rem; margin: 0; padding: 0; list-style: none; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; gap: .625rem; padding: 1.25rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); overflow-wrap: anywhere; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile-mark { box-sizing: border-box; width: 2rem; height: 2rem; border-radius: 50%; border: var(--gio-border-width) solid var(--gio-border); display: grid; place-items: center; font-size: .8125rem; font-weight: 700; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile-mark svg { width: 1rem; height: 1rem; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile:first-child .gio-order-complete-tile-mark { border-color: var(--gio-accent); background: var(--gio-accent); color: #fff; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile-title { margin: 0; font-size: .9375em; font-weight: 700; }
+        .gio-order-complete-cards-grid .gio-order-complete-tile-line { margin: 0; font-size: .8125em; opacity: .72; }
+        .gio-order-complete-cards-grid .gio-order-complete-summary, .gio-order-complete-cards-grid .gio-order-complete-deliver-to { box-sizing: border-box; padding: 1.25rem; background: var(--gio-background); border: var(--gio-border-width) solid var(--gio-border); border-radius: var(--gio-radius); }
+        .gio-order-complete-cards-grid .gio-order-complete-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1.25rem; row-gap: 0; align-items: start; }
+        .gio-order-complete-cards-grid .gio-order-complete-row { grid-column: 1; padding: .1875rem 0; }
+        .gio-order-complete-cards-grid .gio-order-complete-total { grid-column: 2; grid-row: 1 / span 40; display: flex; flex-direction: column; align-items: flex-end; gap: 0; padding: 0; border: 0; text-align: right; }
+        .gio-order-complete-cards-grid .gio-order-complete-total .gio-order-complete-row-label { font-size: .75rem; font-weight: 400; opacity: .72; }
+        .gio-order-complete-cards-grid .gio-order-complete-total .gio-order-complete-row-amount { font-size: 1.625rem; font-weight: 700; }
+        .gio-order-complete-cards-grid .gio-order-complete-actions { width: auto; flex-direction: row; flex-wrap: wrap; }
+        .gio-order-complete-cards-grid .gio-order-complete-button { flex: 1 1 10rem; }
+        @media (min-width: 40rem) {
+        .gio-order-complete-cards-grid .gio-order-complete-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; row-gap: 1.5rem; align-items: end; }
+        .gio-order-complete-cards-grid .gio-order-complete-head { grid-column: 1; grid-row: 1; }
+        .gio-order-complete-cards-grid .gio-order-complete-actions { grid-column: 2; grid-row: 1; }
+        .gio-order-complete-cards-grid .gio-order-complete-button { flex: 0 0 auto; }
+        .gio-order-complete-cards-grid .gio-order-complete-tiles { grid-column: 1 / -1; grid-row: 2; }
+        .gio-order-complete-cards-grid .gio-order-complete-summary { grid-column: 1 / -1; grid-row: 3; }
+        .gio-order-complete-cards-grid .gio-order-complete-deliver-to { grid-column: 1 / -1; grid-row: 4; }
+        .gio-order-complete-cards-grid .gio-order-complete-note { grid-column: 1 / -1; grid-row: 5; }
+        }
+        @media (max-width: 40rem) {
+        .gio-order-complete-cards-grid .gio-order-complete-tiles { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 30rem) {
+        .gio-order-complete-cards-grid .gio-order-complete-headline { font-size: 1.5em; }
+        .gio-order-complete-cards-grid .gio-order-complete-actions { flex-direction: column; }
+        .gio-order-complete-cards-grid .gio-order-complete-button { flex: 0 0 auto; }
+        .gio-order-complete-cards-grid .gio-order-complete-summary { grid-template-columns: minmax(0, 1fr); }
+        .gio-order-complete-cards-grid .gio-order-complete-total { grid-column: 1; grid-row: auto; flex-direction: row; justify-content: space-between; align-items: baseline; gap: .75rem; margin-top: .375rem; padding-top: .625rem; border-top: var(--gio-border-width) solid var(--gio-border); }
+        }
+        CSS;
 
     /**
      * What the split arrangement adds to the base sheet.
@@ -191,6 +340,8 @@ enum OrderCompleteLayout: string
         return match ($this) {
             self::CenteredClassic => 'gio-order-complete-centered-classic',
             self::Split => 'gio-order-complete-split',
+            self::Timeline => 'gio-order-complete-timeline',
+            self::CardsGrid => 'gio-order-complete-cards-grid',
             self::Editorial => 'gio-order-complete-editorial',
             self::AccentBand => 'gio-order-complete-accent-band',
         };
@@ -207,6 +358,8 @@ enum OrderCompleteLayout: string
         return match ($this) {
             self::CenteredClassic => '',
             self::Split => self::SPLIT_RULES,
+            self::Timeline => self::TIMELINE_RULES,
+            self::CardsGrid => self::CARDS_GRID_RULES,
             self::Editorial => self::EDITORIAL_RULES,
             self::AccentBand => self::ACCENT_BAND_RULES,
         };
@@ -217,13 +370,14 @@ enum OrderCompleteLayout: string
      *
      * Split and editorial draw one in place of the badge: a short line in
      * the accent colour that says the Order is in before the headline does.
-     * Centered classic and accent band say it with the tick.
+     * Cards grid draws it beside the order number as the eyebrow. Centered
+     * classic, timeline and accent band say it with the tick.
      */
     public function drawsStatusLine(): bool
     {
         return match ($this) {
-            self::Split, self::Editorial => true,
-            self::CenteredClassic, self::AccentBand => false,
+            self::Split, self::CardsGrid, self::Editorial => true,
+            self::CenteredClassic, self::Timeline, self::AccentBand => false,
         };
     }
 
@@ -231,7 +385,23 @@ enum OrderCompleteLayout: string
     public function drawsSteps(): bool
     {
         return match ($this) {
-            self::CenteredClassic, self::Split, self::Editorial, self::AccentBand => false,
+            self::Timeline => true,
+            self::CenteredClassic, self::Split, self::CardsGrid, self::Editorial, self::AccentBand => false,
+        };
+    }
+
+    /**
+     * Whether this layout writes the Order's capture time beside the order
+     * number.
+     *
+     * Timeline does, because a tracker whose first step is "Order placed"
+     * ought to start from a real time; the others leave the number alone.
+     */
+    public function drawsCaptureTime(): bool
+    {
+        return match ($this) {
+            self::Timeline => true,
+            self::CenteredClassic, self::Split, self::CardsGrid, self::Editorial, self::AccentBand => false,
         };
     }
 
@@ -239,7 +409,8 @@ enum OrderCompleteLayout: string
     public function drawsTiles(): bool
     {
         return match ($this) {
-            self::CenteredClassic, self::Split, self::Editorial, self::AccentBand => false,
+            self::CardsGrid => true,
+            self::CenteredClassic, self::Split, self::Timeline, self::Editorial, self::AccentBand => false,
         };
     }
 
@@ -247,7 +418,7 @@ enum OrderCompleteLayout: string
     public function drawsPrintButton(): bool
     {
         return match ($this) {
-            self::CenteredClassic, self::Split, self::Editorial, self::AccentBand => false,
+            self::CenteredClassic, self::Split, self::Timeline, self::CardsGrid, self::Editorial, self::AccentBand => false,
         };
     }
 
@@ -259,6 +430,8 @@ enum OrderCompleteLayout: string
         return match ($this) {
             self::CenteredClassic => 'One centred card: a tick in your accent colour, the headline and message, the order number, the lines and total, where it is going, your note, and the buttons.',
             self::Split => 'Two columns on a wide screen: your status line, a big headline, the message, the note and the buttons on the left, and a grey panel on the right with the lines, the total and where it is going. On a phone it stacks, ranged left.',
+            self::Timeline => 'A tick, the headline and message, and the order number with the time it was placed, then a four-step tracker of what happens next in your own words, with the lines and total and where it is going as two boxes beneath, and the buttons last. On a phone the tracker stacks.',
+            self::CardsGrid => 'The order number and your status line over a big headline, with the first button beside it, then three tiles in your own words, the lines with the total set large, and where it is going, each a white card on a grey page. On a phone the tiles stack.',
             self::Editorial => 'Ranged left with hairline rules: your status line with a tick, the headline, the message and the order number, then the lines, delivery, payment and the total as a labelled list with where it is going beneath, and the buttons last.',
             self::AccentBand => 'A strip in your accent colour across the top holding the tick, the headline, the message and the order number, with the lines and total as a ruled table beneath, then where it is going beside the buttons.',
         };
@@ -274,6 +447,8 @@ enum OrderCompleteLayout: string
         return [
             self::CenteredClassic->value => 'Centered classic',
             self::Split->value => 'Split',
+            self::Timeline->value => 'Timeline',
+            self::CardsGrid->value => 'Cards grid',
             self::Editorial->value => 'Editorial',
             self::AccentBand->value => 'Accent band',
         ];

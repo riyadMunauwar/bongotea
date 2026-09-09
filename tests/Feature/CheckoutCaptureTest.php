@@ -2695,9 +2695,89 @@ it('draws the status line only in the layouts that have one, in the merchant\'s 
     'split, left empty' => [OrderCompleteLayout::Split, '', 'Order confirmed'],
     'editorial, in the merchant\'s words' => [OrderCompleteLayout::Editorial, 'Placed', 'Placed'],
     'editorial, left empty' => [OrderCompleteLayout::Editorial, null, 'Order confirmed'],
+    'cards grid, in the merchant\'s words' => [OrderCompleteLayout::CardsGrid, 'Confirmed', 'Confirmed'],
+    'cards grid, left empty' => [OrderCompleteLayout::CardsGrid, null, 'Order confirmed'],
     'centered classic draws none' => [OrderCompleteLayout::CenteredClassic, 'Placed', null],
     'accent band draws none' => [OrderCompleteLayout::AccentBand, 'Placed', null],
+    'timeline draws none' => [OrderCompleteLayout::Timeline, 'Placed', null],
 ]);
+
+it('draws the four steps and the capture time in the timeline layout only, in the merchant\'s words or the built-in ones', function () {
+    $page = arrangedAs(sellingPage(Product::factory()->create()), OrderCompleteLayout::Timeline, [
+        'steps' => [
+            ['label' => 'Order {order_number} placed', 'timing' => 'Done'],
+            ['label' => '', 'timing' => 'Before noon'],
+            [],
+        ],
+    ]);
+
+    $this->travelTo('2026-09-07 16:32:00');
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    /** Four steps by position: a step half written keeps the built-in half, and one never written is the built-in step. */
+    expect($html)->toContain('class="gio-order-complete-steps"')
+        ->and(substr_count($html, 'class="gio-order-complete-step"'))->toBe(4)
+        ->and($html)->toContain('Order '.$order->order_number.' placed')
+        ->and($html)->toContain('>Done<')
+        ->and($html)->toContain('>Confirmation call<')
+        ->and($html)->toContain('>Before noon<')
+        ->and($html)->toContain('>Shipped<')
+        ->and($html)->toContain('>Tomorrow<')
+        ->and($html)->toContain('>Delivered<')
+        ->and($html)->toContain('>1–2 days<')
+        ->and($html)->not->toContain('Order placed')
+        /** The tracker starts from a real time: the Order's own capture time, machine-readable beside the words. */
+        ->and($html)->toContain('<time class="gio-order-complete-capture-time" datetime="2026-09-07T16:32:00+00:00">7 Sep 2026, 4:32 PM</time>');
+
+    /** No steps and no time on a Page arranged any other way, whatever it stored. */
+    arrangedAs($page, OrderCompleteLayout::CardsGrid, ['steps' => [['label' => 'Order placed', 'timing' => 'Done']]]);
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($html)->not->toContain('gio-order-complete-steps')
+        ->and($html)->not->toContain('gio-order-complete-capture-time')
+        ->and($html)->not->toContain('>Done<')
+        ->and($html)->not->toContain('7 Sep 2026');
+});
+
+it('draws the three tiles in the cards grid layout only, in the merchant\'s words or the built-in ones', function () {
+    $page = arrangedAs(sellingPage(Product::factory()->create(['price' => 99000])), OrderCompleteLayout::CardsGrid, [
+        'tiles' => [
+            ['title' => 'We have order {order_number}', 'line' => 'A call about your {total} is coming.'],
+            ['title' => '', 'line' => ''],
+        ],
+    ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    /** Three tiles by position: a tile left blank and one never written are both the built-in tile. */
+    expect($html)->toContain('class="gio-order-complete-tiles"')
+        ->and(substr_count($html, 'class="gio-order-complete-tile"'))->toBe(3)
+        ->and($html)->toContain('We have order '.$order->order_number)
+        ->and($html)->toContain('A call about your ৳1050.00 is coming.')
+        ->and($html)->not->toContain('Order received')
+        ->and($html)->toContain('>Delivery in 1–2 days<')
+        ->and($html)->toContain('Your parcel is on its way once we have confirmed.')
+        ->and($html)->toContain('Pay when your parcel arrives.');
+
+    /** No tiles on a Page arranged any other way, whatever it stored. */
+    arrangedAs($page, OrderCompleteLayout::Timeline, ['tiles' => [['title' => 'Order received', 'line' => 'A call is coming.']]]);
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($html)->not->toContain('gio-order-complete-tiles')
+        ->and($html)->not->toContain('Order received')
+        ->and($html)->not->toContain('A call is coming.');
+});
 
 it('draws each page\'s order complete page in that page\'s own layout, and no other page\'s', function () {
     $split = arrangedAs(sellingPage(Product::factory()->create(), slug: 'split'), OrderCompleteLayout::Split);

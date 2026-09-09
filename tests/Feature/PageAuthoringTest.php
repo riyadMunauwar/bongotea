@@ -2168,14 +2168,14 @@ it('reads an order complete config a page had before the column, or one holding 
     'a layout nothing draws and a headline that is not text' => [json_encode(['layout' => 'hero_video', 'headline' => ['not' => 'text'], 'primary_button' => 'nope'])],
 ]);
 
-it('asks about the order complete page on its own tab beside checkout, in three sections', function () {
+it('asks about the order complete page on its own tab beside checkout, in five sections', function () {
     $tab = orderCompleteTabOf(Page::factory()->create());
 
-    /** Layout first, because it decides which words the later sections will ask for. */
+    /** Layout first, because it decides which words the later sections will ask for; the slots a layout may draw come last. */
     expect(array_values(array_map(
         fn (Component $section): string => (string) $section->getHeading(),
-        array_filter($tab->getChildSchema()->getComponents(), fn (Component $component): bool => $component instanceof Section),
-    )))->toBe(['Layout', 'Words', 'Buttons']);
+        array_filter($tab->getChildSchema()->getComponents(withHidden: true), fn (Component $component): bool => $component instanceof Section),
+    )))->toBe(['Layout', 'Words', 'Buttons', 'Steps', 'Tiles']);
 
     expect(statePathsInside($tab))->toBe([
         'order_complete_config.layout',
@@ -2187,6 +2187,20 @@ it('asks about the order complete page on its own tab beside checkout, in three 
         'order_complete_config.primary_button.link',
         'order_complete_config.secondary_button.label',
         'order_complete_config.secondary_button.link',
+        'order_complete_config.steps.0.label',
+        'order_complete_config.steps.0.timing',
+        'order_complete_config.steps.1.label',
+        'order_complete_config.steps.1.timing',
+        'order_complete_config.steps.2.label',
+        'order_complete_config.steps.2.timing',
+        'order_complete_config.steps.3.label',
+        'order_complete_config.steps.3.timing',
+        'order_complete_config.tiles.0.title',
+        'order_complete_config.tiles.0.line',
+        'order_complete_config.tiles.1.title',
+        'order_complete_config.tiles.1.line',
+        'order_complete_config.tiles.2.title',
+        'order_complete_config.tiles.2.line',
     ]);
 
     /** The layout describes itself, so what it draws reads without saving to find out. */
@@ -2200,6 +2214,8 @@ it('asks about the order complete page on its own tab beside checkout, in three 
         ->and($layout->getOptions())->toBe([
             'centered_classic' => 'Centered classic',
             'split' => 'Split',
+            'timeline' => 'Timeline',
+            'cards_grid' => 'Cards grid',
             'editorial' => 'Editorial',
             'accent_band' => 'Accent band',
         ])
@@ -2287,7 +2303,124 @@ it('refuses order complete copy on the box that holds it', function (array $type
     'a button label too long' => [['primary_button' => ['label' => str_repeat('b', 61)]], 'order_complete_config.primary_button.label'],
     'a link that is not a web address' => [['primary_button' => ['link' => 'javascript:alert(1)']], 'order_complete_config.primary_button.link'],
     'a second link that is not a web address' => [['secondary_button' => ['label' => 'Track', 'link' => 'track it']], 'order_complete_config.secondary_button.link'],
+    'a step label too long' => [['layout' => 'timeline', 'steps' => [1 => ['label' => str_repeat('s', 41)]]], 'order_complete_config.steps.1.label'],
+    'a step timing broken over two lines' => [['layout' => 'timeline', 'steps' => [3 => ['timing' => "Two\ndays"]]], 'order_complete_config.steps.3.timing'],
+    'a tile title too long' => [['layout' => 'cards_grid', 'tiles' => [0 => ['title' => str_repeat('t', 61)]]], 'order_complete_config.tiles.0.title'],
+    'a tile line too long' => [['layout' => 'cards_grid', 'tiles' => [2 => ['line' => str_repeat('l', 161)]]], 'order_complete_config.tiles.2.line'],
 ]);
+
+it('asks for the steps only on timeline and the tiles only on cards grid, and keeps both whichever is chosen', function (string $stored, bool $stepsAsked, bool $tilesAsked) {
+    $page = Page::factory()->create(['order_complete_config' => [
+        'layout' => $stored,
+        'steps' => [['label' => 'Booked', 'timing' => 'Done']],
+        'tiles' => [['title' => 'Booked', 'line' => 'We have it.']],
+    ]]);
+
+    $tab = orderCompleteTabOf($page);
+
+    $sections = collect($tab->getChildSchema()->getComponents(withHidden: true))
+        ->filter(fn (Component $component): bool => $component instanceof Section)
+        ->keyBy(fn (Section $section): string => (string) $section->getHeading());
+
+    /** A layout that draws no steps is not asked for them, and likewise the tiles; an unknown stored layout reads as Centered classic, which draws neither. */
+    expect($sections['Steps']->isHidden())->toBe(! $stepsAsked)
+        ->and($sections['Tiles']->isHidden())->toBe(! $tilesAsked);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => ['headline' => 'Thanks']])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Both ride along for the day the Page is moved to a layout that draws them. */
+    $config = $page->refresh()->order_complete_config;
+
+    expect($config->steps[0]->label)->toBe('Booked')
+        ->and($config->steps[0]->timing)->toBe('Done')
+        ->and($config->tiles[0]->title)->toBe('Booked')
+        ->and($config->tiles[0]->line)->toBe('We have it.');
+})->with([
+    'centered classic' => ['centered_classic', false, false],
+    'timeline' => ['timeline', true, false],
+    'cards grid' => ['cards_grid', false, true],
+    'editorial' => ['editorial', false, false],
+    'a layout nothing draws' => ['hero_video', false, false],
+]);
+
+it('lets a merchant word the steps and the tiles, keeps the boxes left alone out of the stored config, and serves the page so', function () {
+    $page = sellingPage(Product::factory()->create());
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => [
+            'layout' => 'timeline',
+            'steps' => [
+                0 => ['label' => 'Order {order_number} booked', 'timing' => '  '],
+                1 => ['label' => '', 'timing' => 'Within the hour'],
+                2 => ['label' => '', 'timing' => ''],
+                3 => ['label' => 'At your door', 'timing' => 'Two days'],
+            ],
+            'tiles' => [
+                0 => ['title' => 'Booked', 'line' => 'We have order {order_number}.'],
+                1 => ['title' => '', 'line' => ''],
+                2 => ['title' => ' ', 'line' => 'Cash, please.'],
+            ],
+        ]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $config = $page->refresh()->order_complete_config;
+
+    /** Every box round-trips by position, and a blank one is the merchant saying nothing. */
+    expect($config->layout)->toBe(OrderCompleteLayout::Timeline)
+        ->and($config->steps[0]->label)->toBe('Order {order_number} booked')
+        ->and($config->steps[0]->timing)->toBeNull()
+        ->and($config->steps[1]->label)->toBeNull()
+        ->and($config->steps[1]->timing)->toBe('Within the hour')
+        ->and($config->steps[2]->label)->toBeNull()
+        ->and($config->steps[2]->timing)->toBeNull()
+        ->and($config->steps[3]->label)->toBe('At your door')
+        ->and($config->tiles[0]->title)->toBe('Booked')
+        ->and($config->tiles[1]->title)->toBeNull()
+        ->and($config->tiles[1]->line)->toBeNull()
+        ->and($config->tiles[2]->title)->toBeNull()
+        ->and($config->tiles[2]->line)->toBe('Cash, please.');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet([
+            'order_complete_config.steps.0.label' => 'Order {order_number} booked',
+            'order_complete_config.steps.0.timing' => null,
+            'order_complete_config.steps.3.timing' => 'Two days',
+            'order_complete_config.tiles.2.line' => 'Cash, please.',
+        ]);
+
+    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+
+    $order = Order::sole();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($html)->toContain('class="gio-order-complete gio-order-complete-timeline"')
+        ->and($html)->toContain('Order '.$order->order_number.' booked')
+        ->and($html)->toContain('>Just now<')
+        ->and($html)->toContain('>Confirmation call<')
+        ->and($html)->toContain('>Within the hour<')
+        ->and($html)->toContain('>At your door<')
+        ->and($html)->not->toContain('Cash, please.');
+
+    /** Moved to Cards grid, the tiles it kept are what the page draws, and the steps wait. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['order_complete_config' => ['layout' => 'cards_grid']])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $html = $this->get(route('checkout.order-complete', $order->order_number))->assertOk()->getContent();
+
+    expect($html)->toContain('class="gio-order-complete gio-order-complete-cards-grid"')
+        ->and($html)->toContain('>Booked<')
+        ->and($html)->toContain('We have order '.$order->order_number.'.')
+        ->and($html)->toContain('Cash, please.')
+        ->and($html)->not->toContain('At your door')
+        ->and($page->refresh()->order_complete_config->steps[3]->label)->toBe('At your door');
+});
 
 it('asks for the status line only on a layout that draws one, and keeps it whichever is chosen', function (string $stored, bool $asked) {
     $page = Page::factory()->create(['order_complete_config' => ['layout' => $stored, 'status_line' => 'Placed']]);
