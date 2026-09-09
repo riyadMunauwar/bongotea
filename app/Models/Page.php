@@ -70,10 +70,10 @@ class Page extends Model
      * Whether this Page, as it stands now, asks the Customer which of its
      * Products to buy.
      *
-     * What the Config alone can say — the Merchant's switch and their layout,
-     * which is `CheckoutConfig::picksProducts()` — and the Page's own Products
-     * on top of it: a picker is only a question where there is more than one
-     * thing to pick between. A Page down to its last Product — linked that way,
+     * What the Config alone can say — the Merchant's switch and whether the
+     * Product List is shown, which is `CheckoutConfig::picksProducts()` — and
+     * the Page's own Products on top of it: a picker is only a question where
+     * there is more than one thing to pick between. A Page down to its last Product — linked that way,
      * or left that way by a soft delete — sells it implicitly rather than
      * putting a box the Customer has to find between them and the order.
      *
@@ -90,8 +90,8 @@ class Page extends Model
     /**
      * The Products this Page's Picker opens ticked, by id.
      *
-     * What the Config alone can say — the Merchant's list, gated on the layout
-     * that would have to draw the boxes, which is `CheckoutConfig::opensTicked()`
+     * What the Config alone can say — the Merchant's list, gated on the Product
+     * List that would have to draw the boxes, which is `CheckoutConfig::opensTicked()`
      * — resolved against the Products this Page currently sells. A tick naming
      * a Product it never sold, or one soft-deleted since the Merchant made it,
      * is dropped: a form cannot open ticked against something it cannot offer,

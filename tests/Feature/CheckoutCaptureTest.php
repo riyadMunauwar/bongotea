@@ -2005,30 +2005,36 @@ it('leaves a field the system knows by name bounded by its own column', function
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
 });
 
-it('captures a complete order from a checkout that draws no products', function () {
+it('captures a complete order from a checkout whose product list is hidden', function (array $stored) {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
     $scarf = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 25000]);
 
     $page = sellingPage([$jacket, $scarf]);
-    $page->update(['checkout_config' => CheckoutConfig::fromArray(['layout' => 'form_only'])]);
+    $page->update(['checkout_config' => CheckoutConfig::fromArray($stored)]);
 
     $response = $this->postJson(route('checkout.store'), capturePayload($page));
 
     $response->assertCreated();
 
     /**
-     * The panel is what a form-only layout drops, never the Order. Everything
-     * the Page sells is on it, at the Page's own prices, with delivery charged
-     * exactly as it would be from the stacked form — a layout decides what is
-     * drawn and nothing about what is collected at the door.
+     * The panel is what hiding the Product List drops, never the Order.
+     * Everything the Page sells is on it, once each, at the Page's own prices,
+     * with delivery charged exactly as it would be from a form that drew the
+     * list — the switch decides what is drawn and nothing about what is
+     * collected at the door. A Page stored under the retired form-only layout
+     * is the same Checkout, and captures the same.
      */
     $order = Order::sole();
 
     expect($order->lines)->toHaveCount(2)
+        ->and($order->lines->pluck('quantity')->all())->toBe([1, 1])
         ->and($order->subtotal)->toBe(124000)
         ->and($order->delivery_charge)->toBe(6000)
         ->and($order->total)->toBe(130000);
-});
+})->with([
+    'the switch off' => [['show_products' => false]],
+    'stored under the retired form-only layout' => [['layout' => 'form_only']],
+]);
 
 it('charges for what the customer sent and not for what the form opened ticked', function () {
     $jacket = Product::factory()->create(['price' => 99000]);
@@ -2092,21 +2098,21 @@ it('leaves the fingerprint alone when the products it opens ticked change', func
     expect(Order::sole()->subtotal)->toBe(99000);
 });
 
-it('sells everything a form-only page offers however its picker is set', function () {
+it('sells everything a page with its product list hidden offers however its picker is set', function () {
     $jacket = Product::factory()->create(['price' => 99000]);
     $scarf = Product::factory()->create(['price' => 25000]);
 
     $page = sellingPage([$jacket, $scarf]);
     $page->update(['checkout_config' => CheckoutConfig::fromArray([
-        'layout' => 'form_only',
+        'show_products' => false,
         'product_picker' => true,
     ])]);
 
     /**
      * The form drew no checkboxes, so the submission names nothing ticked. A
-     * picker left standing on a layout that cannot draw one would refuse this
-     * for having chosen nothing — every order on a live page turned away over a
-     * box no customer was ever shown. The layout is read here for exactly that
+     * picker left standing behind a hidden list would refuse this for having
+     * chosen nothing — every order on a live page turned away over a box no
+     * customer was ever shown. The switch is read here for exactly that
      * reason.
      */
     $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();

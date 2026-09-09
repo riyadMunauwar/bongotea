@@ -70,6 +70,15 @@ class CheckoutShortcode implements ShortcodeDefinition
             'products' => $products,
 
             /**
+             * Whether the Product List is drawn at all. Off, the panel is
+             * omitted and every Product still posts a quantity of one, so the
+             * Order captured is the same complete Order. Read from the Config
+             * because it is the Merchant's switch alone; whether a choice is
+             * offered on top of it is the Page's, below.
+             */
+            'showProducts' => $page->checkout_config->showProducts,
+
+            /**
              * Whether the Customer picks which of them to buy, rather than
              * buying all of them. Asked of the Page rather than of the Config,
              * because a picker on a Page down to one Product is a box between a

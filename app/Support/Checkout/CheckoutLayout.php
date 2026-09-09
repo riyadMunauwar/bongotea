@@ -22,7 +22,6 @@ enum CheckoutLayout: string
     case Split = 'split';
     case Compact = 'compact';
     case SummaryFirst = 'summary_first';
-    case FormOnly = 'form_only';
 
     /**
      * What the split arrangement adds to the base sheet.
@@ -145,11 +144,12 @@ enum CheckoutLayout: string
      * still siblings.
      *
      * The description is put out of the way here rather than left out of the
-     * view, which is the opposite of what form-only does with the panel — and
-     * the difference is what is being left out. Form-only drops a picture, a
-     * price and a stepper per product, none of which a customer on that page
-     * may see; compact drops a sentence, and to drop it in the view would be a
-     * second thing the one loop has to know about a layout.
+     * view, which is the opposite of what hiding the Product List does with
+     * the panel — and the difference is what is being left out. A hidden list
+     * drops a picture, a price and a stepper per product, none of which a
+     * customer on that page may see; compact drops a sentence, and to drop it
+     * in the view would be a second thing the one loop has to know about a
+     * layout.
      *
      * It goes for everyone, screen readers included, which is what makes it a
      * different question from the stepper's label. A description is copy the
@@ -277,34 +277,18 @@ enum CheckoutLayout: string
      * a Config written before a Page could choose one both mean the arrangement
      * the Checkout has always had. A landing page answering paid traffic with a
      * 500 costs more than one drawn in the layout it started in.
+     *
+     * That covers the retired `form_only` name too. Whether the Product List
+     * is drawn stopped being an arrangement the day it became a switch that
+     * works on any of them, and a layout that differed by what the view drew
+     * rather than by any rule was only ever that switch wearing a layout's
+     * name. It falls back to stacked here like any unknown name; that it also
+     * meant "list hidden" is `CheckoutConfig::fromArray()`'s to remember, and
+     * nothing else reads the name.
      */
     public static function fromStored(mixed $stored): self
     {
         return (is_string($stored) ? self::tryFrom($stored) : null) ?? self::Stacked;
-    }
-
-    /**
-     * Whether this layout draws the Products the Page sells.
-     *
-     * False is the whole of what form-only is: a Page whose own markup sold the
-     * product above the fold has no business selling it a second time in
-     * smaller type. What it still does is capture the same Order — one of
-     * everything the Page sells, at the Page's own prices, totalled in the
-     * summary like anywhere else.
-     *
-     * Compact draws them like any arrangement that draws them. What it compacts
-     * is how a row is laid out, never whether a customer can see what they are
-     * about to buy. Summary-first draws them too, and draws them first: the
-     * lines a total is a total of are the one thing that may not be below it.
-     * Split is the arrangement chosen so that a Customer sees them beside the
-     * form rather than above it, so it draws them by definition.
-     */
-    public function showsProducts(): bool
-    {
-        return match ($this) {
-            self::Stacked, self::Split, self::Compact, self::SummaryFirst => true,
-            self::FormOnly => false,
-        };
     }
 
     /**
@@ -319,7 +303,7 @@ enum CheckoutLayout: string
     public function pairsQuestions(): bool
     {
         return match ($this) {
-            self::Stacked, self::Split, self::SummaryFirst, self::FormOnly => true,
+            self::Stacked, self::Split, self::SummaryFirst => true,
             self::Compact => false,
         };
     }
@@ -339,7 +323,6 @@ enum CheckoutLayout: string
             self::Split => 'gio-checkout-split',
             self::Compact => 'gio-checkout-compact',
             self::SummaryFirst => 'gio-checkout-summary-first',
-            self::FormOnly => 'gio-checkout-form-only',
         };
     }
 
@@ -358,11 +341,10 @@ enum CheckoutLayout: string
      * of it is restyled. That property is now pinned per layout rather than
      * across all of them.
      *
-     * Stacked and form-only add nothing. Stacked is what the base sheet
-     * already draws, and form-only differs by what the view draws rather than
-     * by any rule — the product panel is omitted rather than hidden, which is
-     * what leaves `.gio-checkout-form-only` a stable hook for a Merchant's own
-     * CSS carrying no declarations of ours.
+     * Stacked adds nothing: it is what the base sheet already draws. Whether
+     * the Product List is drawn is not a layout's to say either — it is the
+     * Config's `showProducts`, read by the view, and the panel is omitted
+     * rather than hidden by a rule, on whichever arrangement the Page is in.
      */
     public function styleRules(): string
     {
@@ -371,7 +353,6 @@ enum CheckoutLayout: string
             self::Split => self::SPLIT_RULES,
             self::Compact => self::COMPACT_RULES,
             self::SummaryFirst => self::SUMMARY_FIRST_RULES,
-            self::FormOnly => '',
         };
     }
 
@@ -385,7 +366,6 @@ enum CheckoutLayout: string
             self::Split => 'Two columns on a wide screen: the form on the left, the products and the total beside it, with the total staying on screen as the customer works down the questions. The width you set is the form column, and the checkout is sized around it. On a phone it draws exactly as the stacked page does.',
             self::Compact => 'The same checkout in less height: every product one row with a small picture, its name and price beside it and the quantity on the right, descriptions left out, and every question filling its own row whatever width you gave it. The widths you set are kept for the day you move the page back.',
             self::SummaryFirst => 'The products and the total above the questions, for a page whose own copy has already sold the product: the customer meets the price first and the form is all that is left. The total is always in full and never behind a tap.',
-            self::FormOnly => 'The questions and the total, with no product panel — for a page whose own markup already sold the product. The order is still for everything the page sells, so the customer is never asked to choose.',
         };
     }
 
@@ -401,7 +381,6 @@ enum CheckoutLayout: string
             self::Split->value => 'Split',
             self::Compact->value => 'Compact',
             self::SummaryFirst->value => 'Summary first',
-            self::FormOnly->value => 'Form only',
         ];
     }
 }

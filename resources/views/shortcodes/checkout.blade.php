@@ -440,11 +440,12 @@
             soft-deleted since these bytes were written is simply absent from
             the Page by the time the Capture is checked, and the rest still sell.
 
-            Drawn only where the layout shows products. Where it does not, the
-            quantities are still posted — one of everything the page sells — so
-            a form-only checkout captures exactly the Order a stacked one would.
+            Drawn only where the Product List is shown, on whichever layout the
+            page is arranged in. Where it is hidden, the quantities are still
+            posted — one of everything the page sells — so a checkout with the
+            list hidden captures exactly the Order one showing it would.
         --}}
-        @if ($layout->showsProducts())
+        @if ($showProducts)
             <div class="gio-checkout-products">
                 @foreach ($products as $product)
                     <div class="gio-checkout-product{{ $picksProducts ? ' gio-checkout-pickable' : '' }}"
@@ -553,17 +554,19 @@
             {{--
                 The whole product panel, minus everything a customer looks at.
 
-                A form-only page sold the product in its own markup above the
-                fold, so drawing it again in smaller type would be the page
-                arguing with itself. What is left is what an Order cannot be
-                captured without: one quantity per product, keyed by product id
-                like the stepper it stands in for, so the Capture checks and
-                writes exactly what it would from the stacked form.
+                A page hiding its Product List sold the product in its own
+                markup above the fold, so drawing it again in smaller type
+                would be the page arguing with itself. What is left is what an
+                Order cannot be captured without: one quantity per product,
+                keyed by product id like the stepper it stands in for, so the
+                Capture checks and writes exactly what it would from a form
+                that drew the list.
 
                 One of each, and no way to say otherwise. There is no stepper to
-                type into and no box to tick — which is also why a form-only
-                checkout never asks the customer to choose, and why the layout
-                is read where that question is answered (`picksProducts()`).
+                type into and no box to tick — which is also why a checkout
+                with the list hidden never asks the customer to choose, and why
+                the switch is read where that question is answered
+                (`picksProducts()`).
 
                 They carry the line markers too, so the summary below totals the
                 same way in every layout rather than the script needing to know

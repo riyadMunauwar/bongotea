@@ -118,14 +118,14 @@ class StoreOrderRequest extends FormRequest
      * Whether the form this submission came from asked the Customer which
      * Products to buy.
      *
-     * What the Config alone can say — the Merchant's switch and their layout,
-     * which is `CheckoutConfig::picksProducts()` — and how many Products the
-     * submission was offered, which its quantity keys say, because the form
-     * posts one per Product it drew a row for, ticked or not. A form-only
-     * Checkout draws no rows to tick and posts a quantity per Product all the
-     * same, which is why the layout has to be read here too: without it, a
-     * Merchant switching to form-only with the picker left on would have every
-     * Order refused for a box no Customer was shown.
+     * What the Config alone can say — the Merchant's switch and whether the
+     * Product List is shown, which is `CheckoutConfig::picksProducts()` — and
+     * how many Products the submission was offered, which its quantity keys
+     * say, because the form posts one per Product it drew a row for, ticked or
+     * not. A Checkout with its list hidden draws no rows to tick and posts a
+     * quantity per Product all the same, which is why the list has to be read
+     * here too: without it, a Merchant hiding the list with the picker left on
+     * would have every Order refused for a box no Customer was shown.
      *
      * The Config cannot be the whole of it, because it says what the Page asks
      * now and this form was drawn earlier. A tick list arriving at all is the

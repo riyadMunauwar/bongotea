@@ -40,11 +40,9 @@ class CheckoutTab
                     ->contained(false)
                     ->tabs([
                         /**
-                         * First, and before the picker it gates:
-                         * the layout is what decides whether
-                         * products can be picked from at all, so
-                         * a merchant reading left to right meets
-                         * the cause before the effect.
+                         * First, because it is the largest
+                         * decision on the tab: what the whole
+                         * form looks like, before what it sells.
                          */
                         Tab::make('Layout')
                             ->columns(1)
@@ -55,13 +53,23 @@ class CheckoutTab
                         Tab::make('Products')
                             ->columns(1)
                             ->schema([
+                                /**
+                                 * First, and before the picker it
+                                 * gates: the switch is what decides
+                                 * whether products can be picked
+                                 * from at all, so a merchant reading
+                                 * down meets the cause before the
+                                 * effect.
+                                 */
+                                Products::listShown(),
+
                                 Products::sold(),
 
                                 Products::picker(),
 
                                 /**
                                  * After the switch it depends on, for
-                                 * the reason the layout comes before
+                                 * the reason the switch comes before
                                  * the picker: a merchant meets the
                                  * cause before the effect.
                                  */

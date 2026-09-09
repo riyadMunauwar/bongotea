@@ -9,9 +9,10 @@ use Filament\Schemas\Components\Utilities\Get;
 /**
  * How this Page's checkout is arranged.
  *
- * One control, and the reading of it every other concern goes through: the
- * layout is what decides whether products can be picked from at all, so
- * Products asks here rather than reading the box itself.
+ * One control, and the reading of it every other concern goes through:
+ * Questions asks here whether the arrangement pairs half-width questions,
+ * rather than reading the box itself. Whether products are drawn is not the
+ * layout's to say — that is the Product List switch on the Products tab.
  */
 class LayoutChoice
 {

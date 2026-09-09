@@ -1162,7 +1162,7 @@ it('asks a question about no token nothing inside it reads', function () {
         ->toBeGreaterThan(substr_count($rendered, 'style_tokens.button_background'));
 });
 
-it('lets a merchant arrange the checkout without its product panel', function () {
+it('lets a merchant hide the product list', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
     $page->products()->attach($product);
@@ -1170,13 +1170,15 @@ it('lets a merchant arrange the checkout without its product panel', function ()
     $this->cache->put('promo', '<h1>stale</h1>');
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->fillForm(['checkout_config' => ['show_products' => false]])
         ->call('save')
         ->assertHasNoFormErrors();
 
-    /** A different arrangement is different bytes, so the written HTML has to go. */
+    /** A different panel is different bytes, so the written HTML has to go. */
     expect($this->cache->has('promo'))->toBeFalse()
-        ->and($page->refresh()->checkout_config->layout)->toBe(CheckoutLayout::FormOnly);
+        ->and($page->refresh()->checkout_config->showProducts)->toBeFalse()
+        /** The switch and nothing else: the arrangement is the merchant's own decision, and it stands. */
+        ->and($page->checkout_config->layout)->toBe(CheckoutLayout::Stacked);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
@@ -1185,8 +1187,77 @@ it('lets a merchant arrange the checkout without its product panel', function ()
      * repeating it and still takes the order.
      */
     expect($html)->not->toContain('Winter Jacket')
-        ->and($html)->toContain('gio-checkout-form-only')
+        ->and($html)->not->toContain('class="gio-checkout-products"')
         ->and($html)->toContain('name="quantities['.$product->getKey().']" value="1"');
+});
+
+it('puts the product list switch first on the products tab, and hides the picker and the default selection behind it', function () {
+    $shown = checkoutTabsOf(Page::factory()->create())['Products'];
+    $hidden = checkoutTabsOf(Page::factory()->create(['checkout_config' => ['show_products' => false]]))['Products'];
+
+    /** First, before the links it applies to: a merchant meets the thing that decides what the rest of the tab is for. */
+    expect(statePathsInside($shown)[0])->toBe('checkout_config.show_products')
+        ->and(fieldInside($shown, 'checkout_config.show_products'))->toBeInstanceOf(Toggle::class)
+        ->and(fieldInside($shown, 'checkout_config.show_products')->getLabel())->toBe('Show the products in the checkout')
+        /** Live, because the two controls below open and close on it without a save. */
+        ->and(fieldInside($shown, 'checkout_config.show_products')->isLive())->toBeTrue();
+
+    /** On, the picker and its ticks are asked about as they always were. */
+    expect(fieldInside($shown, 'checkout_config.product_picker')->isHidden())->toBeFalse()
+        ->and(fieldInside($shown, 'checkout_config.default_selection')->isHidden())->toBeFalse();
+
+    /**
+     * Off, there is nothing on screen to pick between or to tick, so neither
+     * control is drawn — and both ride along unseen, because a hidden field
+     * is dropped from the saved state unless it says otherwise, and a merchant
+     * toggling the list must lose nothing by it.
+     */
+    foreach (['checkout_config.product_picker', 'checkout_config.default_selection'] as $path) {
+        expect(fieldInside($hidden, $path)->isHidden())->toBeTrue()
+            ->and(fieldInside($hidden, $path)->isDehydratedWhenHidden())->toBeTrue();
+    }
+
+    /** The links themselves stay, because the page still sells them. */
+    expect(fieldInside($hidden, 'products')->isHidden())->toBeFalse();
+});
+
+it('reads a page stored under the retired form-only layout as stacked with its product list hidden', function () {
+    $page = Page::factory()->create(['checkout_config' => ['layout' => 'form_only']]);
+
+    /** What the tab opens on, so a merchant sees the switch off rather than an arrangement the list no longer offers. */
+    $tabs = checkoutTabsOf($page);
+
+    expect(fieldInside($tabs['Layout'], 'checkout_config.layout')->getState())->toBe(CheckoutLayout::Stacked->value)
+        ->and(fieldInside($tabs['Products'], 'checkout_config.show_products')->getState())->toBeFalse();
+
+    /** And saved as such, so the retired name is gone from the stored Config the first time the page is touched. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['title' => 'Renamed'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->getRawOriginal('checkout_config'))->toContain('"layout":"stacked"')
+        ->and($page->getRawOriginal('checkout_config'))->toContain('"show_products":false')
+        ->and($page->checkout_config->showProducts)->toBeFalse();
+});
+
+it('refuses a product list switch that is neither on nor off on the box that holds it, and reads one as shown', function () {
+    $page = Page::factory()->create();
+
+    /** Worded on the tab, where there is a merchant to tell. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['show_products' => 'maybe']])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.show_products']);
+
+    /**
+     * And silent on read, where there is not: a Config written by another
+     * route holding something that is not a yes or a no draws the list, which
+     * is what every Config written before the switch existed draws.
+     */
+    expect(CheckoutConfig::fromArray(['show_products' => 'maybe'])->showProducts)->toBeTrue()
+        ->and(CheckoutConfig::fromArray([])->showProducts)->toBeTrue()
+        ->and(CheckoutConfig::fromArray(['show_products' => false])->showProducts)->toBeFalse();
 });
 
 it('lets a merchant lead the checkout with the total', function () {
@@ -1244,7 +1315,7 @@ it('lets a merchant put the checkout form beside what it sells', function () {
         ->and($html)->toContain('Winter Jacket');
 });
 
-it('keeps the picker a merchant set while the layout has nothing to tick', function () {
+it('keeps the picker a merchant set while the product list is hidden, and brings it back', function () {
     $page = Page::factory()->create();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
@@ -1253,22 +1324,29 @@ it('keeps the picker a merchant set while the layout has nothing to tick', funct
         ->assertHasNoFormErrors();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->fillForm(['checkout_config' => ['show_products' => false]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /**
-     * The switch survives the layout that has nowhere to draw it, so switching
-     * back restores the page the merchant configured. What it must not do
-     * meanwhile is stand: a picker on a form-only page compiles a rule
+     * The switch survives the list that has nowhere to draw it, so showing
+     * the list again restores the page the merchant configured. What it must
+     * not do meanwhile is stand: a picker behind a hidden list compiles a rule
      * demanding a choice the form never offered, and every order on a live page
      * is refused for a box no customer can find.
      */
     $config = $page->refresh()->checkout_config;
 
     expect($config->productPicker)->toBeTrue()
-        ->and($config->layout)->toBe(CheckoutLayout::FormOnly)
+        ->and($config->showProducts)->toBeFalse()
         ->and($config->picksProducts())->toBeFalse();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['show_products' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->picksProducts())->toBeTrue();
 });
 
 it('pre-ticks the products a merchant chose, and offers only the ones the page links', function () {
@@ -1310,20 +1388,20 @@ it('keeps live every control the default selection reads', function () {
     $page = Page::factory()->create();
 
     /**
-     * The tick list builds its options from the links and holds itself shut on
-     * the picker and the layout, so all three have to report their state as it
-     * is changed. Left un-live, a merchant links a product and finds no box
-     * for it, or switches the picker on and finds the list still greyed out —
-     * with nothing failing and no error to act on. The layout is the one most
-     * easily dropped, because it is on another tab.
+     * The tick list builds its options from the links, holds itself shut on
+     * the picker and is drawn at all only while the product list is shown, so
+     * all three have to report their state as it is changed. Left un-live, a
+     * merchant links a product and finds no box for it, or switches the picker
+     * on and finds the list still greyed out — with nothing failing and no
+     * error to act on.
      */
     $tabs = checkoutTabsOf($page);
 
     $reads = [
         fieldInside($tabs['Products'], 'products'),
+        fieldInside($tabs['Products'], 'checkout_config.show_products'),
         fieldInside($tabs['Products'], 'checkout_config.product_picker'),
         fieldInside($tabs['Products'], 'checkout_config.default_selection'),
-        fieldInside($tabs['Layout'], 'checkout_config.layout'),
     ];
 
     foreach ($reads as $control) {
@@ -1338,7 +1416,7 @@ it('keeps live every control the default selection reads', function () {
     expect(fieldInside(tabsInside(editFormOf($page))[0], 'slug')->isLive())->toBeFalse();
 });
 
-it('keeps the products a merchant pre-ticked while nothing can be ticked', function () {
+it('keeps the products a merchant pre-ticked while the product list is hidden, and brings them back', function () {
     $jacket = Product::factory()->create();
     $scarf = Product::factory()->create();
 
@@ -1354,20 +1432,28 @@ it('keeps the products a merchant pre-ticked while nothing can be ticked', funct
         ->assertHasNoFormErrors();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->fillForm(['checkout_config' => ['show_products' => false]])
         ->call('save')
         ->assertHasNoFormErrors();
 
     /**
-     * The list survives a layout with nowhere to draw it, exactly as the
-     * switch above it does, so switching back restores the page the merchant
-     * configured. What it must not do meanwhile is stand: a tick on a
-     * form-only page is a box nobody can see and nobody can untick.
+     * The list survives a hidden product list with nowhere to draw it,
+     * exactly as the switch above it does, so showing the products again
+     * restores the page the merchant configured. What it must not do
+     * meanwhile is stand: a tick behind a hidden list is a box nobody can see
+     * and nobody can untick.
      */
     $config = $page->refresh()->checkout_config;
 
     expect($config->defaultSelection)->toBe([$jacket->getKey()])
         ->and($config->opensTicked())->toBe([]);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['show_products' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->opensTicked())->toBe([$jacket->getKey()]);
 });
 
 it('keeps the questions and the delivery options a page had when the layout changes', function () {
@@ -1379,7 +1465,7 @@ it('keeps the questions and the delivery options a page had when the layout chan
         ->assertHasNoFormErrors();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Split->value]])
         ->call('save')
         ->assertHasNoFormErrors();
 
@@ -1675,9 +1761,9 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
     $setting = match ($tab) {
         'Layout' => [
             'control' => 'checkout_config.layout',
-            'typed' => ['checkout_config' => ['layout' => CheckoutLayout::FormOnly->value]],
+            'typed' => ['checkout_config' => ['layout' => CheckoutLayout::Split->value]],
             'saved' => fn (CheckoutConfig $config): CheckoutLayout => $config->layout,
-            'expected' => CheckoutLayout::FormOnly,
+            'expected' => CheckoutLayout::Split,
         ],
         'Products' => [
             'control' => 'checkout_config.product_picker',

@@ -630,11 +630,11 @@ it('drops a tick against a product the page has stopped selling', function () {
         ->and($page->defaultSelection())->toBe([$boots->getKey()]);
 });
 
-it('never opens a form-only checkout on a pre-ticked product', function () {
+it('never opens a checkout whose product list is hidden on a pre-ticked product', function () {
     $jacket = Product::factory()->create();
     $boots = Product::factory()->create();
 
-    $page = pickingPage([$jacket, $boots], [$jacket->getKey()], ['layout' => 'form_only']);
+    $page = pickingPage([$jacket, $boots], [$jacket->getKey()], ['show_products' => false]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
@@ -1315,18 +1315,18 @@ function checkoutMarkup(string $html): string
     return (string) preg_replace('/<(style|script)>.*?<\/\1>/s', '', $html);
 }
 
-it('draws the products in the stacked layout and omits the panel in the form-only one', function () {
+it('draws the products while the product list is shown and omits the panel while it is hidden', function () {
     pageStyled([], slug: 'stacked');
-    pageStyled(['layout' => 'form_only'], slug: 'bare');
+    pageStyled(['show_products' => false], slug: 'bare');
 
     $stacked = checkoutMarkup($this->get('/stacked')->assertOk()->getContent());
     $bare = checkoutMarkup($this->get('/bare')->assertOk()->getContent());
 
     /**
-     * A form-only page sold the product in its own markup above the fold, so
-     * the panel is gone entirely rather than hidden: nothing is drawn, no
-     * picture is fetched, and none of those bytes are written into the cached
-     * page.
+     * A page hiding its product list sold the product in its own markup above
+     * the fold, so the panel is gone entirely rather than hidden: nothing is
+     * drawn, no picture is fetched, and none of those bytes are written into
+     * the cached page.
      */
     expect($stacked)->toContain('class="gio-checkout-products"')
         ->and($bare)->not->toContain('class="gio-checkout-products"')
@@ -1334,8 +1334,63 @@ it('draws the products in the stacked layout and omits the panel in the form-onl
         ->and($bare)->not->toContain('data-gio-quantity');
 });
 
-it('posts one of everything a form-only checkout sells', function () {
-    $page = pageStyled(['layout' => 'form_only']);
+it('hides the product list on any layout, and draws everything else the layout draws', function (string $layout) {
+    $page = pageStyled(['layout' => $layout, 'show_products' => false]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+
+    /**
+     * The switch is the merchant's and the layout is the merchant's, and one
+     * says nothing about the other: hiding the list is a thing any arrangement
+     * can do, so the arrangement keeps its class and its rules and loses only
+     * the panel.
+     */
+    expect($html)->toContain('class="gio-checkout '.CheckoutLayout::from($layout)->modifierClass().'"')
+        ->and(checkoutMarkup($html))->not->toContain('class="gio-checkout-products"')
+        ->and($html)->toContain('name="quantities['.$page->products->first()->getKey().']" value="1"')
+        ->and($html)->toContain('data-gio-subtotal')
+        ->and($html)->toContain('data-gio-error-for="page"');
+})->with(['stacked', 'split', 'compact', 'summary_first']);
+
+it('reads a page stored under the retired form-only layout as stacked with its product list hidden, and draws it as it always drew', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+
+    $retired = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'retired',
+        'checkout_config' => ['layout' => 'form_only'],
+    ]);
+    $retired->products()->attach($product);
+
+    $switched = Page::factory()->published()->withBody('<main>[checkout]</main>')->create([
+        'slug' => 'switched',
+        'checkout_config' => ['layout' => 'stacked', 'show_products' => false],
+    ]);
+    $switched->products()->attach($product);
+
+    /**
+     * Nothing published changes on upgrade. A page saved under the old layout
+     * is the same Config as one saved with the switch off, and the bytes a
+     * visitor is served are the same bytes — the same product sold, the same
+     * panel omitted, the same class on the root — with only the slug telling
+     * them apart.
+     */
+    $config = $retired->refresh()->checkout_config;
+
+    expect($config->layout)->toBe(CheckoutLayout::Stacked)
+        ->and($config->showProducts)->toBeFalse()
+        ->and($config->toArray()['layout'])->toBe('stacked');
+
+    $retiredHtml = $this->get('/retired')->assertOk()->getContent();
+    $switchedHtml = $this->get('/switched')->assertOk()->getContent();
+
+    expect(str_replace(['value="retired"', 'data-page-slug="retired"'], ['value="switched"', 'data-page-slug="switched"'], $retiredHtml))->toBe($switchedHtml)
+        ->and($retiredHtml)->not->toContain('Winter Jacket')
+        ->and($retiredHtml)->toContain('gio-checkout-stacked')
+        ->and($retiredHtml)->toContain('name="quantities['.$product->getKey().']" value="1"');
+});
+
+it('posts one of everything a checkout with its product list hidden sells', function () {
+    $page = pageStyled(['show_products' => false]);
     $page->products()->attach(Product::factory()->create());
 
     $html = $this->get('/promo')->assertOk()->getContent();
@@ -1353,8 +1408,8 @@ it('posts one of everything a form-only checkout sells', function () {
     expect($page->products)->toHaveCount(2);
 });
 
-it('totals a form-only checkout off the same line markers as a stacked one', function () {
-    $page = pageStyled(['layout' => 'form_only']);
+it('totals a checkout with its product list hidden off the same line markers as one showing it', function () {
+    $page = pageStyled(['show_products' => false]);
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
@@ -1411,7 +1466,7 @@ it('draws every question, the delivery choice, the summary and the error slots i
     foreach ($page->checkout_config->enabledFields() as $field) {
         expect($html)->toContain('data-gio-error-for="'.$field->key().'"');
     }
-})->with(['stacked', 'split', 'compact', 'summary_first', 'form_only']);
+})->with(['stacked', 'split', 'compact', 'summary_first']);
 
 /**
  * The slug a page arranged in one layout is published at.
@@ -1583,7 +1638,6 @@ it('names the layout on the checkout root in every layout', function (string $la
     'split' => ['split', 'gio-checkout-split'],
     'compact' => ['compact', 'gio-checkout-compact'],
     'summary first' => ['summary_first', 'gio-checkout-summary-first'],
-    'form only' => ['form_only', 'gio-checkout-form-only'],
 ]);
 
 it('reads a layout it cannot draw as the one the checkout has always had', function () {
@@ -1597,15 +1651,15 @@ it('reads a layout it cannot draw as the one the checkout has always had', funct
     expect($this->get('/promo')->assertOk()->getContent())->toContain('gio-checkout-stacked');
 });
 
-it('never asks a form-only checkout which products to buy', function () {
-    $page = pageStyled(['layout' => 'form_only', 'product_picker' => true]);
+it('never asks a checkout whose product list is hidden which products to buy', function () {
+    $page = pageStyled(['show_products' => false, 'product_picker' => true]);
     $page->products()->attach(Product::factory()->create());
 
     $html = $this->get('/promo')->assertOk()->getContent();
 
     /**
      * There is nothing on screen to tick, so there is no question. The merchant
-     * keeps their switch for the day they go back to the stacked layout; what
+     * keeps their switch for the day they show the product list again; what
      * it must never do meanwhile is draw a checkbox nobody can find, or — worse
      * — leave a rule standing that demands a choice the form never offered.
      */

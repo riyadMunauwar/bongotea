@@ -25,6 +25,15 @@ use Illuminate\Support\Str;
 class CheckoutConfig implements Arrayable
 {
     /**
+     * The name a Config stored the retired form-only layout under.
+     *
+     * Read in exactly one place, `showProductsFromArray()`, and private so it
+     * stays that way: the name is not a layout any more, and a second reader
+     * would be a second place for the upgrade to go wrong.
+     */
+    private const RETIRED_FORM_ONLY_LAYOUT = 'form_only';
+
+    /**
      * @param  list<CheckoutField>  $fields
      * @param  list<DeliveryOption>  $deliveryOptions
      */
@@ -40,12 +49,25 @@ class CheckoutConfig implements Arrayable
         public readonly StyleTokens $styleTokens,
 
         /**
+         * Whether the Checkout draws the Product List: the Page's Products
+         * with their pictures, quantities and line totals.
+         *
+         * Off for a Page whose own markup has already sold the Product above
+         * the fold, on any layout. A Checkout with the list hidden still sells
+         * everything the Page sells, one of each, and captures the same
+         * complete Order; what it cannot do is offer a Product Picker, because
+         * there is nothing drawn to pick between — which is why `picksProducts()`
+         * reads this before the switch below it.
+         */
+        public readonly bool $showProducts,
+
+        /**
          * Whether the Customer chooses which of this Page's Products to buy.
          *
          * The Merchant's switch and nothing more. What a Checkout actually
-         * asks needs the layout as well, which is `picksProducts()`, and then
-         * how many Products the Page still sells, which is Page's to answer —
-         * see `Page::offersProductChoice()`.
+         * asks needs the Product List to be shown as well, which is
+         * `picksProducts()`, and then how many Products the Page still sells,
+         * which is Page's to answer — see `Page::offersProductChoice()`.
          */
         public readonly bool $productPicker,
 
@@ -53,11 +75,11 @@ class CheckoutConfig implements Arrayable
          * Which of this Page's Products the Picker opens ticked, by id.
          *
          * The Merchant's list and nothing more, kept whole even where it
-         * cannot be honoured — like the switch above it, so a Merchant trying
-         * the other layout gets their ticks back when they switch away from it.
-         * What a form actually opens ticked needs the layout as well, which is
-         * `opensTicked()`, and then the Products the Page still sells, which is
-         * Page's to answer — see `Page::defaultSelection()`.
+         * cannot be honoured — like the switch above it, so a Merchant hiding
+         * the Product List gets their ticks back when they show it again.
+         * What a form actually opens ticked needs the list to be shown as
+         * well, which is `opensTicked()`, and then the Products the Page still
+         * sells, which is Page's to answer — see `Page::defaultSelection()`.
          *
          * @var list<int>
          */
@@ -68,6 +90,8 @@ class CheckoutConfig implements Arrayable
          *
          * A rendering decision only: it changes what the island draws and
          * nothing about what it asks for, what it charges or how it is styled.
+         * Nor whether the Product List is drawn — that is `showProducts`, and
+         * it works on every arrangement alike.
          */
         public readonly CheckoutLayout $layout,
 
@@ -129,6 +153,13 @@ class CheckoutConfig implements Arrayable
              * value its rule already carried.
              */
             StyleTokens::none(),
+
+            /**
+             * Shown, which is the Checkout as it has always drawn: a Page
+             * whose own markup sells the Product is the exception, and hiding
+             * the list is a decision a Merchant makes about one Page.
+             */
+            showProducts: true,
 
             /**
              * Off, so a Page sells everything it links the way it always has.
@@ -238,6 +269,8 @@ class CheckoutConfig implements Arrayable
             self::deliveryOptionsFromArray($stored),
             StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
 
+            showProducts: self::showProductsFromArray($stored),
+
             /**
              * Absent means off, which is what every Config written before the
              * picker existed holds and what those Pages have always done: sell
@@ -296,6 +329,35 @@ class CheckoutConfig implements Arrayable
         }
 
         return $methods;
+    }
+
+    /**
+     * Whether a stored Config draws the Product List.
+     *
+     * Absent means shown, which is what every Config written before the switch
+     * existed holds and what those Pages have always drawn — with one
+     * exception. A Config stored under the retired form-only layout hid the
+     * list by its layout's name, and is read as exactly that: the arrangement
+     * falls back to stacked as any unknown name does, and the list is hidden
+     * whatever else the stored shape says, because a published Page that
+     * suddenly drew a product panel would be the upgrade changing something
+     * nobody asked it to. No data migration: the reading is what carries it,
+     * and the first save from the tab writes the new shape.
+     *
+     * Anything that is not a boolean is dropped for the default, like every
+     * other unusable value a Config holds.
+     *
+     * @param  array<string, mixed>  $stored
+     */
+    private static function showProductsFromArray(array $stored): bool
+    {
+        if (($stored['layout'] ?? null) === self::RETIRED_FORM_ONLY_LAYOUT) {
+            return false;
+        }
+
+        $shown = $stored['show_products'] ?? true;
+
+        return is_bool($shown) ? $shown : true;
     }
 
     /**
@@ -388,11 +450,12 @@ class CheckoutConfig implements Arrayable
      * Whether this Checkout asks the Customer which Products to buy, as far as
      * the Config alone can say.
      *
-     * The Merchant's switch and their layout together. A form-only Checkout
-     * draws no Products, so it has nothing to put a tick box beside — and a
-     * Config that let the switch stand regardless would compile a rule
+     * The Merchant's two switches together. A Checkout with its Product List
+     * hidden draws no Products, so it has nothing to put a tick box beside —
+     * and a Config that let the picker stand regardless would compile a rule
      * demanding a choice the form never offered, which is every Order on a live
-     * Page refused for a box no Customer can find.
+     * Page refused for a box no Customer can find. The picker is kept as set,
+     * so showing the list again restores the Checkout the Merchant configured.
      *
      * How many Products the Page still sells is the other half, and it is not
      * the Config's: see `Page::offersProductChoice()` for the rendering side
@@ -400,7 +463,7 @@ class CheckoutConfig implements Arrayable
      */
     public function picksProducts(): bool
     {
-        return $this->productPicker && $this->layout->showsProducts();
+        return $this->showProducts && $this->productPicker;
     }
 
     /**
@@ -408,10 +471,10 @@ class CheckoutConfig implements Arrayable
      * say.
      *
      * The same gate the Picker itself goes through, and for the same reason: a
-     * Product ticked by default on a layout that draws no Products is a tick
-     * nobody can see and nobody can untick, under a form that never asked.
-     * Dropped rather than enforced, like every other value a Config holds and
-     * cannot use.
+     * Product ticked by default behind a hidden Product List is a tick nobody
+     * can see and nobody can untick, under a form that never asked. Dropped
+     * rather than enforced, like every other value a Config holds and cannot
+     * use.
      *
      * Which of these the Page still sells is the other half, and it is not the
      * Config's — see `Page::defaultSelection()`.
@@ -629,7 +692,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, order_button: array{wording: ?string, note: ?string}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
      */
     public function toArray(): array
     {
@@ -637,6 +700,7 @@ class CheckoutConfig implements Arrayable
             'fields' => $this->fieldsToArray(),
             'delivery_options' => $this->deliveryOptionsToArray(),
             'style_tokens' => $this->styleTokens->toArray(),
+            'show_products' => $this->showProducts,
             'product_picker' => $this->productPicker,
             'default_selection' => $this->defaultSelection,
             'layout' => $this->layout->value,
