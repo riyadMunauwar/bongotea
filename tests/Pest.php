@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\OrderStatus;
+use App\Models\Order;
 use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Product;
@@ -10,6 +12,7 @@ use App\Shortcodes\ShortcodeRegistry;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\PageCache\StaticPageCache;
+use Carbon\CarbonImmutable;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -295,4 +298,38 @@ function styleBlock(string $html): string
     preg_match('/<style>(.*?)<\/style>/s', $html, $block);
 
     return $block[1] ?? '';
+}
+
+/**
+ * The instant every reporting test cuts its windows from: a Wednesday
+ * morning in Dhaka. Last 7 days therefore runs from Thursday the 3rd to
+ * Wednesday the 9th, and the comparison window from the 27th to the 2nd.
+ */
+function reportingNow(): CarbonImmutable
+{
+    return CarbonImmutable::parse('2026-09-09 10:00:00', 'Asia/Dhaka');
+}
+
+/**
+ * An Order captured at an instant, its subtotal given and its total derived
+ * with the Delivery Charge on top, the way the observer keeps it. Status is
+ * a factory state applied at creation rather than a later update, because
+ * a save re-reads the subtotal from the lines an Order made this way does
+ * not have.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function orderCapturedAt(string $instant, int $subtotal = 50000, array $attributes = [], OrderStatus $status = OrderStatus::New): Order
+{
+    $factory = match ($status) {
+        OrderStatus::New => Order::factory(),
+        OrderStatus::Confirmed => Order::factory()->confirmed(),
+        OrderStatus::Cancelled => Order::factory()->cancelled(),
+    };
+
+    return $factory->create(array_merge([
+        'subtotal' => $subtotal,
+        'delivery_charge' => 6000,
+        'created_at' => CarbonImmutable::parse($instant, 'Asia/Dhaka')->utc(),
+    ], $attributes));
 }

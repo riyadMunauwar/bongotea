@@ -17,6 +17,15 @@ final readonly class ReportingBucket
     ) {}
 
     /**
+     * The start as the Merchant reads it, in the timezone the window was
+     * cut in: the hour or the midnight a label names.
+     */
+    public function startIn(string $timezone): CarbonImmutable
+    {
+        return $this->start->setTimezone($timezone);
+    }
+
+    /**
      * Whether the instant falls inside this bucket.
      */
     public function contains(CarbonImmutable $instant): bool

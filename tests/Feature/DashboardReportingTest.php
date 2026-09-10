@@ -3,6 +3,7 @@
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\CachePathIndicator;
 use App\Filament\Widgets\OverviewStats;
+use App\Filament\Widgets\SalesOverTimeChart;
 use App\Models\Order;
 use App\Models\Page;
 use App\Models\User;
@@ -110,6 +111,41 @@ it('measures each tile against the comparison window, up or down', function () {
         ->assertSee('Up from none')
         ->assertSee('50.0%')
         ->assertSee('50.0 pts down on the previous 7 days');
+});
+
+it('draws Sales over time below the tiles: a Sales line and an Orders line over every bucket of the chosen window', function () {
+    Page::factory()->published()->create();
+    Order::factory()->create(['subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->cancelled()->create(['subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
+
+    $this->get('/admin')
+        ->assertOk()
+        ->assertSeeLivewire(SalesOverTimeChart::class);
+
+    $widgets = array_values(app(Dashboard::class)->getWidgets());
+
+    expect(array_search(OverviewStats::class, $widgets, true))
+        ->toBeLessThan(array_search(SalesOverTimeChart::class, $widgets, true))
+        ->and(array_search(SalesOverTimeChart::class, $widgets, true))
+        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
+
+    /**
+     * The data is handed to Chart.js as JavaScript, so it is read off the
+     * widget rather than out of the HTML: seven daily points, the last of
+     * them today, Sales in major units and Orders counting the Cancelled one.
+     * Hourly bucketing is proved against the module in ReportingSalesOverTimeTest.
+     */
+    $chart = Livewire::test(SalesOverTimeChart::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Sales over time')
+        ->instance();
+
+    $data = (fn (): array => $this->getData())->call($chart);
+
+    expect($data['labels'])->toHaveCount(7)
+        ->and($data['datasets'][0]['label'])->toBe('Sales')
+        ->and($data['datasets'][0]['data'])->toBe([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 560.0])
+        ->and($data['datasets'][1]['label'])->toBe('Orders')
+        ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
 });
 
 it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {

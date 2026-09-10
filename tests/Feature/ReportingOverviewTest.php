@@ -2,7 +2,6 @@
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
-use App\Models\Order;
 use App\Models\Page;
 use App\Models\Payment;
 use App\Support\Reporting\Overview;
@@ -12,39 +11,12 @@ use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
 
-/**
- * The instant every window below is cut from: a Wednesday morning in Dhaka.
- * Last 7 days therefore runs from Thursday the 3rd to Wednesday the 9th, and
- * the comparison window from the 27th to the 2nd.
- */
-function reportingNow(): CarbonImmutable
-{
-    return CarbonImmutable::parse('2026-09-09 10:00:00', 'Asia/Dhaka');
-}
-
-/**
- * An Order captured at an instant, its subtotal given and its total derived
- * with the Delivery Charge on top, the way the observer keeps it. Status is
- * a factory state applied at creation rather than a later update, because
- * a save re-reads the subtotal from the lines an Order made this way does
- * not have.
- *
- * @param  array<string, mixed>  $attributes
- */
-function orderCapturedAt(string $instant, int $subtotal = 50000, array $attributes = [], OrderStatus $status = OrderStatus::New): Order
-{
-    $factory = match ($status) {
-        OrderStatus::New => Order::factory(),
-        OrderStatus::Confirmed => Order::factory()->confirmed(),
-        OrderStatus::Cancelled => Order::factory()->cancelled(),
-    };
-
-    return $factory->create(array_merge([
-        'subtotal' => $subtotal,
-        'delivery_charge' => 6000,
-        'created_at' => CarbonImmutable::parse($instant, 'Asia/Dhaka')->utc(),
-    ], $attributes));
-}
+/*
+| Every window below is cut from reportingNow() — a Wednesday morning in
+| Dhaka — so Last 7 days runs from Thursday the 3rd to Wednesday the 9th,
+| and the comparison window from the 27th to the 2nd. The helpers are in
+| tests/Pest.php, shared with the other module tests.
+*/
 
 function overviewOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): Overview
 {

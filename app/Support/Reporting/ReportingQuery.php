@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\Page;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * The one seam every report widget calls, and the only place the glossary's
@@ -21,12 +22,44 @@ use Illuminate\Database\Eloquent\Builder;
  * year. Rows are never fetched per Order; the largest thing this module
  * loops over is the list of buckets.
  *
- * Only the overview is here so far. A later result — a time series, a
- * leaderboard, a Product ranking — is another method returning another
- * result class, built on `ordersIn()`, and no widget changes for it.
+ * The overview and the Sales over time series are here so far. A later
+ * result — a leaderboard, a Product ranking — is another method returning
+ * another result class, built on `ordersIn()`, and no widget changes for it.
  */
 final class ReportingQuery
 {
+    /**
+     * Orders and Sales per bucket of a window, for the line chart: one
+     * grouped query, every bucket in the answer whether or not a row fell
+     * inside it.
+     */
+    public function salesOverTime(ReportingWindow $window, ?Page $page = null): SalesOverTime
+    {
+        $buckets = $window->buckets();
+        $cancelled = OrderStatus::Cancelled->value;
+
+        $rows = $this->groupedByBucket(
+            $this->ordersIn($window, $page),
+            $buckets,
+            'count(*) as order_count, sum(case when status != ? then total else 0 end) as sales',
+            [$cancelled],
+        );
+
+        $points = [];
+
+        foreach ($buckets as $index => $bucket) {
+            $row = $rows->get($index);
+
+            $points[] = new SalesOverTimePoint(
+                bucket: $bucket,
+                orders: (int) ($row->order_count ?? 0),
+                sales: (int) ($row->sales ?? 0),
+            );
+        }
+
+        return new SalesOverTime($window, $points);
+    }
+
     /**
      * The stat tiles' figures for a window, the comparison window's beside
      * them, and the window's own bucket by bucket for the sparklines.
@@ -58,29 +91,20 @@ final class ReportingQuery
      */
     private function figuresByBucket(ReportingWindow $window, array $buckets, ?Page $page): array
     {
-        [$bucketSql, $bucketBindings] = $this->bucketExpression($buckets);
-
         $cancelled = OrderStatus::Cancelled->value;
         $new = OrderStatus::New->value;
 
-        $counted = $this->ordersIn($window, $page)
-            ->selectRaw(
-                "{$bucketSql} as bucket, "
-                .'count(*) as order_count, '
-                .'sum(case when status != ? then total else 0 end) as sales, '
-                .'sum(case when status = ? then 1 else 0 end) as cancelled, '
-                .'sum(case when status = ? then 1 else 0 end) as new_orders',
-                [...$bucketBindings, $cancelled, $cancelled, $new],
-            )
-            ->groupBy('bucket')
-            ->get()
-            ->keyBy('bucket');
+        $counted = $this->groupedByBucket(
+            $this->ordersIn($window, $page),
+            $buckets,
+            'count(*) as order_count, '
+            .'sum(case when status != ? then total else 0 end) as sales, '
+            .'sum(case when status = ? then 1 else 0 end) as cancelled, '
+            .'sum(case when status = ? then 1 else 0 end) as new_orders',
+            [$cancelled, $cancelled, $new],
+        );
 
-        $unpaid = $this->ordersIn($window, $page)
-            ->unpaid()
-            ->selectRaw("{$bucketSql} as bucket, count(*) as unpaid", $bucketBindings)
-            ->groupBy('bucket')
-            ->pluck('unpaid', 'bucket');
+        $unpaid = $this->groupedByBucket($this->ordersIn($window, $page)->unpaid(), $buckets, 'count(*) as unpaid');
 
         $figures = [];
 
@@ -91,12 +115,34 @@ final class ReportingQuery
                 orders: (int) ($row->order_count ?? 0),
                 sales: (int) ($row->sales ?? 0),
                 cancelled: (int) ($row->cancelled ?? 0),
-                unpaid: (int) ($unpaid->get($index, 0)),
+                unpaid: (int) ($unpaid->get($index)?->unpaid ?? 0),
                 new: (int) ($row->new_orders ?? 0),
             );
         }
 
         return $figures;
+    }
+
+    /**
+     * The aggregates a query comes to in each bucket, keyed by bucket index;
+     * a bucket no row fell inside is simply absent, and the caller reads it
+     * as zeros. The aggregate columns are the caller's, bound after the
+     * bucket boundaries.
+     *
+     * @param  Builder<Order>  $orders
+     * @param  list<ReportingBucket>  $buckets
+     * @param  list<string>  $bindings
+     * @return Collection<int, object>
+     */
+    private function groupedByBucket(Builder $orders, array $buckets, string $aggregates, array $bindings = []): Collection
+    {
+        [$bucketSql, $bucketBindings] = $this->bucketExpression($buckets);
+
+        return $orders
+            ->selectRaw("{$bucketSql} as bucket, {$aggregates}", [...$bucketBindings, ...$bindings])
+            ->groupBy('bucket')
+            ->get()
+            ->keyBy('bucket');
     }
 
     /**

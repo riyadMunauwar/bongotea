@@ -31,6 +31,15 @@ class Money
     }
 
     /**
+     * Minor units as a number in major units, for a chart axis that draws
+     * its own symbol and decimals. Display goes through `format()`.
+     */
+    public static function toMajor(int $minorUnits): float
+    {
+        return round($minorUnits / self::factor(), self::decimals());
+    }
+
+    /**
      * A merchant-typed decimal back to minor units, rounded rather than
      * truncated so 9.995 does not silently become 9.99.
      */
