@@ -120,6 +120,8 @@ class Words
         return TextInput::make('checkout_config.words.'.$slot->value)
             ->label($slot->label())
             ->placeholder($slot->defaultValue())
+            /** Worded only where the slot may name a figure, the way the button's box says how to name the total. */
+            ->helperText($slot->helperText())
             ->rules([RefusedBy::rule($slot->refusal(...))]);
     }
 

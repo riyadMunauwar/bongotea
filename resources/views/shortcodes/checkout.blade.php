@@ -24,6 +24,8 @@
     detail line fits, which payment label it names a method by.
 --}}
 @use(App\Support\Checkout\CheckoutFieldType)
+@use(App\Support\Checkout\WordKind)
+@use(App\Support\Checkout\WordPlace)
 @use(App\Support\Checkout\WordSlot)
 @php
     /**
@@ -71,6 +73,44 @@
      * never reads a "2" with no "1" above it.
      */
     $sectionNumber = 0;
+
+    /**
+     * The figures a layout's own words may name, each wrapped so the script
+     * can keep it truthful: how many products open ticked (every product,
+     * where there is no picker), and what the delivery arrangement the form
+     * opens on costs. Substituted into the escaped words, so a merchant's
+     * sentence is escaped and the figure's markup is not.
+     */
+    $count = $picksProducts ? $products->filter($opensTicked)->count() : $products->count();
+
+    $figures = [
+        WordSlot::COUNT_PLACEHOLDER => '<span data-gio-count>'.$count.'</span>',
+        WordSlot::DELIVERY_PLACEHOLDER => '<span data-gio-delivery>'.e(\App\Support\Money::format($preselected?->amount ?? 0)).'</span>',
+    ];
+
+    $sentenceFor = fn (WordSlot $slot): string => strtr(e($words->slot($slot)), $figures);
+
+    /**
+     * The word the layout draws at one place on the form, in the markup its
+     * kind calls for, or nothing where the layout draws none there. The
+     * view knows where it stands and asks the layout what goes there, so a
+     * layout with words of its own adds no branch here; and the badge on a
+     * numbered headline counts as it is drawn.
+     */
+    $wordAt = function (WordPlace $place) use ($layout, $sentenceFor, &$sectionNumber): string {
+        $slot = $layout->slotAt($place);
+
+        if ($slot === null) {
+            return '';
+        }
+
+        return match ($slot->kind()) {
+            WordKind::NumberedHeadline => '<h3 class="gio-checkout-heading"><span class="gio-checkout-number">'.(++$sectionNumber).'</span>'.$sentenceFor($slot).'</h3>',
+            WordKind::Headline => '<h3 class="gio-checkout-heading">'.$sentenceFor($slot).'</h3>',
+            WordKind::Eyebrow => '<p class="gio-checkout-eyebrow">'.$sentenceFor($slot).'</p>',
+            WordKind::Line => '<p class="gio-checkout-footnote">'.$sentenceFor($slot).'</p>',
+        };
+    };
 @endphp
 {{--
     The layout's class rides beside the base one, in every layout, and the
@@ -136,8 +176,33 @@
         --}}
         .gio-checkout-section { margin: 0; }
         .gio-checkout-section + .gio-checkout-section { margin: 1.75rem 0 0; }
+        {{--
+            Everything the customer answers — the questions with the delivery
+            choice beneath them, and the payment choice — as one block, so a
+            two-column arrangement can put it on one side of the form in one
+            move. Spaced from the products above it the way the sections are
+            spaced from each other; nothing else here, so on a one-column
+            page it is the same island it always was.
+        --}}
+        .gio-checkout-questions { margin: 0; }
+        .gio-checkout-section + .gio-checkout-questions { margin: 1.75rem 0 0; }
         .gio-checkout-heading { display: flex; align-items: center; gap: .625rem; margin: 0 0 .875rem; font-size: 1rem; font-weight: 700; line-height: 1.3; }
         .gio-checkout-number { display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gio-text); color: var(--gio-surface); font-size: .75rem; font-weight: 700; }
+        {{--
+            A headline drawn over the delivery choice sits after the questions
+            in the same section, and takes the design's section gap above it.
+            In the base rather than in the block of the one layout drawing
+            such a headline, so a layout's block never has to reach three
+            classes deep to space it.
+        --}}
+        .gio-checkout-fields + .gio-checkout-heading { margin-top: 1.5rem; }
+        {{--
+            An eyebrow is the design's small capitals over a block, in the
+            muted ink: a layout's own word where the design draws one rather
+            than a headline. In the base whether or not the layout draws one,
+            so the sheet is the same bytes whichever words a page draws.
+        --}}
+        .gio-checkout-eyebrow { margin: 0 0 .75rem; font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; line-height: 1.4; color: var(--gio-muted); }
         {{--
             A product row is one line a thumb can read: the tick where there is
             one, the picture, the name with its price beneath, the stepper, and
@@ -366,6 +431,12 @@
         .gio-checkout-submit[disabled] { opacity: .6; cursor: progress; transform: none; }
         .gio-checkout-note { margin: .625rem 0 0; font-size: .75rem; text-align: center; color: var(--gio-muted); }
         {{--
+            The line a layout adds beneath the button after the button's own
+            note — a reassurance, a footnote about the delivery charge —
+            receding in the muted ink the way the note does.
+        --}}
+        .gio-checkout-footnote { margin: .5rem 0 0; font-size: .75rem; text-align: center; color: var(--gio-muted); }
+        {{--
             The phone, as the design draws it at 375: the section and the card
             close in, a product's line total drops to a row of its own beneath
             the name, and the button loses a little of its padding. Nothing
@@ -474,9 +545,7 @@
             --}}
             @if ($showProducts)
                 <div class="gio-checkout-section">
-                    @if ($layout->draws(WordSlot::StackedProductsHeadline))
-                        <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedProductsHeadline) }}</h3>
-                    @endif
+                    {!! $wordAt(WordPlace::Products) !!}
 
                     <div class="gio-checkout-products">
                         @foreach ($products as $product)
@@ -604,6 +673,19 @@
                             </div>
                         @endforeach
                     </div>
+
+                    {{--
+                        Where an order for nothing is refused, beside the
+                        boxes that were never ticked, inside the section that
+                        holds them: a two-column arrangement then places the
+                        products and their refusal in one move. Only a page
+                        that asks the question has anywhere to show the answer
+                        being wrong; on any other, the island's fallback puts
+                        it in the page-level slot instead.
+                    --}}
+                    @if ($picksProducts)
+                        <p class="gio-checkout-error gio-checkout-pick-error" data-gio-error-for="selected"></p>
+                    @endif
                 </div>
             @else
                 {{--
@@ -635,15 +717,16 @@
             @endif
 
             {{--
-                Where an order for nothing is refused, beside the boxes that
-                were never ticked. Only a page that asks the question has
-                anywhere to show the answer being wrong; on any other, the
-                island's fallback puts it in the page-level slot instead.
+                Everything the customer answers, as one block: the questions
+                with the delivery choice beneath them, then the payment
+                choice. One element so that a two-column arrangement can put
+                the whole of it on one side of the form in a single move,
+                while the products and the summary take the other; on a
+                one-column page it is an unstyled box around the sections it
+                always held. The document's order is unchanged by it
+                (ADR-0015).
             --}}
-            @if ($picksProducts)
-                <p class="gio-checkout-error" data-gio-error-for="selected"></p>
-            @endif
-
+            <div class="gio-checkout-questions">
             {{--
                 The questions, their wording and their order come from this
                 Page's own Checkout Config — the same list the server compiles
@@ -660,9 +743,7 @@
                 as the design draws the details.
             --}}
             <div class="gio-checkout-section">
-                @if ($layout->draws(WordSlot::StackedDetailsHeadline))
-                    <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedDetailsHeadline) }}</h3>
-                @endif
+                {!! $wordAt(WordPlace::Details) !!}
 
                 <div class="gio-checkout-fields">
                     @foreach ($fields as $field)
@@ -786,12 +867,24 @@
                     regardless.
                 --}}
                 @if (count($deliveryOptions) > 1)
+                    {!! $wordAt(WordPlace::Delivery) !!}
+
+                    {{--
+                        The row and its control carry a second class naming
+                        what they are for, beside the shared one that draws
+                        them: a layout that draws the delivery choice as a
+                        segmented control and the payment choice as plain
+                        radios has to tell the two apart, and may reach only
+                        two classes deep to do it. The shared class is written
+                        last, so a rule reading `gio-checkout-choice-label">`
+                        reads the same bytes it always did.
+                    --}}
                     <fieldset class="gio-checkout-delivery">
                         <legend class="gio-checkout-label gio-checkout-hidden-label">Delivery</legend>
 
                         @foreach ($deliveryOptions as $index => $option)
-                            <label class="gio-checkout-choice">
-                                <input class="gio-checkout-tick"
+                            <label class="gio-checkout-choice gio-checkout-delivery-choice">
+                                <input class="gio-checkout-delivery-tick gio-checkout-tick"
                                        type="radio"
                                        name="delivery_option"
                                        value="{{ $option->label }}"
@@ -809,7 +902,7 @@
                                     either way. Copy, not a figure: the script
                                     reads `data-amount` and never this.
                                 --}}
-                                <span class="gio-checkout-choice-label">{{ $option->label }}@if ($option->detail !== null && $layout->drawsDeliveryDetail())<span class="gio-checkout-choice-detail">{{ $option->detail }}</span>@endif</span>
+                                <span class="gio-checkout-delivery-label gio-checkout-choice-label">{{ $option->label }}@if ($option->detail !== null && $layout->drawsDeliveryDetail())<span class="gio-checkout-choice-detail">{{ $option->detail }}</span>@endif</span>
                                 <span class="gio-checkout-choice-amount">{{ \App\Support\Money::format($option->amount) }}</span>
                             </label>
                         @endforeach
@@ -849,21 +942,19 @@
                 so its alt is empty and a screen reader hears the method once.
             --}}
             <div class="gio-checkout-section">
-                @if ($layout->draws(WordSlot::StackedPaymentHeadline))
-                    <h3 class="gio-checkout-heading"><span class="gio-checkout-number">{{ ++$sectionNumber }}</span>{{ $words->slot(WordSlot::StackedPaymentHeadline) }}</h3>
-                @endif
+                {!! $wordAt(WordPlace::Payment) !!}
 
                 <fieldset class="gio-checkout-choices gio-checkout-payment">
                     <legend class="gio-checkout-label gio-checkout-hidden-label">Payment</legend>
 
                     @foreach ($paymentChooser->methods as $index => $method)
-                        <label class="gio-checkout-choice">
+                        <label class="gio-checkout-choice gio-checkout-payment-choice">
                             <input class="gio-checkout-tick"
                                    type="radio"
                                    name="payment_method"
                                    value="{{ $method->value }}"
                                    @checked($index === 0) required>
-                            <span class="gio-checkout-choice-label">{{ $layout->drawsShortPaymentLabels() ? $words->shortPaymentLabel($method) : $words->paymentLabel($method) }}</span>
+                            <span class="gio-checkout-payment-label gio-checkout-choice-label">{{ $layout->drawsShortPaymentLabels() ? $words->shortPaymentLabel($method) : $words->paymentLabel($method) }}</span>
                             @if ($paymentChooser->showsLogos)
                                 <img class="gio-checkout-logo" src="{{ $method->logoUrl() }}" alt="" loading="lazy">
                             @endif
@@ -874,6 +965,7 @@
                 <p class="gio-checkout-error" data-gio-error-for="payment_method"></p>
             </div>
 @endif
+            </div>
 
             {{--
                 One of everything, which is what the quantity boxes above start
@@ -931,6 +1023,13 @@
             <button class="gio-checkout-submit" type="submit" data-gio-submit{!! $button->carriesTotal() ? ' data-gio-submit-wording="'.e($button->wording()).'"' : '' !!}>{{ $button->wordingFor(\App\Support\Money::format($total)) }}</button>
 
             <p class="gio-checkout-note">{{ $button->note() }}</p>
+
+            {{--
+                The line the layout adds beneath the button, where it draws
+                one, after the button's own note: a reassurance, or a footnote
+                naming the delivery charge the total already includes.
+            --}}
+            {!! $wordAt(WordPlace::Button) !!}
         </form>
     </div>
 </div>
@@ -1028,24 +1127,34 @@
     /* The figure the customer hands over in cash, kept truthful as they type. */
     function retotal(form) {
         var subtotal = 0;
+        var count = 0;
 
         form.querySelectorAll('[data-gio-line]').forEach(function (line) {
             var lineTotal = line.querySelector('[data-gio-line-total]');
+            var pick = line.querySelector('[data-gio-pick]');
 
             if (lineTotal) { lineTotal.textContent = money(form, lineAmount(line)); }
+            if (!pick || pick.checked) { count += 1; }
 
             subtotal += lineSubtotal(line);
         });
 
         var delivery = deliveryFor(form);
 
+        /*
+         * Every slot carrying a figure, not the first: a layout's own words
+         * may name the delivery charge beneath the button as well as in the
+         * summary, and both have to move together.
+         */
         var set = function (name, text) {
-            var el = form.querySelector('[data-gio-' + name + ']');
-            if (el) { el.textContent = text; }
+            form.querySelectorAll('[data-gio-' + name + ']').forEach(function (el) {
+                el.textContent = text;
+            });
         };
 
         var total = money(form, subtotal + delivery.amount);
 
+        set('count', String(count));
         set('subtotal', money(form, subtotal));
         set('delivery', money(form, delivery.amount));
         set('total', total);

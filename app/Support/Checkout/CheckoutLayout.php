@@ -24,9 +24,10 @@ namespace App\Support\Checkout;
  * every one an exhaustive match over all ten, so a layout added or changed
  * has to answer each question before anything draws it.
  *
- * Stacked is drawn as designed and is what the base sheet draws. The other
- * nine are chosen from the same list and, until each one's own rules land,
- * draw as the base does under a class of their own.
+ * Stacked is drawn as designed and is what the base sheet draws; Split, Split
+ * reversed and Dark panel are drawn as designed by a block of their own. The
+ * other six are chosen from the same list and, until each one's own rules
+ * land, draw as the base does under a class of their own.
  */
 enum CheckoutLayout: string
 {
@@ -93,15 +94,28 @@ enum CheckoutLayout: string
                 WordSlot::StackedDetailsHeadline,
                 WordSlot::StackedPaymentHeadline,
             ],
-            self::Split,
-            self::SplitReversed,
+            self::Split => [
+                WordSlot::SplitOrderHeadline,
+                WordSlot::SplitDetailsHeadline,
+                WordSlot::SplitDeliveryHeadline,
+                WordSlot::SplitPaymentHeadline,
+                WordSlot::SplitHint,
+            ],
+            self::SplitReversed => [
+                WordSlot::SplitReversedBundleEyebrow,
+                WordSlot::SplitReversedFormHeadline,
+                WordSlot::SplitReversedFootnote,
+            ],
+            self::DarkPanel => [
+                WordSlot::DarkPanelSummaryEyebrow,
+                WordSlot::DarkPanelFormHeadline,
+            ],
             self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
             self::Chips,
-            self::Invoice,
-            self::DarkPanel => [],
+            self::Invoice => [],
         };
     }
 
@@ -112,6 +126,26 @@ enum CheckoutLayout: string
     public function draws(WordSlot $slot): bool
     {
         return in_array($slot, $this->wordSlots(), true);
+    }
+
+    /**
+     * The word this layout draws at one place on the form, or null where it
+     * draws none there.
+     *
+     * How the view asks: it knows where it is — over the products, over the
+     * questions, beneath the button — and draws whatever the layout puts
+     * there by the slot's own kind, so a layout adding a word never adds a
+     * branch to the template. A layout puts at most one word at a place.
+     */
+    public function slotAt(WordPlace $place): ?WordSlot
+    {
+        foreach ($this->wordSlots() as $slot) {
+            if ($slot->place() === $place) {
+                return $slot;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -227,16 +261,16 @@ enum CheckoutLayout: string
     public function defaultButtonWording(): string
     {
         return match ($this) {
-            self::Stacked => OrderButton::DEFAULT_WORDING.' · '.OrderButton::TOTAL_PLACEHOLDER,
-            self::Split,
+            self::Stacked,
             self::SplitReversed,
+            self::DarkPanel => OrderButton::DEFAULT_WORDING.' · '.OrderButton::TOTAL_PLACEHOLDER,
+            self::Split,
             self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
             self::Chips,
-            self::Invoice,
-            self::DarkPanel => OrderButton::DEFAULT_WORDING,
+            self::Invoice => OrderButton::DEFAULT_WORDING,
         };
     }
 
@@ -267,23 +301,133 @@ enum CheckoutLayout: string
      * still the same bytes for every Page arranged the same way, however many
      * questions it asks and however much of it is restyled.
      *
-     * Stacked adds nothing: it is what the base sheet draws. The other nine
-     * add nothing yet either, and draw as the base does until each one's own
-     * rules land.
+     * Stacked adds nothing: it is what the base sheet draws. A layout whose
+     * block has not landed yet adds nothing either, and draws as the base
+     * does until its own rules do.
+     *
+     * The two-column arrangements share one construction. The form is a grid
+     * whose children are placed by row and column outright — the questions
+     * wrapper on one side spanning every row, the products, the summary and
+     * the button on the other, one row each — and the panel the design
+     * draws behind one side is the form's own `::before`, a grid item with
+     * no content stretched across that side's rows and columns. Nothing in
+     * the document moves (ADR-0015): what a column holds is decided in the
+     * sheet, and a visitor whose stylesheet never arrives reads the same
+     * order every layout writes. The panel's padding is a track of the grid
+     * rather than a margin on each item, so the phone rules can re-place
+     * every item on one column without undoing any margin. One row is `1fr`
+     * so the side that runs longer spills into it rather than spreading the
+     * other side's items apart.
+     *
+     * Every colour is a token or mixed from two, with one exception the
+     * design fixes: Dark panel's navy set (`#0f1d4f` and its borders and
+     * inks) is the layout, not a Style Token, and is written here in the
+     * block that is shipped only to a Page arranged in it.
      */
     public function styleRules(): string
     {
         return match ($this) {
             self::Stacked,
-            self::Split,
-            self::SplitReversed,
             self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
             self::Chips,
-            self::Invoice,
-            self::DarkPanel => '',
+            self::Invoice => '',
+            self::Split => <<<'CSS'
+        .gio-checkout-split .gio-checkout-card { max-width: 57.5rem; padding: 2rem; }
+        .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, 1fr) 1.75rem 1.25rem minmax(0, 17.5rem) 1.25rem; grid-template-rows: 1.25rem auto auto auto auto auto 1.25rem 1fr; align-items: start; }
+        .gio-checkout-split .gio-checkout-form::before { content: ""; grid-column: 3 / 6; grid-row: 1 / 8; align-self: stretch; border: 1px solid var(--gio-border); background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-split .gio-checkout-questions { grid-column: 1; grid-row: 1 / -1; margin: 0; }
+        .gio-checkout-split .gio-checkout-section { grid-column: 4; grid-row: 2; }
+        .gio-checkout-split .gio-checkout-summary { grid-column: 4; grid-row: 3; margin: .875rem 0 0; padding: .75rem 0 0; gap: .375rem; }
+        .gio-checkout-split .gio-checkout-row { font-size: .8125rem; }
+        .gio-checkout-split .gio-checkout-total { margin: 0; padding: .375rem 0 0; border-top: 0; font-size: 1.0625rem; }
+        .gio-checkout-split .gio-checkout-submit { grid-column: 4; grid-row: 4; margin: .875rem 0 0; }
+        .gio-checkout-split .gio-checkout-note { grid-column: 4; grid-row: 5; }
+        .gio-checkout-split .gio-checkout-footnote { grid-column: 4; grid-row: 6; font-size: .6875rem; }
+        .gio-checkout-split .gio-checkout-heading { margin-bottom: .75rem; font-size: .9375rem; }
+        .gio-checkout-split .gio-checkout-fields { gap: .75rem; }
+        .gio-checkout-split .gio-checkout-delivery { margin: 0; }
+        .gio-checkout-split .gio-checkout-delivery-choice { flex: 1 1 11.25rem; }
+        .gio-checkout-split .gio-checkout-payment { grid-template-columns: repeat(auto-fit, minmax(9.375rem, 1fr)); gap: .625rem; }
+        .gio-checkout-split .gio-checkout-payment-choice { padding: .75rem; font-size: .8125rem; }
+        .gio-checkout-split .gio-checkout-product { padding: .625rem; gap: .625rem; }
+        .gio-checkout-split .gio-checkout-product-head { gap: .625rem; }
+        .gio-checkout-split .gio-checkout-image { width: 2.5rem; height: 2.5rem; }
+        .gio-checkout-split .gio-checkout-name { font-size: .8125rem; }
+        .gio-checkout-split .gio-checkout-quantity-step { width: 1.375rem; height: 1.375rem; font-size: .8125rem; }
+        .gio-checkout-split .gio-checkout-line-total { width: auto; font-size: .8125rem; }
+        @media (max-width: 37.5rem) { .gio-checkout-split .gio-checkout-card { padding: 1.25rem 1rem; } .gio-checkout-split .gio-checkout-form { grid-template-columns: 1.25rem minmax(0, 1fr) 1.25rem; grid-template-rows: auto 1.75rem 1.25rem auto auto auto auto auto 1.25rem; } .gio-checkout-split .gio-checkout-form::before { grid-column: 1 / -1; grid-row: 3 / 10; } .gio-checkout-split .gio-checkout-questions { grid-column: 1 / -1; grid-row: 1; } .gio-checkout-split .gio-checkout-section { grid-column: 2; grid-row: 4; } .gio-checkout-split .gio-checkout-summary { grid-column: 2; grid-row: 5; } .gio-checkout-split .gio-checkout-submit { grid-column: 2; grid-row: 6; } .gio-checkout-split .gio-checkout-note { grid-column: 2; grid-row: 7; } .gio-checkout-split .gio-checkout-footnote { grid-column: 2; grid-row: 8; } }
+
+CSS,
+            self::SplitReversed => <<<'CSS'
+        .gio-checkout-split-reversed .gio-checkout-card { max-width: 57.5rem; padding: 0; }
+        .gio-checkout-split-reversed .gio-checkout-form { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem minmax(0, 1fr) 2rem; grid-template-rows: 2rem auto 1fr auto auto auto 2rem; align-items: start; }
+        .gio-checkout-split-reversed .gio-checkout-form::before { content: ""; grid-column: 1 / 4; grid-row: 1 / -1; align-self: stretch; border-right: 1px solid var(--gio-border); background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-split-reversed .gio-checkout-section { grid-column: 2; grid-row: 2; }
+        .gio-checkout-split-reversed .gio-checkout-summary { grid-column: 2; grid-row: 3 / 7; align-self: end; margin: 0; padding: .75rem 0 0; border-top: 0; }
+        .gio-checkout-split-reversed .gio-checkout-row { font-size: .8125rem; }
+        .gio-checkout-split-reversed .gio-checkout-questions { grid-column: 5; grid-row: 2 / 4; margin: 0; }
+        .gio-checkout-split-reversed .gio-checkout-submit { grid-column: 5; grid-row: 4; margin: .875rem 0 0; padding: 1rem 1.25rem; }
+        .gio-checkout-split-reversed .gio-checkout-note { grid-column: 5; grid-row: 5; }
+        .gio-checkout-split-reversed .gio-checkout-footnote { grid-column: 5; grid-row: 6; }
+        .gio-checkout-split-reversed .gio-checkout-heading { margin: 0 0 .875rem; font-size: 1.125rem; }
+        .gio-checkout-split-reversed .gio-checkout-input { padding: .75rem; }
+        .gio-checkout-split-reversed .gio-checkout-quantity-input { padding: 0; }
+        .gio-checkout-split-reversed .gio-checkout-products { gap: .75rem; }
+        .gio-checkout-split-reversed .gio-checkout-product { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .625rem .875rem; padding: .875rem; }
+        .gio-checkout-split-reversed .gio-checkout-product-head { grid-column: 1; grid-row: 1; gap: .875rem; align-items: flex-start; }
+        .gio-checkout-split-reversed .gio-checkout-image { width: 4.5rem; height: 4.5rem; }
+        .gio-checkout-split-reversed .gio-checkout-name { font-size: .9375rem; }
+        .gio-checkout-split-reversed .gio-checkout-line-total { grid-column: 2; grid-row: 1; align-self: start; width: auto; padding: 0; font-size: .9375rem; font-weight: 700; text-align: right; }
+        .gio-checkout-split-reversed .gio-checkout-quantity { grid-column: 1; grid-row: 2; }
+        .gio-checkout-split-reversed .gio-checkout-pick { grid-column: 2; grid-row: 2; justify-self: end; width: 1.25rem; height: 1.25rem; }
+        .gio-checkout-split-reversed .gio-checkout-quantity-step { width: 1.75rem; height: 1.75rem; font-size: .9375rem; }
+        .gio-checkout-split-reversed .gio-checkout-delivery { display: flex; gap: 1px; margin: .875rem 0 0; border: 1px solid var(--gio-border); background: var(--gio-border); }
+        .gio-checkout-split-reversed .gio-checkout-delivery-choice { position: relative; flex: 1 1 0; justify-content: center; gap: .375rem; padding: .6875rem .5rem; border: 0; font-size: .8125rem; font-weight: 600; transition: background .15s, color .15s; }
+        .gio-checkout-split-reversed .gio-checkout-delivery-choice:has(:checked) { background: var(--gio-accent); color: var(--gio-surface); }
+        .gio-checkout-split-reversed .gio-checkout-delivery-choice:has(:focus-visible) { outline: 2px solid var(--gio-accent); outline-offset: -2px; }
+        .gio-checkout-split-reversed .gio-checkout-delivery-tick { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+        .gio-checkout-split-reversed .gio-checkout-delivery-label { flex: none; }
+        .gio-checkout-split-reversed .gio-checkout-choice-amount { font-weight: 600; }
+        .gio-checkout-split-reversed .gio-checkout-payment { gap: .375rem; }
+        .gio-checkout-split-reversed .gio-checkout-payment-choice { padding: .375rem 0; border: 0; background: transparent; }
+        @media (max-width: 37.5rem) { .gio-checkout-split-reversed .gio-checkout-card { padding: 0; } .gio-checkout-split-reversed .gio-checkout-form { grid-template-columns: 1rem minmax(0, 1fr) 1rem; grid-template-rows: 1.25rem auto auto 1.25rem 1.25rem auto auto auto auto 1.25rem; } .gio-checkout-split-reversed .gio-checkout-form::before { grid-column: 1 / -1; grid-row: 1 / 5; border-right: 0; border-bottom: 1px solid var(--gio-border); } .gio-checkout-split-reversed .gio-checkout-section { grid-column: 2; grid-row: 2; } .gio-checkout-split-reversed .gio-checkout-summary { grid-column: 2; grid-row: 3; } .gio-checkout-split-reversed .gio-checkout-questions { grid-column: 2; grid-row: 6; } .gio-checkout-split-reversed .gio-checkout-submit { grid-column: 2; grid-row: 7; } .gio-checkout-split-reversed .gio-checkout-note { grid-column: 2; grid-row: 8; } .gio-checkout-split-reversed .gio-checkout-footnote { grid-column: 2; grid-row: 9; } }
+
+CSS,
+            self::DarkPanel => <<<'CSS'
+        .gio-checkout-dark-panel .gio-checkout-card { max-width: 57.5rem; padding: 0; }
+        .gio-checkout-dark-panel .gio-checkout-form { display: grid; grid-template-columns: 2rem minmax(0, 17fr) 2rem 2rem minmax(0, 20fr) 2rem; grid-template-rows: 2rem auto 1fr auto auto 2rem; align-items: start; }
+        .gio-checkout-dark-panel .gio-checkout-form::before { content: ""; grid-column: 1 / 4; grid-row: 1 / -1; align-self: stretch; background: #0f1d4f; }
+        .gio-checkout-dark-panel .gio-checkout-section { grid-column: 2; grid-row: 2; }
+        .gio-checkout-dark-panel .gio-checkout-eyebrow { color: #9fb0e8; }
+        .gio-checkout-dark-panel .gio-checkout-products { gap: .875rem; }
+        .gio-checkout-dark-panel .gio-checkout-product { gap: .75rem; border-color: #33468a; background: transparent; color: #fff; }
+        .gio-checkout-dark-panel .gio-checkout-product:has(:checked) { border-color: #fff; background: rgba(255, 255, 255, .08); }
+        .gio-checkout-dark-panel .gio-checkout-pick { accent-color: #fff; }
+        .gio-checkout-dark-panel .gio-checkout-image { border-color: #33468a; background: #1b2b63; }
+        .gio-checkout-dark-panel .gio-checkout-description { color: #9fb0e8; }
+        .gio-checkout-dark-panel .gio-checkout-price { color: #9fb0e8; }
+        .gio-checkout-dark-panel .gio-checkout-quantity-stepper { border-color: #33468a; background: transparent; }
+        .gio-checkout-dark-panel .gio-checkout-quantity-step { width: 1.625rem; height: 1.625rem; color: #fff; }
+        .gio-checkout-dark-panel .gio-checkout-summary { grid-column: 2; grid-row: 3 / 5; align-self: end; margin: 0; padding: .875rem 0 0; gap: .375rem; border-top-color: #33468a; }
+        .gio-checkout-dark-panel .gio-checkout-row { font-size: .8125rem; color: #c5d0f2; }
+        .gio-checkout-dark-panel .gio-checkout-total { margin: 0; padding: .375rem 0 0; border-top: 0; font-size: 1.375rem; color: #fff; }
+        .gio-checkout-dark-panel .gio-checkout-questions { grid-column: 5; grid-row: 2 / 4; margin: 0; }
+        .gio-checkout-dark-panel .gio-checkout-submit { grid-column: 5; grid-row: 4; align-self: end; margin: .875rem 0 0; padding: .9375rem 1.25rem; }
+        .gio-checkout-dark-panel .gio-checkout-note { grid-column: 5; grid-row: 5; }
+        .gio-checkout-dark-panel .gio-checkout-heading { margin: 0 0 .625rem; font-size: 1.125rem; }
+        .gio-checkout-dark-panel .gio-checkout-fields { gap: .75rem; }
+        .gio-checkout-dark-panel .gio-checkout-input { padding: .75rem; background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-dark-panel .gio-checkout-quantity-input { padding: 0; background: transparent; color: #fff; }
+        .gio-checkout-dark-panel .gio-checkout-delivery-choice { flex: 1 1 10rem; }
+        .gio-checkout-dark-panel .gio-checkout-payment { grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .5rem; }
+        .gio-checkout-dark-panel .gio-checkout-payment-choice { justify-content: center; gap: .5rem; padding: .6875rem .5rem; font-size: .8125rem; font-weight: 600; }
+        .gio-checkout-dark-panel .gio-checkout-payment-label { flex: none; }
+        @media (max-width: 37.5rem) { .gio-checkout-dark-panel .gio-checkout-card { padding: 0; } .gio-checkout-dark-panel .gio-checkout-form { grid-template-columns: 1rem minmax(0, 1fr) 1rem; grid-template-rows: 1.25rem auto auto 1.25rem 1.25rem auto auto auto 1.25rem; } .gio-checkout-dark-panel .gio-checkout-form::before { grid-column: 1 / -1; grid-row: 1 / 5; } .gio-checkout-dark-panel .gio-checkout-section { grid-column: 2; grid-row: 2; } .gio-checkout-dark-panel .gio-checkout-summary { grid-column: 2; grid-row: 3; } .gio-checkout-dark-panel .gio-checkout-questions { grid-column: 2; grid-row: 6; } .gio-checkout-dark-panel .gio-checkout-submit { grid-column: 2; grid-row: 7; } .gio-checkout-dark-panel .gio-checkout-note { grid-column: 2; grid-row: 8; } }
+
+CSS,
         };
     }
 
@@ -318,15 +462,15 @@ enum CheckoutLayout: string
     {
         return match ($this) {
             self::Stacked => 'images/checkout-layouts/stacked.svg',
-            self::Split,
-            self::SplitReversed,
+            self::Split => 'images/checkout-layouts/split.svg',
+            self::SplitReversed => 'images/checkout-layouts/split-reversed.svg',
+            self::DarkPanel => 'images/checkout-layouts/dark-panel.svg',
             self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
             self::Chips,
-            self::Invoice,
-            self::DarkPanel => null,
+            self::Invoice => null,
         };
     }
 

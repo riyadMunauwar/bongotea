@@ -1202,7 +1202,7 @@ it('draws each delivery option as a row with the control and label left and the 
     $styles = styleBlock($html);
 
     preg_match('/<fieldset class="gio-checkout-delivery">(.*?)<\/fieldset>/s', checkoutMarkup($html), $delivery);
-    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
+    preg_match_all('/<label class="gio-checkout-choice[^"]*">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
 
     expect($rows[1])->toHaveCount(2);
 
@@ -1246,7 +1246,7 @@ it('draws a delivery option\'s detail line under its name, and nothing where the
     $html = $this->get('/promo')->assertOk()->getContent();
 
     preg_match('/<fieldset class="gio-checkout-delivery">(.*?)<\/fieldset>/s', checkoutMarkup($html), $delivery);
-    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
+    preg_match_all('/<label class="gio-checkout-choice[^"]*">(.*?)<\/label>/s', $delivery[1] ?? '', $rows);
 
     /**
      * Beneath the name and inside the words' span, so it takes the row's
@@ -1905,7 +1905,7 @@ it('draws the stacked checkout as three numbered sections, the totals and a butt
      * And the payment rows carry the design's logo slot at the far end of the
      * row, after the method's name.
      */
-    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $markup, $rows);
+    preg_match_all('/<label class="gio-checkout-choice[^"]*">(.*?)<\/label>/s', $markup, $rows);
 
     $cash = array_values(array_filter($rows[1], fn (string $row): bool => str_contains($row, 'value="cash_on_delivery"')));
 
@@ -1946,16 +1946,19 @@ it('draws the stacked headlines only on the stacked layout, in the merchant\'s w
      * A layout's own words are drawn by that layout and no other: the merchant
      * who reworded the stacked headlines sees them on a stacked page, in
      * their words where they wrote some and the design's where they did not,
-     * and a page arranged any other way draws no numbered heading at all.
-     * The words stay in the Config either way, for the day the page comes
-     * back.
+     * and a page arranged any other way draws no numbered heading at all —
+     * a headline of its own where it has one, but never the badge and never
+     * the stacked words. The words stay in the Config either way, for the
+     * day the page comes back.
      */
     if ($layout === CheckoutLayout::Stacked) {
         expect($markup)->toContain('<span class="gio-checkout-number">1</span>কী কিনবেন / What to buy</h3>')
             ->and($markup)->toContain('<span class="gio-checkout-number">2</span>কোথায় পাঠাব / Where to send it</h3>');
     } else {
-        expect($markup)->not->toContain('gio-checkout-heading')
-            ->and($markup)->not->toContain('What to buy');
+        expect($markup)->not->toContain('gio-checkout-number')
+            ->and($markup)->not->toContain('What to buy')
+            ->and($markup)->not->toContain('Where to send it')
+            ->and($markup)->not->toContain(WordSlot::StackedProductsHeadline->defaultValue());
     }
 
     expect(Page::where('slug', 'promo')->sole()->checkout_config->words->slot(WordSlot::StackedProductsHeadline))->toBe('কী কিনবেন / What to buy');
@@ -2248,7 +2251,7 @@ it('never puts a total behind an interaction on any layout', function (CheckoutL
     expect(checkoutScript($html))->toBe(checkoutScript($this->get('/plain-stacked')->assertOk()->getContent()));
 })->with(fn () => CheckoutLayout::cases());
 
-it('draws the nine layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
+it('draws the six layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
     pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
     pageStyled([], slug: 'plain-stacked');
 
@@ -2258,8 +2261,8 @@ it('draws the nine layouts not yet drawn to their designs as the base does, unde
     /**
      * Selectable today, drawn to its design when its own ticket lands: until
      * then the page carries the base sheet and nothing added, the class the
-     * layout will hang its rules on, and — because none of the nine owns the
-     * stacked headlines — no numbered heading. Everything else a customer
+     * layout will hang its rules on, and — because none of the six owns a
+     * word of its own yet — no heading at all. Everything else a customer
      * meets is the same island.
      */
     expect($layout->styleRules())->toBe('')
@@ -2267,7 +2270,14 @@ it('draws the nine layouts not yet drawn to their designs as the base does, unde
         ->and($html)->toContain('class="gio-checkout '.$layout->modifierClass().'"')
         ->and(checkoutMarkup($html))->not->toContain('gio-checkout-heading')
         ->and(checkoutMarkup($html))->toContain('class="gio-checkout-summary"');
-})->with(fn () => array_values(array_filter(CheckoutLayout::cases(), fn (CheckoutLayout $layout): bool => $layout !== CheckoutLayout::Stacked)));
+})->with([
+    'stepper' => CheckoutLayout::Stepper,
+    'accordion' => CheckoutLayout::Accordion,
+    'bento grid' => CheckoutLayout::BentoGrid,
+    'compact embed' => CheckoutLayout::CompactEmbed,
+    'chips' => CheckoutLayout::Chips,
+    'invoice' => CheckoutLayout::Invoice,
+]);
 
 it('marks a half-width question with one flat class and generates nothing for it', function () {
     pageStyled([
@@ -2515,7 +2525,7 @@ it('draws a single cash on delivery row with its logo once the page unhides the 
     $markup = checkoutMarkup($html);
 
     preg_match('/<fieldset class="gio-checkout-choices gio-checkout-payment">(.*?)<\/fieldset>/s', $markup, $payment);
-    preg_match_all('/<label class="gio-checkout-choice">(.*?)<\/label>/s', $payment[1] ?? '', $rows);
+    preg_match_all('/<label class="gio-checkout-choice[^"]*">(.*?)<\/label>/s', $payment[1] ?? '', $rows);
 
     /**
      * One row, already picked, drawn as a delivery row is: the control, then
@@ -2577,12 +2587,13 @@ it('keeps the layout block last when a chooser adds its own', function (Checkout
      * The chooser's rule comes after the base's last rule and before the
      * layout's block, so the layout still sits last and what it narrows it
      * narrows by order, the chooser's rule included. With no layout adding
-     * anything yet the chooser's rule is the tail of the sheet; the day a
-     * layout's block lands, the base sheet read back out of the page still
+     * anything the chooser's rule is the tail of the sheet; where a layout's
+     * block has landed it follows on a line of its own — the chooser's block
+     * ends its line — and the base sheet read back out of the page still
      * holds the chooser's rule and nothing of the layout's.
      */
     expect(strpos($styles, '.gio-checkout-logo {'))->toBeGreaterThan((int) strpos($styles, '.gio-checkout-note {'))
-        ->and(str_ends_with(trim($styles), trim('.gio-checkout-logo { height: 1.5em; width: auto; flex: none; }'.$layout->styleRules())))->toBeTrue()
+        ->and(str_ends_with(trim($styles), trim('.gio-checkout-logo { height: 1.5em; width: auto; flex: none; }'."\n".$layout->styleRules())))->toBeTrue()
         ->and(baseSheet($styles, $layout))->toContain('.gio-checkout-logo {');
 })->with(fn () => CheckoutLayout::cases());
 
@@ -2596,4 +2607,326 @@ it('hands the visitor, the disk and the fallback reader the same bytes with a ch
     expect($response->getContent())->toContain('name="payment_method"')
         ->and(file_get_contents($this->cache->htmlPath('promo')))->toBe($response->getContent())
         ->and(file_get_contents($served['path']))->toBe($response->getContent());
+});
+
+/**
+ * A page arranged in one of the two-column layouts, asking the questions the
+ * designs draw, with a priced delivery choice carrying a detail line, a
+ * payment choice, and the product list shown.
+ */
+function twoColumnPage(CheckoutLayout $layout, array $config = []): Page
+{
+    return pageStyled([
+        'layout' => $layout->value,
+        'fields' => [
+            ['key' => 'name', 'label' => 'Your name', 'width' => 'half'],
+            ['key' => 'phone', 'label' => 'Phone number', 'width' => 'half'],
+            ['key' => 'address', 'label' => 'Address'],
+        ],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000, 'detail' => '3–5 days'],
+        ],
+        'hide_lone_cash_choice' => false,
+        ...$config,
+    ]);
+}
+
+it('draws the split checkout as the form beside a grey order panel, headed and hinted in the design\'s words', function () {
+    $page = twoColumnPage(CheckoutLayout::Split);
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * Four headlines with no badge — over the order panel, the questions, the
+     * delivery choice and the payment choice — and one hint under the button
+     * after the button's own note, each in the design's words, Bangla first.
+     * The delivery headline sits between the questions and the priced rows,
+     * which still carry their detail line: the split is a roomy arrangement.
+     */
+    expect($markup)->toContain('<h3 class="gio-checkout-heading">আপনার অর্ডার / Your order</h3>')
+        ->and($markup)->toContain('<h3 class="gio-checkout-heading">ডেলিভারি তথ্য / Delivery details</h3>')
+        ->and($markup)->toContain('<h3 class="gio-checkout-heading">ডেলিভারি এলাকা / Delivery area</h3>')
+        ->and($markup)->toContain('<h3 class="gio-checkout-heading">পেমেন্ট / Payment</h3>')
+        ->and($markup)->toContain('<p class="gio-checkout-footnote">অর্ডার কনফার্ম করতে আমরা কল করব / We will call to confirm your order</p>')
+        ->and($markup)->not->toContain('gio-checkout-number')
+        ->and($markup)->toContain('<span class="gio-checkout-choice-detail">1–2 days</span>')
+        ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<')
+        ->and($markup)->toContain('class="gio-checkout-field gio-checkout-field-half"');
+
+    $landmarks = [
+        'class="gio-checkout-heading">আপনার অর্ডার',
+        'class="gio-checkout-products"',
+        $product->name,
+        'class="gio-checkout-questions"',
+        'class="gio-checkout-heading">ডেলিভারি তথ্য',
+        'class="gio-checkout-fields"',
+        'class="gio-checkout-heading">ডেলিভারি এলাকা',
+        'class="gio-checkout-delivery"',
+        'class="gio-checkout-heading">পেমেন্ট',
+        'name="payment_method"',
+        'class="gio-checkout-summary"',
+        'data-gio-submit',
+        'class="gio-checkout-note"',
+        'class="gio-checkout-footnote"',
+    ];
+
+    $positions = array_map(fn (string $landmark): int => (int) strpos($markup, $landmark), $landmarks);
+    $sorted = $positions;
+    sort($sorted);
+
+    foreach ($landmarks as $landmark) {
+        expect($markup)->toContain($landmark);
+    }
+
+    expect($positions)->toBe($sorted);
+
+    /**
+     * The arrangement is the sheet's: the form is a grid, the questions take
+     * the left column across every row, and the products, the summary, the
+     * button and the lines beneath it take the right one, over a panel that
+     * is the form's own pseudo-element — grey mixed from the tokens, bordered
+     * from the border token, never a colour of its own. On a phone the panel
+     * stacks under the form on one column, hiding and reordering nothing.
+     */
+    $block = CheckoutLayout::Split->styleRules();
+
+    expect($styles)->toContain($block)
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-form { display: grid;')
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-form::before { content: "";')
+        ->and($block)->toContain('background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface));')
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-questions { grid-column: 1; grid-row: 1 / -1;')
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-summary { grid-column: 4;')
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-submit { grid-column: 4;')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->toContain('.gio-checkout-split .gio-checkout-form { grid-template-columns: 1.25rem minmax(0, 1fr) 1.25rem;')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/');
+});
+
+it('draws the split reversed checkout as product cards beside a compact form, counting the bundle and naming the delivery charge live', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 29000]);
+
+    pickingPage([$jacket, $boots, $scarf], [$jacket->getKey(), $boots->getKey()], [
+        'layout' => CheckoutLayout::SplitReversed->value,
+        'fields' => [['key' => 'name', 'label' => 'Your name', 'width' => 'half']],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+        'hide_lone_cash_choice' => false,
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $script = checkoutScript($html);
+
+    /**
+     * The eyebrow over the cards counts what opens ticked and the footnote
+     * under the button names the delivery charge the form opens on, each
+     * figure wrapped so the script moves it as the customer ticks and
+     * chooses — the same way the button carries the total, which this
+     * design puts on the button. A narrow-column arrangement: the delivery
+     * choice is a segmented control with no room for a detail line, and a
+     * half-width question fills its row.
+     */
+    expect($markup)->toContain('<p class="gio-checkout-eyebrow">বান্ডেল · <span data-gio-count>2</span>টি নির্বাচিত / Bundle · <span data-gio-count>2</span> selected</p>')
+        ->and($markup)->toContain('<h3 class="gio-checkout-heading">অর্ডার করতে ফর্মটি পূরণ করুন / Fill in the form to order</h3>')
+        ->and($markup)->toContain('<p class="gio-checkout-footnote">ডেলিভারি <span data-gio-delivery>'.Money::format(6000).'</span> সহ / Delivery <span data-gio-delivery>'.Money::format(6000).'</span> included</p>')
+        ->and($markup)->toContain('data-gio-submit-wording="অর্ডার করুন / Order Now · {total}"')
+        ->and($markup)->toContain('>অর্ডার করুন / Order Now · '.Money::format(99000 + 149000 + 6000).'</button>')
+        ->and($markup)->not->toContain('gio-checkout-choice-detail')
+        ->and($markup)->not->toContain('gio-checkout-field-half')
+        ->and($markup)->not->toContain('gio-checkout-number')
+        ->and($markup)->toContain('<label class="gio-checkout-choice gio-checkout-delivery-choice">')
+        ->and($markup)->toContain('<input class="gio-checkout-delivery-tick gio-checkout-tick"')
+        ->and($markup)->toContain('<label class="gio-checkout-choice gio-checkout-payment-choice">');
+
+    /** Every figure named twice moves twice: the script writes to every slot carrying it, not the first. */
+    expect($script)->toContain("set('count', String(count));")
+        ->and($script)->toContain("form.querySelectorAll('[data-gio-' + name + ']').forEach(");
+
+    $block = CheckoutLayout::SplitReversed->styleRules();
+
+    /**
+     * Cards on a grey panel to the left with the subtotal pinned beneath
+     * them, the form on the right with the button and footnote pinned
+     * beneath it; the delivery choice a segmented control whose radios are
+     * clipped from sight and never removed, so the keyboard still reaches
+     * them; the payment choice plain radios with no box.
+     */
+    expect(styleBlock($html))->toContain($block)
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-form::before { content: "";')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-summary { grid-column: 2; grid-row: 3 / 7; align-self: end;')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-questions { grid-column: 5;')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-delivery { display: flex; gap: 1px;')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-delivery-choice:has(:checked) { background: var(--gio-accent);')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-delivery-tick { position: absolute; width: 1px; height: 1px;')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-payment-choice { padding: .375rem 0; border: 0;')
+        ->and($block)->toContain('.gio-checkout-split-reversed .gio-checkout-image { width: 4.5rem; height: 4.5rem; }')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/');
+});
+
+it('counts every product into the bundle eyebrow where the page offers no choice', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    $page = pageStyled(['layout' => CheckoutLayout::SplitReversed->value]);
+    $page->products()->attach([$jacket->getKey(), $boots->getKey()]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /** No picker means everything sells, and the count says so from the first paint. */
+    expect($markup)->toContain('<span data-gio-count>3</span>');
+});
+
+it('draws the dark panel checkout as a navy summary beside a white form, in the layout\'s fixed navy and the design\'s words', function () {
+    twoColumnPage(CheckoutLayout::DarkPanel);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * An eyebrow over the products in the navy panel and a headline over the
+     * form, the methods named by their short labels in centred boxes, the
+     * total on the button, and — a roomy arrangement — the delivery detail
+     * drawn and half-width questions paired.
+     */
+    expect($markup)->toContain('<p class="gio-checkout-eyebrow">আপনার অর্ডার / Order summary</p>')
+        ->and($markup)->toContain('<h3 class="gio-checkout-heading">ডেলিভারি তথ্য / Delivery details</h3>')
+        ->and($markup)->not->toContain('gio-checkout-number')
+        ->and($markup)->toContain('gio-checkout-choice-label">COD<')
+        ->and($markup)->not->toContain('Cash on Delivery<')
+        ->and($markup)->toContain('<span class="gio-checkout-choice-detail">1–2 days</span>')
+        ->and($markup)->toContain('class="gio-checkout-field gio-checkout-field-half"')
+        ->and($markup)->toContain('data-gio-submit-wording="অর্ডার করুন / Order Now · {total}"');
+
+    $block = CheckoutLayout::DarkPanel->styleRules();
+
+    /**
+     * The navy set is the layout's and not a token: written in this block,
+     * shipped only to a page arranged in it, and absent from the base every
+     * other page carries. The products and the totals sit over the navy
+     * pseudo-element with the controls inverted to white; the form's inputs
+     * are filled from the tokens.
+     */
+    expect($styles)->toContain($block)
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-form::before { content: ""; grid-column: 1 / 4; grid-row: 1 / -1; align-self: stretch; background: #0f1d4f; }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-product { gap: .75rem; border-color: #33468a; background: transparent; color: #fff; }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-pick { accent-color: #fff; }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-eyebrow { color: #9fb0e8; }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-total { margin: 0; padding: .375rem 0 0; border-top: 0; font-size: 1.375rem; color: #fff; }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-input { padding: .75rem; background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }')
+        ->and($block)->toContain('.gio-checkout-dark-panel .gio-checkout-payment-choice { justify-content: center;')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/')
+        ->and(baseSheet($styles, CheckoutLayout::DarkPanel))->not->toContain('#0f1d4f');
+});
+
+it('draws a layout\'s own words in the merchant\'s where there are any, the design\'s where there are none, and never one the words tab would refuse', function (CheckoutLayout $layout, WordSlot $reworded, string $words, string $drawn, WordSlot $refused, WordSlot $untouched) {
+    twoColumnPage($layout, ['words' => [
+        $reworded->value => $words,
+        $refused->value => str_repeat('x', 200),
+    ]]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * The merchant's sentence stands where they wrote one, the design's
+     * where they did not, and a sentence too long to draw falls back to the
+     * design's silently — the tab having already refused it where there was
+     * a merchant to tell.
+     */
+    expect($markup)->toContain($drawn)
+        ->and($markup)->not->toContain(str_repeat('x', 200))
+        ->and($markup)->toContain(e($refused->defaultValue()))
+        ->and($markup)->toContain(e($untouched->defaultValue()))
+        ->and(Page::where('slug', 'promo')->sole()->checkout_config->words->slot($reworded))->toBe($words)
+        ->and(Page::where('slug', 'promo')->sole()->checkout_config->words->slot($refused))->toBe($refused->defaultValue());
+})->with([
+    'split' => [CheckoutLayout::Split, WordSlot::SplitHint, 'আমরা ফোন করব / Expect our call', '<p class="gio-checkout-footnote">আমরা ফোন করব / Expect our call</p>', WordSlot::SplitOrderHeadline, WordSlot::SplitPaymentHeadline],
+    'split reversed' => [CheckoutLayout::SplitReversed, WordSlot::SplitReversedBundleEyebrow, 'কী নিলেন / Picked {count}', '<p class="gio-checkout-eyebrow">কী নিলেন / Picked <span data-gio-count>1</span></p>', WordSlot::SplitReversedFormHeadline, WordSlot::SplitReversedFormHeadline],
+    'dark panel' => [CheckoutLayout::DarkPanel, WordSlot::DarkPanelFormHeadline, 'কোথায় পাঠাব / Where to send it', '<h3 class="gio-checkout-heading">কোথায় পাঠাব / Where to send it</h3>', WordSlot::DarkPanelSummaryEyebrow, WordSlot::DarkPanelSummaryEyebrow],
+]);
+
+it('draws each layout\'s own words on that layout alone', function (CheckoutLayout $layout) {
+    $everyWord = [];
+
+    foreach (WordSlot::cases() as $slot) {
+        $everyWord[$slot->value] = 'Word for '.$slot->value;
+    }
+
+    twoColumnPage($layout, ['words' => $everyWord]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * A merchant who has worded every slot of every layout sees, on any one
+     * page, exactly the words of the layout it is arranged in: the rest are
+     * kept in the Config for the day the page is arranged their way.
+     */
+    foreach (WordSlot::cases() as $slot) {
+        expect(str_contains($markup, 'Word for '.$slot->value))->toBe($layout->draws($slot), $slot->value.' on '.$layout->value);
+    }
+})->with(fn () => CheckoutLayout::cases());
+
+it('keeps every layout\'s block two classes deep, each rule under the layout\'s own class', function (CheckoutLayout $layout) {
+    $block = $layout->styleRules();
+
+    if ($block === '') {
+        expect($block)->toBe('');
+
+        return;
+    }
+
+    preg_match_all('/([^{}]+)\{[^{}]*\}/', $block, $rules);
+
+    /**
+     * The one place the sheet outranks a merchant at two classes, and the
+     * ceiling: every selector is the layout's class and one component class,
+     * so a merchant who names an ancestor of their own wins. Never three
+     * classes, never a child combinator, never an id, never `!important`.
+     */
+    expect($rules[1])->not->toBeEmpty();
+
+    foreach ($rules[1] as $selectors) {
+        foreach (explode(',', $selectors) as $selector) {
+            $selector = trim($selector);
+
+            expect($selector)->toStartWith('.'.$layout->modifierClass().' ')
+                ->and(preg_match_all('/\.gio-checkout-[a-z-]+/', $selector))->toBeLessThanOrEqual(2)
+                ->and($selector)->not->toContain('>')
+                ->and($selector)->not->toContain('#');
+        }
+    }
+
+    expect($block)->not->toContain('!important');
+})->with(fn () => CheckoutLayout::cases());
+
+it('puts the refusal for an order of nothing inside the product section it is about', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    pickingPage([$jacket, $boots], [], ['layout' => CheckoutLayout::Split->value]);
+
+    $markup = checkoutMarkup($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Beside the boxes it is about, inside the section that holds them, so
+     * a two-column arrangement places the products and their refusal in one
+     * move and the questions never sit between them.
+     */
+    preg_match('/<div class="gio-checkout-section">(.*?)<div class="gio-checkout-questions">/s', $markup, $products);
+
+    expect($products[1] ?? '')->toContain('<p class="gio-checkout-error gio-checkout-pick-error" data-gio-error-for="selected"></p>')
+        ->and(substr_count($markup, 'data-gio-error-for="selected"'))->toBe(1);
 });

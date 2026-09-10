@@ -2446,7 +2446,7 @@ it('asks for the totals labels and the payment labels on the words tab, with the
      * — the button they tap, the totals above it, how they pay — then one per
      * layout that owns words of its own, hidden unless that layout is chosen.
      */
-    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked']);
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Dark panel']);
 
     /**
      * Bilingual, Bangla first and English second, exactly as designed — shown
@@ -3055,22 +3055,154 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and(array_keys($picker->getDescriptions()))->toBe(array_keys($picker->getOptions()))
         ->and($picker->getDescription('stacked'))->toContain('numbered sections')
         ->and($picker->getThumbnail('stacked'))->toBe('images/checkout-layouts/stacked.svg')
-        ->and($picker->getThumbnail('split'))->toBeNull();
+        ->and($picker->getThumbnail('split'))->toBe('images/checkout-layouts/split.svg')
+        ->and($picker->getThumbnail('split_reversed'))->toBe('images/checkout-layouts/split-reversed.svg')
+        ->and($picker->getThumbnail('dark_panel'))->toBe('images/checkout-layouts/dark-panel.svg')
+        ->and($picker->getThumbnail('stepper'))->toBeNull();
 
     foreach ($picker->getDescriptions() as $description) {
         expect((string) $description)->not->toBeEmpty();
     }
 
-    /** The picture is shipped with the app and drawn on the card the merchant is served. */
-    expect(file_exists(public_path('images/checkout-layouts/stacked.svg')))->toBeTrue()
-        ->and(file_get_contents(public_path('images/checkout-layouts/stacked.svg')))->toContain('<svg');
+    /** Every picture is shipped with the app and drawn on the card the merchant is served. */
+    foreach (array_filter($picker->getThumbnails()) as $thumbnail) {
+        expect(file_exists(public_path($thumbnail)))->toBeTrue($thumbnail)
+            ->and(file_get_contents(public_path($thumbnail)))->toContain('<svg');
+    }
 
     $html = Livewire::test(EditPage::class, ['record' => $page->getKey()])->html();
 
     expect($html)->toContain('gp-layout-cards')
         ->and($html)->toContain('images/checkout-layouts/stacked.svg')
+        ->and($html)->toContain('images/checkout-layouts/split.svg')
+        ->and($html)->toContain('images/checkout-layouts/split-reversed.svg')
+        ->and($html)->toContain('images/checkout-layouts/dark-panel.svg')
         ->and(substr_count($html, 'gp-layout-card-thumbnail'))->toBe(10);
 });
+
+/**
+ * The line beneath a box, or blank where it has none: helper text is a Text
+ * component in the field's below-content schema, not a value on the field.
+ */
+function helperTextBeneath(?Field $field): string
+{
+    $below = $field?->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)?->getComponents() ?? [];
+
+    foreach ($below as $component) {
+        if ($component instanceof Text) {
+            return (string) $component->getContent();
+        }
+    }
+
+    return '';
+}
+
+/**
+ * The Words section headed by one layout's name, read off the live edit form
+ * whether or not it is shown.
+ */
+function wordsSectionOf(Page $page, CheckoutLayout $layout): Section
+{
+    return collect(checkoutTabsOf($page)['Words']->getChildSchema()->getComponents(withHidden: true))
+        ->filter(fn (Component $component): bool => $component instanceof Section)
+        ->sole(fn (Section $section): bool => (string) $section->getHeading() === $layout->label());
+}
+
+it('asks for a two-column layout\'s own words only while it is chosen, with the design\'s words in the boxes, and keeps them across a move away and back', function (CheckoutLayout $layout, array $paths, WordSlot $reworded) {
+    $page = Page::factory()->create(['checkout_config' => ['layout' => $layout->value]]);
+
+    /**
+     * Each of the three is asked for exactly its own slots, in the order the
+     * customer meets them, each box showing the design's sentence; a slot
+     * that may name a figure says so beneath its box. The section rides
+     * along unseen on any other layout — dehydrated when hidden on the
+     * Section itself — so the words survive a move away and are there again
+     * when the page comes back.
+     */
+    $shown = wordsSectionOf($page, $layout);
+
+    expect($shown->isHidden())->toBeFalse()
+        ->and($shown->isDehydratedWhenHidden())->toBeTrue()
+        ->and(statePathsInside($shown))->toBe($paths);
+
+    foreach ($layout->wordSlots() as $slot) {
+        $box = fieldInside($shown, 'checkout_config.words.'.$slot->value);
+
+        expect($box?->getPlaceholder())->toBe($slot->defaultValue())
+            ->and(helperTextBeneath($box))->toBe((string) $slot->helperText());
+    }
+
+    foreach (CheckoutLayout::cases() as $other) {
+        if ($other !== $layout && $other->wordSlots() !== []) {
+            expect(wordsSectionOf($page, $other)->isHidden())->toBeTrue($other->value);
+        }
+    }
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['words' => [$reworded->value => 'নিজের কথা / My own words']]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($page->refresh()->checkout_config->words->slot($reworded))->toBe('নিজের কথা / My own words');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => CheckoutLayout::Stacked->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(wordsSectionOf($page->refresh(), $layout)->isHidden())->toBeTrue()
+        ->and($page->checkout_config->words->slot($reworded))->toBe('নিজের কথা / My own words');
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['layout' => $layout->value]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet(['checkout_config.words.'.$reworded->value => 'নিজের কথা / My own words']);
+})->with([
+    'split' => [CheckoutLayout::Split, [
+        'checkout_config.words.split_order_headline',
+        'checkout_config.words.split_details_headline',
+        'checkout_config.words.split_delivery_headline',
+        'checkout_config.words.split_payment_headline',
+        'checkout_config.words.split_hint',
+    ], WordSlot::SplitHint],
+    'split reversed' => [CheckoutLayout::SplitReversed, [
+        'checkout_config.words.split_reversed_bundle_eyebrow',
+        'checkout_config.words.split_reversed_form_headline',
+        'checkout_config.words.split_reversed_footnote',
+    ], WordSlot::SplitReversedBundleEyebrow],
+    'dark panel' => [CheckoutLayout::DarkPanel, [
+        'checkout_config.words.dark_panel_summary_eyebrow',
+        'checkout_config.words.dark_panel_form_headline',
+    ], WordSlot::DarkPanelFormHeadline],
+]);
+
+it('says beneath the boxes that may name a figure how to name it', function () {
+    $page = Page::factory()->create(['checkout_config' => ['layout' => CheckoutLayout::SplitReversed->value]]);
+
+    $section = wordsSectionOf($page, CheckoutLayout::SplitReversed);
+
+    expect(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_bundle_eyebrow')))->toContain('{count}')
+        ->and(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_footnote')))->toContain('{delivery}')
+        ->and(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_form_headline')))->toBe('');
+});
+
+it('refuses a two-column layout\'s word the checkout could not draw, on the box that holds it', function (CheckoutLayout $layout, WordSlot $slot, string $typed) {
+    $page = Page::factory()->create(['checkout_config' => ['layout' => $layout->value]]);
+
+    /** Worded on the tab, where there is a merchant to tell; the silent half is LandingPageTest's to pin. */
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['words' => [$slot->value => $typed]]])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.words.'.$slot->value]);
+})->with([
+    'a split headline too long' => [CheckoutLayout::Split, WordSlot::SplitDeliveryHeadline, str_repeat('h', 61)],
+    'a split hint over two lines' => [CheckoutLayout::Split, WordSlot::SplitHint, "Two\nlines"],
+    'a split reversed footnote too long' => [CheckoutLayout::SplitReversed, WordSlot::SplitReversedFootnote, str_repeat('f', 121)],
+    'a dark panel eyebrow too long' => [CheckoutLayout::DarkPanel, WordSlot::DarkPanelSummaryEyebrow, str_repeat('e', 61)],
+]);
 
 it('asks for the stacked headlines only while stacked is chosen, and keeps them across a move away and back', function () {
     $page = Page::factory()->create();
@@ -3149,5 +3281,7 @@ it('shows the chosen layout\'s own button wording in the box while the merchant 
      * reads without saving to find out.
      */
     expect($placeholder($stacked))->toBe('অর্ডার করুন / Order Now · {total}')
-        ->and($placeholder($split))->toBe('অর্ডার করুন / Order Now');
+        ->and($placeholder($split))->toBe('অর্ডার করুন / Order Now')
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'split_reversed']])))->toBe('অর্ডার করুন / Order Now · {total}')
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'dark_panel']])))->toBe('অর্ডার করুন / Order Now · {total}');
 });
