@@ -80,7 +80,11 @@ class General extends SettingsPage
                         ->label('Timezone')
                         ->required()
                         ->searchable()
-                        ->options(fn (): array => array_combine(timezone_identifiers_list(), timezone_identifiers_list()))
+                        ->options(function (): array {
+                            $zones = timezone_identifiers_list();
+
+                            return array_combine($zones, $zones);
+                        })
                         ->helperText('Bangladesh is Asia/Dhaka.'),
                 ]),
 

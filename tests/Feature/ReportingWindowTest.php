@@ -1,6 +1,7 @@
 <?php
 
 use App\Support\Reporting\BucketSize;
+use App\Support\Reporting\ReportingBucket;
 use App\Support\Reporting\ReportingPreset;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
@@ -102,7 +103,7 @@ it('buckets a one-day window by the hour and anything longer by the day, empty b
         ->and($today->buckets()[6]->start->setTimezone('Asia/Dhaka')->format('Y-m-d H:i'))->toBe('2026-09-09 06:00');
 
     $week = ReportingWindow::of(ReportingPreset::Last7Days, dhakaMorning());
-    $days = array_map(fn ($bucket): string => $bucket->start->setTimezone('Asia/Dhaka')->format('Y-m-d H:i'), $week->buckets());
+    $days = array_map(fn (ReportingBucket $bucket): string => $bucket->start->setTimezone('Asia/Dhaka')->format('Y-m-d H:i'), $week->buckets());
 
     expect($week->bucketSize())->toBe(BucketSize::Day)
         ->and($days)->toBe([
