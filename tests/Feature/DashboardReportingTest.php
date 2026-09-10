@@ -1,8 +1,10 @@
 <?php
 
 use App\Filament\Pages\Dashboard;
+use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Widgets\CachePathIndicator;
 use App\Filament\Widgets\OverviewStats;
+use App\Filament\Widgets\PageLeaderboardTable;
 use App\Filament\Widgets\SalesOverTimeChart;
 use App\Models\Order;
 use App\Models\Page;
@@ -146,6 +148,65 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
         ->and($data['datasets'][0]['data'])->toBe([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 560.0])
         ->and($data['datasets'][1]['label'])->toBe('Orders')
         ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
+});
+
+it('draws the Page leaderboard below the chart: a row per Page with its own figures, Sales first and sortable, each row opening its Page', function () {
+    $top = Page::factory()->published()->create(['title' => 'Summer combo', 'published_at' => now()->subDays(10)]);
+    $other = Page::factory()->create(['title' => 'Winter combo']);
+    $retired = Page::factory()->published()->create(['title' => 'Retired combo']);
+
+    Order::factory()->create(['page_id' => $top->id, 'subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->create(['page_id' => $other->id, 'subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->cancelled()->create(['page_id' => $other->id, 'subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->create(['page_id' => $retired->id, 'subtotal' => 10000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->create(['page_id' => null, 'page_slug' => 'gone-combo', 'subtotal' => 5000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    $retired->delete();
+
+    $this->get('/admin')
+        ->assertOk()
+        ->assertSeeLivewire(PageLeaderboardTable::class);
+
+    $widgets = array_values(app(Dashboard::class)->getWidgets());
+
+    expect(array_search(SalesOverTimeChart::class, $widgets, true))
+        ->toBeLessThan(array_search(PageLeaderboardTable::class, $widgets, true))
+        ->and(array_search(PageLeaderboardTable::class, $widgets, true))
+        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
+
+    $symbol = app(GeneralSettings::class)->currencySymbol;
+
+    /**
+     * Each Page's row carries that Page's figures alone: the top Page's
+     * Sales, not the installation's; the other Page's Cancellation Rate,
+     * not the top Page's. The retired Page keeps its row, marked, and the
+     * hard-deleted one's Orders sit under their slug.
+     */
+    $leaderboard = Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Page leaderboard')
+        ->assertSee('Summer combo')
+        ->assertSee($symbol.'560.00')
+        ->assertDontSee($symbol.'1090.00')
+        ->assertSee('Winter combo')
+        ->assertSee('50.0%')
+        ->assertDontSee('20.0%')
+        ->assertSee('Retired combo')
+        ->assertSeeHtml('">deleted</span>')
+        ->assertSee('gone-combo')
+        ->assertSee('Not yet counted')
+        ->assertSee(PageResource::getUrl('edit', ['record' => $top]))
+        ->assertSee(PageResource::getUrl('edit', ['record' => $retired]));
+
+    $titles = fn (): array => $leaderboard->instance()->getTableRecords()->pluck('title')->values()->all();
+
+    expect($titles())->toBe(['Summer combo', 'Winter combo', 'Retired combo', 'gone-combo']);
+
+    $leaderboard->sortTable('orders', 'desc');
+
+    expect($titles()[0])->toBe('Winter combo');
+
+    Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'yesterday']])
+        ->assertDontSee('Summer combo')
+        ->assertSee('No Orders in this window');
 });
 
 it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {

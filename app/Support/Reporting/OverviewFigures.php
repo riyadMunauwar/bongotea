@@ -6,14 +6,17 @@ namespace App\Support\Reporting;
  * The counts one span of Orders comes to, by the glossary's rules: a whole
  * Reporting Window, its comparison window, or one bucket of it. Every
  * figure that can be read straight off the rows is a property; the two
- * that are ratios of them are methods, so a rate is never stored beside
- * the counts it disagrees with.
+ * that are ratios of them are methods, shared with the leaderboard's rows
+ * through `HasSalesRatios`, so a rate is never stored beside the counts it
+ * disagrees with.
  *
  * Money is integer minor units, like everywhere else; formatting is the
  * caller's, through `Money`.
  */
 final readonly class OverviewFigures
 {
+    use HasSalesRatios;
+
     public function __construct(
         /** Every Order captured in the span, whatever became of it. */
         public int $orders,
@@ -29,33 +32,6 @@ final readonly class OverviewFigures
     public static function none(): self
     {
         return new self(0, 0, 0, 0, 0);
-    }
-
-    /**
-     * The Orders that count towards Sales.
-     */
-    public function notCancelled(): int
-    {
-        return $this->orders - $this->cancelled;
-    }
-
-    /**
-     * Sales over the Orders that count towards it, in minor units, rounded.
-     * Zero, not undefined, when there are none.
-     */
-    public function averageOrderValue(): int
-    {
-        $counted = $this->notCancelled();
-
-        return $counted === 0 ? 0 : (int) round($this->sales / $counted);
-    }
-
-    /**
-     * Cancelled as a share of Orders, from 0 to 1. Zero when there are none.
-     */
-    public function cancellationRate(): float
-    {
-        return $this->orders === 0 ? 0.0 : $this->cancelled / $this->orders;
     }
 
     public function plus(self $other): self

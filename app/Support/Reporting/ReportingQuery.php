@@ -22,12 +22,25 @@ use Illuminate\Support\Collection;
  * year. Rows are never fetched per Order; the largest thing this module
  * loops over is the list of buckets.
  *
- * The overview and the Sales over time series are here so far. A later
- * result — a leaderboard, a Product ranking — is another method returning
- * another result class, built on `ordersIn()`, and no widget changes for it.
+ * The overview, the Sales over time series and the Page leaderboard are
+ * here so far. A later result — a Product ranking, a Payment Method mix —
+ * is another method returning another result class, built on `ordersIn()`,
+ * and no widget changes for it.
  */
 final class ReportingQuery
 {
+    /**
+     * Sales as the glossary counts it, in SQL: the totals of the Orders not
+     * Cancelled. Binds the Cancelled status once. Written here and nowhere
+     * else, so every result sums the same thing.
+     */
+    private const string SALES = 'sum(case when status != ? then total else 0 end) as sales';
+
+    /**
+     * How many Orders hold one status. Binds that status once.
+     */
+    private const string STATUS_COUNT = 'sum(case when status = ? then 1 else 0 end)';
+
     /**
      * Orders and Sales per bucket of a window, for the line chart: one
      * grouped query, every bucket in the answer whether or not a row fell
@@ -41,7 +54,7 @@ final class ReportingQuery
         $rows = $this->groupedByBucket(
             $this->ordersIn($window, $page),
             $buckets,
-            'count(*) as order_count, sum(case when status != ? then total else 0 end) as sales',
+            'count(*) as order_count, '.self::SALES,
             [$cancelled],
         );
 
@@ -81,6 +94,54 @@ final class ReportingQuery
     }
 
     /**
+     * One row per Page with Orders in the window, trashed Pages included,
+     * and one per recorded slug for Orders whose Page is gone for good.
+     * One grouped query over the Orders and one lookup of the Pages named;
+     * the rows come back Sales first, and the largest thing looped over is
+     * the list of Pages.
+     */
+    public function pageLeaderboard(ReportingWindow $window): PageLeaderboard
+    {
+        $cancelled = OrderStatus::Cancelled->value;
+
+        /**
+         * Grouped by the live link where there is one, and by the recorded
+         * slug only where there is not: an Order whose Page was renamed
+         * still belongs to that Page, while two hard-deleted Pages that
+         * shared nothing but a null are told apart by their slugs.
+         */
+        $rows = $this->ordersIn($window)
+            ->selectRaw(
+                'page_id, min(page_slug) as page_slug, count(*) as order_count, '
+                .self::SALES.', '
+                .self::STATUS_COUNT.' as cancelled',
+                [$cancelled, $cancelled],
+            )
+            ->groupByRaw("page_id, (case when page_id is null then page_slug else '' end)")
+            ->get();
+
+        $pages = Page::withTrashed()->findMany($rows->pluck('page_id')->filter())->keyBy(fn (Page $page): int => $page->getKey());
+
+        $leaderboard = $rows
+            ->map(fn (object $row): PageLeaderboardRow => new PageLeaderboardRow(
+                page: $row->page_id === null ? null : $pages->get((int) $row->page_id),
+                slug: (string) $row->page_slug,
+                orders: (int) $row->order_count,
+                sales: (int) $row->sales,
+                cancelled: (int) $row->cancelled,
+            ))
+            ->sortBy([
+                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => $b->sales <=> $a->sales,
+                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => $b->orders <=> $a->orders,
+                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => strcasecmp($a->title(), $b->title()),
+            ])
+            ->values()
+            ->all();
+
+        return new PageLeaderboard($window, $leaderboard);
+    }
+
+    /**
      * The figures for each bucket of a window, in bucket order, an empty
      * bucket as zeros. Two grouped queries: one for what a row says on its
      * own, and one under `Order::unpaid()` — the scope is the rule for
@@ -98,9 +159,9 @@ final class ReportingQuery
             $this->ordersIn($window, $page),
             $buckets,
             'count(*) as order_count, '
-            .'sum(case when status != ? then total else 0 end) as sales, '
-            .'sum(case when status = ? then 1 else 0 end) as cancelled, '
-            .'sum(case when status = ? then 1 else 0 end) as new_orders',
+            .self::SALES.', '
+            .self::STATUS_COUNT.' as cancelled, '
+            .self::STATUS_COUNT.' as new_orders',
             [$cancelled, $cancelled, $new],
         );
 
@@ -151,7 +212,7 @@ final class ReportingQuery
      *
      * @return Builder<Order>
      */
-    private function ordersIn(ReportingWindow $window, ?Page $page): Builder
+    private function ordersIn(ReportingWindow $window, ?Page $page = null): Builder
     {
         return Order::query()
             ->where('created_at', '>=', $window->start->toDateTimeString())
