@@ -11,7 +11,6 @@ use App\Models\Page;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -20,7 +19,16 @@ class PageResource extends Resource
 {
     protected static ?string $model = Page::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
+    /**
+     * Ours, not Heroicons'. `AdminPanelProvider::boot()` registers the set and
+     * carries the reasoning: a funnel is what a Merchant arriving from
+     * CartFlows reads as "the surface that makes money", and Filament's own
+     * funnel is already the filter button on the very screen this opens.
+     */
+    protected static string|BackedEnum|null $navigationIcon = 'giopages-funnel';
+
+    /** Fourth, above Settings. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

@@ -3,9 +3,11 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Concerns\HasReportingWindow;
+use BackedEnum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\Widget;
 use Filament\Widgets\WidgetConfiguration;
 
@@ -41,6 +43,22 @@ class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
     use HasReportingWindow;
+
+    /**
+     * The widget grid, which is what this screen is. Filament would otherwise
+     * hand the Dashboard a house — true enough of the panel root, but it says
+     * nothing about what is on the screen, and a chart glyph would promise a
+     * pie among figures that are drawn as lines, bars and tables.
+     */
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;
+
+    /**
+     * First, and every top-level entry says where it sits the same way: the
+     * sidebar reads Dashboard, Orders, Products, Pages, then Settings at 100.
+     * Filament reads an undeclared sort as `-1`, so a resource that leaves
+     * this off does not land at the end — it lands above this line.
+     */
+    protected static ?int $navigationSort = 0;
 
     /**
      * Every discovered widget but the first: the first is drawn in the

@@ -20,7 +20,16 @@ class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingBag;
+    /**
+     * A price tag: a Product carries a single price and no variations, which
+     * is the whole of what separates one from anything else in the panel. The
+     * bag it used to wear went to Orders, where a completed purchase is what
+     * a bag actually means.
+     */
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
+
+    /** Third. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

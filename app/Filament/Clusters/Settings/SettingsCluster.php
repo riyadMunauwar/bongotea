@@ -33,9 +33,11 @@ class SettingsCluster extends Cluster
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     /**
-     * After every resource. The resources sort at Filament's default, so any
-     * positive number would do; a large one leaves room for anything that
-     * later wants to sit between them and this.
+     * Last, and the gap above it is the point. Every other top-level entry
+     * now names its own place in the sidebar — Dashboard 0, Orders 1,
+     * Products 2, Pages 3 — so this could have been 4; it is 100 so that
+     * anything which later belongs between the work and the settings has
+     * somewhere to go without renumbering the four above it.
      */
     protected static ?int $navigationSort = 100;
 

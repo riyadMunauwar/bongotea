@@ -30,11 +30,19 @@ class OrderResource extends Resource
 {
     protected static ?string $model = Order::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
+    /**
+     * A bag, which is a purchase that already happened — not a cart, which is
+     * a thing this domain refuses to have. It replaced a clipboard that was
+     * indistinguishable from the Pages document at the 1.5rem the sidebar
+     * draws an icon at, which is the whole of what a User sees in the
+     * collapsed rail.
+     */
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingBag;
 
     protected static ?string $recordTitleAttribute = 'order_number';
 
-    protected static ?int $navigationSort = 0;
+    /** Second, under the Dashboard. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {

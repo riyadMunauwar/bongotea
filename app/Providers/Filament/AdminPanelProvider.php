@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
 use App\Support\Settings\GeneralSettings;
+use BladeUI\Icons\Factory as IconFactory;
 use Filament\FontProviders\BunnyFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -25,15 +26,39 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
-    /**
-     * Every date-time the panel draws — a capture time on the Orders list,
-     * a Payment's verified-at — is shown in the Merchant's timezone, read
-     * from the General group. A closure, so the group is resolved the first
-     * time a date is drawn and never for a request that draws none.
-     * Storage stays UTC; only the display moves.
-     */
     public function boot(): void
     {
+        /**
+         * `resources/svg/` as the `giopages` icon set, which is where an icon
+         * this application draws itself lives. Blade Icons ships with
+         * Filament, so this is a registration and not a dependency.
+         *
+         * It exists for one glyph: the funnel Pages is drawn with. A Merchant
+         * arrives here from CartFlows and reads a funnel as "the surface that
+         * makes money", which is what the sidebar wants to say — but
+         * `Heroicon::Funnel` is Filament's own filter-action icon, and
+         * `PagesTable` has filters, so shipping that enum would put the same
+         * glyph in two meanings on the screen the item opens onto. Hence one
+         * of ours, drawn to Heroicons' outline spec so it sits among the four
+         * beside it as a peer rather than an accent.
+         *
+         * The metaphor stops at the icon. `CONTEXT.md` keeps "funnel step" on
+         * Page's avoid-list on purpose — a CartFlows funnel is multi-step by
+         * construction and a Page is deliberately not — and nothing here is
+         * an argument to start writing the word in code.
+         */
+        app(IconFactory::class)->add('giopages', [
+            'path' => resource_path('svg'),
+            'prefix' => 'giopages',
+        ]);
+
+        /**
+         * Every date-time the panel draws — a capture time on the Orders list,
+         * a Payment's verified-at — is shown in the Merchant's timezone, read
+         * from the General group. A closure, so the group is resolved the first
+         * time a date is drawn and never for a request that draws none.
+         * Storage stays UTC; only the display moves.
+         */
         FilamentTimezone::set(fn (): string => app(GeneralSettings::class)->timezone);
     }
 
