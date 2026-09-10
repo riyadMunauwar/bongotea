@@ -180,6 +180,36 @@ _Avoid_: template, theme, skin, variant, design
 Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Order Complete Page.
 _Avoid_: failure page, error page, payment page
 
+### Reporting
+
+**Reporting Window**:
+The span of days every report figure is counted over, chosen once for a whole screen and obeyed by everything on it: Today, Yesterday, Last 7 days, Last 30 days, This month, or two dates. A day begins and ends in the Merchant's timezone, never the server's, because a Merchant judges a day's spend against a day's Orders and both happen in the same place. Every window has a comparison window of the same length immediately before it, which is what a change is measured against.
+_Avoid_: date range, period, filter, timeframe
+
+**Orders (as a figure)**:
+How many Orders were captured in a Reporting Window, whatever became of them afterwards. It is the number ad spend is judged against: a Cancelled Order still cost a click.
+_Avoid_: conversions, leads, sales
+
+**Sales**:
+The money side of a Reporting Window: the totals, Delivery Charge included, of every Order captured in it that is not Cancelled. Counted at Capture, not when it is paid or delivered, because a Cash on Delivery Order has no other moment. Orders and Sales are always shown side by side and never collapsed into one.
+_Avoid_: revenue, turnover, income, GMV
+
+**Cancellation Rate**:
+Cancelled Orders as a share of Orders in a Reporting Window. Drawn as its own figure so that cancelling an Order moves a rate a Merchant watches rather than quietly shrinking a total.
+_Avoid_: return rate, failure rate, churn
+
+**Average Order Value**:
+Sales divided by the Orders that count towards Sales in a Reporting Window. Zero, not undefined, when there are none.
+_Avoid_: AOV, basket size, ticket size
+
+**Needs Attention**:
+The Orders and Payments an operator must act on regardless of any Reporting Window: a New Order nobody has called in a day, a Payment Pending for over an hour, an Order Paid twice, an Order Paid and Cancelled at once. It is a to-do list, not a report, so it ignores the window.
+_Avoid_: alerts, exceptions, issues, anomalies
+
+**Visit**:
+One load of a published Page by a browser, counted per Page per day. Not yet counted; reserved so that a Conversion Rate, Orders as a share of Visits, has a name when it arrives.
+_Avoid_: page view, hit, session, traffic
+
 ### People
 
 **User**:
