@@ -16,3 +16,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Support/OrderComplete/** | .ai/rules/support-order-complete.md |
 | tests/** | .ai/rules/tests.md |
+| app/Filament/Widgets/** | .ai/rules/widgets.md |

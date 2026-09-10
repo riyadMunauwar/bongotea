@@ -5,7 +5,9 @@ namespace App\Support\Reporting;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\Page;
+use App\Models\Product;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression;
@@ -26,11 +28,12 @@ use Illuminate\Support\Collection;
  * loops over is the list of buckets.
  *
  * The overview, the Sales over time series, the Page leaderboard, the
- * status breakdown, the Payment Method mix and the Needs Attention list are
- * here so far. A later result — a Product ranking, a Delivery mix — is
- * another method returning another result class, built on `ordersIn()`,
- * and no widget changes for it. Needs Attention is the one result that
- * takes no window: it is a to-do list over the whole installation.
+ * status breakdown, the Payment Method mix, the Product ranking, the
+ * Delivery mix and the Needs Attention list are here. A later result is
+ * another method returning another result class, built on `ordersIn()` or
+ * `notCancelledIn()`, and no widget changes for it. Needs Attention is the
+ * one result that takes no window: it is a to-do list over the whole
+ * installation.
  */
 final class ReportingQuery
 {
@@ -45,6 +48,14 @@ final class ReportingQuery
      * How many Orders hold one status. Binds that status once.
      */
     private const string STATUS_COUNT = 'sum(case when status = ? then 1 else 0 end)';
+
+    /**
+     * How many Districts the Delivery mix names. Five is what fits beside
+     * the Delivery Options in a half-width widget, and what the spec asked
+     * for; a Merchant who wants the whole list is owed a Districts report,
+     * not a longer footnote.
+     */
+    private const int DISTRICTS_LISTED = 5;
 
     /**
      * How long a New Order may wait for its confirmation call before it
@@ -232,6 +243,92 @@ final class ReportingQuery
     }
 
     /**
+     * Units and revenue per Product sold in the window, highest revenue
+     * first: one grouped query over the Order Lines of the Orders that
+     * count, and one lookup of the Products named. A Cancelled Order sold
+     * nothing, so its Lines are not here.
+     *
+     * Grouped by the live link where there is one, and by the recorded name
+     * only where there is not: a Product renamed after it sold still merges
+     * into one row, while two Products deleted for good are told apart by
+     * the names their Lines recorded. The largest thing looped over is the
+     * list of Products.
+     */
+    public function productRanking(ReportingWindow $window, ?Page $page = null): ProductRanking
+    {
+        $rows = OrderLine::query()
+            ->joinSub($this->notCancelledIn($window, $page)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
+            ->selectRaw('product_id, min(product_name) as product_name, sum(quantity) as units, sum(line_total) as revenue')
+            ->groupByRaw("product_id, (case when product_id is null then product_name else '' end)")
+            ->get();
+
+        $products = Product::withTrashed()
+            ->findMany($rows->pluck('product_id')->filter())
+            ->keyBy(fn (Product $product): int => $product->getKey());
+
+        $ranking = $rows
+            ->map(fn (object $row): ProductRankingRow => new ProductRankingRow(
+                product: $row->product_id === null ? null : $products->get((int) $row->product_id),
+                recordedName: (string) $row->product_name,
+                units: (int) $row->units,
+                revenue: (int) $row->revenue,
+            ))
+            ->sortBy([
+                fn (ProductRankingRow $a, ProductRankingRow $b): int => $b->revenue <=> $a->revenue,
+                fn (ProductRankingRow $a, ProductRankingRow $b): int => $b->units <=> $a->units,
+                fn (ProductRankingRow $a, ProductRankingRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values()
+            ->all();
+
+        return new ProductRanking($window, $ranking);
+    }
+
+    /**
+     * What each Delivery Option collected in the window and where the
+     * Orders were bound: two grouped queries over the Orders that count,
+     * the second stopping at the five Districts named most often.
+     *
+     * A label is normalised to a blank in SQL so a null and an empty string
+     * are one row rather than two, and read back as null; a blank District
+     * is left out altogether, because "no District" is not a place a
+     * courier covers.
+     */
+    public function deliveryMix(ReportingWindow $window, ?Page $page = null): DeliveryMix
+    {
+        $rows = $this->notCancelledIn($window, $page)
+            ->selectRaw("coalesce(delivery_label, '') as label, count(*) as order_count, sum(delivery_charge) as delivery_charge")
+            ->groupBy('label')
+            ->get()
+            ->map(fn (object $row): DeliveryMixRow => new DeliveryMixRow(
+                label: $row->label === '' ? null : (string) $row->label,
+                orders: (int) $row->order_count,
+                deliveryCharge: (int) $row->delivery_charge,
+            ))
+            ->sortBy([
+                fn (DeliveryMixRow $a, DeliveryMixRow $b): int => $b->orders <=> $a->orders,
+                fn (DeliveryMixRow $a, DeliveryMixRow $b): int => $b->deliveryCharge <=> $a->deliveryCharge,
+                fn (DeliveryMixRow $a, DeliveryMixRow $b): int => strcasecmp((string) $a->label, (string) $b->label),
+            ])
+            ->values()
+            ->all();
+
+        $districts = $this->notCancelledIn($window, $page)
+            ->whereNotNull('customer_district')
+            ->where('customer_district', '!=', '')
+            ->selectRaw('customer_district as district, count(*) as order_count')
+            ->groupBy('district')
+            ->orderByDesc('order_count')
+            ->orderBy('district')
+            ->limit(self::DISTRICTS_LISTED)
+            ->get()
+            ->mapWithKeys(fn (object $row): array => [(string) $row->district => (int) $row->order_count])
+            ->all();
+
+        return new DeliveryMix($window, $rows, $districts);
+    }
+
+    /**
      * The Orders an operator must act on as of one instant, whatever any
      * Reporting Window says: New Orders older than a day, Payments Pending
      * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
@@ -383,6 +480,19 @@ final class ReportingQuery
             ->where('created_at', '>=', $window->start->toDateTimeString())
             ->where('created_at', '<', $window->end->toDateTimeString())
             ->when($page, fn (Builder $query, Page $page) => $query->where('page_id', $page->getKey()));
+    }
+
+    /**
+     * The Orders of a window that count towards Sales: the ones not
+     * Cancelled. What a Cancelled Order sold was never sold and what it
+     * quoted was never collected, so the Product ranking and the Delivery
+     * mix read this rather than `ordersIn()`.
+     *
+     * @return Builder<Order>
+     */
+    private function notCancelledIn(ReportingWindow $window, ?Page $page = null): Builder
+    {
+        return $this->ordersIn($window, $page)->where('status', '!=', OrderStatus::Cancelled->value);
     }
 
     /**

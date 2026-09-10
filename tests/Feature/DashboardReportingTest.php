@@ -5,15 +5,19 @@ use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Widgets\CachePathIndicator;
+use App\Filament\Widgets\DeliveryMixTable;
 use App\Filament\Widgets\NeedsAttentionTable;
 use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PageLeaderboardTable;
 use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
+use App\Filament\Widgets\TopProductsTable;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
@@ -313,6 +317,65 @@ it('says plainly that nothing needs attention when the list is empty, whatever t
     Livewire::test(NeedsAttentionTable::class)
         ->assertSee('Needs Attention')
         ->assertSee('Nothing needs attention');
+});
+
+it('draws Top Products and the Delivery mix side by side under the Payment Method mix, each obeying the filter', function () {
+    Page::factory()->published()->create();
+
+    $tea = Product::factory()->create(['name' => 'Sylhet tea', 'price' => 30000]);
+    $mug = Product::factory()->create(['name' => 'Clay mug', 'price' => 10000]);
+
+    $today = Order::factory()->create(['delivery_label' => 'Inside Dhaka', 'delivery_charge' => 6000, 'customer_district' => 'Dhaka', 'created_at' => now()]);
+    $earlier = Order::factory()->create(['delivery_label' => 'Outside Dhaka', 'delivery_charge' => 12000, 'customer_district' => 'Sylhet', 'created_at' => now()->subDays(3)]);
+
+    OrderLine::factory()->for($today)->create(['product_id' => $tea->id, 'product_name' => $tea->name, 'unit_price' => $tea->price, 'quantity' => 2]);
+    OrderLine::factory()->for($earlier)->create(['product_id' => $mug->id, 'product_name' => $mug->name, 'unit_price' => $mug->price, 'quantity' => 1]);
+
+    $this->get('/admin')
+        ->assertOk()
+        ->assertSeeLivewire(TopProductsTable::class)
+        ->assertSeeLivewire(DeliveryMixTable::class);
+
+    $widgets = array_values(app(Dashboard::class)->getWidgets());
+
+    expect(array_search(PaymentMethodMixChart::class, $widgets, true))
+        ->toBeLessThan(array_search(TopProductsTable::class, $widgets, true))
+        ->and(array_search(TopProductsTable::class, $widgets, true))
+        ->toBeLessThan(array_search(DeliveryMixTable::class, $widgets, true))
+        ->and(array_search(DeliveryMixTable::class, $widgets, true))
+        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true))
+        ->and(app(TopProductsTable::class)->getColumnSpan())->toBe(1)
+        ->and(app(DeliveryMixTable::class)->getColumnSpan())->toBe(1);
+
+    $symbol = app(GeneralSettings::class)->currencySymbol;
+
+    /**
+     * The counting is proved against the module in ReportingProductRankingTest
+     * and ReportingDeliveryMixTest; what is pinned here is that each table is
+     * on the screen with its money in the installation's currency, and that
+     * the Reporting Window changes what it says.
+     */
+    Livewire::test(TopProductsTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Top Products')
+        ->assertSee('Units sold')
+        ->assertSee('Sylhet tea')
+        ->assertSee($symbol.'600.00')
+        ->assertSee('Clay mug');
+
+    Livewire::test(TopProductsTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+        ->assertSee('Sylhet tea')
+        ->assertDontSee('Clay mug');
+
+    Livewire::test(DeliveryMixTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Delivery mix')
+        ->assertSee('Inside Dhaka')
+        ->assertSee('Outside Dhaka')
+        ->assertSee($symbol.'120.00')
+        ->assertSee('Most Orders to Dhaka (1), Sylhet (1)');
+
+    Livewire::test(DeliveryMixTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+        ->assertSee('Inside Dhaka')
+        ->assertDontSee('Outside Dhaka');
 });
 
 it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {
