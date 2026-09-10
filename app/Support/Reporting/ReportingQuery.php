@@ -3,6 +3,7 @@
 namespace App\Support\Reporting;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
 use App\Models\Order;
 use App\Models\Page;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,10 +23,10 @@ use Illuminate\Support\Collection;
  * year. Rows are never fetched per Order; the largest thing this module
  * loops over is the list of buckets.
  *
- * The overview, the Sales over time series and the Page leaderboard are
- * here so far. A later result — a Product ranking, a Payment Method mix —
- * is another method returning another result class, built on `ordersIn()`,
- * and no widget changes for it.
+ * The overview, the Sales over time series, the Page leaderboard, the
+ * status breakdown and the Payment Method mix are here so far. A later
+ * result — a Product ranking, a Delivery mix — is another method returning
+ * another result class, built on `ordersIn()`, and no widget changes for it.
  */
 final class ReportingQuery
 {
@@ -139,6 +140,78 @@ final class ReportingQuery
             ->all();
 
         return new PageLeaderboard($window, $leaderboard);
+    }
+
+    /**
+     * How many of the window's Orders are New, Confirmed and Cancelled, for
+     * the doughnut: one query, three status counts on one row.
+     */
+    public function statusBreakdown(ReportingWindow $window, ?Page $page = null): StatusBreakdown
+    {
+        $row = $this->ordersIn($window, $page)
+            ->selectRaw(
+                self::STATUS_COUNT.' as new_orders, '
+                .self::STATUS_COUNT.' as confirmed, '
+                .self::STATUS_COUNT.' as cancelled',
+                [OrderStatus::New->value, OrderStatus::Confirmed->value, OrderStatus::Cancelled->value],
+            )
+            ->first();
+
+        return new StatusBreakdown(
+            $window,
+            new: (int) ($row->new_orders ?? 0),
+            confirmed: (int) ($row->confirmed ?? 0),
+            cancelled: (int) ($row->cancelled ?? 0),
+        );
+    }
+
+    /**
+     * Orders and Sales per recorded Payment Method, and each online method's
+     * Orders split between Paid and Unpaid, for the bar chart. Two grouped
+     * queries: one for what a row says on its own, and one under
+     * `Order::unpaid()` — the scope is the rule for Unpaid, and is not
+     * restated here as a CASE; the row derives Paid as the rest. The rows
+     * come back in the enum's order, and the largest thing looped over is
+     * the list of methods.
+     *
+     * The method column is read under another name so the model's enum cast
+     * does not touch it: the rows are keyed by the stored value.
+     */
+    public function paymentMix(ReportingWindow $window, ?Page $page = null): PaymentMix
+    {
+        $cancelled = OrderStatus::Cancelled->value;
+
+        $perMethod = $this->ordersIn($window, $page)
+            ->selectRaw('payment_method as method, count(*) as order_count, '.self::SALES, [$cancelled])
+            ->groupBy('payment_method')
+            ->get()
+            ->keyBy('method');
+
+        $unpaid = $this->ordersIn($window, $page)
+            ->unpaid()
+            ->selectRaw('payment_method as method, count(*) as unpaid')
+            ->groupBy('payment_method')
+            ->get()
+            ->keyBy('method');
+
+        $rows = [];
+
+        foreach (PaymentMethod::cases() as $method) {
+            $row = $perMethod->get($method->value);
+
+            if ($row === null) {
+                continue;
+            }
+
+            $rows[] = new PaymentMixRow(
+                method: $method,
+                orders: (int) $row->order_count,
+                sales: (int) $row->sales,
+                unpaid: $method->isOnline() ? (int) ($unpaid->get($method->value)?->unpaid ?? 0) : null,
+            );
+        }
+
+        return new PaymentMix($window, $rows);
     }
 
     /**

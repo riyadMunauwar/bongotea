@@ -1,13 +1,17 @@
 <?php
 
+use App\Enums\PaymentMethod;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Widgets\CachePathIndicator;
+use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PageLeaderboardTable;
+use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
 use App\Models\Order;
 use App\Models\Page;
+use App\Models\Payment;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
@@ -207,6 +211,64 @@ it('draws the Page leaderboard below the chart: a row per Page with its own figu
     Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'yesterday']])
         ->assertDontSee('Summer combo')
         ->assertSee('No Orders in this window');
+});
+
+it('draws the status breakdown and the Payment Method mix side by side under the leaderboard, each obeying the filter', function () {
+    Page::factory()->published()->create();
+    Order::factory()->create(['subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Order::factory()->cancelled()->create(['subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
+    Payment::factory()->for(Order::factory()->create(['subtotal' => 10000, 'delivery_charge' => 6000, 'payment_method' => PaymentMethod::Bkash, 'created_at' => now()]))->paid()->create();
+    Order::factory()->create(['subtotal' => 10000, 'delivery_charge' => 6000, 'payment_method' => PaymentMethod::Bkash, 'created_at' => now()->subDays(3)]);
+
+    $this->get('/admin')
+        ->assertOk()
+        ->assertSeeLivewire(OrderStatusBreakdownChart::class)
+        ->assertSeeLivewire(PaymentMethodMixChart::class);
+
+    $widgets = array_values(app(Dashboard::class)->getWidgets());
+
+    expect(array_search(PageLeaderboardTable::class, $widgets, true))
+        ->toBeLessThan(array_search(OrderStatusBreakdownChart::class, $widgets, true))
+        ->and(array_search(OrderStatusBreakdownChart::class, $widgets, true))
+        ->toBeLessThan(array_search(PaymentMethodMixChart::class, $widgets, true))
+        ->and(array_search(PaymentMethodMixChart::class, $widgets, true))
+        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true))
+        ->and(app(OrderStatusBreakdownChart::class)->getColumnSpan())->toBe(1)
+        ->and(app(PaymentMethodMixChart::class)->getColumnSpan())->toBe(1);
+
+    /**
+     * The data is handed to Chart.js as JavaScript, so it is read off each
+     * widget rather than out of the HTML. The counting is proved against the
+     * module in ReportingStatusBreakdownTest and ReportingPaymentMixTest;
+     * pinned here is the hand-over, and that the filter changes the answer.
+     */
+    $chartData = fn (string $widget, string $preset): array => (fn (): array => $this->getData())->call(
+        Livewire::test($widget, ['pageFilters' => [ReportingWindow::PRESET_FILTER => $preset]])->instance(),
+    );
+
+    $breakdown = $chartData(OrderStatusBreakdownChart::class, 'last_7_days');
+
+    expect($breakdown['labels'])->toBe(['New', 'Confirmed', 'Cancelled'])
+        ->and($breakdown['datasets'][0]['data'])->toBe([3, 0, 1]);
+
+    expect($chartData(OrderStatusBreakdownChart::class, 'today')['datasets'][0]['data'])->toBe([2, 0, 1]);
+
+    $mix = $chartData(PaymentMethodMixChart::class, 'last_7_days');
+    $series = collect($mix['datasets'])->keyBy('label')->map(fn (array $dataset): array => $dataset['data']);
+
+    expect($mix['labels'])->toBe(['Cash on Delivery', 'bKash'])
+        ->and($series['Paid'])->toBe([0, 1])
+        ->and($series['Unpaid'])->toBe([0, 1])
+        ->and($series['Due on delivery'])->toBe([2, 0])
+        ->and($series['Sales'])->toBe([560.0, 320.0]);
+
+    expect($chartData(PaymentMethodMixChart::class, 'today')['datasets'][3]['data'])->toBe([560.0, 160.0]);
+
+    Livewire::test(OrderStatusBreakdownChart::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Order status breakdown');
+
+    Livewire::test(PaymentMethodMixChart::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Payment Method mix');
 });
 
 it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {
