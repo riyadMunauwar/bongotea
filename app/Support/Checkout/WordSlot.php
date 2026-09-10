@@ -58,6 +58,11 @@ enum WordSlot: string
     case ChipsDeliveryEyebrow = 'chips_delivery_eyebrow';
     case ChipsPaymentEyebrow = 'chips_payment_eyebrow';
 
+    case InvoiceTitle = 'invoice_title';
+    case InvoiceItemHeading = 'invoice_item_heading';
+    case InvoiceQuantityHeading = 'invoice_quantity_heading';
+    case InvoiceAmountHeading = 'invoice_amount_heading';
+
     /** A headline or an eyebrow is one short line over a section, in two scripts. */
     public const HEADLINE_MAX_LENGTH = 60;
 
@@ -72,6 +77,13 @@ enum WordSlot: string
 
     /**
      * The design's words for this slot.
+     *
+     * Bilingual, Bangla first and English second, wherever the design writes
+     * two scripts — and English alone where it writes one, as it does for the
+     * Invoice's three column headings: a heading a hair over a stepper has
+     * room for one word, and the bill it heads is read across rather than
+     * down. A Merchant who wants two scripts there writes them, like every
+     * other word here.
      */
     public function defaultValue(): string
     {
@@ -98,6 +110,10 @@ enum WordSlot: string
             self::ChipsEmptyLine => 'কোনো প্রোডাক্ট সিলেক্ট করা হয়নি / Nothing selected',
             self::ChipsDeliveryEyebrow => 'ডেলিভারি / Delivery',
             self::ChipsPaymentEyebrow => 'পেমেন্ট / Payment',
+            self::InvoiceTitle => 'অর্ডার ফর্ম / Order form',
+            self::InvoiceItemHeading => 'Item',
+            self::InvoiceQuantityHeading => 'Qty',
+            self::InvoiceAmountHeading => 'Amount',
         };
     }
 
@@ -129,6 +145,10 @@ enum WordSlot: string
             self::ChipsEmptyLine => 'Nothing selected line',
             self::ChipsDeliveryEyebrow => 'Delivery eyebrow',
             self::ChipsPaymentEyebrow => 'Payment eyebrow',
+            self::InvoiceTitle => 'Form title',
+            self::InvoiceItemHeading => 'Item column heading',
+            self::InvoiceQuantityHeading => 'Quantity column heading',
+            self::InvoiceAmountHeading => 'Amount column heading',
         };
     }
 
@@ -160,7 +180,11 @@ enum WordSlot: string
             self::ChipsSelectEyebrow,
             self::ChipsEmptyLine,
             self::ChipsDeliveryEyebrow,
-            self::ChipsPaymentEyebrow => null,
+            self::ChipsPaymentEyebrow,
+            self::InvoiceTitle,
+            self::InvoiceItemHeading,
+            self::InvoiceQuantityHeading,
+            self::InvoiceAmountHeading => null,
         };
     }
 
@@ -179,7 +203,8 @@ enum WordSlot: string
             self::SplitPaymentHeadline,
             self::SplitReversedFormHeadline,
             self::DarkPanelFormHeadline,
-            self::CompactEmbedTitle => WordKind::Headline,
+            self::CompactEmbedTitle,
+            self::InvoiceTitle => WordKind::Headline,
             self::SplitReversedBundleEyebrow,
             self::DarkPanelSummaryEyebrow,
             self::BentoGridProductsEyebrow,
@@ -189,6 +214,9 @@ enum WordSlot: string
             self::ChipsDeliveryEyebrow,
             self::ChipsPaymentEyebrow => WordKind::Eyebrow,
             self::CompactEmbedItemCount => WordKind::Count,
+            self::InvoiceItemHeading,
+            self::InvoiceQuantityHeading,
+            self::InvoiceAmountHeading => WordKind::ColumnHeading,
             self::ChipsEmptyLine => WordKind::EmptyState,
             self::SplitHint,
             self::SplitReversedFootnote => WordKind::Line,
@@ -207,8 +235,12 @@ enum WordSlot: string
             self::DarkPanelSummaryEyebrow,
             self::BentoGridProductsEyebrow,
             self::CompactEmbedTitle,
+            self::InvoiceTitle,
             self::ChipsSelectEyebrow => WordPlace::Products,
             self::CompactEmbedItemCount => WordPlace::ItemCount,
+            self::InvoiceItemHeading => WordPlace::ItemHeading,
+            self::InvoiceQuantityHeading => WordPlace::QuantityHeading,
+            self::InvoiceAmountHeading => WordPlace::AmountHeading,
             self::ChipsEmptyLine => WordPlace::EmptyList,
             self::StackedDetailsHeadline,
             self::SplitDetailsHeadline,
@@ -240,6 +272,7 @@ enum WordSlot: string
             WordKind::Headline => CheckoutWords::lineRefusal('A headline', $value, self::HEADLINE_MAX_LENGTH),
             WordKind::Eyebrow => CheckoutWords::lineRefusal('An eyebrow', $value, self::HEADLINE_MAX_LENGTH),
             WordKind::Count => CheckoutWords::lineRefusal('A count', $value, self::HEADLINE_MAX_LENGTH),
+            WordKind::ColumnHeading => CheckoutWords::lineRefusal('A column heading', $value, self::HEADLINE_MAX_LENGTH),
             WordKind::EmptyState => CheckoutWords::lineRefusal('An empty-state line', $value, self::LINE_MAX_LENGTH),
             WordKind::Line => CheckoutWords::lineRefusal('A line beneath the button', $value, self::LINE_MAX_LENGTH),
         };

@@ -2446,7 +2446,7 @@ it('asks for the totals labels and the payment labels on the words tab, with the
      * — the button they tap, the totals above it, how they pay — then one per
      * layout that owns words of its own, hidden unless that layout is chosen.
      */
-    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Bento grid', 'Compact embed', 'Chips', 'Dark panel']);
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Bento grid', 'Compact embed', 'Chips', 'Invoice', 'Dark panel']);
 
     /**
      * Bilingual, Bangla first and English second, exactly as designed — shown
@@ -3061,6 +3061,7 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($picker->getThumbnail('bento_grid'))->toBe('images/checkout-layouts/bento-grid.svg')
         ->and($picker->getThumbnail('compact_embed'))->toBe('images/checkout-layouts/compact-embed.svg')
         ->and($picker->getThumbnail('chips'))->toBe('images/checkout-layouts/chips.svg')
+        ->and($picker->getThumbnail('invoice'))->toBe('images/checkout-layouts/invoice.svg')
         ->and($picker->getThumbnail('stepper'))->toBeNull();
 
     foreach ($picker->getDescriptions() as $description) {
@@ -3083,6 +3084,7 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($html)->toContain('images/checkout-layouts/bento-grid.svg')
         ->and($html)->toContain('images/checkout-layouts/compact-embed.svg')
         ->and($html)->toContain('images/checkout-layouts/chips.svg')
+        ->and($html)->toContain('images/checkout-layouts/invoice.svg')
         ->and(substr_count($html, 'gp-layout-card-thumbnail'))->toBe(10);
 });
 
@@ -3198,6 +3200,12 @@ it('asks for a layout\'s own words only while it is chosen, with the design\'s w
         'checkout_config.words.chips_delivery_eyebrow',
         'checkout_config.words.chips_payment_eyebrow',
     ], WordSlot::ChipsEmptyLine],
+    'invoice' => [CheckoutLayout::Invoice, [
+        'checkout_config.words.invoice_title',
+        'checkout_config.words.invoice_item_heading',
+        'checkout_config.words.invoice_quantity_heading',
+        'checkout_config.words.invoice_amount_heading',
+    ], WordSlot::InvoiceItemHeading],
 ]);
 
 it('says beneath the boxes that may name a figure how to name it', function () {
@@ -3231,6 +3239,8 @@ it('refuses a layout\'s word the checkout could not draw, on the box that holds 
     'a bento grid eyebrow over two lines' => [CheckoutLayout::BentoGrid, WordSlot::BentoGridProductsEyebrow, "Two\nlines"],
     'a compact embed count too long' => [CheckoutLayout::CompactEmbed, WordSlot::CompactEmbedItemCount, str_repeat('c', 61)],
     'a chips empty-state line too long' => [CheckoutLayout::Chips, WordSlot::ChipsEmptyLine, str_repeat('n', 121)],
+    'an invoice column heading too long' => [CheckoutLayout::Invoice, WordSlot::InvoiceAmountHeading, str_repeat('a', 61)],
+    'an invoice title over two lines' => [CheckoutLayout::Invoice, WordSlot::InvoiceTitle, "Two\nlines"],
 ]);
 
 it('asks for the stacked headlines only while stacked is chosen, and keeps them across a move away and back', function () {
@@ -3307,10 +3317,20 @@ it('shows the chosen layout\'s own button wording in the box while the merchant 
     /**
      * The stacked design puts the total on the button; the placeholder is
      * the sentence the island will draw for that layout, so what is in force
-     * reads without saving to find out.
+     * reads without saving to find out. The invoice is a bill to agree to and
+     * says so in words of its own, and no other layout borrows them.
      */
     expect($placeholder($stacked))->toBe('অর্ডার করুন / Order Now · {total}')
         ->and($placeholder($split))->toBe('অর্ডার করুন / Order Now')
         ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'split_reversed']])))->toBe('অর্ডার করুন / Order Now · {total}')
-        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'dark_panel']])))->toBe('অর্ডার করুন / Order Now · {total}');
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'dark_panel']])))->toBe('অর্ডার করুন / Order Now · {total}')
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'invoice']])))->toBe('অর্ডার কনফার্ম করুন / Place order');
+
+    /** And no other arrangement borrows the invoice's wording, which is what "for this layout only" means. */
+    foreach (CheckoutLayout::cases() as $layout) {
+        if ($layout !== CheckoutLayout::Invoice) {
+            expect($placeholder(Page::factory()->create(['checkout_config' => ['layout' => $layout->value]])))
+                ->not->toBe('অর্ডার কনফার্ম করুন / Place order', $layout->value);
+        }
+    }
 });

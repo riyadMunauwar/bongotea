@@ -109,6 +109,7 @@
             WordKind::Headline => '<h3 class="gio-checkout-heading">'.$sentenceFor($slot).'</h3>',
             WordKind::Eyebrow => '<p class="gio-checkout-eyebrow">'.$sentenceFor($slot).'</p>',
             WordKind::Count => '<p class="gio-checkout-count">'.$sentenceFor($slot).'</p>',
+            WordKind::ColumnHeading => '<span class="gio-checkout-column-heading">'.$sentenceFor($slot).'</span>',
             WordKind::EmptyState => '<p class="gio-checkout-empty">'.$sentenceFor($slot).'</p>',
             WordKind::Line => '<p class="gio-checkout-footnote">'.$sentenceFor($slot).'</p>',
         };
@@ -214,6 +215,14 @@
         --}}
         .gio-checkout-fields + .gio-checkout-eyebrow { margin-top: 1.5rem; }
         .gio-checkout-count { margin: 0 0 .75rem; font-size: .75rem; line-height: 1.4; text-align: right; color: var(--gio-muted); }
+        {{--
+            The heading over one column of a product list drawn as a table,
+            in the design's small capitals. Which cell it takes is the
+            layout's, because only a layout drawing the list as a table has
+            columns to head; the words and the ink are the base's, so the
+            sheet is the same bytes whichever words a page draws.
+        --}}
+        .gio-checkout-column-heading { margin: 0; font-size: .6875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; line-height: 1.4; color: var(--gio-muted); }
         {{--
             A product row is one line a thumb can read: the tick where there is
             one, the picture, the name with its price beneath, the stepper, and
@@ -569,6 +578,17 @@
                 <div class="gio-checkout-section">
                     {!! $wordAt(WordPlace::Products) !!}
                     {!! $wordAt(WordPlace::ItemCount) !!}
+
+                    {{--
+                        The three headings a layout drawing the list as a
+                        table puts over its columns, written on one template
+                        line so a layout heading none emits the one line it
+                        always did rather than three. Siblings of the list
+                        rather than its children: the sheet places them in
+                        the section's own grid, which is the same grid every
+                        row beneath them is drawn in.
+                    --}}
+                    {!! $wordAt(WordPlace::ItemHeading) !!}{!! $wordAt(WordPlace::QuantityHeading) !!}{!! $wordAt(WordPlace::AmountHeading) !!}
 
                     <div class="gio-checkout-products">
                         @foreach ($products as $product)

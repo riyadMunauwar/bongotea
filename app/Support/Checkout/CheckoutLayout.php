@@ -25,8 +25,8 @@ namespace App\Support\Checkout;
  * has to answer each question before anything draws it.
  *
  * Stacked is drawn as designed and is what the base sheet draws; Split, Split
- * reversed, Dark panel, Bento grid, Compact embed and Chips are drawn as
- * designed by a block of their own. The other three are chosen from the same
+ * reversed, Dark panel, Bento grid, Compact embed, Chips and Invoice are drawn
+ * as designed by a block of their own. The other two are chosen from the same
  * list and, until each one's own rules land, draw as the base does under a
  * class of their own.
  */
@@ -126,9 +126,14 @@ enum CheckoutLayout: string
                 WordSlot::ChipsDeliveryEyebrow,
                 WordSlot::ChipsPaymentEyebrow,
             ],
+            self::Invoice => [
+                WordSlot::InvoiceTitle,
+                WordSlot::InvoiceItemHeading,
+                WordSlot::InvoiceQuantityHeading,
+                WordSlot::InvoiceAmountHeading,
+            ],
             self::Stepper,
-            self::Accordion,
-            self::Invoice => [],
+            self::Accordion => [],
         };
     }
 
@@ -267,9 +272,10 @@ enum CheckoutLayout: string
      * What the Order Button says here where the Merchant has said nothing.
      *
      * Several of the designs print the live total inside the button, and one
-     * (Invoice) words the button differently altogether; the design's words
-     * for the layout are the default, and a Merchant's own wording, once
-     * written, stands on every layout alike.
+     * (Invoice) words the button differently altogether: a bill is agreed to
+     * rather than ordered from, so its button asks the Customer to confirm.
+     * The design's words for the layout are the default, and a Merchant's own
+     * wording, once written, stands on every layout alike.
      */
     public function defaultButtonWording(): string
     {
@@ -277,13 +283,13 @@ enum CheckoutLayout: string
             self::Stacked,
             self::SplitReversed,
             self::DarkPanel => OrderButton::DEFAULT_WORDING.' · '.OrderButton::TOTAL_PLACEHOLDER,
+            self::Invoice => 'অর্ডার কনফার্ম করুন / Place order',
             self::Split,
             self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
-            self::Chips,
-            self::Invoice => OrderButton::DEFAULT_WORDING,
+            self::Chips => OrderButton::DEFAULT_WORDING,
         };
     }
 
@@ -344,6 +350,44 @@ enum CheckoutLayout: string
      * the three sections themselves, bordered and filled at one rule, and
      * its bar is the form's `::after` in the design's ink.
      *
+     * Invoice is the one arrangement drawn as a table. The form is a grid of
+     * spacer tracks rather than a gap, so the receipt-style totals sit tight
+     * beneath the item rows while the sections below keep the design's
+     * roomier rhythm: the summary is placed at the second row and the
+     * questions at the third, and nothing in the document moves (ADR-0015).
+     * The products section and every product row are the same four-column
+     * grid, so the headings line up with the rows beneath them; which cell
+     * each heading takes is said by the first and the last of them, one
+     * pseudo-class on the second class, and the empty first cell is where the
+     * tick box sits, exactly as the design draws the header row. The
+     * continuous rule under the headings is the list's own `border-top`,
+     * because a border on three separate cells would break at the gaps
+     * between them. On a phone the table drops to the design's two columns
+     * and the headings are clipped from sight the way a hidden label is —
+     * never removed, so a screen reader still hears them.
+     *
+     * Invoice is the one block that overrides two tokens the rest of the
+     * sheet leaves alone, and both are the design's. The button takes the
+     * text colour with the accent on hover rather than `--gio-button-*`,
+     * because a bill is agreed to in one ink; and the four figures a receipt
+     * is read down — the line totals, the summary, the quantity and a
+     * delivery charge — are set in the design's monospace rather than in
+     * `--gio-font`, because a column of amounts that do not line up is a
+     * column nobody can check. Everything else on the page is still the
+     * Merchant's typeface. Note the products section is a grid here, so its
+     * template reaches the two sections inside the questions wrapper as
+     * well: every child of those is spanned across it by name in this block,
+     * and a word Invoice does not draw there would need spanning too.
+     *
+     * Two things the
+     * design draws that the fixed document cannot: the mock's `#GP-0001`,
+     * absent because no order number exists before Capture, and the total at
+     * the button's far end, because the button carries one line of the
+     * Merchant's words and not two slots — a Merchant who wants the figure
+     * there writes `{total}` into the wording, as on every other layout. The
+     * button is still `space-between` rather than centred, which with one
+     * line in it is the design's left-aligned label.
+     *
      * Every colour is a token or mixed from two, with two exceptions the
      * design fixes: Dark panel's navy set (`#0f1d4f` and its borders and
      * inks) and the two shades Bento grid's bar is written in (`#b9bec9` for
@@ -357,8 +401,7 @@ enum CheckoutLayout: string
         return match ($this) {
             self::Stacked,
             self::Stepper,
-            self::Accordion,
-            self::Invoice => '',
+            self::Accordion => '',
             self::Split => <<<'CSS'
         .gio-checkout-split .gio-checkout-card { max-width: 57.5rem; padding: 2rem; }
         .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, 1fr) 1.75rem 1.25rem minmax(0, 17.5rem) 1.25rem; grid-template-rows: 1.25rem auto auto auto auto auto 1.25rem 1fr; align-items: start; }
@@ -570,6 +613,48 @@ CSS,
         @media (max-width: 37.5rem) { .gio-checkout-chips .gio-checkout-card { padding: 1.25rem 1rem; } .gio-checkout-chips .gio-checkout-form { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto auto; gap: 1.25rem; } .gio-checkout-chips .gio-checkout-form::before { grid-column: 1; } .gio-checkout-chips .gio-checkout-summary { grid-column: 1; grid-row: 3; } .gio-checkout-chips .gio-checkout-submit { grid-column: 1; grid-row: 4; margin: 0; } .gio-checkout-chips .gio-checkout-note { grid-column: 1; grid-row: 5; } }
 
 CSS,
+            self::Invoice => <<<'CSS'
+        .gio-checkout-invoice .gio-checkout-card { max-width: 38.75rem; padding: 2.5rem 2rem; }
+        .gio-checkout-invoice .gio-checkout-form { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto .75rem auto 1.75rem auto 1.75rem auto auto; }
+        .gio-checkout-invoice .gio-checkout-section { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 4.75rem 4.5rem; gap: 0 .75rem; align-items: center; grid-column: 1; grid-row: 1; margin: 0; }
+        .gio-checkout-invoice .gio-checkout-heading { grid-column: 1 / -1; margin: 0 0 1.75rem; padding: 0 0 .625rem; border-bottom: 2px solid var(--gio-text); font-size: 1.25rem; }
+        .gio-checkout-invoice .gio-checkout-column-heading { padding: 0 0 .5rem; }
+        .gio-checkout-invoice .gio-checkout-column-heading:first-of-type { grid-column: 2; }
+        .gio-checkout-invoice .gio-checkout-column-heading:last-of-type { text-align: right; }
+        .gio-checkout-invoice .gio-checkout-products { grid-column: 1 / -1; gap: 0; border-top: 1px solid var(--gio-border); }
+        .gio-checkout-invoice .gio-checkout-product { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 4.75rem 4.5rem; gap: 0 .75rem; align-items: center; padding: .75rem 0; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--gio-border) 55%, var(--gio-surface)); background: transparent; }
+        .gio-checkout-invoice .gio-checkout-pick { grid-column: 1; }
+        .gio-checkout-invoice .gio-checkout-product-head { grid-column: 2; gap: .625rem; }
+        .gio-checkout-invoice .gio-checkout-image { width: 2rem; height: 2rem; }
+        .gio-checkout-invoice .gio-checkout-product-words { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .375rem; }
+        .gio-checkout-invoice .gio-checkout-name { flex: 1 0 100%; }
+        .gio-checkout-invoice .gio-checkout-description { margin: 0; }
+        .gio-checkout-invoice .gio-checkout-price { margin: 0; }
+        .gio-checkout-invoice .gio-checkout-quantity { grid-column: 3; gap: .25rem; }
+        .gio-checkout-invoice .gio-checkout-quantity-stepper { gap: .125rem; border: 0; background: transparent; }
+        .gio-checkout-invoice .gio-checkout-quantity-step { width: 1.5rem; height: 1.5rem; border: 1px solid var(--gio-border); font-size: .8125rem; }
+        .gio-checkout-invoice .gio-checkout-line-total { grid-column: 4; width: auto; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .875rem; font-weight: 600; text-align: right; }
+        .gio-checkout-invoice .gio-checkout-summary { display: flex; flex-direction: column; align-items: flex-end; grid-column: 1; grid-row: 3; gap: .25rem; margin: 0; padding: 0; border-top: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .gio-checkout-invoice .gio-checkout-row { min-width: 11rem; gap: 1.5rem; font-size: .8125rem; }
+        .gio-checkout-invoice .gio-checkout-total { margin: .25rem 0 0; padding: .375rem 0 0; border-top: 1px solid var(--gio-text); font-size: 1rem; }
+        .gio-checkout-invoice .gio-checkout-questions { display: flex; flex-direction: column; gap: 1.75rem; grid-column: 1; grid-row: 5; margin: 0; }
+        .gio-checkout-invoice .gio-checkout-fields { grid-column: 1 / -1; gap: 1.125rem 1.5rem; }
+        .gio-checkout-invoice .gio-checkout-label { margin: 0 0 .25rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--gio-muted); }
+        .gio-checkout-invoice .gio-checkout-input { padding: .5rem 0; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--gio-muted) 45%, var(--gio-border)); border-radius: 0; background: transparent; font-size: .9375rem; }
+        .gio-checkout-invoice .gio-checkout-input:focus { border-bottom-color: var(--gio-accent); box-shadow: none; }
+        .gio-checkout-invoice .gio-checkout-quantity-input { width: 1.375rem; padding: 0; border: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; }
+        .gio-checkout-invoice .gio-checkout-delivery { flex-direction: column; grid-column: 1 / -1; gap: .5rem; margin: 1.5rem 0 0; }
+        .gio-checkout-invoice .gio-checkout-delivery-choice { flex: none; padding: 0; border: 0; background: transparent; }
+        .gio-checkout-invoice .gio-checkout-payment { grid-column: 1 / -1; gap: .5rem; }
+        .gio-checkout-invoice .gio-checkout-payment-choice { padding: 0; border: 0; background: transparent; }
+        .gio-checkout-invoice .gio-checkout-choice-amount { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; font-weight: 400; }
+        .gio-checkout-invoice .gio-checkout-error { grid-column: 1 / -1; }
+        .gio-checkout-invoice .gio-checkout-submit { justify-content: space-between; grid-column: 1; grid-row: 7; margin: 0; padding: 1rem 1.375rem; background: var(--gio-text); color: var(--gio-surface); }
+        .gio-checkout-invoice .gio-checkout-submit:hover { background: var(--gio-accent); }
+        .gio-checkout-invoice .gio-checkout-note { grid-column: 1; grid-row: 8; }
+        @media (max-width: 37.5rem) { .gio-checkout-invoice .gio-checkout-card { padding: 1.25rem 1rem; } .gio-checkout-invoice .gio-checkout-section { grid-template-columns: 1.5rem minmax(0, 1fr); } .gio-checkout-invoice .gio-checkout-column-heading { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } .gio-checkout-invoice .gio-checkout-product { grid-template-columns: 1.5rem minmax(0, 1fr); gap: .375rem .75rem; } .gio-checkout-invoice .gio-checkout-quantity { grid-column: 2; } .gio-checkout-invoice .gio-checkout-line-total { grid-column: 2; font-size: .8125rem; text-align: left; } }
+
+CSS,
         };
     }
 
@@ -610,9 +695,9 @@ CSS,
             self::BentoGrid => 'images/checkout-layouts/bento-grid.svg',
             self::CompactEmbed => 'images/checkout-layouts/compact-embed.svg',
             self::Chips => 'images/checkout-layouts/chips.svg',
+            self::Invoice => 'images/checkout-layouts/invoice.svg',
             self::Stepper,
-            self::Accordion,
-            self::Invoice => null,
+            self::Accordion => null,
         };
     }
 

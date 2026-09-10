@@ -2251,7 +2251,7 @@ it('never puts a total behind an interaction on any layout', function (CheckoutL
     expect(checkoutScript($html))->toBe(checkoutScript($this->get('/plain-stacked')->assertOk()->getContent()));
 })->with(fn () => CheckoutLayout::cases());
 
-it('draws the three layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
+it('draws the two layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
     pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
     pageStyled([], slug: 'plain-stacked');
 
@@ -2261,7 +2261,7 @@ it('draws the three layouts not yet drawn to their designs as the base does, und
     /**
      * Selectable today, drawn to its design when its own ticket lands: until
      * then the page carries the base sheet and nothing added, the class the
-     * layout will hang its rules on, and — because none of the three owns a
+     * layout will hang its rules on, and — because neither of the two owns a
      * word of its own yet — no heading at all. Everything else a customer
      * meets is the same island.
      */
@@ -2273,7 +2273,6 @@ it('draws the three layouts not yet drawn to their designs as the base does, und
 })->with([
     'stepper' => CheckoutLayout::Stepper,
     'accordion' => CheckoutLayout::Accordion,
-    'invoice' => CheckoutLayout::Invoice,
 ]);
 
 it('marks a half-width question with one flat class and generates nothing for it', function () {
@@ -3025,6 +3024,100 @@ it('draws the bento grid checkout as three bordered cells with numbered eyebrows
         ->and(baseSheet($styles, CheckoutLayout::BentoGrid))->not->toContain('#4f79e6');
 });
 
+it('draws the invoice checkout as a titled bill: headed columns over the item rows, underlined answers and a receipt of totals', function () {
+    $page = twoColumnPage(CheckoutLayout::Invoice);
+    $product = $page->refresh()->products->first();
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * A title over the bill and a heading over each of its three columns, in
+     * the design's words; the methods named at length, because a bill has the
+     * room; a delivery option's detail line drawn under its name for the same
+     * reason; and half-width questions paired.
+     */
+    expect($markup)->toContain('<h3 class="gio-checkout-heading">অর্ডার ফর্ম / Order form</h3>')
+        ->and($markup)->toContain('<span class="gio-checkout-column-heading">Item</span><span class="gio-checkout-column-heading">Qty</span><span class="gio-checkout-column-heading">Amount</span>')
+        ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<')
+        ->and($markup)->toContain('<span class="gio-checkout-choice-detail">1–2 days</span>')
+        ->and($markup)->toContain('class="gio-checkout-field gio-checkout-field-half"')
+        ->and($markup)->not->toContain('gio-checkout-number')
+        ->and($markup)->not->toContain('gio-checkout-empty');
+
+    /**
+     * The button asks the Customer to agree to the bill rather than to order
+     * from it, and says so in the design's words with no figure on it: a
+     * silent Merchant gets the layout's own wording, and nothing rides on the
+     * button for the script to refill.
+     */
+    expect($markup)->toContain('data-gio-submit>অর্ডার কনফার্ম করুন / Place order</button>')
+        ->and($markup)->not->toContain('data-gio-submit-wording');
+
+    /** No order number anywhere: there is no Order to number until the Capture. */
+    expect($markup)->not->toContain('#GP-')
+        ->and($markup)->not->toContain('GP-0001');
+
+    preg_match('/<div class="gio-checkout-section">(.*?)<div class="gio-checkout-products">/s', $markup, $head);
+
+    /**
+     * The headings follow the title and precede the list they head, so the
+     * sheet can place the four of them in one grid — and a customer listening
+     * rather than looking hears the columns named before the rows.
+     */
+    expect($head[1] ?? '')->toMatch('/<h3 class="gio-checkout-heading">[^<]*<\/h3>\s*<span class="gio-checkout-column-heading">/');
+
+    /**
+     * And they are the only spans the section opens with, which is what the
+     * sheet leans on: `:first-of-type` puts the first heading over the name
+     * and `:last-of-type` aligns the last to the right, and both read the
+     * spans of the section rather than the headings. Draw a fourth span
+     * before the list and the columns silently move — fix the block with it.
+     */
+    expect(substr_count($head[1] ?? '', '<span'))->toBe(3)
+        ->and(substr_count($head[1] ?? '', '<span class="gio-checkout-column-heading">'))->toBe(3);
+
+    $block = CheckoutLayout::Invoice->styleRules();
+
+    /**
+     * The bill: a title ruled off in the design's two-pixel ink, the section
+     * and every row the same four-column grid so the headings sit over the
+     * columns beneath them, the list's own top border drawing the one
+     * continuous rule under the headings, answers on underlines with no box
+     * around them, the totals a right-aligned monospace receipt ruled off
+     * above the total, and a button in the text token that turns the accent
+     * on hover. Nothing hidden or reordered on a phone: the table drops to
+     * two columns and the headings are clipped, never removed.
+     */
+    expect($styles)->toContain($block)
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-card { max-width: 38.75rem; padding: 2.5rem 2rem; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-heading { grid-column: 1 / -1; margin: 0 0 1.75rem; padding: 0 0 .625rem; border-bottom: 2px solid var(--gio-text); font-size: 1.25rem; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-section { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 4.75rem 4.5rem;')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-product { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 4.75rem 4.5rem;')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-column-heading:first-of-type { grid-column: 2; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-column-heading:last-of-type { text-align: right; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-products { grid-column: 1 / -1; gap: 0; border-top: 1px solid var(--gio-border); }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-input { padding: .5rem 0; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--gio-muted) 45%, var(--gio-border)); border-radius: 0; background: transparent; font-size: .9375rem; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-summary { display: flex; flex-direction: column; align-items: flex-end; grid-column: 1; grid-row: 3;')
+        ->and($block)->toContain('font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-total { margin: .25rem 0 0; padding: .375rem 0 0; border-top: 1px solid var(--gio-text); font-size: 1rem; }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-submit { justify-content: space-between; grid-column: 1; grid-row: 7; margin: 0; padding: 1rem 1.375rem; background: var(--gio-text); color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-submit:hover { background: var(--gio-accent); }')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->toContain('.gio-checkout-invoice .gio-checkout-column-heading { position: absolute; width: 1px; height: 1px;')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/');
+
+    /**
+     * The document is the one every layout writes: the bill's rows are the
+     * product rows, in the order they were always in, and the totals are the
+     * summary the sheet lifts above the questions rather than a second one.
+     */
+    expect($markup)->toContain($product->name)
+        ->and(substr_count($markup, 'data-gio-total'))->toBe(1);
+});
+
 it('draws a layout\'s own words in the merchant\'s where there are any, the design\'s where there are none, and never one the words tab would refuse', function (CheckoutLayout $layout, WordSlot $reworded, string $words, string $drawn, WordSlot $refused, WordSlot $untouched) {
     twoColumnPage($layout, ['words' => [
         $reworded->value => $words,
@@ -3052,6 +3145,7 @@ it('draws a layout\'s own words in the merchant\'s where there are any, the desi
     'bento grid' => [CheckoutLayout::BentoGrid, WordSlot::BentoGridDetailsEyebrow, 'আপনি কে / Who you are', '<p class="gio-checkout-eyebrow">আপনি কে / Who you are</p>', WordSlot::BentoGridProductsEyebrow, WordSlot::BentoGridPaymentEyebrow],
     'compact embed' => [CheckoutLayout::CompactEmbed, WordSlot::CompactEmbedItemCount, 'নিলেন {count} / Took {count}', '<p class="gio-checkout-count">নিলেন <span data-gio-count>1</span> / Took <span data-gio-count>1</span></p>', WordSlot::CompactEmbedTitle, WordSlot::CompactEmbedTitle],
     'chips' => [CheckoutLayout::Chips, WordSlot::ChipsDeliveryEyebrow, 'কোথায় / Where to', '<p class="gio-checkout-eyebrow">কোথায় / Where to</p>', WordSlot::ChipsSelectEyebrow, WordSlot::ChipsPaymentEyebrow],
+    'invoice' => [CheckoutLayout::Invoice, WordSlot::InvoiceQuantityHeading, 'কয়টি', '<span class="gio-checkout-column-heading">কয়টি</span>', WordSlot::InvoiceTitle, WordSlot::InvoiceAmountHeading],
 ]);
 
 it('draws each layout\'s own words on that layout alone', function (CheckoutLayout $layout) {
