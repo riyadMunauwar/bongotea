@@ -24,6 +24,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Where a Merchant's day begins and ends. Storage stays UTC; this decides
+    | how a capture time is shown in the admin and at which midnight a
+    | Reporting Window is cut, so "today" matches the Merchant's calendar and
+    | not the server's. A PHP timezone identifier, overridable in Settings.
+    |
+    */
+
+    'timezone' => env('GIOPAGES_TIMEZONE', 'Asia/Dhaka'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Phone numbers
     |--------------------------------------------------------------------------
     |

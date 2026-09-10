@@ -210,3 +210,32 @@ it('seeds a new page with the delivery charge the merchant saved', function () {
     expect($page->checkout_config->deliveryOptionsToArray())
         ->toBe([['label' => 'Delivery', 'amount' => 12000]]);
 });
+
+it('defaults the timezone to the config key, which itself defaults to Dhaka', function () {
+    expect(config('giopages.timezone'))->toBe('Asia/Dhaka')
+        ->and(app(GeneralSettings::class)->timezone)->toBe('Asia/Dhaka');
+
+    $general = app(GeneralSettings::class);
+    $general->timezone = 'Europe/London';
+    $general->save();
+
+    $this->app->forgetInstance(GeneralSettings::class);
+
+    expect(app(GeneralSettings::class)->timezone)->toBe('Europe/London');
+});
+
+it('reads a timezone the row holds that PHP does not know as the default, never as an error', function (mixed $stored) {
+    Setting::query()->create([
+        'key' => GeneralSettings::key(),
+        'value' => ['timezone' => $stored, 'currencySymbol' => '£'],
+    ]);
+
+    $general = app(GeneralSettings::class);
+
+    expect($general->timezone)->toBe('Asia/Dhaka')
+        ->and($general->currencySymbol)->toBe('£');
+})->with([
+    'a name that is not a zone' => 'Mars/Olympus_Mons',
+    'a null' => null,
+    'a blank' => '',
+]);

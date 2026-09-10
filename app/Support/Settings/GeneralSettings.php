@@ -45,6 +45,13 @@ class GeneralSettings extends SettingsGroup
     /** Captures allowed per minute from one IP. */
     public int $checkoutRateLimit;
 
+    /**
+     * Where the Merchant's day begins and ends: a PHP timezone identifier.
+     * Storage stays UTC; this decides how a capture time is shown and at
+     * which midnight a Reporting Window is cut.
+     */
+    public string $timezone;
+
     public function __construct()
     {
         $this->currencyCode = (string) config('giopages.currency.code');
@@ -57,10 +64,30 @@ class GeneralSettings extends SettingsGroup
         $this->deliveryCharge = (float) config('giopages.delivery.charge');
         $this->checkoutMaxQuantity = (int) config('giopages.checkout.max_quantity');
         $this->checkoutRateLimit = (int) config('giopages.checkout.rate_limit');
+        $this->timezone = (string) config('giopages.timezone');
     }
 
     public static function key(): string
     {
         return 'general';
+    }
+
+    /**
+     * A timezone the row holds that PHP does not know reads as the one this
+     * group already has — the config default on a fresh group — rather than
+     * reaching Carbon and throwing on every screen that draws a date. The
+     * row must never throw; the page's select refuses the value up front.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function with(array $values): static
+    {
+        $group = parent::with($values);
+
+        if (! in_array($group->timezone, timezone_identifiers_list(), true)) {
+            $group->timezone = $this->timezone;
+        }
+
+        return $group;
     }
 }

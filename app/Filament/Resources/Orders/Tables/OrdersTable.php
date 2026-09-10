@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Orders\Tables;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Support\Money;
+use App\Support\Settings\GeneralSettings;
+use Carbon\CarbonImmutable;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -133,7 +135,10 @@ class OrdersTable
                 /**
                  * "What came in today" is the question this screen is opened
                  * to answer, so the date range is the filter that matters.
-                 * Bounds are inclusive of both days a human would name.
+                 * Bounds are inclusive of both days a human would name, and
+                 * a day is the Merchant's: it starts at midnight in the
+                 * timezone Setting, not at UTC midnight, so the list agrees
+                 * with the capture times it shows and with every report.
                  */
                 Filter::make('taken')
                     ->schema([
@@ -141,8 +146,8 @@ class OrdersTable
                         DatePicker::make('until')->label('Taken until'),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '>=', $date))
-                        ->when($data['until'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '<=', $date)))
+                        ->when($data['from'] ?? null, fn (Builder $query, string $date): Builder => $query->where('created_at', '>=', self::merchantMidnight($date)))
+                        ->when($data['until'] ?? null, fn (Builder $query, string $date): Builder => $query->where('created_at', '<', self::merchantMidnight($date, daysLater: 1))))
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
 
@@ -170,5 +175,19 @@ class OrdersTable
                     RestoreBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Midnight beginning the named day in the Merchant timezone, as the UTC
+     * instant a stored capture time is compared against. Whole days are
+     * stepped in local time before the conversion, so a daylight-saving
+     * change never lands a boundary an hour off midnight.
+     */
+    private static function merchantMidnight(string $date, int $daysLater = 0): CarbonImmutable
+    {
+        return CarbonImmutable::parse($date, app(GeneralSettings::class)->timezone)
+            ->startOfDay()
+            ->addDays($daysLater)
+            ->utc();
     }
 }

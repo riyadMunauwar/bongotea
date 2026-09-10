@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
+use App\Support\Settings\GeneralSettings;
 use Filament\FontProviders\BunnyFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -12,6 +13,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
+use Filament\Support\Facades\FilamentTimezone;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -23,6 +25,18 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
+    /**
+     * Every date-time the panel draws — a capture time on the Orders list,
+     * a Payment's verified-at — is shown in the Merchant's timezone, read
+     * from the General group. A closure, so the group is resolved the first
+     * time a date is drawn and never for a request that draws none.
+     * Storage stays UTC; only the display moves.
+     */
+    public function boot(): void
+    {
+        FilamentTimezone::set(fn (): string => app(GeneralSettings::class)->timezone);
+    }
+
     public function panel(Panel $panel): Panel
     {
         return $panel

@@ -97,6 +97,34 @@ it('narrows the queue to the orders taken in a date range', function () {
         ->assertCanNotSeeTableRecords([$lastWeek]);
 });
 
+it('shows capture times and cuts the date filter at the merchant timezone midnight, not UTC', function () {
+    /**
+     * Dhaka is six hours ahead of UTC, so these two Orders are a minute
+     * apart across a Dhaka midnight and a minute apart inside a UTC evening.
+     */
+    $lateOnTheEighth = capturedOrder(attributes: ['created_at' => '2026-09-08 17:30:00']);
+    $earlyOnTheNinth = capturedOrder(attributes: ['created_at' => '2026-09-08 18:30:00']);
+
+    Livewire::test(ListOrders::class)
+        ->assertSee('Sep 8, 2026 23:30:00')
+        ->assertSee('Sep 9, 2026 00:30:00')
+        ->filterTable('taken', ['from' => '2026-09-08', 'until' => '2026-09-08'])
+        ->assertCanSeeTableRecords([$lateOnTheEighth])
+        ->assertCanNotSeeTableRecords([$earlyOnTheNinth]);
+
+    $general = app(GeneralSettings::class);
+    $general->timezone = 'UTC';
+    $general->save();
+
+    Livewire::test(ListOrders::class)
+        ->assertSee('Sep 8, 2026 17:30:00')
+        ->filterTable('taken', ['from' => '2026-09-08', 'until' => '2026-09-08'])
+        ->assertCanSeeTableRecords([$lateOnTheEighth, $earlyOnTheNinth]);
+
+    /** The stored instants did not move. */
+    expect($lateOnTheEighth->refresh()->created_at->toIso8601String())->toBe('2026-09-08T17:30:00+00:00');
+});
+
 it('records the outcome of the confirmation call', function () {
     $order = capturedOrder();
 

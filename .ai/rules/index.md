@@ -12,7 +12,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/Payments/**, app/Models/Payment.php, app/Http/Controllers/PaymentController.php, resources/views/checkout/processing.blade.php, tests/Fixtures/Payments/** | .ai/rules/payments.md |
 | app/Filament/Resources/** | .ai/rules/resources.md |
 | app/Filament/Resources/Pages/Schemas/OrderComplete/** | .ai/rules/schemas-order-complete.md |
-| app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/** | .ai/rules/settings.md |
+| app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/**, app/Providers/Filament/AdminPanelProvider.php, app/Support/Reporting/** | .ai/rules/settings.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Support/OrderComplete/** | .ai/rules/support-order-complete.md |
 | tests/** | .ai/rules/tests.md |

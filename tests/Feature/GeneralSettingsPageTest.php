@@ -52,6 +52,7 @@ it('loads the current General values, from config when nothing has been saved', 
             'deliveryCharge' => (float) config('giopages.delivery.charge'),
             'checkoutMaxQuantity' => (int) config('giopages.checkout.max_quantity'),
             'checkoutRateLimit' => (int) config('giopages.checkout.rate_limit'),
+            'timezone' => config('giopages.timezone'),
         ]);
 });
 
@@ -70,6 +71,7 @@ it('saves the General page as one row, says so, and shows the saved values on re
             'deliveryCharge' => '4.50',
             'checkoutMaxQuantity' => 20,
             'checkoutRateLimit' => 10,
+            'timezone' => 'Europe/London',
         ])
         ->call('save')
         ->assertHasNoFormErrors()
@@ -90,6 +92,7 @@ it('saves the General page as one row, says so, and shows the saved values on re
             'deliveryCharge' => 4.5,
             'checkoutMaxQuantity' => 20,
             'checkoutRateLimit' => 10,
+            'timezone' => 'Europe/London',
         ]);
 });
 
@@ -147,9 +150,10 @@ it('refuses invalid input with field errors and saves nothing', function () {
             'deliveryCharge' => '-5',
             'phoneNationalLengthMin' => 'ten',
             'checkoutMaxQuantity' => 0,
+            'timezone' => 'Mars/Olympus_Mons',
         ])
         ->call('save')
-        ->assertHasFormErrors(['deliveryCharge', 'phoneNationalLengthMin', 'checkoutMaxQuantity']);
+        ->assertHasFormErrors(['deliveryCharge', 'phoneNationalLengthMin', 'checkoutMaxQuantity', 'timezone']);
 
     expect(Setting::count())->toBe(0);
 });

@@ -5,6 +5,7 @@ namespace App\Filament\Clusters\Settings\Pages;
 use App\Models\Order;
 use App\Models\Product;
 use App\Support\Settings\GeneralSettings;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 
@@ -63,6 +64,24 @@ class General extends SettingsPage
                         ->helperText(fn (): string => self::moneyHasBeenStored()
                             ? 'Fixed: prices and orders are already stored at this scale.'
                             : 'Digits after the point. Zero for JPY, three for KWD. Fixed once a product or order exists.'),
+                ]),
+
+            Section::make('Timezone')
+                ->description('Where your day begins and ends. Order times are shown in it and reports cut their days at its midnight; nothing stored changes.')
+                ->columns(3)
+                ->schema([
+                    /**
+                     * The options list is the validation: Filament refuses a
+                     * value outside it, so a name PHP does not know never
+                     * reaches the row. The group guards the row itself for
+                     * the case where one got there by hand.
+                     */
+                    Select::make('timezone')
+                        ->label('Timezone')
+                        ->required()
+                        ->searchable()
+                        ->options(fn (): array => array_combine(timezone_identifiers_list(), timezone_identifiers_list()))
+                        ->helperText('Bangladesh is Asia/Dhaka.'),
                 ]),
 
             Section::make('Phone numbers')
