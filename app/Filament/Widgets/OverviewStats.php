@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\Overview;
 use App\Support\Reporting\OverviewFigures;
@@ -26,11 +27,16 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * `ReportingQuery`; nothing here counts, and money is drawn through
  * `Money` so the currency Setting is honoured.
  *
+ * One class in both places it is drawn: the whole installation on the
+ * Dashboard, and one Page on that Page's edit screen, which is the record
+ * `ScopedToPage` hands to the module — nothing else here changes.
+ *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class OverviewStats extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
+    use ScopedToPage;
 
     protected static ?int $sort = 20;
 
@@ -41,7 +47,7 @@ class OverviewStats extends StatsOverviewWidget
      */
     protected function getStats(): array
     {
-        $overview = app(ReportingQuery::class)->overview(ReportingWindow::fromFilters($this->pageFilters));
+        $overview = app(ReportingQuery::class)->overview(ReportingWindow::fromFilters($this->pageFilters), $this->record);
 
         $current = $overview->figures;
         $previous = $overview->comparison;

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\ProductRankingRow;
 use App\Support\Reporting\ReportingQuery;
@@ -14,12 +15,16 @@ use Filament\Widgets\TableWidget;
 use Illuminate\Support\Collection;
 
 /**
- * Top Products, half width under the Payment Method mix: one row per
- * Product sold anywhere in the Reporting Window, with the units it moved
- * and what they earned, so a Merchant knows what to stock. Highest revenue
- * first, which is the module's own order and the only one this table has —
- * sorting by a clicked figure is the leaderboard's job, not a widget whose
- * whole point is the top of the list.
+ * Top Products, half width: one row per Product sold in the Reporting
+ * Window, with the units it moved and what they earned, so a Merchant
+ * knows what to stock. Highest revenue first, which is the module's own
+ * order and the only one this table has — sorting by a clicked figure is
+ * the leaderboard's job, not a widget whose whole point is the top of the
+ * list.
+ *
+ * It sits under the Payment Method mix on the Dashboard and above it on a
+ * Page edit screen, where which Product carries this Page is the first
+ * thing asked of the report.
  *
  * A Product deleted since it sold keeps its row under the name its Order
  * Lines recorded, marked deleted while it is only soft-deleted, which is
@@ -34,6 +39,7 @@ use Illuminate\Support\Collection;
 class TopProductsTable extends TableWidget
 {
     use InteractsWithPageFilters;
+    use ScopedToPage;
 
     protected static ?int $sort = 70;
 
@@ -81,7 +87,7 @@ class TopProductsTable extends TableWidget
      */
     private function rows(): Collection
     {
-        $ranking = app(ReportingQuery::class)->productRanking(ReportingWindow::fromFilters($this->pageFilters));
+        $ranking = app(ReportingQuery::class)->productRanking(ReportingWindow::fromFilters($this->pageFilters), $this->record);
 
         return collect($ranking->rows)->map(fn (ProductRankingRow $row): array => [
             ArrayRecord::getKeyName() => $row->product === null ? 'name:'.$row->recordedName : 'product:'.$row->product->getKey(),

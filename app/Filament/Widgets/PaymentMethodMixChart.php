@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\PaymentMixRow;
 use App\Support\Reporting\ReportingQuery;
@@ -27,11 +28,17 @@ use Illuminate\Support\Js;
  * counts. A window with no Orders draws an empty chart rather than an
  * error.
  *
+ * One class in both places it is drawn: the whole installation on the
+ * Dashboard, and one Page on that Page's edit screen, which is the record
+ * `ScopedToPage` hands to the module — nothing else here changes, so a Page
+ * that offers only Cash on Delivery simply has one group of bars.
+ *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class PaymentMethodMixChart extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ScopedToPage;
 
     /**
      * The three parts of an Orders bar, in the colours the payment badge
@@ -67,7 +74,7 @@ class PaymentMethodMixChart extends ChartWidget
      */
     protected function getData(): array
     {
-        $mix = app(ReportingQuery::class)->paymentMix(ReportingWindow::fromFilters($this->pageFilters));
+        $mix = app(ReportingQuery::class)->paymentMix(ReportingWindow::fromFilters($this->pageFilters), $this->record);
 
         return [
             'labels' => $mix->series(fn (PaymentMixRow $row): string => $row->method->getLabel()),

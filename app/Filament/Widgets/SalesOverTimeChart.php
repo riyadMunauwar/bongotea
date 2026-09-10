@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\BucketSize;
 use App\Support\Reporting\ReportingQuery;
@@ -26,11 +27,16 @@ use Illuminate\Support\Js;
  * a zero, so a quiet day is a dip and not a gap. Nothing here counts; this
  * widget labels the buckets and hands the figures to Chart.js.
  *
+ * One class in both places it is drawn: the whole installation on the
+ * Dashboard, and one Page on that Page's edit screen, which is the record
+ * `ScopedToPage` hands to the module — nothing else here changes.
+ *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class SalesOverTimeChart extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ScopedToPage;
 
     /**
      * The neutral the Orders line is drawn in, so blue stays the only
@@ -58,7 +64,7 @@ class SalesOverTimeChart extends ChartWidget
      */
     protected function getData(): array
     {
-        $salesOverTime = app(ReportingQuery::class)->salesOverTime(ReportingWindow::fromFilters($this->pageFilters));
+        $salesOverTime = app(ReportingQuery::class)->salesOverTime(ReportingWindow::fromFilters($this->pageFilters), $this->record);
 
         return [
             'labels' => $this->labels($salesOverTime),

@@ -2,13 +2,9 @@
 
 namespace App\Filament\Pages;
 
-use App\Support\Reporting\ReportingPreset;
-use App\Support\Reporting\ReportingWindow;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
+use App\Filament\Concerns\HasReportingWindow;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Widgets\Widget;
 use Filament\Widgets\WidgetConfiguration;
@@ -44,6 +40,7 @@ use Filament\Widgets\WidgetConfiguration;
 class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
+    use HasReportingWindow;
 
     /**
      * Every discovered widget but the first: the first is drawn in the
@@ -70,32 +67,13 @@ class Dashboard extends BaseDashboard
     }
 
     /**
-     * The preset select, and the two date pickers that appear only once
-     * Custom is chosen. Last 7 days is the default so a quiet morning with
-     * no Orders yet still opens onto something. Each picker bounds the other
-     * so the dates cannot be picked the wrong way round; the window builder
-     * tolerates it anyway, for a session that stored them before the bound
-     * was there.
+     * The Reporting Window control itself, drawn here as a filter form
+     * across the top of the screen. Its components are
+     * `HasReportingWindow`'s, so the Page edit screen's header action
+     * offers the same presets and the same two date pickers.
      */
     public function filtersForm(Schema $schema): Schema
     {
-        $isCustom = fn (Get $get): bool => $get(ReportingWindow::PRESET_FILTER) === ReportingPreset::Custom->value;
-
-        return $schema
-            ->components([
-                Select::make(ReportingWindow::PRESET_FILTER)
-                    ->label('Reporting Window')
-                    ->options(ReportingPreset::labels())
-                    ->default(ReportingPreset::Last7Days->value)
-                    ->selectablePlaceholder(false),
-                DatePicker::make(ReportingWindow::FROM_FILTER)
-                    ->label('From')
-                    ->visible($isCustom)
-                    ->maxDate(fn (Get $get): ?string => $get(ReportingWindow::UNTIL_FILTER)),
-                DatePicker::make(ReportingWindow::UNTIL_FILTER)
-                    ->label('Until')
-                    ->visible($isCustom)
-                    ->minDate(fn (Get $get): ?string => $get(ReportingWindow::FROM_FILTER)),
-            ]);
+        return $schema->components($this->reportingWindowComponents());
     }
 }
