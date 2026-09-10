@@ -9,11 +9,14 @@ use App\Support\Orders\OrderCapture;
 use App\Support\Orders\OrderOwnership;
 use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
+use App\Support\Tracking\MomentRecorder;
+use App\Support\Tracking\TrackingContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
+use Throwable;
 
 /**
  * Capture, and the pages a visitor lands on afterwards.
@@ -25,7 +28,10 @@ use Symfony\Component\HttpFoundation\Response as ResponseCode;
  */
 class CheckoutController extends Controller
 {
-    public function __construct(private readonly PaymentStarter $payments) {}
+    public function __construct(
+        private readonly PaymentStarter $payments,
+        private readonly MomentRecorder $moments,
+    ) {}
 
     /**
      * Take an Order.
@@ -36,6 +42,28 @@ class CheckoutController extends Controller
     public function store(StoreOrderRequest $request, OrderCapture $capture): JsonResponse|RedirectResponse
     {
         $order = $capture->capture($request->page(), $request->details());
+
+        /**
+         * The Capture Moment. It writes rows and returns — nothing is sent to
+         * an ad platform from here, so submitting the Checkout is no slower
+         * for tracking being on and somebody else's outage is never the
+         * Customer's. The address a Provider is told about is the Page the
+         * visitor was on, not this endpoint.
+         *
+         * Caught and reported rather than allowed to raise, because the Order
+         * is already committed by the time this runs: an exception here would
+         * show a 500 for an Order that exists, withhold the ownership cookie
+         * below, and invite the Customer to submit again. Tracking is never a
+         * precondition for buying; a lost row is the right price.
+         */
+        try {
+            $this->moments->captured($order, TrackingContext::fromRequest(
+                $request,
+                route('landing.show', $order->page_slug),
+            ));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
 
         /**
          * The browser that placed the Order is handed ownership of it here,

@@ -210,6 +210,32 @@ _Avoid_: alerts, exceptions, issues, anomalies
 One load of a published Page by a browser, counted per Page per day. Not yet counted; reserved so that a Conversion Rate, Orders as a share of Visits, has a name when it arrives.
 _Avoid_: page view, hit, session, traffic
 
+### Tracking
+
+**Moment**:
+Something that happens in this domain and is worth reporting to an ad platform: a Visit, a Checkout Started, a Capture, a Paid. Tracking is organised around Moments rather than around any one platform's event names, so what the system reports is described in its own words and each Provider translates. A Moment produces zero, one or several provider events, and which ones is the Provider's answer.
+_Avoid_: event, conversion, trigger, pixel event
+
+**Checkout Started**:
+The Moment a visitor first touches a Checkout Field on a page load. It says the visitor began filling the form, not that they submitted it; a Capture is a different Moment.
+_Avoid_: begin checkout, add to cart, engagement
+
+**Provider**:
+An ad platform events can be reported to — Facebook first, TikTok and Google Ads later. A Provider owns everything platform-specific: which of its own events a Moment produces, how many may travel in one request, how long after the fact it still accepts them, and why a Destination cannot be delivered to.
+_Avoid_: channel, integration, vendor, network
+
+**Destination**:
+One configured place a Provider's events are sent: for Facebook, a dataset and the access token that writes to it, under a name the Merchant chose. A Merchant may hold several — separate brands, separate clients — and marks exactly one default per Provider, which is where a Page that has picked nothing reports. Switching a Destination off pauses reporting to it without deleting it.
+_Avoid_: pixel, account, connection, integration
+
+**Purchase**:
+Exactly one is reported per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales.
+_Avoid_: conversion, sale, transaction
+
+**Tracking Outbox**:
+Where a Moment is written down, one row per Destination per provider event, so that no web request ever calls an ad platform. A scheduled sweep delivers what is waiting. A row holds no personal detail: what a Provider is told about the Customer is read from the Order when the row is delivered.
+_Avoid_: queue, event log, buffer
+
 ### People
 
 **User**:

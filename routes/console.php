@@ -16,3 +16,13 @@ Artisan::command('inspire', function () {
 */
 
 Schedule::command('payments:sweep')->everyFiveMinutes()->withoutOverlapping();
+
+/*
+| The sweep over the tracking outbox, beside the payment one and on the same
+| cadence: no web request ever calls an ad platform, so this is the only
+| thing that delivers what a Moment wrote down. Never two at once, because
+| two sweeps draining one Destination is two batches reporting the same
+| events.
+*/
+
+Schedule::command('tracking:sweep')->everyFiveMinutes()->withoutOverlapping();
