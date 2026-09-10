@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -64,6 +65,19 @@ class Page extends Model
         return $this->belongsToMany(Product::class)
             ->withPivot('position')
             ->orderByPivot('position');
+    }
+
+    /**
+     * The Orders captured on this Page, by the live link. An Order whose
+     * Page was force-deleted keeps only its slug and belongs to no Page here;
+     * a soft-deleted Page still holds its Orders, which is what lets its
+     * report be read after it is retired.
+     *
+     * @return HasMany<Order, $this>
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     /**

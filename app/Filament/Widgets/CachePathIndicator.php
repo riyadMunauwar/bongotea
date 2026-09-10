@@ -50,6 +50,12 @@ class CachePathIndicator extends Widget
     protected int|string|array $columnSpan = 'full';
 
     /**
+     * Below the report widgets, which sort in the tens. A diagnostic that is
+     * read once a week sits under the figures that are read every morning.
+     */
+    protected static ?int $sort = 90;
+
+    /**
      * Rendered with the Dashboard rather than lazily.
      *
      * A lazy widget is a placeholder plus a Livewire round trip before its own

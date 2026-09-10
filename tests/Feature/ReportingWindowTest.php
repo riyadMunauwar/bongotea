@@ -116,3 +116,19 @@ it('buckets a one-day window by the hour and anything longer by the day, empty b
     expect(ReportingWindow::between('2026-09-01', '2026-09-01')->bucketSize())->toBe(BucketSize::Hour)
         ->and(ReportingWindow::between('2026-09-01', '2026-09-02')->bucketSize())->toBe(BucketSize::Day);
 });
+
+it('reads a screen\'s filters, defaulting to the last seven days whenever the form could not have said otherwise', function (?array $filters, string $start, string $end, ReportingPreset $preset) {
+    $window = ReportingWindow::fromFilters($filters, dhakaMorning());
+
+    expect($window->preset)->toBe($preset)
+        ->and($window->start->toIso8601String())->toBe($start)
+        ->and($window->end->toIso8601String())->toBe($end);
+})->with([
+    'no filters yet' => [null, '2026-09-02T18:00:00+00:00', '2026-09-09T18:00:00+00:00', ReportingPreset::Last7Days],
+    'a preset' => [[ReportingWindow::PRESET_FILTER => 'today'], '2026-09-08T18:00:00+00:00', '2026-09-09T18:00:00+00:00', ReportingPreset::Today],
+    'an unknown preset' => [[ReportingWindow::PRESET_FILTER => 'last_year'], '2026-09-02T18:00:00+00:00', '2026-09-09T18:00:00+00:00', ReportingPreset::Last7Days],
+    'custom dates' => [[ReportingWindow::PRESET_FILTER => 'custom', ReportingWindow::FROM_FILTER => '2026-09-01', ReportingWindow::UNTIL_FILTER => '2026-09-03'], '2026-08-31T18:00:00+00:00', '2026-09-03T18:00:00+00:00', ReportingPreset::Custom],
+    'custom dates the wrong way round' => [[ReportingWindow::PRESET_FILTER => 'custom', ReportingWindow::FROM_FILTER => '2026-09-03', ReportingWindow::UNTIL_FILTER => '2026-09-01'], '2026-08-31T18:00:00+00:00', '2026-09-03T18:00:00+00:00', ReportingPreset::Custom],
+    'custom with a date still unpicked' => [[ReportingWindow::PRESET_FILTER => 'custom', ReportingWindow::FROM_FILTER => '2026-09-01', ReportingWindow::UNTIL_FILTER => null], '2026-09-02T18:00:00+00:00', '2026-09-09T18:00:00+00:00', ReportingPreset::Last7Days],
+    'custom with an unreadable date' => [[ReportingWindow::PRESET_FILTER => 'custom', ReportingWindow::FROM_FILTER => 'soon', ReportingWindow::UNTIL_FILTER => '2026-09-03'], '2026-09-02T18:00:00+00:00', '2026-09-09T18:00:00+00:00', ReportingPreset::Last7Days],
+]);

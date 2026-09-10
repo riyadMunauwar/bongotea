@@ -5,6 +5,7 @@ namespace App\Support\Reporting;
 use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Carbon\Exceptions\InvalidFormatException;
 use InvalidArgumentException;
 
 /**
@@ -21,6 +22,17 @@ use InvalidArgumentException;
  */
 final class ReportingWindow
 {
+    /**
+     * The keys a screen's filter form stores the window under, read back by
+     * `fromFilters()`: the preset's value, and the two dates when it is
+     * Custom.
+     */
+    public const string PRESET_FILTER = 'preset';
+
+    public const string FROM_FILTER = 'from';
+
+    public const string UNTIL_FILTER = 'until';
+
     private function __construct(
         /** The first instant inside the window, in UTC. */
         public readonly CarbonImmutable $start,
@@ -69,6 +81,44 @@ final class ReportingWindow
     }
 
     /**
+     * The window a screen's filter form describes, keyed by the constants
+     * above, as Filament hands a widget its page filters. Anything a form
+     * cannot have said — no filters yet, an unknown preset, Custom with a
+     * date still unpicked or unreadable — reads as the default, so a widget
+     * always has a window and never a form error. Custom dates the wrong
+     * way round are taken as the span between them.
+     *
+     * @param  array<string, mixed>|null  $filters
+     */
+    public static function fromFilters(?array $filters, ?CarbonInterface $now = null): self
+    {
+        $preset = ReportingPreset::tryFrom((string) ($filters[self::PRESET_FILTER] ?? '')) ?? ReportingPreset::Last7Days;
+
+        if ($preset !== ReportingPreset::Custom) {
+            return self::of($preset, $now);
+        }
+
+        $from = $filters[self::FROM_FILTER] ?? null;
+        $until = $filters[self::UNTIL_FILTER] ?? null;
+
+        if (! is_string($from) || ! is_string($until) || $from === '' || $until === '') {
+            return self::default($now);
+        }
+
+        try {
+            $timezone = self::merchantTimezone();
+            $first = CarbonImmutable::parse($from, $timezone)->startOfDay();
+            $last = CarbonImmutable::parse($until, $timezone)->startOfDay();
+        } catch (InvalidFormatException) {
+            return self::default($now);
+        }
+
+        return $last->lessThan($first)
+            ? self::coveringDays($last, $first, $timezone)
+            : self::coveringDays($first, $last, $timezone);
+    }
+
+    /**
      * A window between two dates a Merchant named, both inclusive, as a
      * date picker hands them over (`Y-m-d`).
      */
@@ -82,6 +132,15 @@ final class ReportingWindow
             throw new InvalidArgumentException("A Reporting Window cannot end ({$until}) before it starts ({$from}).");
         }
 
+        return self::coveringDays($first, $last, $timezone);
+    }
+
+    /**
+     * The Custom window from one local midnight to the midnight after
+     * another, the second no earlier than the first.
+     */
+    private static function coveringDays(CarbonImmutable $first, CarbonImmutable $last, string $timezone): self
+    {
         return new self($first->utc(), $last->addDay()->utc(), ReportingPreset::Custom, $timezone);
     }
 
