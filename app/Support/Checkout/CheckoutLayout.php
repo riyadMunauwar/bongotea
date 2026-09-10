@@ -24,11 +24,10 @@ namespace App\Support\Checkout;
  * every one an exhaustive match over all ten, so a layout added or changed
  * has to answer each question before anything draws it.
  *
- * Stacked is drawn as designed and is what the base sheet draws; Split, Split
- * reversed, Dark panel, Bento grid, Compact embed, Chips and Invoice are drawn
- * as designed by a block of their own. The other two are chosen from the same
- * list and, until each one's own rules land, draw as the base does under a
- * class of their own.
+ * Stacked is drawn as designed and is what the base sheet draws; the other
+ * nine are drawn as designed by a block of their own. Two of them also behave:
+ * Stepper shows one panel at a time and Accordion opens one at a time, from
+ * the island's one inline script and never from the markup (ADR-0015).
  */
 enum CheckoutLayout: string
 {
@@ -132,8 +131,21 @@ enum CheckoutLayout: string
                 WordSlot::InvoiceQuantityHeading,
                 WordSlot::InvoiceAmountHeading,
             ],
-            self::Stepper,
-            self::Accordion => [],
+            self::Stepper => [
+                WordSlot::StepperProductsHeadline,
+                WordSlot::StepperDetailsHeadline,
+                WordSlot::StepperPaymentHeadline,
+                WordSlot::StepperProductsStep,
+                WordSlot::StepperDetailsStep,
+                WordSlot::StepperPaymentStep,
+                WordSlot::StepperNext,
+                WordSlot::StepperBack,
+            ],
+            self::Accordion => [
+                WordSlot::AccordionProductsHeadline,
+                WordSlot::AccordionDetailsHeadline,
+                WordSlot::AccordionPaymentHeadline,
+            ],
         };
     }
 
@@ -282,10 +294,10 @@ enum CheckoutLayout: string
         return match ($this) {
             self::Stacked,
             self::SplitReversed,
+            self::Stepper,
             self::DarkPanel => OrderButton::DEFAULT_WORDING.' · '.OrderButton::TOTAL_PLACEHOLDER,
             self::Invoice => 'অর্ডার কনফার্ম করুন / Place order',
             self::Split,
-            self::Stepper,
             self::Accordion,
             self::BentoGrid,
             self::CompactEmbed,
@@ -320,9 +332,21 @@ enum CheckoutLayout: string
      * still the same bytes for every Page arranged the same way, however many
      * questions it asks and however much of it is restyled.
      *
-     * Stacked adds nothing: it is what the base sheet draws. A layout whose
-     * block has not landed yet adds nothing either, and draws as the base
-     * does until its own rules do.
+     * Stacked adds nothing: it is what the base sheet draws.
+     *
+     * The two behaving arrangements are the only blocks that write
+     * `display: none`, and both write it once, on the `hidden` attribute
+     * their own script sets — an author's `display` beats the browser's
+     * `[hidden]`, so a layout that hides by script has to say what hidden
+     * means. Nothing in the markup carries it, which is the half ADR-0015
+     * fixes: without script every panel shows, in the order the document was
+     * written. Stepper turns the card into the design's rail-over-panel by
+     * unpainting the card and painting the form instead, so the rail the
+     * script builds above the form sits on the section's own ground;
+     * Accordion paints the card in the footer bar's ink and the panels in the
+     * surface over it, so what is left below the last panel reads as the bar
+     * the design draws — a pseudo-element could not, because how many panels
+     * a Page draws is not known to the sheet.
      *
      * The two-column arrangements share one construction. The form is a grid
      * whose children are placed by row and column outright — the questions
@@ -399,9 +423,62 @@ enum CheckoutLayout: string
     public function styleRules(): string
     {
         return match ($this) {
-            self::Stacked,
-            self::Stepper,
-            self::Accordion => '',
+            self::Stacked => '',
+            self::Stepper => <<<'CSS'
+        .gio-checkout-stepper .gio-checkout-card { max-width: 37.5rem; padding: 0; border: 0; background: transparent; }
+        .gio-checkout-stepper .gio-checkout-steps { display: flex; align-items: center; gap: .5rem; margin: 0 0 1.5rem; }
+        .gio-checkout-stepper .gio-checkout-step { display: flex; align-items: center; gap: .5rem; padding: 0; border: 0; background: none; color: var(--gio-muted); font-family: inherit; font-size: .8125rem; font-weight: 600; line-height: 1.3; cursor: pointer; }
+        .gio-checkout-stepper .gio-checkout-step[aria-current="step"] { color: var(--gio-text); }
+        .gio-checkout-stepper .gio-checkout-step-number { display: grid; place-items: center; flex: none; width: 1.625rem; height: 1.625rem; border: 1px solid var(--gio-border); border-radius: 50%; background: var(--gio-surface); font-size: .75rem; }
+        .gio-checkout-stepper .gio-checkout-step-number[data-gio-done] { border-color: var(--gio-accent); background: var(--gio-accent); color: var(--gio-surface); }
+        .gio-checkout-stepper .gio-checkout-step-line { flex: 1; height: 1px; background: var(--gio-border); }
+        .gio-checkout-stepper .gio-checkout-step-line[data-gio-done] { background: var(--gio-accent); }
+        .gio-checkout-stepper .gio-checkout-form { display: grid; gap: 1rem; align-content: start; min-height: 18.75rem; padding: 1.5rem; border: 1px solid var(--gio-border); background: var(--gio-surface); }
+        .gio-checkout-stepper .gio-checkout-questions { display: contents; }
+        .gio-checkout-stepper .gio-checkout-section { margin: 0; }
+        .gio-checkout-stepper .gio-checkout-heading { margin: 0 0 .875rem; font-size: 1.0625rem; }
+        .gio-checkout-stepper .gio-checkout-payment { grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr)); gap: .625rem; }
+        .gio-checkout-stepper .gio-checkout-payment-choice { padding: .75rem; font-size: .8125rem; }
+        .gio-checkout-stepper .gio-checkout-summary { gap: .375rem; margin: 0; padding: .875rem; border: 1px solid var(--gio-border); background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-stepper .gio-checkout-row { font-size: .8125rem; }
+        .gio-checkout-stepper .gio-checkout-total { margin: .25rem 0 0; padding: .5rem 0 0; font-size: 1.0625rem; }
+        .gio-checkout-stepper .gio-checkout-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+        .gio-checkout-stepper .gio-checkout-back { padding: .75rem 1.125rem; border: 1px solid var(--gio-border); background: transparent; color: color-mix(in srgb, var(--gio-text) 35%, var(--gio-muted)); font-family: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+        .gio-checkout-stepper .gio-checkout-next { margin-left: auto; padding: .75rem 1.375rem; border: 0; background: var(--gio-accent); color: var(--gio-surface); font-family: inherit; font-size: .875rem; font-weight: 700; cursor: pointer; }
+        .gio-checkout-stepper .gio-checkout-submit { margin: 0; }
+        .gio-checkout-stepper .gio-checkout-note { margin: 0; }
+        .gio-checkout-stepper [hidden] { display: none; }
+        @media (max-width: 37.5rem) { .gio-checkout-stepper .gio-checkout-card { padding: 0; } .gio-checkout-stepper .gio-checkout-form { min-height: 0; padding: 1.25rem 1rem; } .gio-checkout-stepper .gio-checkout-step-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } }
+
+CSS,
+            self::Accordion => <<<'CSS'
+        .gio-checkout-accordion .gio-checkout-card { max-width: 38.75rem; padding: 0; background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-accordion .gio-checkout-form { display: grid; grid-template-columns: 1.125rem minmax(0, 1fr) .75rem auto 1.125rem; align-items: center; }
+        .gio-checkout-accordion .gio-checkout-questions { display: contents; }
+        .gio-checkout-accordion .gio-checkout-section { display: flex; flex-direction: column; gap: 1.125rem; grid-column: 1 / -1; margin: 0; padding: 0 1.125rem 1.125rem; border-bottom: 1px solid var(--gio-border); background: var(--gio-surface); }
+        .gio-checkout-accordion .gio-checkout-section[data-gio-shut] { padding-bottom: 0; }
+        .gio-checkout-accordion .gio-checkout-heading { margin: 0 -1.125rem; }
+        .gio-checkout-accordion .gio-checkout-panel-head { display: flex; align-items: center; gap: .75rem; box-sizing: border-box; width: 100%; padding: 1rem 1.125rem; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+        .gio-checkout-accordion .gio-checkout-panel-head[aria-expanded="true"] { background: color-mix(in srgb, var(--gio-text) 3%, var(--gio-surface)); }
+        .gio-checkout-accordion .gio-checkout-panel-title { flex: 1; min-width: 0; font-size: .9375rem; }
+        .gio-checkout-accordion .gio-checkout-panel-summary { font-size: .8125rem; font-weight: 500; text-align: right; color: var(--gio-muted); }
+        .gio-checkout-accordion .gio-checkout-panel-chevron { flex: none; font-size: .75rem; font-weight: 400; color: var(--gio-muted); }
+        .gio-checkout-accordion .gio-checkout-product { gap: .75rem; padding: .625rem .75rem; }
+        .gio-checkout-accordion .gio-checkout-product-words { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .375rem; }
+        .gio-checkout-accordion .gio-checkout-price { margin: 0; }
+        .gio-checkout-accordion .gio-checkout-quantity-step { width: 1.75rem; height: 1.75rem; font-size: .9375rem; }
+        .gio-checkout-accordion .gio-checkout-delivery { margin: 0; }
+        .gio-checkout-accordion .gio-checkout-payment { grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr)); gap: .625rem; }
+        .gio-checkout-accordion .gio-checkout-payment-choice { padding: .75rem; font-size: .8125rem; }
+        .gio-checkout-accordion .gio-checkout-summary { gap: .125rem; grid-column: 2; margin: 1rem 0; padding: 0; border-top: 0; }
+        .gio-checkout-accordion .gio-checkout-row { font-size: .75rem; }
+        .gio-checkout-accordion .gio-checkout-total { margin: 0; padding: 0; border-top: 0; font-size: 1.375rem; }
+        .gio-checkout-accordion .gio-checkout-submit { grid-column: 4; width: auto; margin: 1rem 0; padding: .8125rem 1.75rem; }
+        .gio-checkout-accordion .gio-checkout-note { grid-column: 2 / 5; margin: 0 0 1rem; text-align: left; }
+        .gio-checkout-accordion [hidden] { display: none; }
+        @media (max-width: 37.5rem) { .gio-checkout-accordion .gio-checkout-card { padding: 0; } .gio-checkout-accordion .gio-checkout-section { padding: 0 1rem 1rem; } .gio-checkout-accordion .gio-checkout-heading { margin: 0 -1rem; } .gio-checkout-accordion .gio-checkout-panel-summary { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } .gio-checkout-accordion .gio-checkout-summary { grid-column: 2 / 5; } .gio-checkout-accordion .gio-checkout-submit { grid-column: 2 / 5; width: 100%; margin: 0 0 1rem; } }
+
+CSS,
             self::Split => <<<'CSS'
         .gio-checkout-split .gio-checkout-card { max-width: 57.5rem; padding: 2rem; }
         .gio-checkout-split .gio-checkout-form { display: grid; grid-template-columns: minmax(0, 1fr) 1.75rem 1.25rem minmax(0, 17.5rem) 1.25rem; grid-template-rows: 1.25rem auto auto auto auto auto 1.25rem 1fr; align-items: start; }
@@ -679,13 +756,15 @@ CSS,
     }
 
     /**
-     * Where the card's thumbnail is, under `public/`, or null while the layout
-     * has none yet.
+     * Where the card's thumbnail is, under `public/`.
      *
-     * A static picture shipped with the app, one per layout as each lands, so
-     * a Merchant sees what they are choosing before they choose it.
+     * A static picture shipped with the app, one per layout, so a Merchant
+     * sees what they are choosing before they choose it. The picker's slot
+     * still takes a null for an option with no picture — that is the
+     * component's contract, not this enum's — but every arrangement here is
+     * drawn now, so none of these is null.
      */
-    public function thumbnail(): ?string
+    public function thumbnail(): string
     {
         return match ($this) {
             self::Stacked => 'images/checkout-layouts/stacked.svg',
@@ -696,8 +775,8 @@ CSS,
             self::CompactEmbed => 'images/checkout-layouts/compact-embed.svg',
             self::Chips => 'images/checkout-layouts/chips.svg',
             self::Invoice => 'images/checkout-layouts/invoice.svg',
-            self::Stepper,
-            self::Accordion => null,
+            self::Stepper => 'images/checkout-layouts/stepper.svg',
+            self::Accordion => 'images/checkout-layouts/accordion.svg',
         };
     }
 
@@ -750,11 +829,11 @@ CSS,
     }
 
     /**
-     * @return array<string, ?string>
+     * @return array<string, string>
      */
     public static function thumbnails(): array
     {
-        return self::byValue(fn (self $layout): ?string => $layout->thumbnail());
+        return self::byValue(fn (self $layout): string => $layout->thumbnail());
     }
 
     /**

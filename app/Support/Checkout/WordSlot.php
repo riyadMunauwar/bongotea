@@ -25,7 +25,9 @@ namespace App\Support\Checkout;
  * keeps truthful by script, the way the Order Button carries `{total}`. A slot
  * may also be drawn only sometimes: the empty-state line is in the markup
  * whenever its layout is chosen, and the sheet shows it while nothing is
- * ticked.
+ * ticked. And a slot may not be drawn in the document at all — a `Control`'s
+ * word sits on a control a behaving layout's script builds, so it has no
+ * `WordPlace` and rides to the script on the form element instead.
  */
 enum WordSlot: string
 {
@@ -42,6 +44,19 @@ enum WordSlot: string
     case SplitReversedBundleEyebrow = 'split_reversed_bundle_eyebrow';
     case SplitReversedFormHeadline = 'split_reversed_form_headline';
     case SplitReversedFootnote = 'split_reversed_footnote';
+
+    case StepperProductsHeadline = 'stepper_products_headline';
+    case StepperDetailsHeadline = 'stepper_details_headline';
+    case StepperPaymentHeadline = 'stepper_payment_headline';
+    case StepperProductsStep = 'stepper_products_step';
+    case StepperDetailsStep = 'stepper_details_step';
+    case StepperPaymentStep = 'stepper_payment_step';
+    case StepperNext = 'stepper_next';
+    case StepperBack = 'stepper_back';
+
+    case AccordionProductsHeadline = 'accordion_products_headline';
+    case AccordionDetailsHeadline = 'accordion_details_headline';
+    case AccordionPaymentHeadline = 'accordion_payment_headline';
 
     case DarkPanelSummaryEyebrow = 'dark_panel_summary_eyebrow';
     case DarkPanelFormHeadline = 'dark_panel_form_headline';
@@ -69,6 +84,12 @@ enum WordSlot: string
     /** A line beneath the button is a sentence, not a paragraph of terms. */
     public const LINE_MAX_LENGTH = 120;
 
+    /**
+     * A word on a control is a step in a rail or a button beside another
+     * button: one or two words, in whichever scripts fit them.
+     */
+    public const CONTROL_MAX_LENGTH = 24;
+
     /** The placeholder the number of picked products stands in for. */
     public const COUNT_PLACEHOLDER = '{count}';
 
@@ -79,11 +100,12 @@ enum WordSlot: string
      * The design's words for this slot.
      *
      * Bilingual, Bangla first and English second, wherever the design writes
-     * two scripts — and English alone where it writes one, as it does for the
-     * Invoice's three column headings: a heading a hair over a stepper has
-     * room for one word, and the bill it heads is read across rather than
-     * down. A Merchant who wants two scripts there writes them, like every
-     * other word here.
+     * two scripts — and one script alone where it writes one: the Invoice's
+     * three column headings in English, because a heading a hair over a
+     * stepper has room for one word and the bill it heads is read across
+     * rather than down; the Stepper's three step labels in Bangla and its
+     * Back in English, because a step in a rail is one word wide. A Merchant
+     * who wants two scripts there writes them, like every other word here.
      */
     public function defaultValue(): string
     {
@@ -99,6 +121,17 @@ enum WordSlot: string
             self::SplitReversedBundleEyebrow => 'বান্ডেল · {count}টি নির্বাচিত / Bundle · {count} selected',
             self::SplitReversedFormHeadline => 'অর্ডার করতে ফর্মটি পূরণ করুন / Fill in the form to order',
             self::SplitReversedFootnote => 'ডেলিভারি {delivery} সহ / Delivery {delivery} included',
+            self::StepperProductsHeadline => 'কোন প্রোডাক্টগুলো নিবেন? / Choose your items',
+            self::StepperDetailsHeadline => 'কোথায় পাঠাবো? / Where should we deliver?',
+            self::StepperPaymentHeadline => 'পেমেন্ট ও কনফার্ম / Payment & confirm',
+            self::StepperProductsStep => 'প্রোডাক্ট',
+            self::StepperDetailsStep => 'ডেলিভারি',
+            self::StepperPaymentStep => 'পেমেন্ট',
+            self::StepperNext => 'পরবর্তী / Next →',
+            self::StepperBack => '← Back',
+            self::AccordionProductsHeadline => 'প্রোডাক্ট / Products',
+            self::AccordionDetailsHeadline => 'ডেলিভারি / Delivery',
+            self::AccordionPaymentHeadline => 'পেমেন্ট / Payment',
             self::DarkPanelSummaryEyebrow => 'আপনার অর্ডার / Order summary',
             self::DarkPanelFormHeadline => 'ডেলিভারি তথ্য / Delivery details',
             self::BentoGridProductsEyebrow => '০১ · প্রোডাক্ট / 01 · Products',
@@ -134,6 +167,17 @@ enum WordSlot: string
             self::SplitReversedBundleEyebrow => 'Bundle eyebrow',
             self::SplitReversedFormHeadline => 'Form headline',
             self::SplitReversedFootnote => 'Footnote under the button',
+            self::StepperProductsHeadline => 'Products panel headline',
+            self::StepperDetailsHeadline => 'Delivery panel headline',
+            self::StepperPaymentHeadline => 'Payment panel headline',
+            self::StepperProductsStep => 'Products step label',
+            self::StepperDetailsStep => 'Delivery step label',
+            self::StepperPaymentStep => 'Payment step label',
+            self::StepperNext => 'Next button',
+            self::StepperBack => 'Back button',
+            self::AccordionProductsHeadline => 'Products header',
+            self::AccordionDetailsHeadline => 'Delivery header',
+            self::AccordionPaymentHeadline => 'Payment header',
             self::DarkPanelSummaryEyebrow => 'Summary eyebrow',
             self::DarkPanelFormHeadline => 'Form headline',
             self::BentoGridProductsEyebrow => 'Products eyebrow',
@@ -171,6 +215,17 @@ enum WordSlot: string
             self::SplitPaymentHeadline,
             self::SplitHint,
             self::SplitReversedFormHeadline,
+            self::StepperProductsHeadline,
+            self::StepperDetailsHeadline,
+            self::StepperPaymentHeadline,
+            self::StepperProductsStep,
+            self::StepperDetailsStep,
+            self::StepperPaymentStep,
+            self::StepperNext,
+            self::StepperBack,
+            self::AccordionProductsHeadline,
+            self::AccordionDetailsHeadline,
+            self::AccordionPaymentHeadline,
             self::DarkPanelSummaryEyebrow,
             self::DarkPanelFormHeadline,
             self::BentoGridProductsEyebrow,
@@ -202,9 +257,20 @@ enum WordSlot: string
             self::SplitDeliveryHeadline,
             self::SplitPaymentHeadline,
             self::SplitReversedFormHeadline,
+            self::StepperProductsHeadline,
+            self::StepperDetailsHeadline,
+            self::StepperPaymentHeadline,
+            self::AccordionProductsHeadline,
+            self::AccordionDetailsHeadline,
+            self::AccordionPaymentHeadline,
             self::DarkPanelFormHeadline,
             self::CompactEmbedTitle,
             self::InvoiceTitle => WordKind::Headline,
+            self::StepperProductsStep,
+            self::StepperDetailsStep,
+            self::StepperPaymentStep,
+            self::StepperNext,
+            self::StepperBack => WordKind::Control,
             self::SplitReversedBundleEyebrow,
             self::DarkPanelSummaryEyebrow,
             self::BentoGridProductsEyebrow,
@@ -224,11 +290,24 @@ enum WordSlot: string
     }
 
     /**
-     * Where on the form the island draws this slot.
+     * Where on the form the island draws this slot, or null for a word the
+     * document does not draw at all.
+     *
+     * A `Control`'s word sits on a control the script builds and the markup
+     * does not carry, so there is nowhere on the form to put it: it rides to
+     * the script on the form element instead. Null rather than a place of its
+     * own, because a place is what `CheckoutLayout::slotAt()` looks a word up
+     * by, and a layout puts at most one word at each — a Stepper wording
+     * three steps and two buttons would have five words at one place.
      */
-    public function place(): WordPlace
+    public function place(): ?WordPlace
     {
         return match ($this) {
+            self::StepperProductsStep,
+            self::StepperDetailsStep,
+            self::StepperPaymentStep,
+            self::StepperNext,
+            self::StepperBack => null,
             self::StackedProductsHeadline,
             self::SplitOrderHeadline,
             self::SplitReversedBundleEyebrow,
@@ -236,6 +315,8 @@ enum WordSlot: string
             self::BentoGridProductsEyebrow,
             self::CompactEmbedTitle,
             self::InvoiceTitle,
+            self::StepperProductsHeadline,
+            self::AccordionProductsHeadline,
             self::ChipsSelectEyebrow => WordPlace::Products,
             self::CompactEmbedItemCount => WordPlace::ItemCount,
             self::InvoiceItemHeading => WordPlace::ItemHeading,
@@ -245,12 +326,16 @@ enum WordSlot: string
             self::StackedDetailsHeadline,
             self::SplitDetailsHeadline,
             self::SplitReversedFormHeadline,
+            self::StepperDetailsHeadline,
+            self::AccordionDetailsHeadline,
             self::DarkPanelFormHeadline,
             self::BentoGridDetailsEyebrow => WordPlace::Details,
             self::SplitDeliveryHeadline,
             self::ChipsDeliveryEyebrow => WordPlace::Delivery,
             self::StackedPaymentHeadline,
             self::SplitPaymentHeadline,
+            self::StepperPaymentHeadline,
+            self::AccordionPaymentHeadline,
             self::BentoGridPaymentEyebrow,
             self::ChipsPaymentEyebrow => WordPlace::Payment,
             self::SplitHint,
@@ -262,12 +347,13 @@ enum WordSlot: string
      * Why the slot cannot say this, or null where it can.
      *
      * Every slot is one line: a heading, an eyebrow and a count a short one,
-     * and a line beneath the button or beneath an empty list has room for a
-     * sentence.
+     * a word on a control shorter still, and a line beneath the button or
+     * beneath an empty list has room for a sentence.
      */
     public function refusal(string $value): ?string
     {
         return match ($this->kind()) {
+            WordKind::Control => CheckoutWords::lineRefusal('A word on a button', $value, self::CONTROL_MAX_LENGTH),
             WordKind::NumberedHeadline,
             WordKind::Headline => CheckoutWords::lineRefusal('A headline', $value, self::HEADLINE_MAX_LENGTH),
             WordKind::Eyebrow => CheckoutWords::lineRefusal('An eyebrow', $value, self::HEADLINE_MAX_LENGTH),

@@ -3,17 +3,20 @@
 use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
+use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\DeliveryOption;
 use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\Orders\OrderOwnership;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
@@ -541,6 +544,48 @@ it('checks a capture against the checkout config of the page it came from', func
 
     expect(Order::count())->toBe(1);
 });
+
+it('captures from an arrangement that behaves exactly what the stacked one captures', function (CheckoutLayout $layout) {
+    $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+
+    $arranged = function (string $slug, CheckoutLayout $layout) use ($product): Page {
+        $page = sellingPage($product, $slug);
+        $page->checkout_config = CheckoutConfig::fromArray(['layout' => $layout->value]);
+        $page->save();
+
+        return $page->refresh();
+    };
+
+    foreach ([$arranged('plain', CheckoutLayout::Stacked), $arranged('behaving', $layout)] as $page) {
+        $this->postJson(route('checkout.store'), capturePayload($page, [
+            'quantities' => [$product->getKey() => 2],
+        ]))->assertCreated();
+    }
+
+    /**
+     * Everything an Order holds but what says which Page it came from and
+     * when: a layout decides what the island draws and nothing about what it
+     * asks for or what it charges, so an Order placed from a Stepper or an
+     * Accordion is the Order the same Page arranged stacked would have taken,
+     * line for line and figure for figure (ADR-0015).
+     */
+    $captured = function (string $slug): array {
+        $order = Order::where('page_slug', $slug)->sole();
+
+        return [
+            'order' => Arr::except($order->getAttributes(), ['id', 'order_number', 'page_id', 'page_slug', 'created_at', 'updated_at']),
+            'lines' => $order->lines->map(
+                fn (OrderLine $line): array => Arr::except($line->getAttributes(), ['id', 'order_id', 'created_at', 'updated_at']),
+            )->all(),
+        ];
+    };
+
+    expect($layout->behaves())->toBeTrue()
+        ->and($captured('behaving'))->toBe($captured('plain'));
+})->with([
+    'stepper' => CheckoutLayout::Stepper,
+    'accordion' => CheckoutLayout::Accordion,
+]);
 
 /**
  * The same Page's Checkout with named fields reconfigured — switched off,

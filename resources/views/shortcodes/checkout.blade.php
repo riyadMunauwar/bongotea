@@ -112,8 +112,33 @@
             WordKind::ColumnHeading => '<span class="gio-checkout-column-heading">'.$sentenceFor($slot).'</span>',
             WordKind::EmptyState => '<p class="gio-checkout-empty">'.$sentenceFor($slot).'</p>',
             WordKind::Line => '<p class="gio-checkout-footnote">'.$sentenceFor($slot).'</p>',
+            /**
+             * Never reached through `slotAt()`: a control's word has no place
+             * on the form, because the control it sits on is not in the
+             * document at all. The arm is what keeps the match total.
+             */
+            WordKind::Control => '',
         };
     };
+
+    /**
+     * The words a behaving layout's script draws on the chrome it builds —
+     * the steps in a stepper's rail, its Next, its Back — handed over on the
+     * form rather than written into the document.
+     *
+     * Without script there is no rail and no Next for a word to sit on, so
+     * putting either in the markup would be a dead button on a form that
+     * still has to take an order (ADR-0015). This rides on the form the way
+     * the button's own `{total}` template does, and is nothing at all on the
+     * eight arrangements that only arrange.
+     */
+    $cues = '';
+
+    foreach ($layout->wordSlots() as $slot) {
+        if ($slot->kind() === WordKind::Control) {
+            $cues .= ' data-gio-cue-'.str_replace('_', '-', $slot->value).'="'.e($words->slot($slot)).'"';
+        }
+    }
 @endphp
 {{--
     The layout's class rides beside the base one, in every layout, and the
@@ -540,7 +565,7 @@
                   low by the delivery charge is a refused parcel.
               --}}
               data-delivery-amount="{{ $preselected?->amount ?? 0 }}"
-              data-token-url="{{ route('checkout.token') }}">
+              data-token-url="{{ route('checkout.token') }}"{!! $cues !!}>
             <input type="hidden" name="page" value="{{ $page->slug }}">
 
             {{--
@@ -575,7 +600,15 @@
                 would.
             --}}
             @if ($showProducts)
-                <div class="gio-checkout-section">
+                {{--
+                    Which of the three the section is, said in the markup so
+                    a behaving layout's script can step through them or open
+                    one at a time without reading the classes of what happens
+                    to be inside. Written on every layout, so the document is
+                    the same shape whichever arrangement is chosen, and read
+                    by nothing at all on the eight that do not behave.
+                --}}
+                <div class="gio-checkout-section" data-gio-panel="products">
                     {!! $wordAt(WordPlace::Products) !!}
                     {!! $wordAt(WordPlace::ItemCount) !!}
 
@@ -794,7 +827,7 @@
                 row; the delivery choice sits beneath it in the same section,
                 as the design draws the details.
             --}}
-            <div class="gio-checkout-section">
+            <div class="gio-checkout-section" data-gio-panel="details">
                 {!! $wordAt(WordPlace::Details) !!}
 
                 <div class="gio-checkout-fields">
@@ -993,7 +1026,7 @@
                 The logo is decorative beside a name that says the same thing,
                 so its alt is empty and a screen reader hears the method once.
             --}}
-            <div class="gio-checkout-section">
+            <div class="gio-checkout-section" data-gio-panel="payment">
                 {!! $wordAt(WordPlace::Payment) !!}
 
                 <fieldset class="gio-checkout-choices gio-checkout-payment">
@@ -1115,6 +1148,31 @@
     var TOO_MANY_ATTEMPTS = 'Too many attempts just now. Please wait a moment and try again.';
     var SERVER_FAILED = 'Something went wrong placing your order. Please try again.';
 
+    /*
+     * The two arrangements that behave, named by the class the layout puts on
+     * the island's root. Everything keyed off these does nothing at all on the
+     * other eight, which is what lets one script serve every page: the chrome
+     * each of the two needs — a stepper's rail with its Next and Back, an
+     * accordion's header buttons — is built here rather than written into the
+     * document, so a visitor whose scripts never run reads every panel in the
+     * order the page was written and orders from the form as it stands
+     * (ADR-0015).
+     */
+    var STEPPER = 'gio-checkout-stepper';
+    var ACCORDION = 'gio-checkout-accordion';
+
+    /*
+     * What a shut accordion header says about the choice made inside it, and
+     * the arrows either header wears. English alone, like the sentences
+     * above: these are the script's own words rather than the merchant's,
+     * who words the header itself on the Words tab.
+     */
+    var ONE_ITEM = ' item';
+    var MANY_ITEMS = ' items';
+    var SUMMARY_JOIN = ' · ';
+    var OPEN_CHEVRON = '▲';
+    var SHUT_CHEVRON = '▼';
+
     function money(form, minorUnits) {
         var decimals = parseInt(form.dataset.currencyDecimals, 10) || 0;
         var value = minorUnits / Math.pow(10, decimals);
@@ -1211,6 +1269,9 @@
         set('delivery', money(form, delivery.amount));
         set('total', total);
 
+        /* And what an accordion's shut headers say, off the same figures. */
+        summarise(form, count, subtotal);
+
         /*
          * The button carries the same figure where the merchant put it there.
          * Left alone while an order is going out: the button is saying so, and
@@ -1230,6 +1291,289 @@
      */
     function islandFor(form) {
         return form.closest('[data-gio-checkout]');
+    }
+
+    /* Whether this form's island is arranged in the layout named. */
+    function arrangedAs(form, layout) {
+        var island = islandFor(form);
+
+        return island !== null && island.classList.contains(layout);
+    }
+
+    /* Whether it is arranged in either of the two that behave. */
+    function behaves(form) {
+        return arrangedAs(form, STEPPER) || arrangedAs(form, ACCORDION);
+    }
+
+    /*
+     * The sections a behaving layout steps through or opens, in the order the
+     * document writes them. Which of the three each is, is said in the markup:
+     * the products may be hidden and the payment choice may not be drawn, so a
+     * step's own word cannot be found by counting.
+     */
+    function panelsOf(form) {
+        return [].slice.call(form.querySelectorAll('[data-gio-panel]'));
+    }
+
+    /* One of the layout's own words for a control this script builds. */
+    function cue(form, name) {
+        return form.getAttribute('data-gio-cue-' + name) || '';
+    }
+
+    function element(tag, className) {
+        var el = document.createElement(tag);
+        el.className = className;
+
+        return el;
+    }
+
+    /* `type="button"`, because a button in a form submits it unless told otherwise. */
+    function chrome(className, text) {
+        var el = element('button', className);
+        el.type = 'button';
+        el.textContent = text;
+
+        return el;
+    }
+
+    function show(el, shown) {
+        if (el) { el.hidden = !shown; }
+    }
+
+    function mark(el, done) {
+        if (!el) { return; }
+
+        if (done) { el.setAttribute('data-gio-done', ''); } else { el.removeAttribute('data-gio-done'); }
+    }
+
+    /*
+     * The first answer in a panel that the browser would refuse, or null where
+     * there is none.
+     *
+     * This is what a behaving layout has to ask before it hides anything: a
+     * required box inside a panel the script has hidden cannot be focused, so
+     * the browser refuses the whole submission and shows nobody anything at
+     * all. Asked before every step forward, and again before the order goes
+     * out, so the panel holding the refusal is opened before the browser is
+     * asked to say what is wrong.
+     */
+    function refusalIn(panel) {
+        var refused = null;
+
+        panel.querySelectorAll('input, select, textarea').forEach(function (field) {
+            if (!refused && field.willValidate && !field.checkValidity()) { refused = field; }
+        });
+
+        return refused;
+    }
+
+    /* Put a panel in front of the customer, in whichever way its layout does. */
+    function reveal(form, panel) {
+        if (arrangedAs(form, ACCORDION)) {
+            openPanel(form, panel.dataset.gioPanel);
+
+            return;
+        }
+
+        showStep(form, panelsOf(form).indexOf(panel));
+    }
+
+    /*
+     * Whether every panel from here up to there holds answers the browser
+     * would take. Where one does not, that panel is opened and the browser
+     * says what is wrong, and the customer goes no further.
+     */
+    function answeredThrough(form, from, to) {
+        var panels = panelsOf(form);
+
+        for (var at = from; at < to && at < panels.length; at += 1) {
+            var refused = refusalIn(panels[at]);
+
+            if (refused) {
+                reveal(form, panels[at]);
+                refused.reportValidity();
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /*
+     * The stepper's chrome: a rail of steps above the panel, and a Next and a
+     * Back at its foot.
+     *
+     * The rail sits above the form rather than inside it, as the design draws
+     * it, so it is the island's chrome and not the form's; the nav goes in
+     * ahead of the button, which is the one child of the form that only the
+     * last step shows. The summary stays on screen throughout — the figure a
+     * customer is agreeing to hand over in cash is never behind a tap.
+     */
+    function buildStepper(form) {
+        var panels = panelsOf(form);
+
+        if (panels.length === 0) { return; }
+
+        var rail = element('div', 'gio-checkout-steps');
+
+        panels.forEach(function (panel, at) {
+            if (at) { rail.appendChild(element('span', 'gio-checkout-step-line')); }
+
+            var step = chrome('gio-checkout-step', '');
+            step.dataset.gioGoto = String(at);
+
+            var number = element('span', 'gio-checkout-step-number');
+            number.textContent = String(at + 1);
+
+            var label = element('span', 'gio-checkout-step-label');
+            label.textContent = cue(form, 'stepper-' + panel.dataset.gioPanel + '-step');
+
+            step.appendChild(number);
+            step.appendChild(label);
+            rail.appendChild(step);
+        });
+
+        form.parentNode.insertBefore(rail, form);
+
+        var nav = element('div', 'gio-checkout-nav');
+        var back = chrome('gio-checkout-back', cue(form, 'stepper-back'));
+        var next = chrome('gio-checkout-next', cue(form, 'stepper-next'));
+
+        back.dataset.gioMove = '-1';
+        next.dataset.gioMove = '1';
+        nav.appendChild(back);
+        nav.appendChild(next);
+
+        form.insertBefore(nav, form.querySelector('[data-gio-submit]'));
+
+        showStep(form, 0);
+    }
+
+    /* One panel at a time, the rail saying how far along the customer is. */
+    function showStep(form, at) {
+        var island = islandFor(form);
+        var panels = panelsOf(form);
+        var last = panels.length - 1;
+
+        at = Math.max(0, Math.min(at, last));
+
+        /*
+         * Which step is showing, kept on the form so nothing here holds state
+         * of its own. Never the quantity stepper's own name: on the form, that
+         * would answer the stepper's delegated lookup for every click inside
+         * it, and a tap on Next would silently add one to the first product's
+         * quantity.
+         */
+        form.dataset.gioShowing = String(at);
+
+        panels.forEach(function (panel, index) { panel.hidden = index !== at; });
+
+        island.querySelectorAll('[data-gio-goto]').forEach(function (step) {
+            var index = parseInt(step.dataset.gioGoto, 10);
+
+            if (index === at) { step.setAttribute('aria-current', 'step'); } else { step.removeAttribute('aria-current'); }
+
+            mark(step.querySelector('.gio-checkout-step-number'), index <= at);
+            mark(step.previousElementSibling, index <= at);
+        });
+
+        show(form.querySelector('[data-gio-submit]'), at === last);
+        show(form.querySelector('.gio-checkout-note'), at === last);
+        show(island.querySelector('[data-gio-move="1"]'), at !== last);
+        show(island.querySelector('[data-gio-move="-1"]'), at > 0);
+    }
+
+    /*
+     * The accordion's chrome: each panel's own heading, with a button inside
+     * it carrying the heading's words, what was chosen in the panel, and the
+     * arrow saying which way it opens.
+     *
+     * The heading stays a heading and gains the button, which is what an
+     * accordion header is; the panel's other children are what opens and
+     * shuts, so every header is on screen at every moment.
+     */
+    function buildAccordion(form) {
+        var panels = panelsOf(form);
+
+        if (panels.length === 0) { return; }
+
+        panels.forEach(function (panel) {
+            var heading = panel.querySelector('.gio-checkout-heading');
+
+            if (!heading) { return; }
+
+            var head = chrome('gio-checkout-panel-head', '');
+            head.dataset.gioPanelHead = panel.dataset.gioPanel;
+
+            var title = element('span', 'gio-checkout-panel-title');
+            title.textContent = heading.textContent;
+
+            var chevron = element('span', 'gio-checkout-panel-chevron');
+            chevron.setAttribute('aria-hidden', 'true');
+
+            head.appendChild(title);
+            head.appendChild(element('span', 'gio-checkout-panel-summary'));
+            head.appendChild(chevron);
+
+            heading.textContent = '';
+            heading.appendChild(head);
+        });
+
+        openPanel(form, panels[0].dataset.gioPanel);
+    }
+
+    /* One panel open at a time, and none where the open one is tapped again. */
+    function openPanel(form, name) {
+        panelsOf(form).forEach(function (panel) {
+            var open = panel.dataset.gioPanel === name;
+            var head = panel.querySelector('[data-gio-panel-head]');
+
+            [].slice.call(panel.children).forEach(function (child) {
+                if (!child.classList.contains('gio-checkout-heading')) { child.hidden = !open; }
+            });
+
+            if (open) { panel.removeAttribute('data-gio-shut'); } else { panel.setAttribute('data-gio-shut', ''); }
+
+            if (head) {
+                head.setAttribute('aria-expanded', open ? 'true' : 'false');
+                head.querySelector('.gio-checkout-panel-chevron').textContent = open ? OPEN_CHEVRON : SHUT_CHEVRON;
+            }
+        });
+    }
+
+    /*
+     * What a shut accordion header says about the choice made inside it: how
+     * many items and what they come to, the delivery arrangement and its
+     * charge, and the method the customer will pay by.
+     *
+     * Read off the same figures and the same checked controls the totals are,
+     * as `retotal` finishes, so a header and the summary beneath it cannot
+     * disagree. Nothing at all where a panel holds no choice to report — a
+     * page offering one delivery arrangement has none to name.
+     */
+    function summarise(form, count, subtotal) {
+        if (!arrangedAs(form, ACCORDION)) { return; }
+
+        var delivery = form.querySelector('[data-gio-delivery-option]:checked');
+
+        /*
+         * The row rather than the label inside it: a method's name is the only
+         * text a payment row carries — the logo beside it is decorative and
+         * says nothing — and reading the row keeps the class names of one
+         * arrangement out of a script every page ships.
+         */
+        var chosen = form.querySelector('[name="payment_method"]:checked');
+
+        var said = {
+            products: count + (count === 1 ? ONE_ITEM : MANY_ITEMS) + SUMMARY_JOIN + money(form, subtotal),
+            details: delivery ? delivery.value + SUMMARY_JOIN + money(form, deliveryFor(form).amount) : '',
+            payment: chosen ? chosen.parentNode.textContent.trim() : ''
+        };
+
+        form.querySelectorAll('[data-gio-panel-head]').forEach(function (head) {
+            head.querySelector('.gio-checkout-panel-summary').textContent = said[head.dataset.gioPanelHead] || '';
+        });
     }
 
     /* The three parts of the whole-form banner, which always travel together. */
@@ -1323,7 +1667,19 @@
             if (field !== 'page' && fill(slotFor(form, field), message(field)) && !first) { first = slotFor(form, field); }
         });
 
-        if (first) { first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        if (!first) { return; }
+
+        /*
+         * A slot inside a panel a behaving layout has shut is a refusal
+         * nobody can read, so the panel it belongs to is opened before the
+         * customer is taken to it. The banner is the island's own child and
+         * belongs to no panel, so it opens nothing.
+         */
+        var panel = first.closest ? first.closest('[data-gio-panel]') : null;
+
+        if (panel && behaves(form)) { reveal(form, panel); }
+
+        first.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
 
     /* A failure that is nobody's answer to fix, worded for what went wrong and offering no reload. */
@@ -1366,7 +1722,13 @@
         var form = formFor(event);
         if (!form) { return; }
 
-        var step = event.target.closest ? event.target.closest('[data-gio-step]') : null;
+        /*
+         * The button itself, never whatever else might one day carry the
+         * name: a container with `data-gio-step` on it would answer this for
+         * every click inside it, and a tap anywhere in the form would step a
+         * quantity nobody touched.
+         */
+        var step = event.target.closest ? event.target.closest('button[data-gio-step]') : null;
         if (!step) { return; }
 
         var box = step.parentNode.querySelector('[data-gio-quantity]');
@@ -1415,6 +1777,9 @@
             showErrors(form, { selected: ['Please choose at least one item to order.'] });
             return;
         }
+
+        /* And every answer a behaving layout has shut away, which the browser is no longer checking. */
+        if (behaves(form) && !answeredThrough(form, 0, panelsOf(form).length)) { return; }
 
         var button = form.querySelector('[data-gio-submit]');
         var buttonLabel = button ? button.innerHTML : null;
@@ -1495,6 +1860,57 @@
         window.location.reload();
     });
 
-    document.querySelectorAll('[data-gio-checkout-form]').forEach(retotal);
+    /*
+     * A behaving layout's own controls, delegated from the document like the
+     * rest, and inert on the other eight because no page arranged in them has
+     * any of these to click. Found through the island rather than through the
+     * form, because the stepper's rail sits above the form as the banner does.
+     */
+    document.addEventListener('click', function (event) {
+        var island = event.target.closest ? event.target.closest('[data-gio-checkout]') : null;
+        var control = island ? event.target.closest('[data-gio-goto], [data-gio-move], [data-gio-panel-head]') : null;
+        if (!control) { return; }
+
+        var form = island.querySelector('[data-gio-checkout-form]');
+        if (!form) { return; }
+
+        if (control.dataset.gioPanelHead !== undefined) {
+            /* Tapping the panel that is open shuts it, which is the whole of "one at a time or none". */
+            openPanel(form, control.getAttribute('aria-expanded') === 'true' ? null : control.dataset.gioPanelHead);
+
+            return;
+        }
+
+        var at = parseInt(form.dataset.gioShowing, 10) || 0;
+        var to = control.dataset.gioGoto !== undefined
+            ? parseInt(control.dataset.gioGoto, 10)
+            : at + parseInt(control.dataset.gioMove, 10);
+
+        /* Forward only past answers the browser would take, so nothing it refuses is ever hidden. */
+        if (to > at && !answeredThrough(form, at, to)) { return; }
+
+        showStep(form, to);
+    });
+
+    document.querySelectorAll('[data-gio-checkout-form]').forEach(function (form) {
+        if (behaves(form)) {
+            /*
+             * The browser's own gate is taken over for the two arrangements
+             * that hide an answer already given. A required box inside a
+             * hidden panel is one the browser refuses to submit and cannot
+             * focus, so it would block the order and show nobody anything —
+             * the submit handler asks the same questions of the same boxes
+             * instead, and opens the panel holding the first refusal before
+             * reporting it. Set here rather than in the markup, so a visitor
+             * whose scripts never run keeps every check the browser makes.
+             */
+            form.noValidate = true;
+        }
+
+        if (arrangedAs(form, STEPPER)) { buildStepper(form); }
+        if (arrangedAs(form, ACCORDION)) { buildAccordion(form); }
+
+        retotal(form);
+    });
 })();
 </script>

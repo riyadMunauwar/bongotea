@@ -2446,7 +2446,7 @@ it('asks for the totals labels and the payment labels on the words tab, with the
      * — the button they tap, the totals above it, how they pay — then one per
      * layout that owns words of its own, hidden unless that layout is chosen.
      */
-    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Bento grid', 'Compact embed', 'Chips', 'Invoice', 'Dark panel']);
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Stepper', 'Accordion', 'Bento grid', 'Compact embed', 'Chips', 'Invoice', 'Dark panel']);
 
     /**
      * Bilingual, Bangla first and English second, exactly as designed — shown
@@ -3062,7 +3062,8 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($picker->getThumbnail('compact_embed'))->toBe('images/checkout-layouts/compact-embed.svg')
         ->and($picker->getThumbnail('chips'))->toBe('images/checkout-layouts/chips.svg')
         ->and($picker->getThumbnail('invoice'))->toBe('images/checkout-layouts/invoice.svg')
-        ->and($picker->getThumbnail('stepper'))->toBeNull();
+        ->and($picker->getThumbnail('stepper'))->toBe('images/checkout-layouts/stepper.svg')
+        ->and($picker->getThumbnail('accordion'))->toBe('images/checkout-layouts/accordion.svg');
 
     foreach ($picker->getDescriptions() as $description) {
         expect((string) $description)->not->toBeEmpty();
@@ -3085,6 +3086,8 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($html)->toContain('images/checkout-layouts/compact-embed.svg')
         ->and($html)->toContain('images/checkout-layouts/chips.svg')
         ->and($html)->toContain('images/checkout-layouts/invoice.svg')
+        ->and($html)->toContain('images/checkout-layouts/stepper.svg')
+        ->and($html)->toContain('images/checkout-layouts/accordion.svg')
         ->and(substr_count($html, 'gp-layout-card-thumbnail'))->toBe(10);
 });
 
@@ -3206,6 +3209,21 @@ it('asks for a layout\'s own words only while it is chosen, with the design\'s w
         'checkout_config.words.invoice_quantity_heading',
         'checkout_config.words.invoice_amount_heading',
     ], WordSlot::InvoiceItemHeading],
+    'stepper' => [CheckoutLayout::Stepper, [
+        'checkout_config.words.stepper_products_headline',
+        'checkout_config.words.stepper_details_headline',
+        'checkout_config.words.stepper_payment_headline',
+        'checkout_config.words.stepper_products_step',
+        'checkout_config.words.stepper_details_step',
+        'checkout_config.words.stepper_payment_step',
+        'checkout_config.words.stepper_next',
+        'checkout_config.words.stepper_back',
+    ], WordSlot::StepperProductsHeadline],
+    'accordion' => [CheckoutLayout::Accordion, [
+        'checkout_config.words.accordion_products_headline',
+        'checkout_config.words.accordion_details_headline',
+        'checkout_config.words.accordion_payment_headline',
+    ], WordSlot::AccordionDetailsHeadline],
 ]);
 
 it('says beneath the boxes that may name a figure how to name it', function () {
@@ -3241,6 +3259,10 @@ it('refuses a layout\'s word the checkout could not draw, on the box that holds 
     'a chips empty-state line too long' => [CheckoutLayout::Chips, WordSlot::ChipsEmptyLine, str_repeat('n', 121)],
     'an invoice column heading too long' => [CheckoutLayout::Invoice, WordSlot::InvoiceAmountHeading, str_repeat('a', 61)],
     'an invoice title over two lines' => [CheckoutLayout::Invoice, WordSlot::InvoiceTitle, "Two\nlines"],
+    'a stepper step label too long for the rail' => [CheckoutLayout::Stepper, WordSlot::StepperProductsStep, str_repeat('s', 25)],
+    'a stepper next button too long' => [CheckoutLayout::Stepper, WordSlot::StepperNext, str_repeat('n', 25)],
+    'a stepper panel headline too long' => [CheckoutLayout::Stepper, WordSlot::StepperDetailsHeadline, str_repeat('p', 61)],
+    'an accordion header over two lines' => [CheckoutLayout::Accordion, WordSlot::AccordionPaymentHeadline, "Two\nlines"],
 ]);
 
 it('asks for the stacked headlines only while stacked is chosen, and keeps them across a move away and back', function () {
@@ -3324,6 +3346,9 @@ it('shows the chosen layout\'s own button wording in the box while the merchant 
         ->and($placeholder($split))->toBe('অর্ডার করুন / Order Now')
         ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'split_reversed']])))->toBe('অর্ডার করুন / Order Now · {total}')
         ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'dark_panel']])))->toBe('অর্ডার করুন / Order Now · {total}')
+        /** The stepper's last step carries the figure the design prints inside its button; the accordion prints it in the bar beside one. */
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'stepper']])))->toBe('অর্ডার করুন / Order Now · {total}')
+        ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'accordion']])))->toBe('অর্ডার করুন / Order Now')
         ->and($placeholder(Page::factory()->create(['checkout_config' => ['layout' => 'invoice']])))->toBe('অর্ডার কনফার্ম করুন / Place order');
 
     /** And no other arrangement borrows the invoice's wording, which is what "for this layout only" means. */
