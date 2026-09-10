@@ -108,6 +108,8 @@
             WordKind::NumberedHeadline => '<h3 class="gio-checkout-heading"><span class="gio-checkout-number">'.(++$sectionNumber).'</span>'.$sentenceFor($slot).'</h3>',
             WordKind::Headline => '<h3 class="gio-checkout-heading">'.$sentenceFor($slot).'</h3>',
             WordKind::Eyebrow => '<p class="gio-checkout-eyebrow">'.$sentenceFor($slot).'</p>',
+            WordKind::Count => '<p class="gio-checkout-count">'.$sentenceFor($slot).'</p>',
+            WordKind::EmptyState => '<p class="gio-checkout-empty">'.$sentenceFor($slot).'</p>',
             WordKind::Line => '<p class="gio-checkout-footnote">'.$sentenceFor($slot).'</p>',
         };
     };
@@ -204,6 +206,15 @@
         --}}
         .gio-checkout-eyebrow { margin: 0 0 .75rem; font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; line-height: 1.4; color: var(--gio-muted); }
         {{--
+            An eyebrow drawn over the delivery choice sits after the questions
+            in the same section and takes the section gap above it, as a
+            headline there does. A count is the small muted line at the far
+            end of the row a title sits on, naming how many products are
+            picked; the layout drawing one sets the two on one row.
+        --}}
+        .gio-checkout-fields + .gio-checkout-eyebrow { margin-top: 1.5rem; }
+        .gio-checkout-count { margin: 0 0 .75rem; font-size: .75rem; line-height: 1.4; text-align: right; color: var(--gio-muted); }
+        {{--
             A product row is one line a thumb can read: the tick where there is
             one, the picture, the name with its price beneath, the stepper, and
             the line total at the far end. Boxed with the border token and
@@ -242,6 +253,17 @@
         --}}
         .gio-checkout-pick:not(:checked) ~ .gio-checkout-quantity { display: none; }
         .gio-checkout-pick:not(:checked) ~ .gio-checkout-line-total { opacity: .45; }
+        {{--
+            The line a layout draws beneath an empty list: nothing until a
+            list that can be ticked has nothing ticked, and then the layout's
+            own words in the muted ink. Gated on a tick box being there at
+            all, because a list with no picker has nothing to untick and
+            `:not(:has(:checked))` would otherwise be true of it forever. In
+            the base whether or not the layout draws one, so the sheet is
+            the same bytes whichever words a page draws.
+        --}}
+        .gio-checkout-empty { display: none; margin: 0; font-size: .8125rem; line-height: 1.4; text-align: center; color: var(--gio-muted); }
+        .gio-checkout-products:has(.gio-checkout-pick):not(:has(:checked)) + .gio-checkout-empty { display: block; }
         .gio-checkout-product-head { display: flex; flex: 1; min-width: 0; gap: .75rem; align-items: center; }
         .gio-checkout-image { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); }
         .gio-checkout-product-words { flex: 1; min-width: 0; }
@@ -546,6 +568,7 @@
             @if ($showProducts)
                 <div class="gio-checkout-section">
                     {!! $wordAt(WordPlace::Products) !!}
+                    {!! $wordAt(WordPlace::ItemCount) !!}
 
                     <div class="gio-checkout-products">
                         @foreach ($products as $product)
@@ -673,6 +696,15 @@
                             </div>
                         @endforeach
                     </div>
+                    {{--
+                        The line a layout draws beneath an empty list, in the
+                        markup whenever the layout owns one and shown by the
+                        sheet only while a list that can be ticked has nothing
+                        ticked — the list's next sibling, which is how the
+                        sheet reaches it. A visitor whose scripts never run
+                        still reads why the total is zero.
+                    --}}
+                    {!! $wordAt(WordPlace::EmptyList) !!}
 
                     {{--
                         Where an order for nothing is refused, beside the
@@ -949,7 +981,7 @@
 
                     @foreach ($paymentChooser->methods as $index => $method)
                         <label class="gio-checkout-choice gio-checkout-payment-choice">
-                            <input class="gio-checkout-tick"
+                            <input class="gio-checkout-payment-tick gio-checkout-tick"
                                    type="radio"
                                    name="payment_method"
                                    value="{{ $method->value }}"

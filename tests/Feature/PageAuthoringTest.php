@@ -2446,7 +2446,7 @@ it('asks for the totals labels and the payment labels on the words tab, with the
      * — the button they tap, the totals above it, how they pay — then one per
      * layout that owns words of its own, hidden unless that layout is chosen.
      */
-    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Dark panel']);
+    expect($sections->keys()->all())->toBe(['Button', 'Totals', 'Payment', 'Stacked', 'Split', 'Split reversed', 'Bento grid', 'Compact embed', 'Chips', 'Dark panel']);
 
     /**
      * Bilingual, Bangla first and English second, exactly as designed — shown
@@ -3058,6 +3058,9 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($picker->getThumbnail('split'))->toBe('images/checkout-layouts/split.svg')
         ->and($picker->getThumbnail('split_reversed'))->toBe('images/checkout-layouts/split-reversed.svg')
         ->and($picker->getThumbnail('dark_panel'))->toBe('images/checkout-layouts/dark-panel.svg')
+        ->and($picker->getThumbnail('bento_grid'))->toBe('images/checkout-layouts/bento-grid.svg')
+        ->and($picker->getThumbnail('compact_embed'))->toBe('images/checkout-layouts/compact-embed.svg')
+        ->and($picker->getThumbnail('chips'))->toBe('images/checkout-layouts/chips.svg')
         ->and($picker->getThumbnail('stepper'))->toBeNull();
 
     foreach ($picker->getDescriptions() as $description) {
@@ -3077,6 +3080,9 @@ it('offers the ten layouts as a grid of cards, each with a name, a line on its l
         ->and($html)->toContain('images/checkout-layouts/split.svg')
         ->and($html)->toContain('images/checkout-layouts/split-reversed.svg')
         ->and($html)->toContain('images/checkout-layouts/dark-panel.svg')
+        ->and($html)->toContain('images/checkout-layouts/bento-grid.svg')
+        ->and($html)->toContain('images/checkout-layouts/compact-embed.svg')
+        ->and($html)->toContain('images/checkout-layouts/chips.svg')
         ->and(substr_count($html, 'gp-layout-card-thumbnail'))->toBe(10);
 });
 
@@ -3108,11 +3114,11 @@ function wordsSectionOf(Page $page, CheckoutLayout $layout): Section
         ->sole(fn (Section $section): bool => (string) $section->getHeading() === $layout->label());
 }
 
-it('asks for a two-column layout\'s own words only while it is chosen, with the design\'s words in the boxes, and keeps them across a move away and back', function (CheckoutLayout $layout, array $paths, WordSlot $reworded) {
+it('asks for a layout\'s own words only while it is chosen, with the design\'s words in the boxes, and keeps them across a move away and back', function (CheckoutLayout $layout, array $paths, WordSlot $reworded) {
     $page = Page::factory()->create(['checkout_config' => ['layout' => $layout->value]]);
 
     /**
-     * Each of the three is asked for exactly its own slots, in the order the
+     * Each layout is asked for exactly its own slots, in the order the
      * customer meets them, each box showing the design's sentence; a slot
      * that may name a figure says so beneath its box. The section rides
      * along unseen on any other layout — dehydrated when hidden on the
@@ -3177,6 +3183,21 @@ it('asks for a two-column layout\'s own words only while it is chosen, with the 
         'checkout_config.words.dark_panel_summary_eyebrow',
         'checkout_config.words.dark_panel_form_headline',
     ], WordSlot::DarkPanelFormHeadline],
+    'bento grid' => [CheckoutLayout::BentoGrid, [
+        'checkout_config.words.bento_grid_products_eyebrow',
+        'checkout_config.words.bento_grid_details_eyebrow',
+        'checkout_config.words.bento_grid_payment_eyebrow',
+    ], WordSlot::BentoGridDetailsEyebrow],
+    'compact embed' => [CheckoutLayout::CompactEmbed, [
+        'checkout_config.words.compact_embed_title',
+        'checkout_config.words.compact_embed_item_count',
+    ], WordSlot::CompactEmbedTitle],
+    'chips' => [CheckoutLayout::Chips, [
+        'checkout_config.words.chips_select_eyebrow',
+        'checkout_config.words.chips_empty_line',
+        'checkout_config.words.chips_delivery_eyebrow',
+        'checkout_config.words.chips_payment_eyebrow',
+    ], WordSlot::ChipsEmptyLine],
 ]);
 
 it('says beneath the boxes that may name a figure how to name it', function () {
@@ -3187,9 +3208,14 @@ it('says beneath the boxes that may name a figure how to name it', function () {
     expect(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_bundle_eyebrow')))->toContain('{count}')
         ->and(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_footnote')))->toContain('{delivery}')
         ->and(helperTextBeneath(fieldInside($section, 'checkout_config.words.split_reversed_form_headline')))->toBe('');
+
+    $compact = wordsSectionOf(Page::factory()->create(['checkout_config' => ['layout' => CheckoutLayout::CompactEmbed->value]]), CheckoutLayout::CompactEmbed);
+
+    expect(helperTextBeneath(fieldInside($compact, 'checkout_config.words.compact_embed_item_count')))->toContain('{count}')
+        ->and(helperTextBeneath(fieldInside($compact, 'checkout_config.words.compact_embed_title')))->toBe('');
 });
 
-it('refuses a two-column layout\'s word the checkout could not draw, on the box that holds it', function (CheckoutLayout $layout, WordSlot $slot, string $typed) {
+it('refuses a layout\'s word the checkout could not draw, on the box that holds it', function (CheckoutLayout $layout, WordSlot $slot, string $typed) {
     $page = Page::factory()->create(['checkout_config' => ['layout' => $layout->value]]);
 
     /** Worded on the tab, where there is a merchant to tell; the silent half is LandingPageTest's to pin. */
@@ -3202,6 +3228,9 @@ it('refuses a two-column layout\'s word the checkout could not draw, on the box 
     'a split hint over two lines' => [CheckoutLayout::Split, WordSlot::SplitHint, "Two\nlines"],
     'a split reversed footnote too long' => [CheckoutLayout::SplitReversed, WordSlot::SplitReversedFootnote, str_repeat('f', 121)],
     'a dark panel eyebrow too long' => [CheckoutLayout::DarkPanel, WordSlot::DarkPanelSummaryEyebrow, str_repeat('e', 61)],
+    'a bento grid eyebrow over two lines' => [CheckoutLayout::BentoGrid, WordSlot::BentoGridProductsEyebrow, "Two\nlines"],
+    'a compact embed count too long' => [CheckoutLayout::CompactEmbed, WordSlot::CompactEmbedItemCount, str_repeat('c', 61)],
+    'a chips empty-state line too long' => [CheckoutLayout::Chips, WordSlot::ChipsEmptyLine, str_repeat('n', 121)],
 ]);
 
 it('asks for the stacked headlines only while stacked is chosen, and keeps them across a move away and back', function () {

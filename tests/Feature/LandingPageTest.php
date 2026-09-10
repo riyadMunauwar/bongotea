@@ -2251,7 +2251,7 @@ it('never puts a total behind an interaction on any layout', function (CheckoutL
     expect(checkoutScript($html))->toBe(checkoutScript($this->get('/plain-stacked')->assertOk()->getContent()));
 })->with(fn () => CheckoutLayout::cases());
 
-it('draws the six layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
+it('draws the three layouts not yet drawn to their designs as the base does, under a class of their own', function (CheckoutLayout $layout) {
     pageStyled(['layout' => $layout->value], slug: layoutSlug($layout));
     pageStyled([], slug: 'plain-stacked');
 
@@ -2261,7 +2261,7 @@ it('draws the six layouts not yet drawn to their designs as the base does, under
     /**
      * Selectable today, drawn to its design when its own ticket lands: until
      * then the page carries the base sheet and nothing added, the class the
-     * layout will hang its rules on, and — because none of the six owns a
+     * layout will hang its rules on, and — because none of the three owns a
      * word of its own yet — no heading at all. Everything else a customer
      * meets is the same island.
      */
@@ -2273,9 +2273,6 @@ it('draws the six layouts not yet drawn to their designs as the base does, under
 })->with([
     'stepper' => CheckoutLayout::Stepper,
     'accordion' => CheckoutLayout::Accordion,
-    'bento grid' => CheckoutLayout::BentoGrid,
-    'compact embed' => CheckoutLayout::CompactEmbed,
-    'chips' => CheckoutLayout::Chips,
     'invoice' => CheckoutLayout::Invoice,
 ]);
 
@@ -2832,6 +2829,202 @@ it('draws the dark panel checkout as a navy summary beside a white form, in the 
         ->and(baseSheet($styles, CheckoutLayout::DarkPanel))->not->toContain('#0f1d4f');
 });
 
+it('draws the compact embed checkout as a narrow card, titled and counted in the design\'s words, with the delivery and the payment each a segmented control', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+    $scarf = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 29000]);
+
+    pickingPage([$jacket, $boots, $scarf], [$jacket->getKey(), $boots->getKey()], [
+        'layout' => CheckoutLayout::CompactEmbed->value,
+        'fields' => [['key' => 'name', 'label' => 'Your name', 'width' => 'half']],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+        'hide_lone_cash_choice' => false,
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+
+    /**
+     * A title over the list with the count of what opens ticked at the far
+     * end of the same row, the figure wrapped so the script keeps it truthful
+     * as the customer ticks. A narrow-column arrangement: the methods are
+     * named by their short labels, the delivery choice is a segmented
+     * control with no room for a detail line, and a half-width question
+     * fills its row.
+     */
+    expect($markup)->toContain('<h3 class="gio-checkout-heading">দ্রুত অর্ডার / Quick order</h3>')
+        ->and($markup)->toContain('<p class="gio-checkout-count"><span data-gio-count>2</span>টি আইটেম / <span data-gio-count>2</span> items</p>')
+        ->and($markup)->toContain('gio-checkout-choice-label">COD<')
+        ->and($markup)->not->toContain('Cash on Delivery<')
+        ->and($markup)->not->toContain('gio-checkout-choice-detail')
+        ->and($markup)->not->toContain('gio-checkout-field-half')
+        ->and($markup)->not->toContain('gio-checkout-number')
+        ->and($markup)->not->toContain('gio-checkout-empty')
+        ->and($markup)->toContain('<input class="gio-checkout-delivery-tick gio-checkout-tick"')
+        ->and($markup)->toContain('<input class="gio-checkout-payment-tick gio-checkout-tick"');
+
+    preg_match('/<div class="gio-checkout-section">(.*?)<div class="gio-checkout-products">/s', $markup, $titleRow);
+
+    /** The count follows the title inside the products section, so the sheet can set the two on one row. */
+    expect($titleRow[1] ?? '')->toMatch('/<h3 class="gio-checkout-heading">[^<]*<\/h3>\s*<p class="gio-checkout-count">/');
+
+    $block = CheckoutLayout::CompactEmbed->styleRules();
+
+    /**
+     * A card at the design's narrow width with the design's tight spacing,
+     * the list boxed with hairlines between its rows, the delivery and the
+     * payment each a segmented control whose radios are clipped from sight
+     * and never removed, the totals on one line with the total at its far
+     * end, and nothing hidden or reordered on a phone.
+     */
+    expect(styleBlock($html))->toContain($block)
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-card { max-width: 25rem; padding: 1.25rem; }')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-section { display: grid; grid-template-columns: minmax(0, 1fr) auto;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-products { grid-column: 1 / -1; gap: 0; border: 1px solid var(--gio-border); }')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-delivery { display: flex; gap: 1px;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-delivery-choice:has(:checked) { background: var(--gio-accent); color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-delivery-tick { position: absolute; width: 1px; height: 1px;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-payment { display: flex; gap: 1px;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-payment-choice:has(:checked) { background: var(--gio-accent); color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-payment-tick { position: absolute; width: 1px; height: 1px;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-quantity-step { width: 1.375rem; height: 1.375rem;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-summary { display: flex;')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-total { margin: 0 0 0 auto; padding: 0; border-top: 0; font-size: 1rem; }')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-submit { margin: 0; padding: .8125rem; font-size: .875rem; }')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->toContain('.gio-checkout-compact-embed .gio-checkout-card { padding: 1.25rem 1rem; }')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/');
+});
+
+it('draws the chips checkout as pills to tap on and off, a line for nothing ticked, and eyebrows over the list, the delivery and the payment', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $boots = Product::factory()->create(['name' => 'Hiking Boots', 'price' => 149000]);
+
+    pickingPage([$jacket, $boots], [], [
+        'layout' => CheckoutLayout::Chips->value,
+        'fields' => [
+            ['key' => 'name', 'label' => 'Your name', 'width' => 'half'],
+            ['key' => 'phone', 'label' => 'Phone number', 'width' => 'half'],
+        ],
+        'delivery_options' => [
+            ['label' => 'Inside Dhaka', 'amount' => 6000, 'detail' => '1–2 days'],
+            ['label' => 'Outside Dhaka', 'amount' => 12000],
+        ],
+        'hide_lone_cash_choice' => false,
+    ]);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * Three eyebrows in the design's words, the methods named in full by
+     * plain radios, the delivery choice a segmented control with no room for
+     * a detail line, and half-width questions paired: the card is wide.
+     */
+    expect($markup)->toContain('<p class="gio-checkout-eyebrow">আইটেম বাছুন / Select items</p>')
+        ->and($markup)->toContain('<p class="gio-checkout-eyebrow">ডেলিভারি / Delivery</p>')
+        ->and($markup)->toContain('<p class="gio-checkout-eyebrow">পেমেন্ট / Payment</p>')
+        ->and($markup)->toContain('gio-checkout-choice-label">ক্যাশ অন ডেলিভারি / Cash on Delivery<')
+        ->and($markup)->not->toContain('gio-checkout-choice-detail')
+        ->and($markup)->toContain('class="gio-checkout-field gio-checkout-field-half"')
+        ->and($markup)->not->toContain('gio-checkout-number');
+
+    preg_match('/<div class="gio-checkout-section">(.*?)<div class="gio-checkout-questions">/s', $markup, $products);
+
+    /**
+     * The empty-state line sits right after the list it is about and before
+     * the refusal for an order of nothing, drawn in the markup whether or
+     * not anything is ticked: the sheet shows it only while a list that can
+     * be ticked has nothing ticked, so a visitor whose scripts never run
+     * still reads why the total is zero.
+     */
+    expect($products[1] ?? '')->toMatch('/<\/div>\s*<p class="gio-checkout-empty">কোনো প্রোডাক্ট সিলেক্ট করা হয়নি \/ Nothing selected<\/p>\s*<p class="gio-checkout-error gio-checkout-pick-error"/')
+        ->and(baseSheet($styles, CheckoutLayout::Chips))->toContain('.gio-checkout-empty { display: none;')
+        ->and(baseSheet($styles, CheckoutLayout::Chips))->toContain('.gio-checkout-products:has(.gio-checkout-pick):not(:has(:checked)) + .gio-checkout-empty { display: block; }');
+
+    $block = CheckoutLayout::Chips->styleRules();
+
+    /**
+     * The list is a row of pills that fill with the accent when ticked and
+     * grow a stepper; the line beneath the empty list is ruled off; the
+     * delivery choice is segmented and the payment choice plain; the totals
+     * sit beside the button in the ruled-off footer, the total set large;
+     * and nothing is hidden or reordered on a phone.
+     */
+    expect($styles)->toContain($block)
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-card { max-width: 40rem; padding: 2.25rem; }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-products { display: flex; flex-wrap: wrap; gap: .5rem; }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-product:has(:checked) { border-color: var(--gio-accent); background: var(--gio-accent); color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-empty { margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--gio-border); }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-delivery { display: flex; gap: 1px;')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-delivery-choice:has(:checked) { background: var(--gio-accent); color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-payment-choice { padding: .375rem 0; border: 0; background: transparent; }')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-summary { grid-column: 1; grid-row: 3;')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-submit { grid-column: 2; grid-row: 3;')
+        ->and($block)->toContain('.gio-checkout-chips .gio-checkout-total { margin: 0; padding: 0; border-top: 0; font-size: 1.5rem; }')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/');
+});
+
+it('draws the bento grid checkout as three bordered cells with numbered eyebrows and a dark bar carrying the totals and the button', function () {
+    twoColumnPage(CheckoutLayout::BentoGrid);
+
+    $html = $this->get('/promo')->assertOk()->getContent();
+    $markup = checkoutMarkup($html);
+    $styles = styleBlock($html);
+
+    /**
+     * An eyebrow over each cell, numbered in the design's words, the methods
+     * named by their short labels in a two-by-two grid, the delivery choice
+     * segmented with no room for a detail line, and half-width questions
+     * paired: a cell has the room.
+     */
+    expect($markup)->toContain('<p class="gio-checkout-eyebrow">০১ · প্রোডাক্ট / 01 · Products</p>')
+        ->and($markup)->toContain('<p class="gio-checkout-eyebrow">০২ · আপনার তথ্য / 02 · Your details</p>')
+        ->and($markup)->toContain('<p class="gio-checkout-eyebrow">০৩ · পেমেন্ট / 03 · Payment</p>')
+        ->and($markup)->toContain('gio-checkout-choice-label">COD<')
+        ->and($markup)->not->toContain('Cash on Delivery<')
+        ->and($markup)->not->toContain('gio-checkout-choice-detail')
+        ->and($markup)->toContain('class="gio-checkout-field gio-checkout-field-half"')
+        ->and($markup)->not->toContain('gio-checkout-number');
+
+    $block = CheckoutLayout::BentoGrid->styleRules();
+
+    /**
+     * The cells sit on the page's ground with no card around them: each
+     * section is a bordered cell, the products on the left and the two
+     * others stacked on the right. The bar beneath is the form's own
+     * pseudo-element filled from the text token, with the totals on the left
+     * and the button on the right and the button's own hover — the bar's
+     * quieter grey and that hover are the layout's, written here and absent
+     * from the base.
+     * Nothing hidden or reordered on a phone.
+     */
+    expect($styles)->toContain($block)
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-card { max-width: 57.5rem; padding: 0; border: 0; background: transparent; }')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-form::after { content: ""; grid-column: 1 / -1; grid-row: 3 / 7; align-self: stretch; background: var(--gio-text); }')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-section { grid-column: 1 / 3; grid-row: 1; margin: 0; padding: 1.25rem; border: 1px solid var(--gio-border); background: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-questions { display: flex; flex-direction: column;')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-delivery { display: flex; gap: 1px;')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-payment { grid-template-columns: 1fr 1fr; gap: .5rem; }')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-summary { display: flex;')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-total { margin: 0; padding: 0; border-top: 0; font-size: 1.125rem; color: var(--gio-surface); }')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-submit { grid-column: 4; grid-row: 4;')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-submit:hover { background: #4f79e6; }')
+        ->and($block)->toContain('@media (max-width: 37.5rem) {')
+        ->and($block)->toContain('.gio-checkout-bento-grid .gio-checkout-submit { grid-column: 2; grid-row: 7; justify-self: stretch; width: 100%; margin: .875rem 0 0; }')
+        ->and($block)->not->toContain('display: none')
+        ->and($block)->not->toMatch('/[^a-z-]order:/')
+        ->and(baseSheet($styles, CheckoutLayout::BentoGrid))->not->toContain('#b9bec9')
+        ->and(baseSheet($styles, CheckoutLayout::BentoGrid))->not->toContain('#4f79e6');
+});
+
 it('draws a layout\'s own words in the merchant\'s where there are any, the design\'s where there are none, and never one the words tab would refuse', function (CheckoutLayout $layout, WordSlot $reworded, string $words, string $drawn, WordSlot $refused, WordSlot $untouched) {
     twoColumnPage($layout, ['words' => [
         $reworded->value => $words,
@@ -2856,6 +3049,9 @@ it('draws a layout\'s own words in the merchant\'s where there are any, the desi
     'split' => [CheckoutLayout::Split, WordSlot::SplitHint, 'আমরা ফোন করব / Expect our call', '<p class="gio-checkout-footnote">আমরা ফোন করব / Expect our call</p>', WordSlot::SplitOrderHeadline, WordSlot::SplitPaymentHeadline],
     'split reversed' => [CheckoutLayout::SplitReversed, WordSlot::SplitReversedBundleEyebrow, 'কী নিলেন / Picked {count}', '<p class="gio-checkout-eyebrow">কী নিলেন / Picked <span data-gio-count>1</span></p>', WordSlot::SplitReversedFormHeadline, WordSlot::SplitReversedFormHeadline],
     'dark panel' => [CheckoutLayout::DarkPanel, WordSlot::DarkPanelFormHeadline, 'কোথায় পাঠাব / Where to send it', '<h3 class="gio-checkout-heading">কোথায় পাঠাব / Where to send it</h3>', WordSlot::DarkPanelSummaryEyebrow, WordSlot::DarkPanelSummaryEyebrow],
+    'bento grid' => [CheckoutLayout::BentoGrid, WordSlot::BentoGridDetailsEyebrow, 'আপনি কে / Who you are', '<p class="gio-checkout-eyebrow">আপনি কে / Who you are</p>', WordSlot::BentoGridProductsEyebrow, WordSlot::BentoGridPaymentEyebrow],
+    'compact embed' => [CheckoutLayout::CompactEmbed, WordSlot::CompactEmbedItemCount, 'নিলেন {count} / Took {count}', '<p class="gio-checkout-count">নিলেন <span data-gio-count>1</span> / Took <span data-gio-count>1</span></p>', WordSlot::CompactEmbedTitle, WordSlot::CompactEmbedTitle],
+    'chips' => [CheckoutLayout::Chips, WordSlot::ChipsDeliveryEyebrow, 'কোথায় / Where to', '<p class="gio-checkout-eyebrow">কোথায় / Where to</p>', WordSlot::ChipsSelectEyebrow, WordSlot::ChipsPaymentEyebrow],
 ]);
 
 it('draws each layout\'s own words on that layout alone', function (CheckoutLayout $layout) {
