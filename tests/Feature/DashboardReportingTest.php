@@ -2,8 +2,10 @@
 
 use App\Enums\PaymentMethod;
 use App\Filament\Pages\Dashboard;
+use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Widgets\CachePathIndicator;
+use App\Filament\Widgets\NeedsAttentionTable;
 use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PageLeaderboardTable;
@@ -269,6 +271,48 @@ it('draws the status breakdown and the Payment Method mix side by side under the
 
     Livewire::test(PaymentMethodMixChart::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
         ->assertSee('Payment Method mix');
+});
+
+it('pins Needs Attention above the filter, full width, each row naming its condition and opening its Order', function () {
+    $uncalled = Order::factory()->create(['customer_name' => 'Rahim Uddin', 'created_at' => now()->subHours(25)]);
+    $refundable = Order::factory()->cancelled()->create(['payment_method' => PaymentMethod::Bkash, 'created_at' => now()]);
+    Payment::factory()->for($refundable)->paid()->create(['method' => PaymentMethod::Bkash]);
+    Order::factory()->create(['customer_name' => 'Karim Fresh', 'created_at' => now()->subHours(23)]);
+
+    $this->get('/admin')
+        ->assertOk()
+        ->assertSeeLivewire(NeedsAttentionTable::class)
+        /** Lazy, so the page carries only its mount; that mount comes before the filter. */
+        ->assertSeeInOrder(['wire:name="'.NeedsAttentionTable::class.'"', 'Reporting Window'], escape: false);
+
+    $dashboard = app(Dashboard::class);
+    $headerWidgets = (fn (): array => $this->getHeaderWidgets())->call($dashboard);
+
+    expect(array_values($headerWidgets))->toBe([NeedsAttentionTable::class])
+        ->and($dashboard->getWidgets())->not->toContain(NeedsAttentionTable::class)
+        ->and(NeedsAttentionTable::getSort())->toBeLessThan(OverviewStats::getSort())
+        ->and(app(NeedsAttentionTable::class)->getColumnSpan())->toBe('full');
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertSee('Needs Attention')
+        ->assertSee($uncalled->order_number)
+        ->assertSee('Rahim Uddin')
+        ->assertSee('New for over a day')
+        ->assertSee('Call the Customer')
+        ->assertSee($refundable->order_number)
+        ->assertSee('Paid and Cancelled')
+        ->assertSee(OrderResource::getUrl('view', ['record' => $uncalled]))
+        ->assertSee(OrderResource::getUrl('view', ['record' => $refundable]))
+        ->assertDontSee('Karim Fresh')
+        ->assertDontSee('Nothing needs attention');
+});
+
+it('says plainly that nothing needs attention when the list is empty, whatever the window', function () {
+    Order::factory()->create(['created_at' => now()->subHours(23)]);
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertSee('Needs Attention')
+        ->assertSee('Nothing needs attention');
 });
 
 it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {

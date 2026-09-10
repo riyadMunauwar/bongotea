@@ -10,6 +10,8 @@ use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Widgets\Widget;
+use Filament\Widgets\WidgetConfiguration;
 
 /**
  * The panel's own Dashboard, owning the panel root.
@@ -31,10 +33,41 @@ use Filament\Schemas\Schema;
  * `ReportingWindow::fromFilters()`, so every figure on the screen is counted
  * over the same days. Filament keeps the chosen filter in the session, which
  * is what makes it survive a visit to the Orders list and back.
+ *
+ * One widget stands above that filter rather than under it: Needs
+ * Attention, the to-do list that ignores the window. It is still discovered
+ * and still sorts first; the page only moves the first-sorted widget into
+ * its header slot, which Filament draws before the content the filter form
+ * opens. Nothing here names the widget, so a widget that should be pinned
+ * above the filter is one whose sort puts it first.
  */
 class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
+
+    /**
+     * Every discovered widget but the first: the first is drawn in the
+     * header, above the filter, by `getHeaderWidgets()`.
+     */
+    public function getWidgets(): array
+    {
+        return array_slice(parent::getWidgets(), 1);
+    }
+
+    /**
+     * The first-sorted widget alone, full width.
+     *
+     * @return array<class-string<Widget> | WidgetConfiguration>
+     */
+    protected function getHeaderWidgets(): array
+    {
+        return array_slice(parent::getWidgets(), 0, 1);
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
 
     /**
      * The preset select, and the two date pickers that appear only once

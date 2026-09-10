@@ -6,7 +6,9 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Order;
 use App\Models\Page;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Collection;
 
 /**
@@ -24,9 +26,11 @@ use Illuminate\Support\Collection;
  * loops over is the list of buckets.
  *
  * The overview, the Sales over time series, the Page leaderboard, the
- * status breakdown and the Payment Method mix are here so far. A later
- * result — a Product ranking, a Delivery mix — is another method returning
- * another result class, built on `ordersIn()`, and no widget changes for it.
+ * status breakdown, the Payment Method mix and the Needs Attention list are
+ * here so far. A later result — a Product ranking, a Delivery mix — is
+ * another method returning another result class, built on `ordersIn()`,
+ * and no widget changes for it. Needs Attention is the one result that
+ * takes no window: it is a to-do list over the whole installation.
  */
 final class ReportingQuery
 {
@@ -41,6 +45,19 @@ final class ReportingQuery
      * How many Orders hold one status. Binds that status once.
      */
     private const string STATUS_COUNT = 'sum(case when status = ? then 1 else 0 end)';
+
+    /**
+     * How long a New Order may wait for its confirmation call before it
+     * needs attention. A constant rather than a Setting until a Merchant
+     * asks for it to move.
+     */
+    public const int NEW_ORDER_ATTENTION_AFTER_HOURS = 24;
+
+    /**
+     * How long a Payment may sit Pending before the gateway should be asked
+     * about it. A constant, like the one above, for the same reason.
+     */
+    public const int PENDING_PAYMENT_ATTENTION_AFTER_MINUTES = 60;
 
     /**
      * Orders and Sales per bucket of a window, for the line chart: one
@@ -212,6 +229,81 @@ final class ReportingQuery
         }
 
         return new PaymentMix($window, $rows);
+    }
+
+    /**
+     * The Orders an operator must act on as of one instant, whatever any
+     * Reporting Window says: New Orders older than a day, Payments Pending
+     * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
+     * once. Four queries, one per condition, each returning whole Orders
+     * with the instant the condition began loaded beside them; the rows
+     * come back in condition order, oldest first within each, and the
+     * largest thing looped over is the list of Orders that need attention.
+     * Soft-deleted Orders are gone through the model's scope, whatever
+     * their Payments say.
+     */
+    public function needsAttention(?CarbonImmutable $now = null): NeedsAttention
+    {
+        $now ??= CarbonImmutable::now();
+
+        $pendingSince = $now->subMinutes(self::PENDING_PAYMENT_ATTENTION_AFTER_MINUTES)->utc()->toDateTimeString();
+        $stalePending = fn (Builder $payments): Builder => $payments->where('created_at', '<', $pendingSince);
+
+        /**
+         * When a Paid Payment was verified; its start where a row somehow
+         * carries no verification time, so a refund is never dated "now".
+         */
+        $lastPaidAt = new Expression('coalesce(verified_at, created_at)');
+
+        return new NeedsAttention([
+            ...$this->attentionRows(
+                AttentionReason::NewOrderUncalled,
+                Order::query()
+                    ->where('status', OrderStatus::New)
+                    ->where('created_at', '<', $now->subHours(self::NEW_ORDER_ATTENTION_AFTER_HOURS)->utc()->toDateTimeString())
+                    ->selectRaw('orders.*, created_at as since'),
+            ),
+            ...$this->attentionRows(
+                AttentionReason::PaymentPending,
+                Order::query()
+                    ->whereHas('pendingPayments', $stalePending)
+                    ->withMin(['pendingPayments as since' => $stalePending], 'created_at'),
+            ),
+            ...$this->attentionRows(
+                AttentionReason::PaidTwice,
+                Order::query()
+                    ->has('paidPayments', '>', 1)
+                    ->withMax('paidPayments as since', $lastPaidAt),
+            ),
+            ...$this->attentionRows(
+                AttentionReason::PaidAndCancelled,
+                Order::query()
+                    ->paidButCancelled()
+                    ->withMax('paidPayments as since', $lastPaidAt),
+            ),
+        ]);
+    }
+
+    /**
+     * The Orders one condition's query finds, as rows under that condition,
+     * oldest first in SQL. The query loads the instant the condition began
+     * under `since`; the column is UTC, like every stored time.
+     *
+     * @param  Builder<Order>  $orders
+     * @return list<NeedsAttentionRow>
+     */
+    private function attentionRows(AttentionReason $reason, Builder $orders): array
+    {
+        return $orders
+            ->orderBy('since')
+            ->get()
+            ->map(fn (Order $order): NeedsAttentionRow => new NeedsAttentionRow(
+                $order,
+                $reason,
+                CarbonImmutable::parse((string) $order->getAttribute('since'), 'UTC'),
+            ))
+            ->values()
+            ->all();
     }
 
     /**
