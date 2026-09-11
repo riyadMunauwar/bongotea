@@ -137,14 +137,38 @@ it('narrows the queue to the paid but cancelled orders to refund', function () {
     $unpaidAndCancelled = orderUnder(PaymentMethod::SslCommerz, ['status' => OrderStatus::Cancelled]);
     $cashAndCancelled = orderUnder(PaymentMethod::CashOnDelivery, ['status' => OrderStatus::Cancelled]);
 
-    /** Both are kept: the operator's decision and the money's story (ADR-0013). */
+    /**
+     * From the All tab: the queue opens on New, and a Cancelled-only question
+     * cannot be answered there. The tabs are one axis and this filter is the
+     * other (ADR-0013).
+     */
     Livewire::test(ListOrders::class)
+        ->set('activeTab', 'all')
         ->filterTable('paid_but_cancelled')
         ->assertCanSeeTableRecords([$paidAndCancelled])
         ->assertCanNotSeeTableRecords([$paidAndNew, $unpaidAndCancelled, $cashAndCancelled]);
 
+    /** Both are kept: the operator's decision and the money's story (ADR-0013). */
     expect($paidAndCancelled->refresh()->status)->toBe(OrderStatus::Cancelled)
         ->and($paidAndCancelled->isPaid())->toBeTrue();
+});
+
+it('offers the whole list when a payment filter cannot match the tab it was set in', function () {
+    $paidAndCancelled = orderUnder(PaymentMethod::SslCommerz, ['status' => OrderStatus::Cancelled]);
+    Payment::factory()->for($paidAndCancelled)->paid()->create();
+
+    /**
+     * Set from the New queue the screen opens on, "Paid but cancelled" can
+     * never return a row. Saying so, and offering the one tab that can answer,
+     * is what keeps a cross-status filter from looking broken.
+     */
+    Livewire::test(ListOrders::class)
+        ->filterTable('paid_but_cancelled')
+        ->assertCanNotSeeTableRecords([$paidAndCancelled])
+        ->assertSeeText('No New orders match the filters you have set')
+        ->callTableAction('showInAllOrders')
+        ->assertSet('activeTab', 'all')
+        ->assertCanSeeTableRecords([$paidAndCancelled]);
 });
 
 /*
@@ -250,6 +274,7 @@ it('records a payment paid against a cancelled order without reopening it', func
         ->and($order->isPaid())->toBeTrue();
 
     Livewire::test(ListOrders::class)
+        ->set('activeTab', 'all')
         ->filterTable('paid_but_cancelled')
         ->assertCanSeeTableRecords([$order]);
 })->with('online gateways');

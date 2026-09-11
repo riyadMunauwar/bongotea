@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,9 +14,10 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Resources\Pages\ListRecords;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -113,9 +114,6 @@ class OrdersTable
             /** One query answers "is it Paid" for the whole page, not one per row. */
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withPaidFlag())
             ->filters([
-                SelectFilter::make('status')
-                    ->options(OrderStatus::class),
-
                 /**
                  * The two lists the payment axis is opened for: the Unpaid
                  * online Orders to chase, and the Orders both Paid and
@@ -164,6 +162,50 @@ class OrdersTable
 
                 TrashedFilter::make(),
             ])
+            /**
+             * The escape from a tab that has narrowed the list twice over.
+             *
+             * `ListOrders` opens on New, so an operator searching for an order
+             * a colleague confirmed yesterday gets an empty table and no reason
+             * for it — which reads as "no such order", the one thing this
+             * screen must never say about an order it holds. The same goes for
+             * the payment filters, which are cross-status: "Paid but cancelled"
+             * is a Cancelled-only question and can never answer from New.
+             *
+             * One mechanism covers both, and anything cross-status added later:
+             * name the tab that is doing the narrowing, and offer the tab that
+             * can answer. Only `activeTab` moves, so the search and filters
+             * carry across untouched.
+             */
+            ->emptyStateHeading(function (Table $table, ListRecords $livewire): ?string {
+                $tab = self::narrowedTabLabel($table, $livewire);
+
+                if ($tab === null) {
+                    return null;
+                }
+
+                $search = $livewire->getTableSearch();
+
+                /** Both can be narrowing at once, and naming only one sends the operator back for the other. */
+                return match (true) {
+                    filled($search) && self::isNarrowedAcrossStatuses($table) => "No {$tab} orders match {$search} with the filters you have set",
+                    filled($search) => "No {$tab} orders match {$search}",
+                    default => "No {$tab} orders match the filters you have set",
+                };
+            })
+            ->emptyStateDescription(fn (Table $table, ListRecords $livewire): ?string => self::narrowedTabLabel($table, $livewire) === null
+                ? null
+                : 'The order you are looking for may have another status.')
+            ->emptyStateActions([
+                Action::make('showInAllOrders')
+                    ->label('Show in all orders')
+                    ->icon(Heroicon::OutlinedArrowRight)
+                    ->visible(fn (Table $table, ListRecords $livewire): bool => self::narrowedTabLabel($table, $livewire) !== null)
+                    ->action(function (ListRecords $livewire): void {
+                        $livewire->activeTab = 'all';
+                        $livewire->updatedActiveTab();
+                    }),
+            ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
@@ -175,6 +217,54 @@ class OrdersTable
                     RestoreBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * The filters that ask something the status tabs cannot answer from where
+     * they stand: "Paid but cancelled" is a Cancelled-only question, and
+     * "Unpaid online orders" spans all three. Deliberately not every filter —
+     * the date range and TrashedFilter say nothing about status, so an empty
+     * table under one of those must not be blamed on the tab, and offering to
+     * move to All would only trade a named cause for Filament's silent one.
+     *
+     * @var list<string>
+     */
+    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled'];
+
+    private static function isNarrowedAcrossStatuses(Table $table): bool
+    {
+        foreach (self::CROSS_STATUS_FILTERS as $name) {
+            if (($table->getFilter($name)?->getActiveCount() ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The label of the active tab when it is not the whole list and something
+     * that could be answered elsewhere is narrowing too. Null everywhere else,
+     * which leaves Filament's own empty state to say what it already says
+     * correctly: an empty New queue with nothing set is the good state, not a
+     * dead end.
+     *
+     * The label is read off the Tab rather than written twice, so renaming one
+     * renames it here.
+     */
+    private static function narrowedTabLabel(Table $table, ListRecords $livewire): ?string
+    {
+        if (blank($livewire->activeTab) || $livewire->activeTab === 'all') {
+            return null;
+        }
+
+        if (! $livewire->hasTableSearch() && ! self::isNarrowedAcrossStatuses($table)) {
+            return null;
+        }
+
+        $label = ($livewire->getCachedTabs()[$livewire->activeTab] ?? null)?->getLabel();
+
+        return filled($label) ? (string) $label : null;
     }
 
     /**

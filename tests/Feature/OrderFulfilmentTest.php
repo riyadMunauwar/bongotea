@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
@@ -11,6 +12,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
+use Filament\Schemas\Components\Tabs\Tab;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -123,6 +125,95 @@ it('shows capture times and cuts the date filter at the merchant timezone midnig
 
     /** The stored instants did not move. */
     expect($lateOnTheEighth->refresh()->created_at->toIso8601String())->toBe('2026-09-08T17:30:00+00:00');
+});
+
+/*
+|--------------------------------------------------------------------------
+| The queue's tabs
+|--------------------------------------------------------------------------
+*/
+
+it('opens on the orders waiting for a call, and gives every status a tab of its own', function () {
+    $new = capturedOrder();
+    $confirmed = capturedOrder(attributes: ['status' => OrderStatus::Confirmed]);
+    $cancelled = capturedOrder(attributes: ['status' => OrderStatus::Cancelled]);
+
+    /**
+     * Cold, with no tab named in the URL: this screen is the confirmation-call
+     * queue, so it opens on the calls nobody has made yet rather than on the
+     * archive. The tabs are the only control for the fulfilment axis — the
+     * status filter was removed so that two controls cannot disagree.
+     */
+    Livewire::test(ListOrders::class)
+        ->assertSet('activeTab', 'new')
+        ->assertCanSeeTableRecords([$new])
+        ->assertCanNotSeeTableRecords([$confirmed, $cancelled])
+        ->set('activeTab', 'confirmed')
+        ->assertCanSeeTableRecords([$confirmed])
+        ->assertCanNotSeeTableRecords([$new, $cancelled])
+        ->set('activeTab', 'cancelled')
+        ->assertCanSeeTableRecords([$cancelled])
+        ->assertCanNotSeeTableRecords([$new, $confirmed])
+        ->set('activeTab', 'all')
+        ->assertCanSeeTableRecords([$new, $confirmed, $cancelled]);
+});
+
+it('counts the orders waiting on a call once, for the sidebar and the tab alike', function () {
+    capturedOrder();
+    capturedOrder();
+    capturedOrder(attributes: ['status' => OrderStatus::Confirmed]);
+
+    $newTab = fn (): Tab => Livewire::test(ListOrders::class)->instance()->getCachedTabs()['new'];
+
+    expect(OrderResource::getNavigationBadge())->toBe('2')
+        ->and($newTab()->getBadge())->toBe('2')
+        ->and($newTab()->getBadgeColor())->toBe('warning');
+
+    Order::query()->update(['status' => OrderStatus::Confirmed]);
+
+    /** Nothing waiting is the good state, and it wears no badge at either end. */
+    expect(OrderResource::getNavigationBadge())->toBeNull()
+        ->and($newTab()->getBadge())->toBeNull();
+});
+
+it('names the tab that swallowed a search, and offers the whole list instead', function () {
+    $confirmed = capturedOrder(attributes: [
+        'status' => OrderStatus::Confirmed,
+        'customer_phone' => '01712345678',
+    ]);
+
+    /** An empty queue with nothing set is the good state, not a dead end. */
+    Livewire::test(ListOrders::class)
+        ->assertTableActionHidden('showInAllOrders');
+
+    /**
+     * The customer rings back about an order somebody confirmed yesterday. An
+     * empty table with no reason given reads as "no such order", which is the
+     * one thing this screen must never say about an order it holds.
+     */
+    Livewire::test(ListOrders::class)
+        ->searchTable('01712345678')
+        ->assertCanNotSeeTableRecords([$confirmed])
+        ->assertSeeText('No New orders match 01712345678')
+        ->callTableAction('showInAllOrders')
+        ->assertSet('activeTab', 'all')
+        ->assertSet('tableSearch', '01712345678')
+        ->assertCanSeeTableRecords([$confirmed]);
+});
+
+it('does not blame the tab for a date range nothing falls in', function () {
+    capturedOrder(attributes: ['created_at' => now()->subWeek()]);
+
+    /**
+     * The date range and the trashed filter say nothing about status, so an
+     * empty table under one of them is not the tab's doing. Offering All here
+     * would carry the same filter across and land the operator on Filament's
+     * silent empty state — less to go on than before the click.
+     */
+    Livewire::test(ListOrders::class)
+        ->filterTable('taken', ['from' => now()->toDateString()])
+        ->assertTableActionHidden('showInAllOrders')
+        ->assertDontSeeText('may have another status');
 });
 
 it('records the outcome of the confirmation call', function () {

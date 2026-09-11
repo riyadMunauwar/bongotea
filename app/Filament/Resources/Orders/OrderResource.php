@@ -62,10 +62,26 @@ class OrderResource extends Resource
     /**
      * How many orders are still waiting on a confirmation call — the one number
      * that says whether anyone needs to do anything today.
+     *
+     * Counted in one place because it is drawn in two: here in the sidebar and
+     * again on the queue's New tab, about two hundred pixels apart. They are
+     * the same number to an operator, so a second copy of this query would only
+     * be a way for them to start disagreeing. Equality on `status`, so
+     * `orders_status_created_at_index` serves it.
+     *
+     * Soft-deleted Orders are out of it. They are also out of every tab until
+     * TrashedFilter says otherwise, which is the one case where the New tab
+     * lists more rows than its own badge counts — a deleted Order is not work
+     * anybody has to do, so the badge is right to keep ignoring it.
      */
+    public static function newOrderCount(): int
+    {
+        return static::getModel()::query()->where('status', OrderStatus::New)->count();
+    }
+
     public static function getNavigationBadge(): ?string
     {
-        $waiting = static::getModel()::query()->where('status', OrderStatus::New)->count();
+        $waiting = static::newOrderCount();
 
         return $waiting > 0 ? (string) $waiting : null;
     }
