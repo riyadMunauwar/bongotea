@@ -43,6 +43,23 @@ abstract class ProviderScript
     abstract public function pageViewEvent(): string;
 
     /**
+     * The click identifiers this Provider matches an Order back to an ad
+     * click by, under the names the browser hands them over as.
+     *
+     * @return list<string>
+     */
+    abstract public function clickIdNames(): array;
+
+    /**
+     * What a browser that arrived from one of this Provider's ad clicks
+     * would post with the Checkout, keyed by those same names and shaped the
+     * way the platform itself writes them.
+     *
+     * @return array<string, string>
+     */
+    abstract public function browserClickIds(): array;
+
+    /**
      * Whether this document carries the browser snippet addressed to this
      * Destination: the Provider's own base code, and the public identifier
      * that says whose it is.

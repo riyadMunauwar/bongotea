@@ -5,10 +5,10 @@ use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
 use App\Support\Orders\OrderOwnership;
 use App\Support\Tracking\MomentRecorder;
-use App\Support\Tracking\TrackingContext;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Payments\SslCommerzScript;
 use Tests\Fixtures\Tracking\FacebookScript;
@@ -71,6 +71,88 @@ it('records what the browser told us, unhashed, because a provider matches on it
     expect($row->ip_address)->toBe('203.0.113.42')
         ->and($row->user_agent)->toBe('Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile');
 })->with('tracking providers');
+
+/**
+ * The click identifiers are the Checkout island's half: it reads the
+ * platform's cookies and the click id this page was opened with at submit
+ * time and writes them into hidden inputs, because the markup itself was
+ * written to disk days ago for every visitor alike.
+ */
+it('records the click identifiers the island read from the browser, unhashed, because a provider matches on them itself', function (ProviderScript $script) {
+    $script->makeDestination();
+    $page = sellingPage(Product::factory()->create());
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds(),
+    ]))->assertCreated();
+
+    expect(TrackingEvent::sole()->click_ids)->toBe($script->browserClickIds());
+})->with('tracking providers');
+
+/**
+ * Tracking is never a precondition for buying. A visitor whose scripts never
+ * ran posts the form as it stands, which carries none of this, and their
+ * Order is captured exactly as it always was.
+ */
+it('captures an order from a visitor whose browser ran no script, reporting no click identifiers', function (ProviderScript $script) {
+    $script->makeDestination();
+    $page = sellingPage(Product::factory()->create());
+
+    $this->post(route('checkout.store'), capturePayload($page))->assertRedirect();
+
+    expect(Order::count())->toBe(1)
+        ->and(TrackingEvent::sole()->click_ids)->toBeNull();
+})->with('tracking providers');
+
+/**
+ * These arrive in a field no Customer can see or correct, from a script their
+ * browser may not have run. Filtered rather than checked: an Order refused
+ * over one would be a sale lost to tracking.
+ */
+it('never refuses an order over a click identifier, and keeps only what a provider recognises', function (ProviderScript $script) {
+    $script->makeDestination();
+    $page = sellingPage(Product::factory()->create());
+
+    $this->postJson(route('checkout.store'), capturePayload($page, [
+        TrackingContext::CLICK_IDS_FIELD => [
+            $script->clickIdNames()[0] => str_repeat('x', 400),
+            'ttclid' => 'a name no provider here knows',
+            'nested' => ['not even a string'],
+        ],
+    ]))->assertCreated();
+
+    expect(Order::count())->toBe(1)
+        ->and(TrackingEvent::sole()->click_ids)->toBe([$script->clickIdNames()[0] => str_repeat('x', 255)]);
+})->with('tracking providers');
+
+/**
+ * The bytes a visitor is served are written once and handed to everyone. A
+ * cookie or a click id read at render time would be frozen into them and sent
+ * to every visitor after the first — which is why the island reads both in
+ * the browser instead, and why the document carries no box for them.
+ */
+it('bakes nothing about the visitor into the checkout, whatever cookie or click id the page is fetched with', function () {
+    Destination::factory()->create();
+    sellingPage(Product::factory()->create());
+
+    $plain = $this->get('/promo');
+
+    /** After the plain fetch: a cookie given to the test client rides on every request it makes afterwards. */
+    $clicked = $this->withCookie('_fbc', 'fb.1.1757000000000.IwAR0abcdefghijklmnop')
+        ->withCookie('_fbp', 'fb.1.1757000000000.1098765432')
+        ->get('/promo?fbclid=IwAR0abcdefghijklmnop');
+
+    expect($clicked->headers->get('X-GioPages-Cache'))->toBe('miss')
+        ->and($clicked->getContent())->toBe($plain->getContent())
+        ->and($plain->getContent())->not->toContain('IwAR0abcdefghijklmnop')
+
+        /** And no box drawn empty for them, which a visitor running no script would post blank. */
+        ->and($plain->getContent())->not->toContain('name="click_ids')
+
+        /** Read in the browser instead, at the moment the form is submitted. */
+        ->and($plain->getContent())->toContain("cookie('_fbc')")
+        ->and($plain->getContent())->toContain('window.location.search.match(/[?&]fbclid=');
+});
 
 it('holds no personal detail on the row: what a provider is told about the customer is read from the order at delivery', function (ProviderScript $script) {
     $script->makeDestination();

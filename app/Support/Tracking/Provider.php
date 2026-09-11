@@ -36,6 +36,19 @@ interface Provider
     public function eventsFor(TrackingMoment $moment): array;
 
     /**
+     * The click identifiers this Provider matches a Moment to an ad click
+     * by, under the names the browser hands them over as.
+     *
+     * The one place those names are written down: the Checkout keeps only
+     * what some Provider recognises, the outbox's bag is keyed by them, and
+     * a driver reads back the ones it knows. Adding TikTok adds `ttclid`
+     * here and nowhere else.
+     *
+     * @return list<string>
+     */
+    public function clickIdNames(): array;
+
+    /**
      * How many events one request to this Provider may carry. The sweep cuts
      * its batches here.
      */

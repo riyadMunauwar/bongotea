@@ -837,6 +837,13 @@ it('refuses a question of the merchant that nothing could answer', function (arr
      * and every order on the page would be turned away as stale.
      */
     'the key the pricing hash arrives under' => [[questionRow('fingerprint', ['label' => 'Fingerprint'])]],
+    /**
+     * Posted by the island's script rather than drawn in the document, and
+     * posted as a bag: a question under this name would arrive as an array
+     * where a string was asked for, and refuse every Order on the Page over a
+     * box no Customer can see.
+     */
+    'the key the click identifiers arrive under' => [[questionRow('click_ids', ['label' => 'Click ids'])]],
     'a key no form input could carry' => [[questionRow('Gift Note!')]],
     'a dropdown with nothing to choose between' => [[questionRow('colour', ['type' => 'select', 'options' => []])]],
     'radio buttons with nothing to choose between' => [[questionRow('colour', ['type' => 'radio', 'options' => []])]],

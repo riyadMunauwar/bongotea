@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -175,6 +176,23 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class)->orderBy('id');
+    }
+
+    /**
+     * What the browser told us when this Order was captured, kept only where
+     * the Moment that will report it is still to come — an Order paid online,
+     * whose `Purchase` belongs to the Verification that says Paid and happens
+     * with no browser present.
+     *
+     * Deliberately not part of the Order: an Order records what it needs to
+     * be fulfilled, and it is kept indefinitely, which an IP address must not
+     * be.
+     *
+     * @return HasOne<TrackingContext, $this>
+     */
+    public function trackingContext(): HasOne
+    {
+        return $this->hasOne(TrackingContext::class);
     }
 
     /**

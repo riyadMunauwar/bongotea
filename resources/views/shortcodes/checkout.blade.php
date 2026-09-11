@@ -1689,6 +1689,105 @@
         if (fill(text, message)) { text.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     }
 
+    /*
+     * One cookie by name, or null. Read at submit and never at render: these
+     * bytes may have been written to disk days ago and are served to every
+     * visitor alike, so nothing about this one visitor can be baked into
+     * them.
+     */
+    function cookie(name) {
+        var match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+        if (!match) { return null; }
+
+        /*
+         * A stray `%` left by another script or a proxy makes decoding throw,
+         * and a throw here would leave the order unposted behind a disabled
+         * button. The raw value is worth more than nothing to a platform, and
+         * an order is worth more than either.
+         */
+        try {
+            return decodeURIComponent(match[2]);
+        } catch (e) {
+            return match[2];
+        }
+    }
+
+    /*
+     * The click identifiers the ad platforms match an order back to the click
+     * that produced it, read from the browser and posted with the form.
+     *
+     * `_fbp` is the pixel's own browser identifier and is taken as it stands.
+     * `_fbc` is Facebook's click identifier: taken from the cookie where the
+     * pixel has already written one, and otherwise built from the `fbclid`
+     * this page was opened with, in the shape Meta documents — a page whose
+     * visitor blocks the pixel, or who submits before it has loaded, still
+     * reports the click that brought them.
+     *
+     * A visitor whose scripts never run sends none of this, and their order
+     * is captured exactly as it always was: the server keeps only what some
+     * platform recognises and never refuses an order over it.
+     */
+    function clickIds() {
+        var stored = cookie('_fbc');
+
+        if (!stored) {
+            /*
+             * Read with a pattern rather than `URLSearchParams`, which the
+             * older webviews a good share of this market still orders from do
+             * not carry. Nothing on the ordering path may depend on a
+             * convenience that is missing for some of them.
+             */
+            var clicked = window.location.search.match(/[?&]fbclid=([^&]*)/);
+            if (clicked) { stored = 'fb.1.' + Date.now() + '.' + clicked[1]; }
+        }
+
+        return { fbc: stored, fbp: cookie('_fbp') };
+    }
+
+    /*
+     * Written into hidden inputs rather than added to the body of the request,
+     * so a layout that one day posts this form by other means carries them
+     * too, and so a merchant debugging in their own browser can see what is
+     * being sent. Added here rather than drawn in the document, because a box
+     * rendered empty would post an empty value for every visitor whose
+     * browser filled in nothing.
+     */
+    function stampClickIds(form) {
+        var ids = clickIds();
+
+        Object.keys(ids).forEach(function (name) {
+            if (!ids[name]) { return; }
+
+            var field = 'click_ids[' + name + ']';
+            var input = form.querySelector('input[name="' + field + '"]');
+
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = field;
+                form.appendChild(input);
+            }
+
+            input.value = ids[name];
+        });
+    }
+
+    /*
+     * And whatever else a browser we have never seen does with any of the
+     * above. Tracking is never a precondition for buying: this runs after the
+     * submit has been taken over and the button disabled, so anything raised
+     * here that was not caught would leave the customer looking at a dead
+     * "Placing your order…" and no order placed. The reporting is what is
+     * lost, never the order.
+     */
+    function stampClickIdsQuietly(form) {
+        try {
+            stampClickIds(form);
+        } catch (e) {
+            /* Nothing to say to the customer, and nothing to do about it. */
+        }
+    }
+
     function post(form, token) {
         var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
         if (token) { headers['X-CSRF-TOKEN'] = token; }
@@ -1790,6 +1889,8 @@
             button.disabled = true;
             button.textContent = SUBMITTING;
         }
+
+        stampClickIdsQuietly(form);
 
         var restore = function () {
             if (button) {

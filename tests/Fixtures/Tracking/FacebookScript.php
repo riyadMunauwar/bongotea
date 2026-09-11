@@ -63,6 +63,29 @@ class FacebookScript extends ProviderScript
         return 'PageView';
     }
 
+    /**
+     * @return list<string>
+     */
+    public function clickIdNames(): array
+    {
+        return ['fbc', 'fbp'];
+    }
+
+    /**
+     * Meta's own two shapes: `fb.{subdomain index}.{creation time}.{fbclid}`
+     * for the click, and the same envelope around the random number the Pixel
+     * makes up for the browser.
+     *
+     * @return array<string, string>
+     */
+    public function browserClickIds(): array
+    {
+        return [
+            'fbc' => 'fb.1.1757000000000.IwAR0abcdefghijklmnop',
+            'fbp' => 'fb.1.1757000000000.1098765432',
+        ];
+    }
+
     public function carriesBaseCodeFor(Destination $destination, string $html): bool
     {
         return Str::contains($html, 'connect.facebook.net/en_US/fbevents.js')

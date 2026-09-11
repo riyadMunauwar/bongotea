@@ -17,5 +17,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Support/OrderComplete/** | .ai/rules/support-order-complete.md |
 | tests/** | .ai/rules/tests.md |
-| app/Support/Tracking/**, app/Models/Destination.php, app/Models/TrackingEvent.php, app/Observers/DestinationObserver.php, app/Enums/Tracking*.php, app/Console/Commands/SweepTrackingCommand.php, app/Filament/Resources/Destinations/**, tests/Fixtures/Tracking/** | .ai/rules/tracking.md |
+| app/Support/Tracking/**, app/Models/Destination.php, app/Models/TrackingEvent.php, app/Models/TrackingContext.php, app/Observers/DestinationObserver.php, app/Enums/Tracking*.php, app/Console/Commands/SweepTrackingCommand.php, app/Filament/Resources/Destinations/**, tests/Fixtures/Tracking/** | .ai/rules/tracking.md |
 | app/Filament/Widgets/** | .ai/rules/widgets.md |

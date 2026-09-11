@@ -126,6 +126,12 @@ class Payment extends Model
         return $this->state === PaymentState::Pending;
     }
 
+    /** Whether a Verification found this attempt taken: the one state in which money moved. */
+    public function isPaid(): bool
+    {
+        return $this->state === PaymentState::Paid;
+    }
+
     /**
      * Write where this Payment ended onto its Order's activity trail.
      *

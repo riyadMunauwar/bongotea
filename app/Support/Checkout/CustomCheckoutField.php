@@ -49,8 +49,13 @@ class CustomCheckoutField extends CheckoutField
      * Checkout tab saying why (ADR-0007). Note the Merchant is steered
      * straight at it: the key is derived from the label, so a question
      * labelled "Fingerprint" asks for exactly this.
+     *
+     * `click_ids` is posted by the island's script rather than drawn in the
+     * document, and posted as a bag — a question sharing the name would arrive
+     * as an array where a string was asked for, refusing every Order on the
+     * Page with a message about a box the Customer cannot correct.
      */
-    private const RESERVED_KEYS = ['page', 'fingerprint', 'selected', 'quantities', 'delivery_option'];
+    private const RESERVED_KEYS = ['page', 'fingerprint', 'selected', 'quantities', 'delivery_option', 'payment_method', 'click_ids'];
 
     /**
      * What the Merchant said an answer has to be, from the bounded vocabulary

@@ -217,13 +217,17 @@ function pageOffering(GatewayScript $gateway): Page
 /**
  * Capture an Order under the gateway, with the gateway accepting the Payment,
  * the way a Customer does before being sent off to pay.
+ *
+ * @param  array<string, mixed>  $overrides  anything else the submission carries — what the island fills in from the browser, in practice.
  */
-function capturedFor(GatewayScript $gateway): Payment
+function capturedFor(GatewayScript $gateway, array $overrides = []): Payment
 {
     $gateway->fakeStart();
 
-    test()->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
-        ->assertCreated();
+    test()->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), [
+        'payment_method' => $gateway->method()->value,
+        ...$overrides,
+    ]))->assertCreated();
 
     return Payment::sole();
 }

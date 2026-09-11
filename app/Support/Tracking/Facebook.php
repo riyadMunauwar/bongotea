@@ -42,6 +42,12 @@ class Facebook implements Provider
     /** What Meta calls the load of a page, reported by the base code itself. */
     private const PAGE_VIEW = 'PageView';
 
+    /** Meta's click identifier, derived by the browser from an ad click's `fbclid` and kept in the `_fbc` cookie. */
+    private const CLICK_ID = 'fbc';
+
+    /** Meta's browser identifier, set by the Pixel itself in the `_fbp` cookie. */
+    private const BROWSER_ID = 'fbp';
+
     /** Where Meta serves the Pixel library from: the one address a page carrying the snippet reaches out to. */
     private const LIBRARY = 'https://connect.facebook.net/en_US/fbevents.js';
 
@@ -114,6 +120,19 @@ class Facebook implements Provider
             TrackingMoment::CheckoutStarted => ['InitiateCheckout'],
             TrackingMoment::Capture, TrackingMoment::Paid => ['Purchase'],
         };
+    }
+
+    /**
+     * Meta's two: the click identifier a browser derives from an ad click's
+     * `fbclid` and keeps in `_fbc`, and the browser identifier the Pixel
+     * itself sets in `_fbp`. Both are sent to the Conversions API plain,
+     * because Meta matches on them itself.
+     *
+     * @return list<string>
+     */
+    public function clickIdNames(): array
+    {
+        return [self::CLICK_ID, self::BROWSER_ID];
     }
 
     public function batchLimit(): int
@@ -323,8 +342,8 @@ class Facebook implements Provider
             ...$hashed,
             'client_ip_address' => $event->ip_address,
             'client_user_agent' => $event->user_agent,
-            'fbc' => $clickIds['fbc'] ?? null,
-            'fbp' => $clickIds['fbp'] ?? null,
+            self::CLICK_ID => $clickIds[self::CLICK_ID] ?? null,
+            self::BROWSER_ID => $clickIds[self::BROWSER_ID] ?? null,
         ], fn (mixed $value): bool => filled($value));
     }
 

@@ -240,6 +240,10 @@ _Avoid_: tag, tracker, script, beacon
 Where a Moment is written down, one row per Destination per provider event, so that no web request ever calls an ad platform. A scheduled sweep delivers what is waiting. A row holds no personal detail: what a Provider is told about the Customer is read from the Order when the row is delivered.
 _Avoid_: queue, event log, buffer
 
+**Tracking Context**:
+What the browser told us when an Order was captured — the click identifiers, the IP address, the User-Agent and the Page it was on — kept apart from the Order in a table of its own. It exists for the Moment that arrives with no browser present: an Order paid online reports its Purchase when a Verification says Paid, which happens from a sweep or a gateway's own notification. Kept only where such a Moment is still to come, because an Order reporting at Capture has already written the same things onto its outbox row. Not part of the Order: an Order records what it needs to be fulfilled and is kept indefinitely, and a browser identifier is neither.
+_Avoid_: session, visitor record, attribution data, fingerprint
+
 ### People
 
 **User**:

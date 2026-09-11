@@ -6,6 +6,8 @@ use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Page;
+use App\Models\Payment;
+use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
 use Illuminate\Support\Carbon;
 
@@ -40,17 +42,72 @@ class MomentRecorder
      */
     public function captured(Order $order, TrackingContext $context): void
     {
+        $destinations = $this->destinations->forPage($order->page);
+
+        /** Nowhere to report to is nothing to report, and nothing worth keeping an IP address for. */
+        if ($destinations === []) {
+            return;
+        }
+
+        /**
+         * An Order whose Purchase is still to come is where the browser's
+         * word has to outlive the browser: the Verification that says Paid
+         * runs from the sweep or from a gateway's Notification, with nobody
+         * there to ask. It cannot be read back off the outbox either, because
+         * this Moment writes no row for such an Order and so leaves none to
+         * copy from.
+         *
+         * Nothing is kept for an Order reporting here and now: the row below
+         * carries the same things, and a second copy would be a second thing
+         * to prune.
+         */
         if (self::purchaseMomentFor($order) !== TrackingMoment::Capture) {
+            $context->keepFor($order);
+
             return;
         }
 
         $this->record(
+            $destinations,
             TrackingMoment::Capture,
             deduplicationId: $order->order_number,
             occurredAt: $order->created_at ?? Carbon::now(),
             page: $order->page,
             order: $order,
             context: $context,
+        );
+    }
+
+    /**
+     * The Paid Moment: a Verification marked one of an Order's Payments Paid.
+     *
+     * Money moved for this Order, which is a `Purchase` — and the outbox's
+     * unique index is what makes it exactly one. No rule about how the Order
+     * is paid is re-asked here: the Verification reached from the Processing
+     * Page, from a gateway's Notification and from the sweep each writes, the
+     * first lands and the rest are no-ops, and an Order that already reported
+     * at Capture finds its own row in the way.
+     *
+     * What the browser told us is read back from the Tracking Context kept at
+     * Capture, because by now there is no browser to ask — and nothing at all
+     * where the Order reported at Capture and nothing was kept.
+     */
+    public function paid(Payment $payment): void
+    {
+        $order = $payment->order;
+
+        if ($order === null) {
+            return;
+        }
+
+        $this->record(
+            $this->destinations->forPage($order->page),
+            TrackingMoment::Paid,
+            deduplicationId: $order->order_number,
+            occurredAt: $payment->verified_at ?? Carbon::now(),
+            page: $order->page,
+            order: $order,
+            context: TrackingContext::forOrder($order),
         );
     }
 
@@ -76,8 +133,11 @@ class MomentRecorder
      * carry, so Meta counts one and not two; the Order's number for Capture
      * and Paid, because both browser and server can reach it without
      * coordinating.
+     *
+     * @param  list<Destination>  $destinations
      */
     private function record(
+        array $destinations,
         TrackingMoment $moment,
         string $deduplicationId,
         Carbon $occurredAt,
@@ -85,7 +145,7 @@ class MomentRecorder
         ?Order $order,
         TrackingContext $context,
     ): void {
-        foreach ($this->destinations->forPage($page) as $destination) {
+        foreach ($destinations as $destination) {
             foreach ($destination->driver()->eventsFor($moment) as $event) {
                 $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context);
             }
@@ -117,10 +177,10 @@ class MomentRecorder
                 'page_slug' => $page?->slug ?? $order?->page_slug,
 
                 'order_id' => $order?->getKey(),
-                'source_url' => $context->sourceUrl,
-                'ip_address' => $context->ipAddress,
-                'user_agent' => $context->userAgent,
-                'click_ids' => $context->clickIds === [] ? null : $context->clickIds,
+                'source_url' => $context->source_url,
+                'ip_address' => $context->ip_address,
+                'user_agent' => $context->user_agent,
+                'click_ids' => filled($context->click_ids) ? $context->click_ids : null,
             ],
         );
     }

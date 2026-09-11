@@ -5,8 +5,10 @@ namespace App\Support\Payments;
 use App\Enums\PaymentState;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Support\Tracking\MomentRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Verification: the system asking a gateway, in a call of its own, whether a
@@ -22,9 +24,17 @@ use Illuminate\Support\Facades\Log;
  */
 class PaymentVerifier
 {
+    public function __construct(private readonly MomentRecorder $moments) {}
+
     /**
      * The Payment as it stands once the gateway has been asked and the answer
-     * recorded.
+     * recorded — and, where that answer was Paid, once the Order's Purchase
+     * has been written to the tracking outbox.
+     *
+     * The Moment is reported by whoever's Verification left the Payment Paid,
+     * including a caller that found another had settled it first: the money
+     * moved either way, and the outbox's own index is what keeps it to one
+     * Purchase.
      */
     public function verify(Payment $payment): Payment
     {
@@ -34,7 +44,7 @@ class PaymentVerifier
 
         $verification = $payment->gateway()->verify($payment);
 
-        return $this->settle($payment, function (Payment $current) use ($verification): void {
+        $settled = $this->settle($payment, function (Payment $current) use ($verification): void {
             $current->verification_response = $verification->response;
             $current->gateway_reference ??= $verification->gatewayReference;
 
@@ -55,6 +65,12 @@ class PaymentVerifier
                 $this->flagIfPaidTwice($current);
             }
         });
+
+        if ($settled->isPaid()) {
+            $this->reportPaid($settled);
+        }
+
+        return $settled;
     }
 
     /**
@@ -102,6 +118,32 @@ class PaymentVerifier
 
             return $current;
         });
+    }
+
+    /**
+     * The Paid Moment, outside the lock the outcome was written under and
+     * after it: the row is the Order's to report, not this transaction's, and
+     * a Provider is never spoken to from here regardless.
+     *
+     * Recorded by whoever's Verification left the Payment Paid, which is any
+     * of the three — the Processing Page, a gateway's Notification, the
+     * sweep — and by all three where they ran at once. Only the first write
+     * lands; the outbox's unique index is what makes the rest no-ops, so none
+     * of them has to know about the others.
+     *
+     * Caught and reported rather than allowed to raise, for the reason the
+     * Capture Moment is: the money has already moved and been recorded, and
+     * an exception here would fail a Verification over a row. A gateway that
+     * is not answered 200 retries, and a sweep that throws leaves a settled
+     * Payment looking unswept.
+     */
+    private function reportPaid(Payment $paid): void
+    {
+        try {
+            $this->moments->paid($paid);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**
