@@ -40,7 +40,7 @@ class OrderStatusBreakdownChart extends ChartWidget
         'cancelled' => '#ef4444',
     ];
 
-    protected static ?int $sort = 50;
+    protected static ?int $sort = 40;
 
     protected ?string $heading = 'Order status breakdown';
 

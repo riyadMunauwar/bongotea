@@ -21,6 +21,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -160,7 +161,7 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
         ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
 });
 
-it('draws the Page leaderboard below the chart: a row per Page with its own figures, Sales first and sortable, each row opening its Page', function () {
+it('draws the Page leaderboard last of the reports, above the Cache Path indicator: a row per Page with its own figures, Sales first and sortable, each row opening its Page', function () {
     $top = Page::factory()->published()->create(['title' => 'Summer combo', 'published_at' => now()->subDays(10)]);
     $other = Page::factory()->create(['title' => 'Winter combo']);
     $retired = Page::factory()->published()->create(['title' => 'Retired combo']);
@@ -178,7 +179,7 @@ it('draws the Page leaderboard below the chart: a row per Page with its own figu
 
     $widgets = array_values(app(Dashboard::class)->getWidgets());
 
-    expect(array_search(SalesOverTimeChart::class, $widgets, true))
+    expect(array_search(DeliveryMixTable::class, $widgets, true))
         ->toBeLessThan(array_search(PageLeaderboardTable::class, $widgets, true))
         ->and(array_search(PageLeaderboardTable::class, $widgets, true))
         ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
@@ -219,7 +220,7 @@ it('draws the Page leaderboard below the chart: a row per Page with its own figu
         ->assertSee('No Orders in this window');
 });
 
-it('draws the status breakdown and the Payment Method mix side by side under the leaderboard, each obeying the filter', function () {
+it('draws the status breakdown and the Payment Method mix side by side under the Sales chart, each obeying the filter', function () {
     Page::factory()->published()->create();
     Order::factory()->create(['subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
     Order::factory()->cancelled()->create(['subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
@@ -233,7 +234,7 @@ it('draws the status breakdown and the Payment Method mix side by side under the
 
     $widgets = array_values(app(Dashboard::class)->getWidgets());
 
-    expect(array_search(PageLeaderboardTable::class, $widgets, true))
+    expect(array_search(SalesOverTimeChart::class, $widgets, true))
         ->toBeLessThan(array_search(OrderStatusBreakdownChart::class, $widgets, true))
         ->and(array_search(OrderStatusBreakdownChart::class, $widgets, true))
         ->toBeLessThan(array_search(PaymentMethodMixChart::class, $widgets, true))
@@ -389,4 +390,144 @@ it('keeps the Cache Path indicator on the Dashboard, below the reports', functio
 
     expect(array_search(OverviewStats::class, $widgets, true))
         ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
+});
+
+it('pages the Page leaderboard at ten rows, sorting the whole leaderboard before the page is cut, and returning to the first page when the Reporting Window changes', function () {
+    /**
+     * Twelve Pages ranked by the Sales each was given, so there is a second
+     * page at all. The lowest-ranked of them is the one carrying the most
+     * Orders — it sits on page two, which is where a sort by Orders has to
+     * reach to be a sort of the leaderboard rather than of the page in view.
+     */
+    $pages = collect(range(1, 12))->map(function (int $rank): Page {
+        $page = Page::factory()->published()->create(['title' => "Combo {$rank}"]);
+
+        Order::factory()->create([
+            'page_id' => $page->getKey(),
+            'subtotal' => (13 - $rank) * 10000,
+            'delivery_charge' => 0,
+            'created_at' => now(),
+        ]);
+
+        return $page;
+    });
+
+    Order::factory()->count(2)->create([
+        'page_id' => $pages->last()->getKey(),
+        'subtotal' => 100,
+        'delivery_charge' => 0,
+        'created_at' => now(),
+    ]);
+
+    $leaderboard = Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
+
+    $records = fn (): LengthAwarePaginator => $leaderboard->instance()->getTableRecords();
+    $titles = fn (): array => $records()->getCollection()->pluck('title')->values()->all();
+
+    expect($records())->toBeInstanceOf(LengthAwarePaginator::class)
+        ->and($records()->total())->toBe(12)
+        ->and($records()->perPage())->toBe(10)
+        ->and($records()->lastPage())->toBe(2)
+        ->and($titles())->toHaveCount(10)
+        ->and($titles()[0])->toBe('Combo 1')
+        ->and($titles())->not->toContain('Combo 12');
+
+    $leaderboard->call('setPage', 2);
+
+    expect($records()->currentPage())->toBe(2)
+        ->and($titles())->toBe(['Combo 11', 'Combo 12']);
+
+    $leaderboard->sortTable('orders', 'desc');
+
+    expect($records()->currentPage())->toBe(1)
+        ->and($titles()[0])->toBe('Combo 12');
+
+    /**
+     * A new window is a new question, so it is answered from the top.
+     *
+     * Livewire refuses a lifecycle method over the wire ("Unable to call
+     * lifecycle method [updatedPageFilters] directly"), so the hook is
+     * invoked where Livewire invokes it — on the component itself, once the
+     * reactive property it watches has changed.
+     */
+    $leaderboard->call('setPage', 2);
+
+    $instance = $leaderboard->instance();
+
+    expect($instance->getTablePage())->toBe(2);
+
+    $instance->updatedPageFilters();
+
+    expect($instance->getTablePage())->toBe(1);
+});
+
+it('pages every collection-backed report table at ten rows, offering the standard page sizes', function () {
+    $page = Page::factory()->published()->create();
+
+    $order = Order::factory()->create([
+        'page_id' => $page->getKey(),
+        'delivery_label' => 'Inside Dhaka',
+        'delivery_charge' => 6000,
+        'created_at' => now(),
+    ]);
+
+    OrderLine::factory()->for($order)->create();
+
+    /**
+     * Each of these is backed by a Collection of rows rather than a query, so
+     * each has to hand Filament a paginator itself for page controls to exist
+     * at all. What is pinned is that every one of them does, at the same page
+     * size, with the same sizes on offer.
+     */
+    foreach ([NeedsAttentionTable::class, PageLeaderboardTable::class, TopProductsTable::class, DeliveryMixTable::class] as $widget) {
+        $instance = Livewire::test($widget)->instance();
+
+        expect($instance->getTable()->isPaginated())->toBeTrue()
+            ->and($instance->getTable()->getPaginationPageOptions())->toBe([5, 10, 25, 50])
+            ->and($instance->getTableRecordsPerPage())->toBe(10)
+            ->and($instance->getTableRecords())->toBeInstanceOf(LengthAwarePaginator::class);
+    }
+});
+
+it('answers a page past the end of a report table with its last page, so a stale page number never reads as no data', function () {
+    /**
+     * Three Orders nobody has called, and a page number that has outlived the
+     * rows it was counted against — which is what a bookmarked `?page=`, a
+     * refresh, or a backlog worked down while the page stayed open all leave
+     * behind. Every widget table reads that same key, because none of them
+     * names its own, so the one that must never be wrong is the one asserted:
+     * an empty page under the green tick is a false all-clear.
+     */
+    Order::factory()->count(3)->create(['created_at' => now()->subHours(25)]);
+
+    $attention = Livewire::withQueryParams(['page' => 3])->test(NeedsAttentionTable::class);
+
+    $attention->assertSee('Needs Attention')
+        ->assertDontSee('Nothing needs attention');
+
+    /**
+     * The stale number did reach the table — so this is the clamp being
+     * asserted and not the query string quietly failing to arrive.
+     */
+    expect($attention->instance()->getTablePage())->toBe(3)
+        ->and($attention->instance()->getTableRecords()->currentPage())->toBe(1)
+        ->and($attention->instance()->getTableRecords()->count())->toBe(3);
+
+    /** The same clamp on a table with a real second page: the last one, not nothing. */
+    collect(range(1, 12))->each(function (int $rank): void {
+        $page = Page::factory()->published()->create(['title' => "Combo {$rank}"]);
+
+        Order::factory()->create([
+            'page_id' => $page->getKey(),
+            'subtotal' => (13 - $rank) * 10000,
+            'delivery_charge' => 0,
+            'created_at' => now(),
+        ]);
+    });
+
+    $leaderboard = Livewire::withQueryParams(['page' => 99])
+        ->test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
+
+    expect($leaderboard->instance()->getTableRecords()->currentPage())->toBe(2)
+        ->and($leaderboard->instance()->getTableRecords()->count())->toBeGreaterThan(0);
 });

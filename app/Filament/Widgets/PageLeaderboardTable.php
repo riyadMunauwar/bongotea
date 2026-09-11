@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Pages\PageResource;
+use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Support\Money;
 use App\Support\Reporting\PageLeaderboardRow;
 use App\Support\Reporting\ReportingQuery;
@@ -12,16 +13,24 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\TableWidget;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
- * The Page leaderboard, full width under the chart: one row per Page with
- * Orders in the Reporting Window, so a Merchant can set Pages against each
- * other and against their campaigns. Each row carries the Page's title,
- * Orders, Sales, Cancellation Rate, Average Order Value and when it went
- * live, and opens that Page's edit screen; Sales first by default, and
- * any figure sorts. A Visits / Conversion column is reserved so the table
- * does not shift when Visit counting arrives.
+ * The Page leaderboard, full width and last of the reports, directly above
+ * the Cache Path indicator: one row per Page with Orders in the Reporting
+ * Window, so a Merchant can set Pages against each other and against their
+ * campaigns. Each row carries the Page's title, Orders, Sales, Cancellation
+ * Rate, Average Order Value and when it went live, and opens that Page's
+ * edit screen; Sales first by default, and any figure sorts. A Visits /
+ * Conversion column is reserved so the table does not shift when Visit
+ * counting arrives.
+ *
+ * It sits at the foot of the screen rather than among the figures because it
+ * is the one report whose height grows with the installation — a Merchant
+ * with forty live Pages has forty rows of it — so the compact tiles and
+ * charts are read without scrolling past it. Ten rows at a time keeps it
+ * bounded even there.
  *
  * A Page soft-deleted after taking Orders keeps its row, marked deleted,
  * and still links — the resource serves trashed records. Orders whose
@@ -38,16 +47,30 @@ use Illuminate\Support\Collection;
 class PageLeaderboardTable extends TableWidget
 {
     use InteractsWithPageFilters;
+    use PaginatesRows;
 
-    protected static ?int $sort = 40;
+    protected static ?int $sort = 80;
 
     protected int|string|array $columnSpan = 'full';
+
+    /**
+     * A new Reporting Window is a new question, answered from the top.
+     *
+     * Filament resets the table page for every filter it owns and not for a
+     * page filter, so without this a Merchant narrowing the window from the
+     * second page would be left asking for a page the shorter leaderboard no
+     * longer has — an empty table reading as no Sales.
+     */
+    public function updatedPageFilters(): void
+    {
+        $this->resetPage();
+    }
 
     public function table(Table $table): Table
     {
         return $table
             ->heading('Page leaderboard')
-            ->records(fn (?string $sortColumn, ?string $sortDirection): Collection => $this->rows($sortColumn, $sortDirection))
+            ->records(fn (?string $sortColumn, ?string $sortDirection, int|string $page, int|string $recordsPerPage): LengthAwarePaginator => $this->paginateRows($this->rows($sortColumn, $sortDirection), $page, $recordsPerPage))
             ->columns([
                 TextColumn::make('title')
                     ->label('Page')
@@ -98,8 +121,7 @@ class PageLeaderboardTable extends TableWidget
             ->defaultSort('sales', 'desc')
             ->recordUrl(fn (array $record): ?string => $record['url'])
             ->emptyStateHeading('No Orders in this window')
-            ->emptyStateDescription('A Page appears here once an Order is captured on it inside the Reporting Window.')
-            ->paginated(false);
+            ->emptyStateDescription('A Page appears here once an Order is captured on it inside the Reporting Window.');
     }
 
     /**
@@ -107,6 +129,10 @@ class PageLeaderboardTable extends TableWidget
      * the Merchant asked for. The module's own order — Sales first — is
      * kept until a figure is clicked; the raw figures ride in the row so a
      * sort compares numbers, and the columns format them.
+     *
+     * Every Page is sorted, not the ten in view: the page is cut from this
+     * result afterwards, so a leaderboard sorted by Orders names the Page
+     * with the most Orders even when it was on the second page.
      *
      * @return Collection<int, array<string, mixed>>
      */

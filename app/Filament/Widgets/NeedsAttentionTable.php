@@ -3,12 +3,14 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Support\Reporting\NeedsAttentionRow;
 use App\Support\Reporting\ReportingQuery;
 use Filament\Support\ArrayRecord;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,7 +23,9 @@ use Illuminate\Support\Collection;
  *
  * A to-do list, not a report: it reads no page filter, and when there is
  * nothing to do it says so in words rather than drawing an empty table, so
- * silence is never mistaken for a broken widget.
+ * silence is never mistaken for a broken widget. Ten rows at a time, so a
+ * morning's backlog is worked through a page at a time instead of pushing
+ * the Reporting Window filter and every figure under it off the screen.
  *
  * The rows come whole from `ReportingQuery::needsAttention()`; the widget
  * labels and links and never counts. Lazy, like every report widget, so
@@ -29,6 +33,8 @@ use Illuminate\Support\Collection;
  */
 class NeedsAttentionTable extends TableWidget
 {
+    use PaginatesRows;
+
     /**
      * Ahead of every report widget, which sort in the tens from 20. The
      * Dashboard places it in its header slot on the strength of this
@@ -42,7 +48,7 @@ class NeedsAttentionTable extends TableWidget
     {
         return $table
             ->heading('Needs Attention')
-            ->records(fn (): Collection => $this->rows())
+            ->records(fn (int|string $page, int|string $recordsPerPage): LengthAwarePaginator => $this->paginateRows($this->rows(), $page, $recordsPerPage))
             ->columns([
                 TextColumn::make('order_number')
                     ->label('Order')
@@ -65,8 +71,7 @@ class NeedsAttentionTable extends TableWidget
             ->recordUrl(fn (array $record): string => $record['url'])
             ->emptyStateHeading('Nothing needs attention')
             ->emptyStateDescription('Every New Order is under a day old, no Payment has been Pending for over an hour, and no Order is Paid twice or Paid and Cancelled.')
-            ->emptyStateIcon('heroicon-o-check-circle')
-            ->paginated(false);
+            ->emptyStateIcon('heroicon-o-check-circle');
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\ProductRankingRow;
@@ -12,6 +13,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\TableWidget;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,6 +23,12 @@ use Illuminate\Support\Collection;
  * order and the only one this table has — sorting by a clicked figure is
  * the leaderboard's job, not a widget whose whole point is the top of the
  * list.
+ *
+ * The ranking itself is unbounded — `ReportingQuery::productRanking()`
+ * returns a row for every Product sold in the window, which on a real
+ * catalogue is hundreds — so the table pages at ten. The first page is the
+ * top of the list, which is the whole of what the widget is for; the rest
+ * is reachable rather than drawn.
  *
  * It sits under the Payment Method mix on the Dashboard and above it on a
  * Page edit screen, where which Product carries this Page is the first
@@ -39,15 +47,29 @@ use Illuminate\Support\Collection;
 class TopProductsTable extends TableWidget
 {
     use InteractsWithPageFilters;
+    use PaginatesRows;
     use ScopedToPage;
 
-    protected static ?int $sort = 70;
+    protected static ?int $sort = 60;
+
+    /**
+     * A new Reporting Window is a new question, answered from the top.
+     *
+     * Filament resets the table page for every filter it owns and not for a
+     * page filter, so without this a Merchant narrowing the window from the
+     * second page would be left asking for a page the shorter ranking no
+     * longer has — an empty table reading as nothing sold.
+     */
+    public function updatedPageFilters(): void
+    {
+        $this->resetPage();
+    }
 
     public function table(Table $table): Table
     {
         return $table
             ->heading('Top Products')
-            ->records(fn (): Collection => $this->rows())
+            ->records(fn (int|string $page, int|string $recordsPerPage): LengthAwarePaginator => $this->paginateRows($this->rows(), $page, $recordsPerPage))
             ->columns([
                 TextColumn::make('name')
                     ->label('Product')
@@ -74,8 +96,7 @@ class TopProductsTable extends TableWidget
                     ->alignEnd(),
             ])
             ->emptyStateHeading('Nothing sold in this window')
-            ->emptyStateDescription('A Product appears here once it is sold on an Order captured inside the Reporting Window.')
-            ->paginated(false);
+            ->emptyStateDescription('A Product appears here once it is sold on an Order captured inside the Reporting Window.');
     }
 
     /**

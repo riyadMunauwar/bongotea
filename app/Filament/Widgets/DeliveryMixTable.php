@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Support\Money;
 use App\Support\Reporting\DeliveryMix;
 use App\Support\Reporting\DeliveryMixRow;
@@ -12,6 +13,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\TableWidget;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
@@ -33,8 +35,9 @@ use Illuminate\Support\Collection;
 class DeliveryMixTable extends TableWidget
 {
     use InteractsWithPageFilters;
+    use PaginatesRows;
 
-    protected static ?int $sort = 80;
+    protected static ?int $sort = 70;
 
     /**
      * The window's mix, once per render. Private, so Livewire neither
@@ -42,12 +45,26 @@ class DeliveryMixTable extends TableWidget
      */
     private ?DeliveryMix $mix = null;
 
+    /**
+     * A new Reporting Window is a new question, answered from the top.
+     *
+     * Filament resets the table page for every filter it owns and not for a
+     * page filter. This table is short — one row per Delivery Option — so the
+     * second page is rare, but an installation that has retired a few labels
+     * can reach it, and a narrowed window would then leave it asking for a
+     * page the mix no longer has.
+     */
+    public function updatedPageFilters(): void
+    {
+        $this->resetPage();
+    }
+
     public function table(Table $table): Table
     {
         return $table
             ->heading('Delivery mix')
             ->description(fn (): ?string => $this->districts())
-            ->records(fn (): Collection => $this->rows())
+            ->records(fn (int|string $page, int|string $recordsPerPage): LengthAwarePaginator => $this->paginateRows($this->rows(), $page, $recordsPerPage))
             ->columns([
                 TextColumn::make('label')
                     ->label('Delivery Option')
@@ -64,8 +81,7 @@ class DeliveryMixTable extends TableWidget
                     ->alignEnd(),
             ])
             ->emptyStateHeading('No Orders in this window')
-            ->emptyStateDescription('A Delivery Option appears here once an Order that chose it is captured inside the Reporting Window.')
-            ->paginated(false);
+            ->emptyStateDescription('A Delivery Option appears here once an Order that chose it is captured inside the Reporting Window.');
     }
 
     /**
