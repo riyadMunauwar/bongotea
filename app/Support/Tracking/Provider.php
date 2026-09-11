@@ -12,14 +12,15 @@ use App\Models\TrackingEvent;
  *
  * One contract so that nothing outside this namespace speaks any platform's
  * vocabulary: a Moment is recorded, the Provider says which of its own events
- * that produces, and the sweep hands it batches to deliver. Adding TikTok is
- * one class implementing this and one case on `TrackingProvider` — the
- * outbox, the sweep, the beacon and the Tracking tab are untouched.
+ * that produces, the sweep hands it batches to deliver, and the snippet
+ * builder asks it what the browser should run. Adding TikTok is one class
+ * implementing this and one case on `TrackingProvider` — the outbox, the
+ * sweep, the beacon and the Tracking tab are untouched.
  *
- * The four questions are deliberately narrow. Nothing here takes a Page, a
- * Request or a Settings group: a driver reads the row it is handed and the
- * Order that row points at, and everything else is decided before it is
- * called.
+ * The questions are deliberately narrow. Nothing here takes a Page, a
+ * Request or a Settings group: a driver reads the row or the Destination it
+ * is handed and the Order that points at, and everything else is decided
+ * before it is called.
  */
 interface Provider
 {
@@ -56,6 +57,25 @@ interface Provider
      * neither restates the rule.
      */
     public function refusal(Destination $destination): ?string;
+
+    /**
+     * The browser's half: this Destination's base code, which reports the
+     * load of the page it is written into, followed by one call per event
+     * given.
+     *
+     * The script and nothing around it — the element, the consent hook and
+     * the choice of what fires are `TrackingSnippet`'s, so that a Provider
+     * stays the only thing that ever speaks its own vocabulary.
+     *
+     * Empty where the browser has nothing to address this Destination by. A
+     * base code with no public identifier is dead script on every page it is
+     * baked into, and the access token is not asked for: that is the server
+     * half's credential, and a Merchant who has pasted the identifier and
+     * not yet the token is already reporting from the browser.
+     *
+     * @param  list<BrowserEvent>  $events
+     */
+    public function script(Destination $destination, array $events): string;
 
     /**
      * Deliver one batch to one Destination, in a single request.

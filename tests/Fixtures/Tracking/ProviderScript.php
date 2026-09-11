@@ -39,6 +39,26 @@ abstract class ProviderScript
     /** What this Provider calls the event a completed Order reports. */
     abstract public function purchaseEvent(): string;
 
+    /** What this Provider calls the load of a page, which its base code reports by itself. */
+    abstract public function pageViewEvent(): string;
+
+    /**
+     * Whether this document carries the browser snippet addressed to this
+     * Destination: the Provider's own base code, and the public identifier
+     * that says whose it is.
+     */
+    abstract public function carriesBaseCodeFor(Destination $destination, string $html): bool;
+
+    /**
+     * Every event the snippet in this document tells the browser to report,
+     * in order, each in the same shape `sentEvents()` hands back — so the
+     * readers below answer for the browser's copy exactly as they do for the
+     * server's, and one test body can hold the two against each other.
+     *
+     * @return list<array<string, mixed>>
+     */
+    abstract public function browserEventsIn(string $html): array;
+
     /** Fake the Provider accepting every batch. */
     abstract public function fakeAccepted(): void;
 

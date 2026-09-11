@@ -40,7 +40,7 @@ class MomentRecorder
      */
     public function captured(Order $order, TrackingContext $context): void
     {
-        if ($order->payment_method->isOnline()) {
+        if (self::purchaseMomentFor($order) !== TrackingMoment::Capture) {
             return;
         }
 
@@ -52,6 +52,20 @@ class MomentRecorder
             order: $order,
             context: $context,
         );
+    }
+
+    /**
+     * Which Moment an Order's Purchase is reported at: Capture for Cash on
+     * Delivery, Paid for an online method.
+     *
+     * The one wording of that rule, which `captured()` and the browser's own
+     * copy of the Purchase both ask rather than restate. Static because it is
+     * a rule and not a collaboration: nothing about it is configured, and a
+     * caller reading it is not thereby recording anything.
+     */
+    public static function purchaseMomentFor(Order $order): TrackingMoment
+    {
+        return $order->payment_method->isOnline() ? TrackingMoment::Paid : TrackingMoment::Capture;
     }
 
     /**

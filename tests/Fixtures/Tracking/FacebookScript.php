@@ -58,6 +58,51 @@ class FacebookScript extends ProviderScript
         return 'Purchase';
     }
 
+    public function pageViewEvent(): string
+    {
+        return 'PageView';
+    }
+
+    public function carriesBaseCodeFor(Destination $destination, string $html): bool
+    {
+        return Str::contains($html, 'connect.facebook.net/en_US/fbevents.js')
+            && Str::contains($html, 'fbq("init", "'.$destination->dataset.'");');
+    }
+
+    /**
+     * Every `fbq("track", …)` the snippet makes, read back into the shape a
+     * delivered event arrives in: the event's name, its parameters where it
+     * has any, and the `eventID` that deduplicates it against the server's
+     * copy.
+     *
+     * The arguments are read by decoding them as a JSON list, which is what
+     * they are once the call around them is stripped — so a nested basket is
+     * read as reliably as a flat value, and a Product named after a piece of
+     * markup is read as what the browser will actually see.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function browserEventsIn(string $html): array
+    {
+        preg_match_all('/^\s*fbq\("track", (.+)\);$/m', $html, $calls);
+
+        $events = [];
+
+        foreach ($calls[1] as $arguments) {
+            $decoded = json_decode('['.$arguments.']', true);
+
+            Assert::assertIsArray($decoded, "A tracked event was not readable as arguments: [{$arguments}].");
+
+            $events[] = array_filter([
+                'event_name' => $decoded[0] ?? null,
+                'custom_data' => $decoded[1] ?? null,
+                'event_id' => $decoded[2]['eventID'] ?? null,
+            ], fn (mixed $value): bool => $value !== null);
+        }
+
+        return $events;
+    }
+
     public function fakeAccepted(): void
     {
         Http::fake([self::ADDRESS => $this->acceptance()]);

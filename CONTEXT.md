@@ -229,8 +229,12 @@ One configured place a Provider's events are sent: for Facebook, a dataset and t
 _Avoid_: pixel, account, connection, integration
 
 **Purchase**:
-Exactly one is reported per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales.
+Exactly one is counted per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales. It is sent twice — once from the Customer's browser and once from the server — and counted once, because both copies carry the order number as the deduplication id.
 _Avoid_: conversion, sale, transaction
+
+**Pixel**:
+The browser's half of reporting: a snippet a page carries that reports a Moment from the Customer's own browser, beside the copy the server sends. Both copies carry the same deduplication id, so the Provider counts one event. A Destination is not a Pixel — the Pixel is what addresses one, and a page with no Destination carries none.
+_Avoid_: tag, tracker, script, beacon
 
 **Tracking Outbox**:
 Where a Moment is written down, one row per Destination per provider event, so that no web request ever calls an ad platform. A scheduled sweep delivers what is waiting. A row holds no personal detail: what a Provider is told about the Customer is read from the Order when the row is delivered.

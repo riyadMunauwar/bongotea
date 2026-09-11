@@ -11,6 +11,7 @@ use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
 use App\Support\Tracking\MomentRecorder;
 use App\Support\Tracking\TrackingContext;
+use App\Support\Tracking\TrackingSnippet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ class CheckoutController extends Controller
     public function __construct(
         private readonly PaymentStarter $payments,
         private readonly MomentRecorder $moments,
+        private readonly TrackingSnippet $snippet,
     ) {}
 
     /**
@@ -96,6 +98,8 @@ class CheckoutController extends Controller
             return redirect()->route('checkout.retry', $order->order_number);
         }
 
+        $placedByThisBrowser = OrderOwnership::fromRequest($request)->owns($order->order_number);
+
         /**
          * What the page says and how it is arranged is the Page's Order
          * Complete Config, read as it stands now; what it is coloured with is
@@ -105,7 +109,18 @@ class CheckoutController extends Controller
          */
         return $this->uncachedPage('checkout.order-complete', [
             'order' => $order->load('lines'),
-            'placedByThisBrowser' => OrderOwnership::fromRequest($request)->owns($order->order_number),
+            'placedByThisBrowser' => $placedByThisBrowser,
+
+            /**
+             * The browser's copy of the Purchase the outbox already holds,
+             * deduplicated against it on the order number. It is the same
+             * cookie that unlocks the Customer's details that unlocks the
+             * report: the address alone is not ownership, and a Purchase
+             * fired for whoever opens the link would be reported revenue the
+             * Merchant does not have.
+             */
+            'snippet' => $this->snippet->forOrder($order, reportsPurchase: $placedByThisBrowser),
+
             'layout' => $order->orderCompleteConfig()->layout,
             'words' => $order->orderCompleteWords(),
             'styleTokens' => $order->pageStyleTokens()->completed(),
@@ -130,6 +145,9 @@ class CheckoutController extends Controller
         return $this->uncachedPage('checkout.retry', [
             'order' => $order->load('lines'),
             'methods' => $order->retryPaymentMethods(),
+
+            /** The Pixel's base code and nothing more: an Order that is Unpaid has bought nothing to report. */
+            'snippet' => $this->snippet->forOrder($order, reportsPurchase: false),
         ]);
     }
 

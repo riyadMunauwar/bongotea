@@ -39,6 +39,29 @@ class Facebook implements Provider
     /** Pinned rather than floating: a version bump changes the payload, and that is a change to read before taking. */
     private const API_VERSION = 'v21.0';
 
+    /** What Meta calls the load of a page, reported by the base code itself. */
+    private const PAGE_VIEW = 'PageView';
+
+    /** Where Meta serves the Pixel library from: the one address a page carrying the snippet reaches out to. */
+    private const LIBRARY = 'https://connect.facebook.net/en_US/fbevents.js';
+
+    /**
+     * Meta's own base code, verbatim.
+     *
+     * It defines the `fbq` queue so calls made before the library has
+     * arrived are not lost, returns early if a copy of itself already ran,
+     * and appends the library asynchronously so nothing on the page waits on
+     * it. Verbatim because it is what Meta's own diagnostics recognise, and
+     * because a hand-trimmed base code is a bug nobody finds until the
+     * Merchant's events stop arriving.
+     *
+     * There is no `<noscript>` image beside it. The half of this that has to
+     * survive a browser running no script is the server's, and it already
+     * does; a picture request from a page carrying a Customer's details is a
+     * cost with no return.
+     */
+    private const LOADER = "!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','".self::LIBRARY."');";
+
     /** Events one request may carry, as Meta documents it. */
     private const BATCH_LIMIT = 1000;
 
@@ -87,7 +110,7 @@ class Facebook implements Provider
     public function eventsFor(TrackingMoment $moment): array
     {
         return match ($moment) {
-            TrackingMoment::Visit => ['PageView', 'ViewContent'],
+            TrackingMoment::Visit => [self::PAGE_VIEW, 'ViewContent'],
             TrackingMoment::CheckoutStarted => ['InitiateCheckout'],
             TrackingMoment::Capture, TrackingMoment::Paid => ['Purchase'],
         };
@@ -118,6 +141,68 @@ class Facebook implements Provider
         }
 
         return null;
+    }
+
+    /**
+     * The Pixel: the base code, the `PageView` it reports for the page it is
+     * written into, and one `fbq("track", …)` per event given.
+     *
+     * Each event is sent with the same `custom_data` its server copy carries
+     * and with the deduplication id as Meta's `eventID`, which is the whole
+     * of how the two copies of one Purchase are counted once.
+     *
+     * @param  list<BrowserEvent>  $events
+     */
+    public function script(Destination $destination, array $events): string
+    {
+        if (blank($destination->dataset)) {
+            return '';
+        }
+
+        $lines = [
+            self::LOADER,
+            $this->call('init', $destination->dataset),
+            $this->call('track', self::PAGE_VIEW),
+        ];
+
+        foreach ($events as $event) {
+            $lines[] = $this->call(
+                'track',
+                $event->event,
+                $this->customData($event->order),
+                ['eventID' => $event->deduplicationId],
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * One `fbq` call, every argument JSON-encoded.
+     *
+     * Encoded rather than pasted in, under the same flags Blade's `@json`
+     * uses, so that a Product named after a piece of markup cannot end the
+     * element it is written into.
+     *
+     * @param  string  $subject  what the call is about: a dataset to initialise, or an event to track
+     * @param  array<string, mixed>|null  $parameters  what the event reports, absent where the call takes none
+     * @param  array<string, mixed>  $options
+     */
+    private function call(string $method, string $subject, ?array $parameters = null, array $options = []): string
+    {
+        $arguments = [$this->encode($method), $this->encode($subject)];
+
+        if ($parameters !== null) {
+            $arguments[] = $this->encode($parameters);
+            $arguments[] = $this->encode($options);
+        }
+
+        return 'fbq('.implode(', ', $arguments).');';
+    }
+
+    private function encode(mixed $value): string
+    {
+        return (string) json_encode($value, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
     }
 
     /**

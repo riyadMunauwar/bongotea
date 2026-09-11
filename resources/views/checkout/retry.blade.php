@@ -18,6 +18,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title>Order {{ $order->order_number }} is unpaid</title>
+{{--
+    The Pixel, where the Page reports to a Destination: the base code and the
+    load of this page, and no Purchase — nothing has been bought here yet.
+--}}
+@if ($snippet !== '')
+{!! $snippet !!}
+@endif
     <style>
         :root { color-scheme: light; }
         body { margin: 0; padding: 1.5rem 1rem; background: #f9fafb; color: #111827; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }

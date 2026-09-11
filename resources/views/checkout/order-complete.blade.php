@@ -4,10 +4,12 @@
     controller sends an Unpaid Order to the Retry Page before this is reached.
 
     Unlike a landing page, this document is ours — the merchant does not author
-    it — so it carries its own styles inline, and nothing else: no stylesheet,
-    font, script or picture from anywhere. A page carrying a Customer's details
-    makes no request they did not ask for. It is never cached: it is addressed
-    per order and hit once.
+    it — so it carries its own styles inline: no stylesheet, font or picture
+    from anywhere. A page carrying a Customer's details makes no request they
+    did not ask for, and the one exception is the one the Merchant asked for
+    by configuring a Destination — the Pixel in `$snippet`, which is absent
+    entirely where there is none. It is never cached: it is addressed per
+    order and hit once.
 
     What it says is the Page's Order Complete Config, handed here as `$words`
     with every box the Merchant left empty at the built-in words and the
@@ -30,6 +32,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title>{{ $words->headline() }} · Order {{ $order->order_number }}</title>
+{{--
+    The Pixel, where the Page reports to a Destination: the base code, the
+    load of this page, and the Purchase this Order's browser placed. Written
+    at the margin because it is generated whole and read in a browser's own
+    view-source, and drawn only when there is one, so a Page that tracks
+    nothing serves the document it has always served.
+--}}
+@if ($snippet !== '')
+{!! $snippet !!}
+@endif
     <style>
         {{--
             The named token set, declared once on the root and read by every

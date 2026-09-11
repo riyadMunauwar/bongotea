@@ -7,7 +7,10 @@
     nothing, and the customer sees a "verifying" state rather than a blank
     wait. It prints nothing about the customer, and only the invoice
     reference about the Order, because this is the one address a gateway's
-    own logs hold.
+    own logs hold. It carries no Pixel either, for the same reason, and
+    because it is transient: it is drawn for a second or two and moved on
+    from, and a Purchase reported here would be reported before the money
+    was known to have moved.
 
     A client whose script never runs follows the meta refresh to the same
     Verification, which answers with a redirect instead. Both are harmless to
