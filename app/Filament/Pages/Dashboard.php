@@ -8,8 +8,6 @@ use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Widgets\Widget;
-use Filament\Widgets\WidgetConfiguration;
 
 /**
  * The panel's own Dashboard, owning the panel root.
@@ -32,12 +30,14 @@ use Filament\Widgets\WidgetConfiguration;
  * over the same days. Filament keeps the chosen filter in the session, which
  * is what makes it survive a visit to the Orders list and back.
  *
- * One widget stands above that filter rather than under it: Needs
- * Attention, the to-do list that ignores the window. It is still discovered
- * and still sorts first; the page only moves the first-sorted widget into
- * its header slot, which Filament draws before the content the filter form
- * opens. Nothing here names the widget, so a widget that should be pinned
- * above the filter is one whose sort puts it first.
+ * Every widget is drawn under that filter, in sort order, with no header
+ * slot. Needs Attention was pinned above it for a while, being the one
+ * widget that ignores the window — but it is full width, and both full-width
+ * tables now sit together at the foot of the screen so the tiles and charts
+ * are read without scrolling past them. What the position used to say, that
+ * widget now says in its own subheading. Promoting a widget into the header
+ * again would hand the slot to whichever widget happened to sort first,
+ * which is how a widget that reads the filter ends up drawn above it.
  */
 class Dashboard extends BaseDashboard
 {
@@ -59,30 +59,6 @@ class Dashboard extends BaseDashboard
      * this off does not land at the end — it lands above this line.
      */
     protected static ?int $navigationSort = 0;
-
-    /**
-     * Every discovered widget but the first: the first is drawn in the
-     * header, above the filter, by `getHeaderWidgets()`.
-     */
-    public function getWidgets(): array
-    {
-        return array_slice(parent::getWidgets(), 1);
-    }
-
-    /**
-     * The first-sorted widget alone, full width.
-     *
-     * @return array<class-string<Widget> | WidgetConfiguration>
-     */
-    protected function getHeaderWidgets(): array
-    {
-        return array_slice(parent::getWidgets(), 0, 1);
-    }
-
-    public function getHeaderWidgetsColumns(): int|array
-    {
-        return 1;
-    }
 
     /**
      * The Reporting Window control itself, drawn here as a filter form

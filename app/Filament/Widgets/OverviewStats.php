@@ -38,7 +38,7 @@ class OverviewStats extends StatsOverviewWidget
     use InteractsWithPageFilters;
     use ScopedToPage;
 
-    protected static ?int $sort = 20;
+    protected static ?int $sort = 10;
 
     protected ?string $heading = 'Overview';
 

@@ -46,7 +46,7 @@ class SalesOverTimeChart extends ChartWidget
      */
     private const string ORDERS_LINE_COLOR = '#737373';
 
-    protected static ?int $sort = 30;
+    protected static ?int $sort = 20;
 
     protected int|string|array $columnSpan = 'full';
 

@@ -58,7 +58,7 @@ class PaymentMethodMixChart extends ChartWidget
      */
     private const string ORDERS_STACK = 'orders';
 
-    protected static ?int $sort = 50;
+    protected static ?int $sort = 40;
 
     protected ?string $heading = 'Payment Method mix';
 

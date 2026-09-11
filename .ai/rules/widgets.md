@@ -20,6 +20,11 @@ The clamp is the load-bearing half, because Filament's table view draws the **em
 ## A page filter does not reset the table page
 Filament calls `resetPage()` for every filter it owns (`HasFilters::updatedTableFilters()`) and for none of the page filters a widget reads through `InteractsWithPageFilters`. So a widget paginating a result that the Reporting Window shortens declares `updatedPageFilters(): void { $this->resetPage(); }`, or narrowing the window from the second page leaves the table asking for a page that no longer exists — an empty table, which a Merchant reads as no Sales. Livewire does fire that hook for a `#[Reactive]` property (`SupportReactiveProps\BaseReactive::hydrate()` queues the update), but a test cannot `->set('pageFilters', ...)` to trigger it: mutating a reactive prop throws `CannotMutateReactivePropException`, so call the hook.
 
+## The Dashboard has no header widget slot, and giving it one promotes whatever sorts first
+`App\Filament\Pages\Dashboard` draws every discovered widget in sort order under the Reporting Window filter form. It used to move the first-sorted widget into `getHeaderWidgets()`, which Filament draws *above* that form, so that Needs Attention — the one widget ignoring the window — said so by position. Both full-width tables now sit together at the foot of the screen instead, and that widget says it in its own `->description()`.
+
+Do not reinstate the slot to pin something: the override takes the first-sorted widget whatever it is, so the next sort change silently draws a widget that reads the filter above the control that sets it. If a widget needs to stand apart from the window, say it in the widget.
+
 ## A report widget is scoped by declaring `record`, never by subclassing
 Filament hands a resource page's record to every widget it draws under the key `record` (`InteractsWithRecord::getWidgetData()`, spread by `Page::getWidgetsSchemaComponents()`), whether or not the widget wants it — Livewire's `separateParamsAndAttributes()` is what quietly demotes an unclaimed key to an HTML attribute. So a Dashboard widget is reused on a Page edit screen by adding `use ScopedToPage;` (which declares `public ?Page $record = null`, claiming the key) and passing `$this->record` to the `ReportingQuery` method — every one of them already takes an optional Page. Do not copy a widget to scope it.
 

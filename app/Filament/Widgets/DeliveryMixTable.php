@@ -37,7 +37,7 @@ class DeliveryMixTable extends TableWidget
     use InteractsWithPageFilters;
     use PaginatesRows;
 
-    protected static ?int $sort = 70;
+    protected static ?int $sort = 60;
 
     /**
      * The window's mix, once per render. Private, so Livewire neither

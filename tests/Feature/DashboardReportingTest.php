@@ -278,7 +278,7 @@ it('draws the status breakdown and the Payment Method mix side by side under the
         ->assertSee('Payment Method mix');
 });
 
-it('pins Needs Attention above the filter, full width, each row naming its condition and opening its Order', function () {
+it('draws Needs Attention full width at the foot of the Dashboard above the leaderboard, saying in words that it ignores the window, each row naming its condition and opening its Order', function () {
     $uncalled = Order::factory()->create(['customer_name' => 'Rahim Uddin', 'created_at' => now()->subHours(25)]);
     $refundable = Order::factory()->cancelled()->create(['payment_method' => PaymentMethod::Bkash, 'created_at' => now()]);
     Payment::factory()->for($refundable)->paid()->create(['method' => PaymentMethod::Bkash]);
@@ -287,19 +287,30 @@ it('pins Needs Attention above the filter, full width, each row naming its condi
     $this->get('/admin')
         ->assertOk()
         ->assertSeeLivewire(NeedsAttentionTable::class)
-        /** Lazy, so the page carries only its mount; that mount comes before the filter. */
-        ->assertSeeInOrder(['wire:name="'.NeedsAttentionTable::class.'"', 'Reporting Window'], escape: false);
+        /** Lazy, so the page carries only its mount; the filter comes before it now. */
+        ->assertSeeInOrder(['Reporting Window', 'wire:name="'.NeedsAttentionTable::class.'"'], escape: false);
 
     $dashboard = app(Dashboard::class);
+    $widgets = array_values($dashboard->getWidgets());
+
+    /**
+     * The header slot is gone rather than handed on: whichever widget sorted
+     * first would have inherited it, and every other widget on this screen
+     * reads the filter the slot is drawn above.
+     */
     $headerWidgets = (fn (): array => $this->getHeaderWidgets())->call($dashboard);
 
-    expect(array_values($headerWidgets))->toBe([NeedsAttentionTable::class])
-        ->and($dashboard->getWidgets())->not->toContain(NeedsAttentionTable::class)
-        ->and(NeedsAttentionTable::getSort())->toBeLessThan(OverviewStats::getSort())
+    expect($headerWidgets)->toBe([])
+        ->and(array_search(DeliveryMixTable::class, $widgets, true))
+        ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true))
+        ->and(array_search(NeedsAttentionTable::class, $widgets, true))
+        ->toBeLessThan(array_search(PageLeaderboardTable::class, $widgets, true))
         ->and(app(NeedsAttentionTable::class)->getColumnSpan())->toBe('full');
 
     Livewire::test(NeedsAttentionTable::class)
         ->assertSee('Needs Attention')
+        /** Drawn under the filter now, so the subheading is what says it is not filtered. */
+        ->assertSee('whatever the Reporting Window above says')
         ->assertSee($uncalled->order_number)
         ->assertSee('Rahim Uddin')
         ->assertSee('New for over a day')

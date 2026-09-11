@@ -50,7 +50,7 @@ class TopProductsTable extends TableWidget
     use PaginatesRows;
     use ScopedToPage;
 
-    protected static ?int $sort = 60;
+    protected static ?int $sort = 50;
 
     /**
      * A new Reporting Window is a new question, answered from the top.
