@@ -145,6 +145,18 @@ return [
          * rather than the event, since the browser's own Pixel has fired.
          */
         'beacon_rate_limit' => (int) env('GIOPAGES_TRACKING_BEACON_RATE_LIMIT', 300),
+
+        /**
+         * Whether every load of a published Page is counted as a Visit.
+         *
+         * Off, because it is a database write on the path of a page load and
+         * this product is served from shared hosting: adding one to every
+         * installation without being asked is the wrong instinct. A Merchant
+         * who wants the Visits tile and a Conversion Rate switches it on and
+         * accepts the write, and gets both whether or not they use any ad
+         * platform at all.
+         */
+        'counts_visits' => (bool) env('GIOPAGES_TRACKING_COUNTS_VISITS', false),
     ],
 
     /*

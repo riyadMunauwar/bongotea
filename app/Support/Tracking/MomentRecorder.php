@@ -26,7 +26,10 @@ use Illuminate\Support\Carbon;
  */
 class MomentRecorder
 {
-    public function __construct(private readonly TrackingPlans $plans) {}
+    public function __construct(
+        private readonly TrackingPlans $plans,
+        private readonly VisitCounter $visits,
+    ) {}
 
     /**
      * A Moment the browser is the only witness to: a Page was loaded, or a
@@ -39,9 +42,16 @@ class MomentRecorder
      * unique index doing its job, and two loads are two Visits under two
      * identifiers.
      *
-     * Nothing at all where the Page reports nowhere — which is also what
+     * No outbox row at all where the Page reports nowhere — which is also what
      * makes the beacon free on a Page nobody is tracking, since no such Page
-     * carries one.
+     * carries one unless the Merchant is counting Visits.
+     *
+     * The Merchant's own Visit figure is taken first and separately, because
+     * it owes nothing to any ad platform: a Page with no Destination anywhere
+     * still counts its loads while counting is on, and a Page whose `PageView`
+     * is switched off still counts them too. That is what keeps the Moment
+     * seam honest rather than decorative — if a Visit existed only to feed a
+     * Provider's event, the first platform added would bend it.
      *
      * What was being bought comes in from the caller rather than from an
      * Order, because a visitor who has started filling the Checkout has not
@@ -56,6 +66,10 @@ class MomentRecorder
         TrackingContext $context,
         ?Selection $selection = null,
     ): void {
+        if ($moment === TrackingMoment::Visit) {
+            $this->visits->count($page);
+        }
+
         $this->record(
             $this->plans->forPage($page),
             $moment,

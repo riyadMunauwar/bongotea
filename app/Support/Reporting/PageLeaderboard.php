@@ -14,6 +14,15 @@ final readonly class PageLeaderboard
     public function __construct(
         public ReportingWindow $window,
         /**
+         * Whether the Merchant counts Visits.
+         *
+         * Carried beside the rows because a row's `visits` is null for two
+         * different reasons — counting is off, or this Page is deleted for
+         * good and its counts are no longer attributed to anything — and a
+         * screen must not tell a Merchant to switch on something already on.
+         */
+        public bool $countsVisits,
+        /**
          * Highest Sales first, then most Orders, then by title, so two
          * Pages that earned the same read in a stable order.
          *

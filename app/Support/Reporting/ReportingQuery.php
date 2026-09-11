@@ -8,6 +8,8 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Product;
+use App\Models\VisitCount;
+use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression;
@@ -26,6 +28,14 @@ use Illuminate\Support\Collection;
  * the database or an offset arithmetic that would be wrong for half the
  * year. Rows are never fetched per Order; the largest thing this module
  * loops over is the list of buckets.
+ *
+ * Orders are not the only rows it reads: Visits come from the aggregate the
+ * beacon writes, which is a count per Page per day rather than a row per
+ * load. That one is compared as whole days in the Merchant's timezone, since
+ * that is what it is keyed by — never as the UTC instants every Order figure
+ * beside it is cut on — and it answers null rather than zero where the
+ * Merchant is not counting, which is how a screen knows to say the feature is
+ * off instead of drawing a silent nought.
  *
  * The overview, the Sales over time series, the Page leaderboard, the
  * status breakdown, the Payment Method mix, the Product ranking, the
@@ -119,15 +129,25 @@ final class ReportingQuery
         $comparison = $window->comparison();
         $whole = new ReportingBucket($comparison->start, $comparison->end);
 
-        return new Overview($window, $figures, $this->figuresByBucket($comparison, [$whole], $page)[0], $buckets);
+        /**
+         * Visits are attached to the two whole windows and to no bucket: the
+         * aggregate counts a day, and a one-day window's buckets are hours.
+         */
+        return new Overview(
+            $window,
+            $figures->withVisits($this->visitsIn($window, $page)),
+            $this->figuresByBucket($comparison, [$whole], $page)[0]->withVisits($this->visitsIn($comparison, $page)),
+            $buckets,
+        );
     }
 
     /**
      * One row per Page with Orders in the window, trashed Pages included,
      * and one per recorded slug for Orders whose Page is gone for good.
-     * One grouped query over the Orders and one lookup of the Pages named;
-     * the rows come back Sales first, and the largest thing looped over is
-     * the list of Pages.
+     * One grouped query over the Orders, one over the Visit aggregate where
+     * the Merchant counts Visits, and one lookup of the Pages named; the rows
+     * come back Sales first, and the largest thing looped over is the list of
+     * Pages.
      */
     public function pageLeaderboard(ReportingWindow $window): PageLeaderboard
     {
@@ -150,6 +170,7 @@ final class ReportingQuery
             ->get();
 
         $pages = Page::withTrashed()->findMany($rows->pluck('page_id')->filter())->keyBy(fn (Page $page): int => $page->getKey());
+        $visits = $this->visitsByPageIn($window);
 
         $leaderboard = $rows
             ->map(fn (object $row): PageLeaderboardRow => new PageLeaderboardRow(
@@ -158,6 +179,13 @@ final class ReportingQuery
                 orders: (int) $row->order_count,
                 sales: (int) $row->sales,
                 cancelled: (int) $row->cancelled,
+
+                /**
+                 * A Page deleted for good keeps no counts and takes none: its
+                 * Orders sit here under a recorded slug, and a slug is not
+                 * something a load was ever counted against.
+                 */
+                visits: $visits === null || $row->page_id === null ? null : ($visits[(int) $row->page_id] ?? 0),
             ))
             ->sortBy([
                 fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => $b->sales <=> $a->sales,
@@ -167,7 +195,7 @@ final class ReportingQuery
             ->values()
             ->all();
 
-        return new PageLeaderboard($window, $leaderboard);
+        return new PageLeaderboard($window, $visits !== null, $leaderboard);
     }
 
     /**
@@ -466,6 +494,77 @@ final class ReportingQuery
             ->groupBy('bucket')
             ->get()
             ->keyBy('bucket');
+    }
+
+    /**
+     * How many Visits the window holds, over the whole installation or on one
+     * Page — and null where the Merchant is not counting them.
+     *
+     * Null rather than zero is the whole of how a screen knows to say the
+     * feature is off instead of drawing a silent nought, and the switch is
+     * read here rather than on a widget so that "not counted" has one
+     * wording, as every other counting rule does.
+     */
+    private function visitsIn(ReportingWindow $window, ?Page $page = null): ?int
+    {
+        if (! $this->countsVisits()) {
+            return null;
+        }
+
+        return (int) $this->visitsOverDays($window)
+            ->when($page, fn (Builder $query, Page $page) => $query->where('page_id', $page->getKey()))
+            ->sum('visits');
+    }
+
+    /**
+     * The window's Visits per Page, keyed by Page — and null where the
+     * Merchant is not counting them, which is how the leaderboard tells a
+     * Page with no Visits apart from an installation with no counting.
+     *
+     * @return array<int, int>|null
+     */
+    private function visitsByPageIn(ReportingWindow $window): ?array
+    {
+        if (! $this->countsVisits()) {
+            return null;
+        }
+
+        return $this->visitsOverDays($window)
+            /** Rows orphaned by a hard-deleted Page still count towards the installation and belong to no row here. */
+            ->whereNotNull('page_id')
+            ->selectRaw('page_id, sum(visits) as visits')
+            ->groupBy('page_id')
+            ->get()
+            ->mapWithKeys(fn (VisitCount $row): array => [(int) $row->page_id => (int) $row->visits])
+            ->all();
+    }
+
+    /**
+     * Whether the Merchant counts Visits at all: the one reading of the
+     * switch in this module, and what makes every Visit figure null rather
+     * than zero while it is off.
+     */
+    private function countsVisits(): bool
+    {
+        return app(TrackingSettings::class)->countsVisits;
+    }
+
+    /**
+     * The aggregate rows the window covers.
+     *
+     * Compared as whole days in the Merchant's own timezone, which is what
+     * the aggregate is keyed by and what the window's bounds were cut from —
+     * never as the UTC instants the Orders beside them are compared against.
+     * The window ends at the midnight after its last day, so its local end
+     * date is the first day *outside* it.
+     *
+     * @return Builder<VisitCount>
+     */
+    private function visitsOverDays(ReportingWindow $window): Builder
+    {
+        return VisitCount::query()
+            ->where('visited_on', '>=', $window->localStart()->toDateString())
+            ->where('visited_on', '<', $window->localEnd()->toDateString());
     }
 
     /**

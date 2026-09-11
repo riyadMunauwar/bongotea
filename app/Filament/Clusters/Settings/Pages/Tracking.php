@@ -10,7 +10,8 @@ use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 
 /**
- * What every Page reports unless it says otherwise.
+ * What every Page reports unless it says otherwise, and whether the Merchant
+ * counts their own Visits while it does.
  *
  * One section per Provider, listing exactly the events that Provider declares
  * — so the page grows on its own as a Provider gains an event, and a second
@@ -59,6 +60,15 @@ class Tracking extends SettingsPage
     {
         return [
             ...array_map(self::provider(...), TrackingProvider::cases()),
+
+            Section::make('Visits')
+                ->description('Your own figures, owing nothing to any ad platform: the Visits tile on the Dashboard, and a Conversion Rate on the Page leaderboard.')
+                ->columns(1)
+                ->schema([
+                    Toggle::make('countsVisits')
+                        ->label('Count Visits')
+                        ->helperText('Off. Counting a Visit is a small database write on every load of a published Page, so it is not switched on for you. On, every load is counted — every load, not every visitor, which is how an ad platform counts the same thing. Loads of the Order Complete and Retry Pages are not Visits.'),
+                ]),
 
             Section::make('Beacon')
                 ->description('The small same-origin request a tracked Page makes after it has painted, which is how the server learns about a load that only the browser saw.')

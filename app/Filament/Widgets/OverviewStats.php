@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Clusters\Settings\Pages\Tracking;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\Overview;
@@ -17,9 +18,9 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 /**
  * The row of stat tiles under the Reporting Window: Orders and Sales side
  * by side, never collapsed into one; Average Order Value and the
- * Cancellation Rate; Unpaid and New awaiting call, the two queues; and the
- * Visits tile, reserved so the row does not shift when counting arrives —
- * a Visit is named in the glossary and not yet counted.
+ * Cancellation Rate; Unpaid and New awaiting call, the two queues; and
+ * Visits, which is a figure where the Merchant has switched Visit counting
+ * on and a sentence pointing at that switch where they have not.
  *
  * Each tile reads its change against the comparison window, coloured by
  * whether up is good — it is not for the Cancellation Rate or Unpaid — and
@@ -71,10 +72,40 @@ class OverviewStats extends StatsOverviewWidget
             $this->tile('New awaiting call', number_format($current->new), $overview, fn (OverviewFigures $figures): int => $figures->new)
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->new, $previous->new, upIsGood: true)),
 
-            Stat::make('Visits', 'Not yet counted')
-                ->description('Visit counting comes in a later release')
-                ->descriptionColor('gray'),
+            $this->visits($overview),
         ];
+    }
+
+    /**
+     * The Visits tile: loads of the Merchant's published Pages in the window,
+     * or the sentence that says counting is off and where to switch it on.
+     *
+     * Off is said rather than drawn as a nought, because a zero on a tile
+     * beside six tiles carrying figures reads as no traffic — which is a
+     * Merchant's worst afternoon, and would be a lie. The tile links to the
+     * screen that switches it on, so being told is also being taken there.
+     *
+     * It carries no sparkline, alone among the tiles. The aggregate behind it
+     * counts a day, and a one-day window's buckets are hours; a line drawn
+     * over those would have to invent five figures out of one.
+     */
+    private function visits(Overview $overview): Stat
+    {
+        $visits = $overview->figures->visits;
+
+        if ($visits === null) {
+            /** The link only where the User could act on it; the sentence stands either way. */
+            $reachable = Tracking::canAccess();
+
+            return Stat::make('Visits', 'Not counted')
+                ->description('Switch Visit counting on in Settings → Tracking')
+                ->descriptionIcon($reachable ? Heroicon::ArrowTopRightOnSquare : null)
+                ->descriptionColor('gray')
+                ->url($reachable ? Tracking::getUrl() : null);
+        }
+
+        return Stat::make('Visits', number_format($visits))
+            ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $visits, (int) $overview->comparison->visits, upIsGood: true));
     }
 
     /**

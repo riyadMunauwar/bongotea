@@ -12,7 +12,7 @@ use Carbon\CarbonInterface;
  * deleted; an Order whose Page was deleted for good has only its recorded
  * slug left, and the row carries that instead with no Page at all.
  *
- * Money is integer minor units; the two ratios are the same methods the
+ * Money is integer minor units; the three ratios are the same methods the
  * Overview's figures use, so a rate is never stored beside the counts it
  * disagrees with.
  */
@@ -30,6 +30,14 @@ final readonly class PageLeaderboardRow
         /** The totals, Delivery Charge included, of the Orders not Cancelled. */
         public int $sales,
         public int $cancelled,
+        /**
+         * Loads of the Page inside the window; null where the Merchant is not
+         * counting Visits, and null too for a Page deleted for good, whose
+         * counts went with it and whose Orders sit here under a slug alone.
+         * Both read the same way on the screen, and both are the truth: there
+         * is no figure to give.
+         */
+        public ?int $visits = null,
     ) {}
 
     /**

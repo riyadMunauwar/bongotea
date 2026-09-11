@@ -56,3 +56,10 @@ A Toggle reads an absent value as off, so a group whose default is "on when the 
 
 ## A beacon rate limit of nothing is the beacon switched off
 `SettingsGroup::coerce()` reads a stored null as an int property's empty value, so a damaged row would hand `Limit::perMinute(0)` to the beacon limiter and refuse every report silently — the one failure the whole tracking design is arranged against. `TrackingSettings::with()` therefore floors `beaconRateLimit` at 1, falling back to the config default, the way `GeneralSettings::with()` guards an unknown timezone. The page's `minValue(1)` only covers values that went through the form.
+
+## Visits are a whole-window figure and never a bucket, and null means "not counted"
+`OverviewFigures::$visits` is nullable and is filled by `withVisits()` **after** the buckets are summed — `plus()` never carries it. The aggregate counts a day and a one-day window's buckets are hours, so a bucket's Visits are not a figure that exists; that is why the Visits tile alone draws no sparkline. Do not "fix" it by storing an hourly aggregate.
+
+Null is not zero. `ReportingQuery::visitsIn()` / `visitsByPageIn()` answer null when `TrackingSettings::$countsVisits` is off, and `PageLeaderboardRow::$visits` is also null for a Page deleted for good (its counts went with it; its Orders sit under a slug). `conversionRate()` on `HasSalesRatios` returns null for null visits and 0.0 for zero — screens must say "Not counted" rather than draw 0.0%, which a Merchant reads as a Page that sells nothing.
+
+Visit days are compared as `Y-m-d` strings against `$window->localStart()/localEnd()`, never the UTC instants Orders are cut on: the aggregate is keyed by the Merchant's day.

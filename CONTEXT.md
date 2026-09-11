@@ -207,8 +207,12 @@ The Orders and Payments an operator must act on regardless of any Reporting Wind
 _Avoid_: alerts, exceptions, issues, anomalies
 
 **Visit**:
-One load of a published Page by a browser, counted per Page per day. Not yet counted; reserved so that a Conversion Rate, Orders as a share of Visits, has a name when it arrives.
+One load of a published Page by a browser, counted per Page per day. Every load, not every browser, matching how an ad platform counts the same thing, so the two figures agree. Loads of the Order Complete Page and the Retry Page are not Visits: whoever is on them has already ordered, and counting them would dilute the Conversion Rate with people who converted. Counted only where the Merchant has switched Visit counting on, because counting is a database write on the path of every page load; what is stored is the count and never the load, so it holds nothing about anybody and is kept indefinitely.
 _Avoid_: page view, hit, session, traffic
+
+**Conversion Rate**:
+Orders as a share of Visits in a Reporting Window, drawn per Page on the Page leaderboard. Every Order counts towards it, Cancelled ones included, for the same reason `Orders` as a figure counts them: the Visit converted whatever became of the Order afterwards. It owes nothing to any ad platform — a Merchant who reports to none still has one — and it is unknown rather than zero where Visits are not counted.
+_Avoid_: CVR, conversion, close rate, win rate
 
 ### Tracking
 

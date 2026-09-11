@@ -87,7 +87,7 @@ it('draws the tiles for the chosen window, money with the currency symbol, and c
         ->assertSee('Unpaid')
         ->assertSee('New awaiting call')
         ->assertSee('Visits')
-        ->assertSee('Not yet counted')
+        ->assertSee('Not counted')
         ->assertSee($symbol.'820.00')
         ->assertSee($symbol.'410.00');
 
@@ -203,7 +203,7 @@ it('draws the Page leaderboard last of the reports, above the Cache Path indicat
         ->assertSee('Retired combo')
         ->assertSeeHtml('">deleted</span>')
         ->assertSee('gone-combo')
-        ->assertSee('Not yet counted')
+        ->assertSee('Not counted')
         ->assertSee(PageResource::getUrl('edit', ['record' => $top]))
         ->assertSee(PageResource::getUrl('edit', ['record' => $retired]));
 

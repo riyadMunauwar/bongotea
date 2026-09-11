@@ -141,7 +141,7 @@ it('hands each widget the record, so one Page\'s figures are drawn and another P
         ->assertSee('Unpaid')
         ->assertSee('New awaiting call')
         ->assertSee('Visits')
-        ->assertSee('Not yet counted')
+        ->assertSee('Not counted')
         ->assertSee($symbol.'820.00')
         ->assertSee($symbol.'410.00')
         ->assertDontSee($symbol.'960.00');

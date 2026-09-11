@@ -50,9 +50,26 @@ class TrackingSettings extends SettingsGroup
      */
     public int $beaconRateLimit;
 
+    /**
+     * Whether every load of a published Page is counted as a Visit.
+     *
+     * Off until a Merchant asks for it. Counting is an increment on the path
+     * of a page load, and this is a product served from shared hosting — a
+     * write per visit that nobody asked for is the wrong default, however
+     * small it is. Switching it on is what turns the Visits tile and the
+     * leaderboard's Conversion Rate from a sentence into a figure.
+     *
+     * It owes nothing to any ad platform: a Page with no Destination anywhere
+     * in the installation still carries the beacon while this is on, and still
+     * counts. That is the whole of why the Visit Moment is worth having on its
+     * own.
+     */
+    public bool $countsVisits;
+
     public function __construct()
     {
         $this->beaconRateLimit = (int) config('giopages.tracking.beacon_rate_limit');
+        $this->countsVisits = (bool) config('giopages.tracking.counts_visits');
     }
 
     public static function key(): string

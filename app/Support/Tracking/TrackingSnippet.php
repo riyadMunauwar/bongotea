@@ -7,6 +7,7 @@ use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Page;
 use App\Shortcodes\Definitions\CheckoutShortcode;
+use App\Support\Settings\TrackingSettings;
 
 /**
  * The browser's half of the same events the outbox carries, as the one
@@ -78,7 +79,10 @@ class TrackingSnippet
      */
     private const INSERTION_POINTS = ['</head>', '</body>'];
 
-    public function __construct(private readonly TrackingPlans $plans) {}
+    public function __construct(
+        private readonly TrackingPlans $plans,
+        private readonly TrackingSettings $settings,
+    ) {}
 
     /**
      * The served document with this Page's Pixel in it.
@@ -119,33 +123,43 @@ class TrackingSnippet
      * visitor start filling the Checkout, and the beacons that tell the
      * server the same things.
      *
-     * Nothing at all where the Page reports nowhere. A Page with no
-     * Destination is injected with nothing and serves the document it has
-     * always served, byte for byte — no element, no global, no beacon and no
-     * request to anyone.
+     * Nothing at all where the Page reports nowhere and the Merchant is not
+     * counting Visits. Such a Page is injected with nothing and serves the
+     * document it has always served, byte for byte — no element, no global, no
+     * beacon and no request to anyone.
+     *
+     * Visit counting is the other reason to carry a beacon, and it is enough
+     * on its own: a Merchant who uses no ad platform at all still gets the
+     * Visits tile and a Conversion Rate, from a Page that addresses nobody and
+     * loads nobody's script. It is also enough on a Page whose Visit events
+     * are every one switched off — the Merchant's own figure is not theirs to
+     * decide with an ad platform's switch.
      *
      * A Destination the Merchant has switched on but not yet given a dataset
      * still gets the beacon: the server half stands alone, and the rows it
      * writes are what the Merchant is owed once the credential is pasted.
      *
-     * Each beacon is carried only where some Destination still reports the
-     * Moment it is about. A Page whose Visit events are all switched off
-     * would write no row for the load whatever the beacon said, and a
+     * Each beacon is carried only where something still has a use for the
+     * Moment it is about — some Destination reporting it, or, for the Visit,
+     * the Merchant counting it. A Page whose Checkout Started is switched off
+     * everywhere would write no row for it whatever the beacon said, and a
      * request that can only be discarded is not one to put on the path of an
-     * ad click; the same holds for the listener a Checkout Started is
-     * reported from.
+     * ad click.
      */
     public function forPage(Page $page): string
     {
         $plan = $this->plans->forPage($page);
+        $countsVisits = $this->settings->countsVisits;
 
-        if ($plan->reportsNowhere()) {
+        if ($plan->reportsNowhere() && ! $countsVisits) {
             return '';
         }
 
         $scripts = [];
         $started = [];
-        $reportsVisit = false;
+
+        /** The Merchant's own count is a reason to report the Visit all by itself. */
+        $reportsVisit = $countsVisits;
         $reportsStart = false;
 
         foreach ($plan->destinations() as $destination) {

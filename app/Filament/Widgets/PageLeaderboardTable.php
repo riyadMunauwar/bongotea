@@ -21,10 +21,9 @@ use Illuminate\Support\Collection;
  * the Cache Path indicator: one row per Page with Orders in the Reporting
  * Window, so a Merchant can set Pages against each other and against their
  * campaigns. Each row carries the Page's title, Orders, Sales, Cancellation
- * Rate, Average Order Value and when it went live, and opens that Page's
- * edit screen; Sales first by default, and any figure sorts. A Visits /
- * Conversion column is reserved so the table does not shift when Visit
- * counting arrives.
+ * Rate, Average Order Value, when it went live and its Visits with the
+ * Conversion Rate they produced, and opens that Page's edit screen; Sales
+ * first by default, and any figure sorts.
  *
  * It sits at the foot of the screen rather than among the figures because it
  * is the one report whose height grows with the installation — a Merchant
@@ -112,16 +111,52 @@ class PageLeaderboardTable extends TableWidget
                     ->dateTime()
                     ->placeholder('—'),
 
+                /** Sorted on the Visits, which is the count; `visitsAndConversion()` says why the two ride together. */
                 TextColumn::make('visits')
                     ->label('Visits / Conversion')
-                    ->state('Not yet counted')
-                    ->color('gray')
-                    ->tooltip('Visit counting comes in a later release'),
+                    ->state(fn (array $record): string => self::visitsAndConversion($record))
+                    ->color(fn (array $record): ?string => $record['visits'] === null ? 'gray' : null)
+                    ->tooltip(fn (array $record): ?string => $record['counts_visits']
+                        ? null
+                        : 'Switch Visit counting on in Settings → Tracking')
+                    ->alignEnd()
+                    ->sortable(),
             ])
             ->defaultSort('sales', 'desc')
             ->recordUrl(fn (array $record): ?string => $record['url'])
             ->emptyStateHeading('No Orders in this window')
             ->emptyStateDescription('A Page appears here once an Order is captured on it inside the Reporting Window.');
+    }
+
+    /**
+     * What the Visits column says: the loads and the share of them that
+     * became Orders, or why there is no figure.
+     *
+     * Two figures in one cell, because neither is worth much without the
+     * other — a Page with the most Visits and the worst Conversion Rate is
+     * the one to look at, and a Merchant reading them in two columns has to
+     * pair them by eye. Never a nought in place of an absent figure, for the
+     * reason the tile never draws one: a 0.0% beside a Page that is selling
+     * would be read as a Page that is not.
+     *
+     * The two absences are different and say so. Counting off is a thing the
+     * Merchant can change, and the tooltip says where; a Page deleted for
+     * good is not — its counts are kept and simply belong to nothing any
+     * more, which is a dash and no instruction.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    private static function visitsAndConversion(array $record): string
+    {
+        if (! $record['counts_visits']) {
+            return 'Not counted';
+        }
+
+        if ($record['visits'] === null) {
+            return '—';
+        }
+
+        return number_format($record['visits']).' / '.number_format($record['conversion_rate'] * 100, 1).'%';
     }
 
     /**
@@ -149,6 +184,12 @@ class PageLeaderboardTable extends TableWidget
             'cancellation_rate' => $row->cancellationRate(),
             'average_order_value' => $row->averageOrderValue(),
             'went_live_at' => $row->wentLiveAt(),
+
+            /** The count rides raw so the column sorts on a number and not on the sentence drawn from it. */
+            'visits' => $row->visits,
+            'conversion_rate' => $row->conversionRate(),
+            'counts_visits' => $leaderboard->countsVisits,
+
             'url' => $row->page === null ? null : PageResource::getUrl('edit', ['record' => $row->page]),
         ]);
 
