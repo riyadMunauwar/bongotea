@@ -13,9 +13,13 @@ use App\Support\Settings\GeneralSettings;
  * The only shortcode v1 registers.
  *
  * It expands to a self-contained island: markup, a scoped <style> and an inline
- * <script>. Nothing touches <head> and nothing loads an external asset, because
- * a Page's document belongs entirely to the merchant — this is the one escape
- * hatch from that rule, and it reaches no further than the point of expansion.
+ * <script>. Nothing here touches <head> and nothing loads an external asset,
+ * because a Page's document belongs entirely to the merchant — this expansion
+ * reaches no further than the point it happens at.
+ *
+ * One thing does reach <head>, and it is not this: `TrackingSnippet` injects
+ * the Pixel there after expansion, on a Page that reports to a Destination,
+ * and that snippet is the one thing on a Page that loads an external asset.
  *
  * Declares no attributes. The schema mechanism ships unexercised on purpose;
  * see ADR-0002.

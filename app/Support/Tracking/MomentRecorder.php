@@ -29,6 +29,34 @@ class MomentRecorder
     public function __construct(private readonly TrackingDestinations $destinations) {}
 
     /**
+     * A Moment the browser is the only witness to: a Page was loaded, or a
+     * visitor started filling in its Checkout.
+     *
+     * The deduplication id is the browser's own, made up for that page load
+     * and carried here by the beacon, because the copy the Pixel fired
+     * carries it too and the Provider must count one event. It is written as
+     * given: a repeat is not a defect to guard against but the outbox's
+     * unique index doing its job, and two loads are two Visits under two
+     * identifiers.
+     *
+     * Nothing at all where the Page reports nowhere — which is also what
+     * makes the beacon free on a Page nobody is tracking, since no such Page
+     * carries one.
+     */
+    public function reportedByBrowser(Page $page, TrackingMoment $moment, string $deduplicationId, TrackingContext $context): void
+    {
+        $this->record(
+            $this->destinations->forPage($page),
+            $moment,
+            deduplicationId: $deduplicationId,
+            occurredAt: Carbon::now(),
+            page: $page,
+            order: null,
+            context: $context,
+        );
+    }
+
+    /**
      * The Capture Moment: a visitor submitted the Checkout and an Order came
      * into existence.
      *

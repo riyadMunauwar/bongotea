@@ -29,6 +29,35 @@ enum TrackingMoment: string implements HasLabel
     /** A Verification marked one of an Order's Payments Paid. */
     case Paid = 'paid';
 
+    /**
+     * The Moments a browser is allowed to report for itself.
+     *
+     * Visit and Checkout Started happen in a browser and are witnessed
+     * nowhere else, so the beacon is the only thing that can say they
+     * happened. Capture and Paid are deliberately absent: the beacon is
+     * unauthenticated by design — it answers a document served as a file
+     * with no session and no token — and a Purchase anyone holding a Page's
+     * slug could post is reported revenue the Merchant does not have.
+     *
+     * @return list<self>
+     */
+    public static function reportableByBrowser(): array
+    {
+        return [self::Visit, self::CheckoutStarted];
+    }
+
+    /**
+     * The Moment a browser posted under that name, or null where it is not
+     * one a browser may report — an unknown word and a forged Capture read
+     * the same way here, because both are simply nothing to record.
+     */
+    public static function fromBrowser(mixed $posted): ?self
+    {
+        $moment = is_string($posted) ? self::tryFrom($posted) : null;
+
+        return in_array($moment, self::reportableByBrowser(), true) ? $moment : null;
+    }
+
     public function getLabel(): string
     {
         return match ($this) {

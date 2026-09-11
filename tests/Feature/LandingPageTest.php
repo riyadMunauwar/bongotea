@@ -68,9 +68,14 @@ it('serves the stored document byte for byte', function () {
     $page = Page::factory()->published()->create(['slug' => 'promo']);
 
     /**
-     * The merchant owns the whole document, `<head>` included. Anything we wrap
-     * around it or inject into it looks to them like the product broke their
-     * page.
+     * The merchant owns the whole document. Anything we wrap around it looks
+     * to them like the product broke their page.
+     *
+     * Exactly one thing is injected into it, and only where the merchant has
+     * asked for it: the tracking snippet, into a Page that reports to a
+     * Destination (ADR-0017). This installation has none, which is every
+     * installation until a Merchant configures one, so the document here is
+     * the document they stored.
      */
     expect($this->get('/promo')->getContent())->toBe($page->body);
 });

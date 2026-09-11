@@ -20,6 +20,23 @@ class AppServiceProvider extends ServiceProvider
     private const NOTIFICATIONS_PER_MINUTE = 60;
 
     /**
+     * Moments one address may report in a minute before it is refused.
+     *
+     * Set well above what a real visitor produces — one beacon per page load
+     * — because the addresses this counts are shared: a carrier's NAT puts
+     * thousands of genuine visitors behind one, and this market browses from
+     * mobile almost entirely. Being refused costs the redundancy and not the
+     * event, since the browser's own Pixel has already fired, which is what
+     * makes a generous limit the cheap side to be wrong on.
+     *
+     * A constant like the Notification's, not a Setting like the Capture's:
+     * the tracking settings group that is to hold this arrives with the
+     * Merchant's own event switches, and a Setting with no screen to set it
+     * on would be a column nobody can reach.
+     */
+    private const MOMENTS_PER_MINUTE = 300;
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -83,6 +100,16 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('payment-notification', fn (Request $request): Limit => Limit::perMinute(
             self::NOTIFICATIONS_PER_MINUTE,
+        )->by($request->ip()));
+
+        /**
+         * The beacon is an unauthenticated write on the path of every ad
+         * click, so it is throttled per address like the Capture beside it.
+         * Keyed on IP alone for the same reason and with the same trade-off
+         * written down at the constant.
+         */
+        RateLimiter::for('tracking', fn (Request $request): Limit => Limit::perMinute(
+            self::MOMENTS_PER_MINUTE,
         )->by($request->ip()));
     }
 }

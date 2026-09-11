@@ -41,3 +41,10 @@ Which click identifiers are kept is `Provider::clickIdNames()` and nowhere else 
 Both copies of an event carry the order number as the deduplication id (`eventID` on Meta), which is the whole of how one Purchase is counted once. Which Moment an Order's Purchase belongs to is `MomentRecorder::purchaseMomentFor()` and is not restated at a call site.
 
 The consent hook is `TrackingSnippet::CONSENT_HOOK`, one global, consulted once. Absent or true fires; only an explicit `false` holds. Never invert that default — it would silently disable reporting for every Merchant who never heard of it.
+
+## A Page's Pixel is injected in the controller, and a cached Page names no identifier of its own
+`TrackingSnippet::injectedInto()` is where a landing Page's Pixel enters the document: `LandingPageController::show()` calls it on the expanded HTML and the one string it returns is both written to the cache and returned, which is how the three-way byte identity in `LandingPageTest` survives injection. Insertion is before `</head>`, then `</body>`, then appended, matched case-insensitively. The authoring preview deliberately gets none — a Merchant looking at their own draft is not a Visit, for the reason the Processing Page carries no Pixel.
+
+A Page's deduplication id cannot be baked in: one file is served to every visitor, so a literal would deduplicate the whole campaign into one Visit. `BrowserEvent::forLoad()` carries JavaScript *naming* the value instead, and every Provider writes it through `deduplicationIdSource()` rather than quoting the string. `Facebook::script()` skips its own bare `PageView` when the events given already include one, so a load is reported once and with that id.
+
+Nothing here is wrapped in a try/catch: the only thing that can fail is reading the Destinations, and the Page lookup above it already made that connection. A catch would trade a loud failure for a cached Page that silently reports nothing until someone saves it.

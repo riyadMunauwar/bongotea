@@ -64,6 +64,17 @@ class FacebookScript extends ProviderScript
     }
 
     /**
+     * Meta wants both for a landing Page: the page view its base code makes,
+     * and the look at the product the page is selling.
+     *
+     * @return list<string>
+     */
+    public function visitEvents(): array
+    {
+        return [$this->pageViewEvent(), 'ViewContent'];
+    }
+
+    /**
      * @return list<string>
      */
     public function clickIdNames(): array
@@ -112,7 +123,7 @@ class FacebookScript extends ProviderScript
         $events = [];
 
         foreach ($calls[1] as $arguments) {
-            $decoded = json_decode('['.$arguments.']', true);
+            $decoded = json_decode('['.$this->quotingGeneratedIdentifiers($arguments).']', true);
 
             Assert::assertIsArray($decoded, "A tracked event was not readable as arguments: [{$arguments}].");
 
@@ -124,6 +135,20 @@ class FacebookScript extends ProviderScript
         }
 
         return $events;
+    }
+
+    /**
+     * The same arguments with any `eventID` the browser makes up on load
+     * read as the name it is made up under, so a call carrying one decodes
+     * as JSON like every other and `deduplicationIdOf()` answers what the
+     * browser will send under it.
+     *
+     * The snippet always writes such an identifier as a bare JavaScript
+     * name, which is why this can be a pattern and not a parser.
+     */
+    private function quotingGeneratedIdentifiers(string $arguments): string
+    {
+        return (string) preg_replace('/"eventID": ([A-Za-z_$][A-Za-z0-9_$]*)/', '"eventID": "$1"', $arguments);
     }
 
     public function fakeAccepted(): void

@@ -69,7 +69,7 @@ class PageForm
                                     ->language(Language::Html)
                                     ->required()
                                     ->columnSpanFull()
-                                    ->helperText('A complete HTML document. Nothing is wrapped around it and no stylesheet of ours is injected — what you paste is what a visitor receives. Write [checkout] where the order form should appear.'),
+                                    ->helperText('A complete HTML document. Nothing is wrapped around it and no stylesheet of ours is injected. Write [checkout] where the order form should appear. The only thing added to what you paste is the tracking snippet, where this Page reports to a Destination.'),
                             ]),
 
                         /**

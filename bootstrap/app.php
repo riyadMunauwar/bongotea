@@ -24,7 +24,14 @@ return Application::configure(basePath: dirname(__DIR__))
              * nothing is given up here.
              *
              * Registered after the web routes because `/{slug}` is a catch-all.
+             *
+             * The beacon a served Page reports its own load through is
+             * registered the same way and for the same reason, and before
+             * the catch-all: it is two segments deep, so a slug could not
+             * shadow it either way, but nothing that answers a cached Page
+             * should depend on that being noticed.
              */
+            Route::group([], base_path('routes/tracking.php'));
             Route::group([], base_path('routes/landing.php'));
         },
     )

@@ -43,6 +43,15 @@ abstract class ProviderScript
     abstract public function pageViewEvent(): string;
 
     /**
+     * Everything this Provider is told when a Page is loaded, in the order
+     * it is reported — the load itself among them, since a landing Page is a
+     * page view and a look at the thing being sold at once.
+     *
+     * @return list<string>
+     */
+    abstract public function visitEvents(): array;
+
+    /**
      * The click identifiers this Provider matches an Order back to an ad
      * click by, under the names the browser hands them over as.
      *
@@ -127,7 +136,18 @@ abstract class ProviderScript
     /** The name of the event, as this Provider spells it. @param array<string, mixed> $event */
     abstract public function eventNameOf(array $event): ?string;
 
-    /** What the browser copy of this event will carry so the Provider counts one. @param array<string, mixed> $event */
+    /**
+     * What the browser copy of this event will carry so the Provider counts
+     * one.
+     *
+     * Read off a browser event, this is the string itself where the document
+     * already knew it — an order number — and the JavaScript naming it where
+     * the browser makes it up on load, which is every Moment about a Page. A
+     * test holds the two halves against each other by asking what the beacon
+     * carries under the same name.
+     *
+     * @param  array<string, mixed>  $event
+     */
     abstract public function deduplicationIdOf(array $event): ?string;
 
     /** The Merchant's own reference for the Order. @param array<string, mixed> $event */

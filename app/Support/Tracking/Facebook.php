@@ -170,6 +170,12 @@ class Facebook implements Provider
      * and with the deduplication id as Meta's `eventID`, which is the whole
      * of how the two copies of one Purchase are counted once.
      *
+     * The `PageView` is reported once. A caller that has a `PageView` of its
+     * own to report — a Page load, which the beacon writes a server copy of
+     * — gets that one and not a second bare one, because two `PageView`s
+     * from one load is a doubled figure on the Merchant's own Dashboard and
+     * only one of them would deduplicate.
+     *
      * @param  list<BrowserEvent>  $events
      */
     public function script(Destination $destination, array $events): string
@@ -181,19 +187,56 @@ class Facebook implements Provider
         $lines = [
             self::LOADER,
             $this->call('init', $destination->dataset),
-            $this->call('track', self::PAGE_VIEW),
         ];
 
+        if (! $this->reportsPageView($events)) {
+            $lines[] = $this->call('track', self::PAGE_VIEW);
+        }
+
         foreach ($events as $event) {
-            $lines[] = $this->call(
-                'track',
-                $event->event,
-                $this->customData($event->order),
-                ['eventID' => $event->deduplicationId],
-            );
+            $lines[] = $this->track($event);
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Whether the caller is reporting the page's own load itself.
+     *
+     * @param  list<BrowserEvent>  $events
+     */
+    private function reportsPageView(array $events): bool
+    {
+        foreach ($events as $event) {
+            if ($event->event === self::PAGE_VIEW) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * One tracked event: what it reports, and the `eventID` its server copy
+     * carries too.
+     *
+     * An event about no Order reports no parameters — as an empty object
+     * rather than an empty array, since `fbq` reads its third argument as
+     * one, and because that is exactly what its server copy sends.
+     */
+    private function track(BrowserEvent $event): string
+    {
+        $parameters = $event->order === null
+            ? $this->encode(new stdClass)
+            : $this->encode($this->customData($event->order));
+
+        return sprintf(
+            'fbq(%s, %s, %s, {"eventID": %s});',
+            $this->encode('track'),
+            $this->encode($event->event),
+            $parameters,
+            $event->deduplicationIdSource(),
+        );
     }
 
     /**
@@ -204,19 +247,10 @@ class Facebook implements Provider
      * element it is written into.
      *
      * @param  string  $subject  what the call is about: a dataset to initialise, or an event to track
-     * @param  array<string, mixed>|null  $parameters  what the event reports, absent where the call takes none
-     * @param  array<string, mixed>  $options
      */
-    private function call(string $method, string $subject, ?array $parameters = null, array $options = []): string
+    private function call(string $method, string $subject): string
     {
-        $arguments = [$this->encode($method), $this->encode($subject)];
-
-        if ($parameters !== null) {
-            $arguments[] = $this->encode($parameters);
-            $arguments[] = $this->encode($options);
-        }
-
-        return 'fbq('.implode(', ', $arguments).');';
+        return 'fbq('.$this->encode($method).', '.$this->encode($subject).');';
     }
 
     private function encode(mixed $value): string

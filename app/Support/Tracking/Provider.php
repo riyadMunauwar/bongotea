@@ -76,6 +76,12 @@ interface Provider
      * load of the page it is written into, followed by one call per event
      * given.
      *
+     * Where the events given already include the Provider's own name for
+     * that load, it is reported once and with its deduplication id rather
+     * than twice: a Provider knows which of its own events its base code
+     * fires, and a caller writing a server copy of one may not end up with
+     * the load counted twice.
+     *
      * The script and nothing around it — the element, the consent hook and
      * the choice of what fires are `TrackingSnippet`'s, so that a Provider
      * stays the only thing that ever speaks its own vocabulary.
