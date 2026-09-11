@@ -123,6 +123,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tracking
+    |--------------------------------------------------------------------------
+    |
+    | What the beacon — the one thing on a Visit's path that boots the
+    | framework at all — may be asked for.
+    |
+    | The default for each Provider event is deliberately not here. It is a
+    | decision a Merchant makes on a screen about events only a Provider can
+    | name, so it lives in the tracking settings row alone with no config key
+    | to disagree with; an event nobody has said anything about fires.
+    |
+    */
+
+    'tracking' => [
+        /**
+         * Moments one address may report in a minute before the beacon
+         * refuses it. Keyed on IP alone, with the trade-off named at the
+         * property this fills: a carrier's NAT puts thousands of genuine
+         * visitors behind one address, and being refused costs the redundancy
+         * rather than the event, since the browser's own Pixel has fired.
+         */
+        'beacon_rate_limit' => (int) env('GIOPAGES_TRACKING_BEACON_RATE_LIMIT', 300),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Checkout
     |--------------------------------------------------------------------------
     */

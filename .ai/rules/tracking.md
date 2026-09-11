@@ -24,7 +24,7 @@ Idempotence is the unique index on (`destination_id`, `deduplication_id`, `event
 
 The outbox row holds **no personal data**: `Facebook::payloadFor()` reads the Customer off `$event->order` at delivery, which is what lets the table be pruned without touching a fulfilment record. Match keys are SHA-256 hashed after Meta's normalisation; `client_ip_address`, `client_user_agent`, `fbc` and `fbp` must stay plain, because a hashed one matches nobody.
 
-Which Destinations apply is `TrackingDestinations::forPage()` and nowhere else. A Destination that is switched off yields no rows at all (that is a campaign break); one that is on with blank credentials still accumulates them and the sweep prints the Provider's refusal. Why a Destination is unusable has one wording, `Provider::refusal()` — the sweep, the table column and any later screen ask it rather than restating the rule.
+Which Destinations apply is `TrackingPlans::forPage()` and nowhere else. A Destination that is switched off yields no rows at all (that is a campaign break); one that is on with blank credentials still accumulates them and the sweep prints the Provider's refusal. Why a Destination is unusable has one wording, `Provider::refusal()` — the sweep, the table column and any later screen ask it rather than restating the rule.
 
 `DestinationObserver` does two things a model does not get for free: keeps exactly one default per Provider (first one takes it, marking a second unmarks the first, deleting the holder passes it on), and calls `PageCacheInvalidator::forgetEveryPage()` on save and delete, because the dataset is baked into every cached Page's Pixel snippet.
 
@@ -36,7 +36,7 @@ Tests run as a Pest dataset over `tests/Fixtures/Tracking/ProviderScript`; a new
 Which click identifiers are kept is `Provider::clickIdNames()` and nowhere else — `TrackingContext` takes the union across Providers and drops the rest, so adding TikTok adds `ttclid` in the driver alone. They are filtered and truncated, never validated: they arrive in a field no Customer can see, from a script their browser may not have run, and `StoreOrderRequest` carries no rule for them because an Order refused over one is a sale lost to tracking.
 
 ## The browser's half is one snippet, built here and never authored in a view
-`TrackingSnippet` builds the whole `<script>`: the consent hook, and one `Provider::script()` per Destination from `TrackingDestinations::forPage()` — the same answer the recorder takes, so the two halves cannot disagree about where a Page reports. A Provider's `script()` returns its base code (which reports the page's own load) plus one call per `BrowserEvent`, and returns '' where the Destination has no public identifier; the access token is not asked for, because that is the server half's credential. No Destination means no element, no global and no external request at all.
+`TrackingSnippet` builds the whole `<script>`: the consent hook, and one `Provider::script()` per Destination from `TrackingPlans::forPage()` — the same answer the recorder takes, so the two halves cannot disagree about where a Page reports or about what it reports there. A Provider's `script()` returns its base code (which reports the page's own load) plus one call per `BrowserEvent`, and returns '' where the Destination has no public identifier; the access token is not asked for, because that is the server half's credential. No Destination means no element, no global and no external request at all.
 
 Both copies of an event carry the order number as the deduplication id (`eventID` on Meta), which is the whole of how one Purchase is counted once. Which Moment an Order's Purchase belongs to is `MomentRecorder::purchaseMomentFor()` and is not restated at a call site.
 
@@ -48,3 +48,10 @@ The consent hook is `TrackingSnippet::CONSENT_HOOK`, one global, consulted once.
 A Page's deduplication id cannot be baked in: one file is served to every visitor, so a literal would deduplicate the whole campaign into one Visit. `BrowserEvent::forLoad()` carries JavaScript *naming* the value instead, and every Provider writes it through `deduplicationIdSource()` rather than quoting the string. `Facebook::script()` skips its own bare `PageView` when the events given already include one, so a load is reported once and with that id.
 
 Nothing here is wrapped in a try/catch: the only thing that can fail is reading the Destinations, and the Page lookup above it already made that connection. A catch would trade a loud failure for a cached Page that silently reports nothing until someone saves it.
+
+## One Plan answers where a Page reports and what it reports there
+`TrackingPlans::forPage()` (formerly `TrackingDestinations`) answers with a `TrackingPlan`, not a list: the Destinations, the events, and whether the basket travels are all read from one Tracking Config, and the recorder and the snippet builder must not read them separately. `forConfig()` is the same reading for a Config that was never saved — the Tracking tab's preview goes through it rather than restating the rules.
+
+A Page's pick replaces its own Provider's default and leaves other Providers' alone. A pick that has been deleted falls back to the default; a pick that is switched off reports nowhere for that Provider, because pausing is what switching off means.
+
+Two additions to the Provider contract carry this: `loadEvent()`, so a caller can ask whether the load a base code reports by itself is still wanted without ever spelling the name, and `payloadFor()`, so the preview prints exactly what `send()` would send. Content detail is frozen onto the outbox row (`content_detail`) at Moment time — a driver reads the row it is handed, and the Page may be in the bin by the time the sweep runs.

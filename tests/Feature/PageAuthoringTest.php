@@ -39,7 +39,6 @@ use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
@@ -1701,110 +1700,6 @@ it('sets the checkout in the page\'s own typeface from the look tab', function (
 });
 
 /**
- * The tabs directly inside a schema or a component, in the order a merchant
- * meets them.
- *
- * A `Tabs` is transparent here: it is the arrangement, not a thing on screen,
- * so asking a Tab what tabs are inside it answers with the nested ones rather
- * than with the container that holds them.
- *
- * @return list<Tab>
- */
-function tabsInside(Schema|Component $node): array
-{
-    $schema = $node instanceof Schema ? $node : $node->getChildSchema();
-
-    $tabs = [];
-
-    foreach ($schema?->getComponents(withHidden: true) ?? [] as $component) {
-        if ($component instanceof Tabs) {
-            $tabs = [...$tabs, ...tabsInside($component)];
-
-            continue;
-        }
-
-        if ($component instanceof Tab) {
-            $tabs[] = $component;
-        }
-    }
-
-    return $tabs;
-}
-
-/**
- * Every state path a merchant can type into somewhere under this component,
- * however deeply it is nested.
- *
- * Read without the form's own root, so a path here is the one the Config is
- * written at rather than the Livewire property the panel happens to hold the
- * whole form in.
- *
- * @return list<string>
- */
-function statePathsInside(Schema|Component $node): array
-{
-    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
-
-    $paths = [];
-
-    foreach ($schemas as $schema) {
-        foreach ($schema->getComponents(withHidden: true) as $component) {
-            if ($component instanceof Field) {
-                $paths[] = Str::after(
-                    $component->getStatePath(),
-                    $component->getRootContainer()->getStatePath().'.',
-                );
-            }
-
-            $paths = [...$paths, ...statePathsInside($component)];
-        }
-    }
-
-    return $paths;
-}
-
-/**
- * One control a merchant types into, found by the path its value is written
- * at.
- *
- * The same walk `statePathsInside()` makes, stopping at the field rather than
- * collecting every path — so a test can ask what a control is *offering* and
- * not only that it is on the right tab.
- */
-function fieldInside(Schema|Component $node, string $path): ?Field
-{
-    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
-
-    foreach ($schemas as $schema) {
-        foreach ($schema->getComponents(withHidden: true) as $component) {
-            if ($component instanceof Field && Str::after(
-                $component->getStatePath(),
-                $component->getRootContainer()->getStatePath().'.',
-            ) === $path) {
-                return $component;
-            }
-
-            if ($found = fieldInside($component, $path)) {
-                return $found;
-            }
-        }
-    }
-
-    return null;
-}
-
-/**
- * The form a merchant is actually served on the edit screen, rather than the
- * schema classes that build it — so what is asserted is what they open.
- */
-function editFormOf(Page $page): Schema
-{
-    return Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->instance()
-        ->getSchema('form');
-}
-
-/**
  * The nested tabs the Checkout tab is split into, by their label.
  *
  * @return Collection<string, Tab>
@@ -1835,12 +1730,14 @@ it('keeps everything the checkout decides inside the checkout tab', function () 
      * the tab must not promote its parts to sit beside the Page itself. The
      * Order Complete Config is another thing a Page decides, and sits beside
      * it rather than inside it: the Checkout captures the Order, and that is
-     * where the Customer lands afterwards.
+     * where the Customer lands afterwards. The Tracking Config is a fourth,
+     * and sits beside both: where a Page reports is not part of the form that
+     * captures the Order nor of the page the Customer lands on.
      */
     expect(array_map(
         fn (Tab $tab): string => (string) $tab->getLabel(),
         tabsInside(editFormOf(Page::factory()->create())),
-    ))->toBe(['Page', 'Checkout', 'Order complete']);
+    ))->toBe(['Page', 'Checkout', 'Order complete', 'Tracking']);
 });
 
 it('reaches and saves a setting on every nested checkout tab', function (string $tab) {

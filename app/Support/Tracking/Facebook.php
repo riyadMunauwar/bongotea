@@ -135,6 +135,11 @@ class Facebook implements Provider
         return [self::CLICK_ID, self::BROWSER_ID];
     }
 
+    public function loadEvent(): string
+    {
+        return self::PAGE_VIEW;
+    }
+
     public function batchLimit(): int
     {
         return self::BATCH_LIMIT;
@@ -176,9 +181,14 @@ class Facebook implements Provider
      * from one load is a doubled figure on the Merchant's own Dashboard and
      * only one of them would deduplicate.
      *
+     * Where the Page reports no `PageView` at all, the bare one is not fired
+     * either: the base code still loads, so the Pixel is initialised and its
+     * browser identifier is set for the events that *are* reported, and the
+     * one event the Merchant switched off is the one thing it does not send.
+     *
      * @param  list<BrowserEvent>  $events
      */
-    public function script(Destination $destination, array $events): string
+    public function script(Destination $destination, array $events, bool $reportsLoad): string
     {
         if (blank($destination->dataset)) {
             return '';
@@ -189,7 +199,7 @@ class Facebook implements Provider
             $this->call('init', $destination->dataset),
         ];
 
-        if (! $this->reportsPageView($events)) {
+        if ($reportsLoad && ! $this->reportsPageView($events)) {
             $lines[] = $this->call('track', self::PAGE_VIEW);
         }
 
@@ -228,7 +238,7 @@ class Facebook implements Provider
     {
         $parameters = $event->order === null
             ? $this->encode(new stdClass)
-            : $this->encode($this->customData($event->order));
+            : $this->encode($this->customData($event->order, $event->contentDetail));
 
         return sprintf(
             'fbq(%s, %s, %s, {"eventID": %s});',
@@ -313,7 +323,7 @@ class Facebook implements Provider
      *
      * @return array<string, mixed>
      */
-    private function payloadFor(TrackingEvent $event): array
+    public function payloadFor(TrackingEvent $event): array
     {
         $order = $event->order;
 
@@ -323,7 +333,7 @@ class Facebook implements Provider
             'event_id' => $event->deduplication_id,
             'event_source_url' => $event->source_url,
             'action_source' => self::ACTION_SOURCE,
-            'custom_data' => $order === null ? [] : $this->customData($order),
+            'custom_data' => $order === null ? [] : $this->customData($order, $event->content_detail),
         ], fn (mixed $value): bool => $value !== null && $value !== []);
 
         /**
@@ -389,29 +399,36 @@ class Facebook implements Provider
      * the two never disagree. The currency is the installation's, read from
      * Settings rather than from config.
      *
+     * A Page may withhold the content detail — what was bought, by name and
+     * by id — and still report the money. That is what a Merchant selling
+     * something Meta's business tool terms restrict needs: Meta keeps
+     * optimising on value and currency, the catalogue match is what is given
+     * up, and no product name leaves the installation. The count and the
+     * delivery category stay: neither says what the parcel holds.
+     *
      * @return array<string, mixed>
      */
-    private function customData(Order $order): array
+    private function customData(Order $order, bool $contentDetail): array
     {
         $lines = $order->lines;
 
-        return [
+        return array_filter([
             'value' => Money::toMajor($order->total),
             'currency' => Str::upper(app(GeneralSettings::class)->currencyCode),
-            'content_type' => self::CONTENT_TYPE,
-            'contents' => $lines->map(fn (OrderLine $line): array => [
+            'content_type' => $contentDetail ? self::CONTENT_TYPE : null,
+            'contents' => $contentDetail ? $lines->map(fn (OrderLine $line): array => [
                 'id' => self::contentId($line),
                 'quantity' => $line->quantity,
                 'item_price' => Money::toMajor($line->unit_price),
-            ])->values()->all(),
-            'content_ids' => $lines->map(self::contentId(...))->values()->all(),
+            ])->values()->all() : null,
+            'content_ids' => $contentDetail ? $lines->map(self::contentId(...))->values()->all() : null,
 
             /** The order number: the same string the event deduplicates on, so Events Manager reads as the Merchant's own admin does. */
             'order_id' => $order->order_number,
 
             'num_items' => (int) $lines->sum('quantity'),
             'delivery_category' => self::DELIVERY_CATEGORY,
-        ];
+        ], fn (mixed $value): bool => $value !== null);
     }
 
     /**

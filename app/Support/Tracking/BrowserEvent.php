@@ -33,6 +33,14 @@ final class BrowserEvent
         public readonly string $deduplicationId,
         public readonly ?Order $order,
 
+        /**
+         * Whether this event may name what was bought, as the outbox row
+         * beside it carries the same answer in a column: the two copies of
+         * one event may not disagree about what it was, a suppression least
+         * of all.
+         */
+        public readonly bool $contentDetail,
+
         /** Whether the deduplication id above is JavaScript naming a value rather than the value. */
         private readonly bool $browserGenerated,
     ) {}
@@ -42,9 +50,9 @@ final class BrowserEvent
      * string the browser and the server can both reach without coordinating,
      * and the one the outbox row already carries.
      */
-    public static function forOrder(string $event, Order $order): self
+    public static function forOrder(string $event, Order $order, bool $contentDetail = true): self
     {
-        return new self($event, $order->order_number, $order, browserGenerated: false);
+        return new self($event, $order->order_number, $order, $contentDetail, browserGenerated: false);
     }
 
     /**
@@ -60,7 +68,7 @@ final class BrowserEvent
      */
     public static function forLoad(string $event, string $identifier): self
     {
-        return new self($event, $identifier, null, browserGenerated: true);
+        return new self($event, $identifier, null, contentDetail: true, browserGenerated: true);
     }
 
     /**

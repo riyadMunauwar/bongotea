@@ -6,6 +6,7 @@ use App\Enums\PageStatus;
 use App\Observers\PageObserver;
 use App\Support\Checkout\AsCheckoutConfig;
 use App\Support\OrderComplete\AsOrderCompleteConfig;
+use App\Support\Tracking\AsTrackingConfig;
 use Database\Factories\PageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * served at its own flat slug.
  */
 #[ObservedBy(PageObserver::class)]
-#[Fillable(['title', 'slug', 'body', 'status', 'published_at', 'checkout_config', 'order_complete_config'])]
+#[Fillable(['title', 'slug', 'body', 'status', 'published_at', 'checkout_config', 'order_complete_config', 'tracking_config'])]
 class Page extends Model
 {
     /** @use HasFactory<PageFactory> */
@@ -46,6 +47,15 @@ class Page extends Model
              * Page from before the column.
              */
             'order_complete_config' => AsOrderCompleteConfig::class,
+
+            /**
+             * Likewise: where this Page reports and what it reports there,
+             * seeded on create and backfilled for every Page from before the
+             * column. Never part of the Pricing Fingerprint — it is not a
+             * figure, and switching an event off must never turn away an
+             * Order somebody is half-way through typing.
+             */
+            'tracking_config' => AsTrackingConfig::class,
         ];
     }
 

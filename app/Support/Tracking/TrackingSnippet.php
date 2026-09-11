@@ -3,6 +3,7 @@
 namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
+use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Page;
 
@@ -22,9 +23,9 @@ use App\Models\Page;
  * `script()`: one base code per Destination, and nothing in this class ever
  * names an event of any platform's.
  *
- * Which Destinations a page reports to is `TrackingDestinations::forPage()`,
+ * Where a page reports and what it reports there is `TrackingPlans::forPage()`,
  * the same answer the recorder takes, so the two halves cannot disagree
- * about where a Page reports.
+ * about either.
  */
 class TrackingSnippet
 {
@@ -57,7 +58,7 @@ class TrackingSnippet
      */
     private const INSERTION_POINTS = ['</head>', '</body>'];
 
-    public function __construct(private readonly TrackingDestinations $destinations) {}
+    public function __construct(private readonly TrackingPlans $plans) {}
 
     /**
      * The served document with this Page's Pixel in it.
@@ -105,28 +106,50 @@ class TrackingSnippet
      * A Destination the Merchant has switched on but not yet given a dataset
      * still gets the beacon: the server half stands alone, and the rows it
      * writes are what the Merchant is owed once the credential is pasted.
+     *
+     * The beacon is carried only where some Destination still reports a Visit
+     * event. A Page whose Visit events are all switched off would write no
+     * row for the load whatever the beacon said, and a request that can only
+     * be discarded is not one to put on the path of an ad click.
      */
     public function forPage(Page $page): string
     {
-        $destinations = $this->destinations->forPage($page);
+        $plan = $this->plans->forPage($page);
 
-        if ($destinations === []) {
+        if ($plan->reportsNowhere()) {
             return '';
         }
 
         $scripts = [];
+        $reportsVisit = false;
 
-        foreach ($destinations as $destination) {
+        foreach ($plan->destinations() as $destination) {
             $driver = $destination->driver();
+            $events = $plan->eventsFor($destination, TrackingMoment::Visit);
 
-            $script = $driver->script($destination, $this->visit($driver));
+            $reportsVisit = $reportsVisit || $events !== [];
+
+            $script = $driver->script(
+                $destination,
+                $this->visit($events),
+                reportsLoad: $plan->reports($destination->provider, $driver->loadEvent()),
+            );
 
             if ($script !== '') {
                 $scripts[] = $script;
             }
         }
 
-        return $this->element([$this->identifier(), ...$scripts, $this->beacon($page)]);
+        /** No script to run and no load to report is the document as it was. */
+        if ($scripts === [] && ! $reportsVisit) {
+            return '';
+        }
+
+        return $this->element([
+            $this->identifier(),
+            ...$scripts,
+            ...($reportsVisit ? [$this->beacon($page)] : []),
+        ]);
     }
 
     /**
@@ -147,12 +170,18 @@ class TrackingSnippet
      */
     public function forOrder(Order $order, bool $reportsPurchase): string
     {
+        $plan = $this->plans->forPage($order->page);
+
         $scripts = [];
 
-        foreach ($this->destinations->forPage($order->page) as $destination) {
+        foreach ($plan->destinations() as $destination) {
             $driver = $destination->driver();
 
-            $script = $driver->script($destination, $this->purchase($driver, $order, $reportsPurchase));
+            $script = $driver->script(
+                $destination,
+                $this->purchase($plan, $destination, $order, $reportsPurchase),
+                reportsLoad: $plan->reports($destination->provider, $driver->loadEvent()),
+            );
 
             if ($script !== '') {
                 $scripts[] = $script;
@@ -163,17 +192,18 @@ class TrackingSnippet
     }
 
     /**
-     * The Visit, as this Destination's Provider reports it: every event the
-     * Moment produces — the load of the page among them — each deduplicated
+     * The Visit as the browser is told to report it: each event this Page
+     * reports for the Moment — the load of the page among them — deduplicated
      * against the copy the beacon is about to write.
      *
+     * @param  list<string>  $events
      * @return list<BrowserEvent>
      */
-    private function visit(Provider $driver): array
+    private function visit(array $events): array
     {
         return array_map(
             fn (string $event): BrowserEvent => BrowserEvent::forLoad($event, self::LOAD_IDENTIFIER),
-            $driver->eventsFor(TrackingMoment::Visit),
+            $events,
         );
     }
 
@@ -182,20 +212,21 @@ class TrackingSnippet
      * this browser is not the one that placed it.
      *
      * Which Moment the Purchase belongs to is `MomentRecorder`'s rule and not
-     * restated here, and which events that Moment produces is the Provider's
-     * answer — the seam a Page's own event switches filter at.
+     * restated here, and which events that Moment produces — less the ones
+     * this Page does not report — is the Plan's answer, the same one the
+     * outbox row was written from.
      *
      * @return list<BrowserEvent>
      */
-    private function purchase(Provider $driver, Order $order, bool $reportsPurchase): array
+    private function purchase(TrackingPlan $plan, Destination $destination, Order $order, bool $reportsPurchase): array
     {
         if (! $reportsPurchase) {
             return [];
         }
 
         return array_map(
-            fn (string $event): BrowserEvent => BrowserEvent::forOrder($event, $order),
-            $driver->eventsFor(MomentRecorder::purchaseMomentFor($order)),
+            fn (string $event): BrowserEvent => BrowserEvent::forOrder($event, $order, $plan->sendsContentDetail()),
+            $plan->eventsFor($destination, MomentRecorder::purchaseMomentFor($order)),
         );
     }
 

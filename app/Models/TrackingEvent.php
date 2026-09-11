@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'ip_address',
     'user_agent',
     'click_ids',
+    'content_detail',
     'state',
 ])]
 class TrackingEvent extends Model
@@ -51,6 +52,7 @@ class TrackingEvent extends Model
     protected $attributes = [
         'state' => TrackingEventState::Pending->value,
         'attempts' => 0,
+        'content_detail' => true,
     ];
 
     protected function casts(): array
@@ -61,6 +63,15 @@ class TrackingEvent extends Model
             'occurred_at' => 'datetime',
             'sent_at' => 'datetime',
             'click_ids' => 'array',
+
+            /**
+             * Whether this event may name what was bought, as the Page
+             * decided when the Moment happened. Read by the driver off the
+             * row it is handed, so a Page edited or deleted since cannot
+             * change what a queued event says.
+             */
+            'content_detail' => 'boolean',
+
             'attempts' => 'integer',
         ];
     }

@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  */
 class MomentRecorder
 {
-    public function __construct(private readonly TrackingDestinations $destinations) {}
+    public function __construct(private readonly TrackingPlans $plans) {}
 
     /**
      * A Moment the browser is the only witness to: a Page was loaded, or a
@@ -46,7 +46,7 @@ class MomentRecorder
     public function reportedByBrowser(Page $page, TrackingMoment $moment, string $deduplicationId, TrackingContext $context): void
     {
         $this->record(
-            $this->destinations->forPage($page),
+            $this->plans->forPage($page),
             $moment,
             deduplicationId: $deduplicationId,
             occurredAt: Carbon::now(),
@@ -70,10 +70,10 @@ class MomentRecorder
      */
     public function captured(Order $order, TrackingContext $context): void
     {
-        $destinations = $this->destinations->forPage($order->page);
+        $plan = $this->plans->forPage($order->page);
 
         /** Nowhere to report to is nothing to report, and nothing worth keeping an IP address for. */
-        if ($destinations === []) {
+        if ($plan->reportsNowhere()) {
             return;
         }
 
@@ -96,7 +96,7 @@ class MomentRecorder
         }
 
         $this->record(
-            $destinations,
+            $plan,
             TrackingMoment::Capture,
             deduplicationId: $order->order_number,
             occurredAt: $order->created_at ?? Carbon::now(),
@@ -129,7 +129,7 @@ class MomentRecorder
         }
 
         $this->record(
-            $this->destinations->forPage($order->page),
+            $this->plans->forPage($order->page),
             TrackingMoment::Paid,
             deduplicationId: $order->order_number,
             occurredAt: $payment->verified_at ?? Carbon::now(),
@@ -155,17 +155,16 @@ class MomentRecorder
 
     /**
      * One row per applicable Destination per event that Destination's
-     * Provider produces for this Moment.
+     * Provider produces for this Moment — less the events this Page does not
+     * report, which the Plan takes off the list.
      *
      * The deduplication id is what the browser copy of the same event will
      * carry, so Meta counts one and not two; the Order's number for Capture
      * and Paid, because both browser and server can reach it without
      * coordinating.
-     *
-     * @param  list<Destination>  $destinations
      */
     private function record(
-        array $destinations,
+        TrackingPlan $plan,
         TrackingMoment $moment,
         string $deduplicationId,
         Carbon $occurredAt,
@@ -173,9 +172,9 @@ class MomentRecorder
         ?Order $order,
         TrackingContext $context,
     ): void {
-        foreach ($destinations as $destination) {
-            foreach ($destination->driver()->eventsFor($moment) as $event) {
-                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context);
+        foreach ($plan->destinations() as $destination) {
+            foreach ($plan->eventsFor($destination, $moment) as $event) {
+                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context, $plan->sendsContentDetail());
             }
         }
     }
@@ -189,6 +188,7 @@ class MomentRecorder
         ?Page $page,
         ?Order $order,
         TrackingContext $context,
+        bool $contentDetail,
     ): void {
         TrackingEvent::query()->firstOrCreate(
             [
@@ -209,6 +209,14 @@ class MomentRecorder
                 'ip_address' => $context->ip_address,
                 'user_agent' => $context->user_agent,
                 'click_ids' => filled($context->click_ids) ? $context->click_ids : null,
+
+                /**
+                 * Frozen here rather than read back at delivery: the sweep
+                 * runs minutes or hours later, hands a driver the row and the
+                 * Order it points at, and the Page that decided this may be
+                 * in the bin by then.
+                 */
+                'content_detail' => $contentDetail,
             ],
         );
     }

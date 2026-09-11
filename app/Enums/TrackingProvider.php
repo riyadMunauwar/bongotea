@@ -39,6 +39,35 @@ enum TrackingProvider: string implements HasLabel
     }
 
     /**
+     * Every event this Provider reports, across every Moment, in the order
+     * the Moments produce them.
+     *
+     * Derived from the driver's own answers rather than listed, because the
+     * driver is already the only thing that speaks this Provider's
+     * vocabulary: a Provider that gains an event gains a switch on every
+     * Tracking tab and on the tracking settings page without either being
+     * edited, and the same derivation serves every Provider rather than being
+     * copied into each driver.
+     *
+     * @return list<string>
+     */
+    public function events(): array
+    {
+        $driver = $this->driver();
+        $events = [];
+
+        foreach (TrackingMoment::cases() as $moment) {
+            foreach ($driver->eventsFor($moment) as $event) {
+                if (! in_array($event, $events, true)) {
+                    $events[] = $event;
+                }
+            }
+        }
+
+        return $events;
+    }
+
+    /**
      * The driver behind this Provider, resolved from the container so it
      * takes its Settings and its HTTP client factory by injection.
      */

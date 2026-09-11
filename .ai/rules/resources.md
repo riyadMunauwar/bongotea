@@ -54,6 +54,6 @@ Note this is unrelated to whether the attribute is displayed: an infolist entry 
 ## A new resource must declare $navigationSort or it lands above the Dashboard
 Filament reads an undeclared `$navigationSort` as `-1`, not as "last". Every top-level entry in this panel therefore states its own — Dashboard 0, Orders 1, Products 2, Pages 3, SettingsCluster 100 — and a resource added without one jumps to the top of the sidebar silently. `AdminShellTest` asserts the full order, so this fails in CI rather than in front of a Merchant; update it when you add an entry.
 
-Resources inside the Settings cluster are numbered separately (General 0, Payment Methods 1, Destinations 2) and are not part of the top-level order.
+Resources inside the Settings cluster are numbered separately (General 0, Payment Methods 1, Destinations 2, Tracking 3) and are not part of the top-level order.
 
 The full reasoning, including why Pages uses the custom `giopages-funnel` icon rather than `Heroicon::OutlinedFunnel`, is in the AdminPanelProvider rules.

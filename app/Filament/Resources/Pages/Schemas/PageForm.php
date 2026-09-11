@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Pages\Schemas;
 use App\Enums\PageStatus;
 use App\Filament\Resources\Pages\Schemas\Checkout\CheckoutTab;
 use App\Filament\Resources\Pages\Schemas\OrderComplete\OrderCompleteTab;
+use App\Filament\Resources\Pages\Schemas\Tracking\TrackingTab;
 use App\Shortcodes\PageBodyValidator;
 use Closure;
 use Filament\Forms\Components\CodeEditor;
@@ -86,6 +87,14 @@ class PageForm
                          * tab beside Checkout rather than inside it.
                          */
                         OrderCompleteTab::make(),
+
+                        /**
+                         * Where this Page reports and what it
+                         * reports there: a fourth thing a Page
+                         * decides, beside what it sells and what
+                         * it says afterwards.
+                         */
+                        TrackingTab::make(),
                     ]),
 
                 Section::make('Publishing')

@@ -42,25 +42,6 @@ function visitedPage(ProviderScript $script): string
 }
 
 /**
- * The beacon this document carries: the address it posts to, and the name of
- * the identifier it appends.
- *
- * Read out of the served bytes rather than built, because what is being
- * pinned is that the Pixel and the beacon were handed the same one.
- *
- * @return array{address: string, identifier: string}
- */
-function beaconIn(string $html): array
-{
-    $found = [];
-
-    expect(preg_match('/var gioBeacon = "([^"]+)" \+ encodeURIComponent\(([A-Za-z_$][A-Za-z0-9_$]*)\);/', $html, $found))
-        ->toBe(1, 'The document carries no beacon.');
-
-    return ['address' => $found[1], 'identifier' => $found[2]];
-}
-
-/**
  * The browser reporting a Moment, the way the snippet does it: everything in
  * the address, nothing in the body, and the header a browser sets itself.
  *

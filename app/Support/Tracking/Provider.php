@@ -49,6 +49,17 @@ interface Provider
     public function clickIdNames(): array;
 
     /**
+     * This Provider's own name for the load of a page, which its base code
+     * reports by itself.
+     *
+     * Asked so that a caller can say whether that load is one of the events
+     * the Merchant still wants reported, without ever having to spell the
+     * name: a Page that has switched the load off must not have it fired out
+     * from under it by a base code nobody read.
+     */
+    public function loadEvent(): string;
+
+    /**
      * How many events one request to this Provider may carry. The sweep cuts
      * its batches here.
      */
@@ -92,9 +103,29 @@ interface Provider
      * half's credential, and a Merchant who has pasted the identifier and
      * not yet the token is already reporting from the browser.
      *
+     * The load is reported by the base code only where the caller says this
+     * page's load is reported at all. A Merchant who has switched that event
+     * off has switched it off everywhere, including the one copy a base code
+     * makes without being asked.
+     *
      * @param  list<BrowserEvent>  $events
      */
-    public function script(Destination $destination, array $events): string;
+    public function script(Destination $destination, array $events, bool $reportsLoad): string;
+
+    /**
+     * One outbox row as this Provider's wire format: exactly what `send()`
+     * puts in a batch for it.
+     *
+     * Asked separately from sending so that a Merchant can be shown what a
+     * Page will report before it reports anything — the Tracking tab's
+     * preview builds a sample row and prints this, rather than describing the
+     * payload a second time and drifting from it. It reads the row it is
+     * handed and the Order that row points at, and nothing else, so a row
+     * that was never saved previews as truly as one that was.
+     *
+     * @return array<string, mixed>
+     */
+    public function payloadFor(TrackingEvent $event): array;
 
     /**
      * Deliver one batch to one Destination, in a single request.

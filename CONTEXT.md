@@ -244,6 +244,10 @@ _Avoid_: queue, event log, buffer
 What the browser told us when an Order was captured — the click identifiers, the IP address, the User-Agent and the Page it was on — kept apart from the Order in a table of its own. It exists for the Moment that arrives with no browser present: an Order paid online reports its Purchase when a Verification says Paid, which happens from a sweep or a gateway's own notification. Kept only where such a Moment is still to come, because an Order reporting at Capture has already written the same things onto its outbox row. Not part of the Order: an Order records what it needs to be fulfilled and is kept indefinitely, and a browser identifier is neither.
 _Avoid_: session, visitor record, attribution data, fingerprint
 
+**Tracking Config**:
+Everything one Page decides about its own tracking: which Destination it reports to, which of each Provider's events it fires there, and whether what it reports may name what was bought. It belongs to a single Page and is complete on its own, like a Checkout Config and an Order Complete Config, and is a third thing beside them. Every decision in it can be left unsaid: no Destination means the default for each Provider, and an event nobody has decided is whatever Settings says. Nothing in it is a figure, so it is not in the Pricing Fingerprint — switching an event off never turns away an Order somebody has half-typed.
+_Avoid_: pixel settings, tracking options, event config
+
 ### People
 
 **User**:

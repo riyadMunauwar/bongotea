@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Models\Order;
 use App\Models\Page;
 use App\Models\Payment;
@@ -13,12 +14,18 @@ use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\PricingFingerprint;
 use App\Support\PageCache\StaticPageCache;
 use Carbon\CarbonImmutable;
+use Filament\Forms\Components\Field;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Schema;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Livewire;
 use Pest\Expectation;
 use Tests\Fixtures\Payments\GatewayScript;
 use Tests\TestCase;
@@ -336,4 +343,138 @@ function orderCapturedAt(string $instant, int $subtotal = 50000, array $attribut
         'delivery_charge' => 6000,
         'created_at' => CarbonImmutable::parse($instant, 'Asia/Dhaka')->utc(),
     ], $attributes));
+}
+
+/**
+ * The beacon a served document carries: the address it posts to, and the name
+ * of the identifier it appends.
+ *
+ * Read out of the served bytes rather than built, because what is being
+ * pinned is that the Pixel and the beacon were handed the same one.
+ *
+ * @return array{address: string, identifier: string}
+ */
+function beaconIn(string $html): array
+{
+    $found = [];
+
+    expect(preg_match('/var gioBeacon = "([^"]+)" \+ encodeURIComponent\(([A-Za-z_$][A-Za-z0-9_$]*)\);/', $html, $found))
+        ->toBe(1, 'The document carries no beacon.');
+
+    return ['address' => $found[1], 'identifier' => $found[2]];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reading an admin form
+|--------------------------------------------------------------------------
+|
+| The Page form is read by more than one suite — the authoring tests and the
+| tracking ones — so the walk over a built schema lives here rather than in
+| whichever file needed it first. Everything below asks the form a Merchant
+| is actually served, never the schema classes that build it.
+|
+*/
+/**
+ * The tabs directly inside a schema or a component, in the order a merchant
+ * meets them.
+ *
+ * A `Tabs` is transparent here: it is the arrangement, not a thing on screen,
+ * so asking a Tab what tabs are inside it answers with the nested ones rather
+ * than with the container that holds them.
+ *
+ * @return list<Tab>
+ */
+function tabsInside(Schema|Component $node): array
+{
+    $schema = $node instanceof Schema ? $node : $node->getChildSchema();
+
+    $tabs = [];
+
+    foreach ($schema?->getComponents(withHidden: true) ?? [] as $component) {
+        if ($component instanceof Tabs) {
+            $tabs = [...$tabs, ...tabsInside($component)];
+
+            continue;
+        }
+
+        if ($component instanceof Tab) {
+            $tabs[] = $component;
+        }
+    }
+
+    return $tabs;
+}
+
+/**
+ * Every state path a merchant can type into somewhere under this component,
+ * however deeply it is nested.
+ *
+ * Read without the form's own root, so a path here is the one the Config is
+ * written at rather than the Livewire property the panel happens to hold the
+ * whole form in.
+ *
+ * @return list<string>
+ */
+function statePathsInside(Schema|Component $node): array
+{
+    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
+
+    $paths = [];
+
+    foreach ($schemas as $schema) {
+        foreach ($schema->getComponents(withHidden: true) as $component) {
+            if ($component instanceof Field) {
+                $paths[] = Str::after(
+                    $component->getStatePath(),
+                    $component->getRootContainer()->getStatePath().'.',
+                );
+            }
+
+            $paths = [...$paths, ...statePathsInside($component)];
+        }
+    }
+
+    return $paths;
+}
+
+/**
+ * One control a merchant types into, found by the path its value is written
+ * at.
+ *
+ * The same walk `statePathsInside()` makes, stopping at the field rather than
+ * collecting every path — so a test can ask what a control is *offering* and
+ * not only that it is on the right tab.
+ */
+function fieldInside(Schema|Component $node, string $path): ?Field
+{
+    $schemas = $node instanceof Schema ? [$node] : $node->getChildSchemas(withHidden: true);
+
+    foreach ($schemas as $schema) {
+        foreach ($schema->getComponents(withHidden: true) as $component) {
+            if ($component instanceof Field && Str::after(
+                $component->getStatePath(),
+                $component->getRootContainer()->getStatePath().'.',
+            ) === $path) {
+                return $component;
+            }
+
+            if ($found = fieldInside($component, $path)) {
+                return $found;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * The form a merchant is actually served on the edit screen, rather than the
+ * schema classes that build it — so what is asserted is what they open.
+ */
+function editFormOf(Page $page): Schema
+{
+    return Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->instance()
+        ->getSchema('form');
 }
