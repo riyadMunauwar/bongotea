@@ -25,6 +25,13 @@ class FacebookScript extends ProviderScript
 
     private const ADDRESS = 'graph.facebook.com/*';
 
+    /**
+     * How the snippet writes parameters it cannot know when the document is
+     * written: an expression over the Selection the page hands it at the
+     * moment the event fires.
+     */
+    private const LIVE_SELECTION = '/\(function \(s\) \{.*?\}\)\([A-Za-z_$][A-Za-z0-9_$]*\)/';
+
     /** Whether the outage the fake stands in for is over; see `fakeOutage()`. */
     private bool $reachable = true;
 
@@ -72,6 +79,14 @@ class FacebookScript extends ProviderScript
     public function visitEvents(): array
     {
         return [$this->pageViewEvent(), 'ViewContent'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function checkoutStartedEvents(): array
+    {
+        return ['InitiateCheckout'];
     }
 
     /**
@@ -131,6 +146,15 @@ class FacebookScript extends ProviderScript
                 'event_name' => $decoded[0] ?? null,
                 'custom_data' => $decoded[1] ?? null,
                 'event_id' => $decoded[2]['eventID'] ?? null,
+
+                /**
+                 * The call as it was written, kept beside the decoded
+                 * arguments because an event whose parameters are read at the
+                 * moment it fires has none to decode — what it will send is a
+                 * JavaScript expression, and the only thing a rendered
+                 * document can be asked is what that expression says.
+                 */
+                'source' => $arguments,
             ], fn (mixed $value): bool => $value !== null);
         }
 
@@ -138,17 +162,36 @@ class FacebookScript extends ProviderScript
     }
 
     /**
-     * The same arguments with any `eventID` the browser makes up on load
-     * read as the name it is made up under, so a call carrying one decodes
-     * as JSON like every other and `deduplicationIdOf()` answers what the
-     * browser will send under it.
+     * The same arguments with everything the browser works out for itself
+     * replaced by something JSON can hold: an `eventID` made up on load read
+     * as the name it is made up under, and a live basket read as no
+     * parameters at all — the raw call is kept beside it for what those
+     * cannot answer.
      *
-     * The snippet always writes such an identifier as a bare JavaScript
-     * name, which is why this can be a pattern and not a parser.
+     * The snippet always writes both as bare JavaScript, which is why this
+     * can be a pattern and not a parser.
      */
     private function quotingGeneratedIdentifiers(string $arguments): string
     {
+        $arguments = (string) preg_replace(self::LIVE_SELECTION, 'null', $arguments);
+
         return (string) preg_replace('/"eventID": ([A-Za-z_$][A-Za-z0-9_$]*)/', '"eventID": "$1"', $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    public function reportsLiveSelection(array $event): bool
+    {
+        return preg_match(self::LIVE_SELECTION, (string) ($event['source'] ?? '')) === 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    public function namesWhatWasBought(array $event): bool
+    {
+        return Str::contains((string) ($event['source'] ?? ''), '"contents"');
     }
 
     public function fakeAccepted(): void

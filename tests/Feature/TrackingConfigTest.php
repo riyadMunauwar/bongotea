@@ -252,7 +252,7 @@ it('stops reporting an event the page switched off, in both halves', function (P
     $html = $this->get('/'.$page->slug)->assertOk()->getContent();
 
     /** The browser is told to report what is left of the Visit and nothing else. */
-    expect(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe($kept);
+    expect(array_map($script->eventNameOf(...), $script->browserEventsIn(onLoad($html))))->toBe($kept);
 
     /** And the beacon writes the same ones, from the same reading. */
     reportLoad($page)->assertNoContent();
@@ -274,7 +274,7 @@ it('withholds the load the base code reports by itself when the page has switche
     $html = $this->get('/'.$page->slug)->assertOk()->getContent();
 
     expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
-        ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe($withoutTheLoad);
+        ->and(array_map($script->eventNameOf(...), $script->browserEventsIn(onLoad($html))))->toBe($withoutTheLoad);
 })->with('tracking providers');
 
 it('carries no beacon at all where the page reports no visit event, and still carries the page it wrote', function (ProviderScript $script) {

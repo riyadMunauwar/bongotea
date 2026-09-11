@@ -113,6 +113,23 @@ interface Provider
     public function script(Destination $destination, array $events, bool $reportsLoad): string;
 
     /**
+     * The same events with no base code around them, for a Moment the page
+     * reports after it has loaded.
+     *
+     * A visitor starting the Checkout is such a Moment: the Pixel was
+     * initialised when the page ran, and what happens later is the telling
+     * alone. The caller runs this where the Moment happens; when that is, and
+     * what it hands the events to report about, is `TrackingSnippet`'s and
+     * never a Provider's.
+     *
+     * Empty for a Destination the browser cannot address, exactly as
+     * `script()` is.
+     *
+     * @param  list<BrowserEvent>  $events
+     */
+    public function calls(Destination $destination, array $events): string;
+
+    /**
      * One outbox row as this Provider's wire format: exactly what `send()`
      * puts in a batch for it.
      *

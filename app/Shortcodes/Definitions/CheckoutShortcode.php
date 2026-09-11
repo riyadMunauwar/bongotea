@@ -28,6 +28,18 @@ class CheckoutShortcode implements ShortcodeDefinition
 {
     public const NAME = 'checkout';
 
+    /**
+     * The one thing the island says about itself to the rest of the page: a
+     * visitor has started filling the Checkout, and here is what they have
+     * ticked.
+     *
+     * Named here rather than wherever it is listened for, because it is the
+     * island's own announcement — a Page carrying no listener raises it into
+     * nothing, and the island must never learn who is listening. A Pixel is
+     * what listens today; see `.ai/rules/tracking.md`.
+     */
+    public const STARTED_EVENT = 'gio:checkout-started';
+
     public function name(): string
     {
         return self::NAME;
@@ -69,6 +81,9 @@ class CheckoutShortcode implements ShortcodeDefinition
 
         return view('shortcodes.checkout', [
             'page' => $page,
+
+            /** What the island calls out when a visitor starts filling it in. */
+            'startedEvent' => self::STARTED_EVENT,
 
             /** Everything the Page sells, each with a quantity of its own. */
             'products' => $products,

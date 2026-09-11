@@ -626,7 +626,7 @@
                     <div class="gio-checkout-products">
                         @foreach ($products as $product)
                             <div class="gio-checkout-product{{ $picksProducts ? ' gio-checkout-pickable' : '' }}"
-                                 data-gio-line data-unit-price="{{ $product->price }}">
+                                 data-gio-line data-product-id="{{ $product->getKey() }}" data-unit-price="{{ $product->price }}">
                                 @if ($picksProducts)
                                     {{--
                                         Ticked where the merchant said so, and
@@ -797,7 +797,7 @@
                 --}}
                 @foreach ($products as $product)
                     <input type="hidden" name="quantities[{{ $product->getKey() }}]" value="1"
-                           data-gio-line data-unit-price="{{ $product->price }}">
+                           data-gio-line data-product-id="{{ $product->getKey() }}" data-unit-price="{{ $product->price }}">
                 @endforeach
             @endif
 
@@ -853,7 +853,16 @@
                             way. No question restyles itself, so no wrapper
                             carries a style of its own.
                         --}}
-                        <div class="gio-checkout-field{{ $layout->pairsQuestions() ? $field->width->classSuffix() : '' }}">
+                        {{--
+                            Marked as a question so the script can tell the
+                            moment a customer starts answering one from a tap
+                            on a product's box or a quantity stepper, which is
+                            arranging an order and not filling in the form.
+                            On the wrapper rather than on each control: one
+                            attribute serves every kind of field, including a
+                            radio group whose controls are several.
+                        --}}
+                        <div class="gio-checkout-field{{ $layout->pairsQuestions() ? $field->width->classSuffix() : '' }}" data-gio-field>
                             {{--
                                 A radio group and a checkbox carry their own
                                 wording — a legend over the choices, and the
@@ -1162,6 +1171,19 @@
     var ACCORDION = 'gio-checkout-accordion';
 
     /*
+     * What this script calls out to the page when a customer first touches one
+     * of the questions, and whether it has done so yet.
+     *
+     * The one thing the island says about itself to anything outside it. What
+     * listens, if anything does, is none of its business: a page with a pixel
+     * on it hears this and reports a moment, and a page without one hears
+     * nothing happen.
+     */
+    var CHECKOUT_STARTED = @json($startedEvent);
+
+    var startedFilling = false;
+
+    /*
      * What a shut accordion header says about the choice made inside it, and
      * the arrows either header wears. English alone, like the sentences
      * above: these are the script's own words rather than the merchant's,
@@ -1173,10 +1195,21 @@
     var OPEN_CHEVRON = '▲';
     var SHUT_CHEVRON = '▼';
 
+    /*
+     * What a merchant's own page and an ad platform both want in the end: the
+     * figure, in whole currency rather than in the minor units everything here
+     * counts in. Rounded to the currency's own places, because a division by a
+     * power of ten is the one arithmetic a browser can hand back a trailing
+     * digit from, and a price is not a place to show one.
+     */
+    function major(form, minorUnits) {
+        var decimals = parseInt(form.dataset.currencyDecimals, 10) || 0;
+        return parseFloat((minorUnits / Math.pow(10, decimals)).toFixed(decimals));
+    }
+
     function money(form, minorUnits) {
         var decimals = parseInt(form.dataset.currencyDecimals, 10) || 0;
-        var value = minorUnits / Math.pow(10, decimals);
-        return form.dataset.currencySymbol + value.toFixed(decimals);
+        return form.dataset.currencySymbol + major(form, minorUnits).toFixed(decimals);
     }
 
     /*
@@ -1208,17 +1241,35 @@
     }
 
     /*
-     * What one line comes to at its current quantity, from the price rendered
-     * into it. Read off the line rather than off a single price on the form:
-     * a page may sell several products, each at its own price and its own
-     * quantity. This is what the line's own total shows, ticked or not.
+     * How many of this line the customer is ordering, and what one of them
+     * costs. Both read off the line rather than off a single figure on the
+     * form: a page may sell several products, each at its own price and its
+     * own quantity.
      */
-    function lineAmount(line) {
-        var unitPrice = parseInt(line.dataset.unitPrice, 10) || 0;
+    function quantityOf(line) {
         var input = line.querySelector('[data-gio-quantity]');
-        var quantity = Math.max(1, parseInt(input ? input.value : '', 10) || 1);
 
-        return unitPrice * quantity;
+        return Math.max(1, parseInt(input ? input.value : '', 10) || 1);
+    }
+
+    function unitPriceOf(line) {
+        return parseInt(line.dataset.unitPrice, 10) || 0;
+    }
+
+    /*
+     * Whether this line is part of the order: everything is, on a form that
+     * asks the customer to tick nothing, and only what they ticked on one
+     * that does.
+     */
+    function ticked(line) {
+        var pick = line.querySelector('[data-gio-pick]');
+
+        return !pick || pick.checked;
+    }
+
+    /* What one line comes to at its current quantity, which is what the line's own total shows, ticked or not. */
+    function lineAmount(line) {
+        return unitPriceOf(line) * quantityOf(line);
     }
 
     /*
@@ -1227,11 +1278,76 @@
      * ordering.
      */
     function lineSubtotal(line) {
-        var pick = line.querySelector('[data-gio-pick]');
+        return ticked(line) ? lineAmount(line) : 0;
+    }
 
-        if (pick && !pick.checked) { return 0; }
+    /*
+     * What the customer currently has selected: a line per product they are
+     * ordering, how many of each, and what those products come to.
+     *
+     * Off the same line markers and the same two readings — `ticked` and
+     * `lineAmount` — the summary is totalled from, so what leaves this page
+     * about what a customer is buying and what the page shows them can never
+     * come from two different walks of the form.
+     *
+     * The products alone. What it costs to get the parcel to the door is not
+     * something the customer has selected, and the figure on screen carries
+     * it because the figure on screen is what the courier collects.
+     *
+     * Named in this page's own words and in no platform's — whatever listens
+     * translates. In whole currency rather than minor units, because this is
+     * handed over the page's edge and nothing outside knows what a minor unit
+     * is here.
+     */
+    function selectionOf(form) {
+        var lines = [];
+        var count = 0;
+        var value = 0;
 
-        return lineAmount(line);
+        form.querySelectorAll('[data-gio-line]').forEach(function (line) {
+            if (!ticked(line)) { return; }
+
+            lines.push({
+                id: line.dataset.productId,
+                quantity: quantityOf(line),
+                unitPrice: major(form, unitPriceOf(line))
+            });
+
+            count += quantityOf(line);
+            value += lineAmount(line);
+        });
+
+        return { value: major(form, value), count: count, lines: lines };
+    }
+
+    /*
+     * Say once, and only once, that the customer has started filling the form.
+     *
+     * Raised on the document rather than acted on here, because this script
+     * knows how a checkout is drawn and nothing about who wants to hear that
+     * it was started. A page carrying no listener raises it into nothing.
+     *
+     * Once per page load: a customer who answers a question, wanders off to
+     * read the page and comes back to answer another has not started a second
+     * checkout. Tapping a product's box or a quantity stepper is arranging an
+     * order rather than filling in the form, and is deliberately not it —
+     * which is why the marker is on the questions and nowhere else, and why
+     * this is reached from a touch rather than from a change.
+     *
+     * Nothing here may raise. It runs from a listener on a merchant's own
+     * page, where a red line in the console would be the only thing anybody
+     * ever saw of it.
+     */
+    function noteStarted(form, target) {
+        if (startedFilling || !target || !target.closest || !target.closest('[data-gio-field]')) { return; }
+
+        startedFilling = true;
+
+        try {
+            document.dispatchEvent(new CustomEvent(CHECKOUT_STARTED, { detail: selectionOf(form) }));
+        } catch (e) {
+            /* A browser with no CustomEvent reports nothing and orders fine. */
+        }
     }
 
     /* The figure the customer hands over in cash, kept truthful as they type. */
@@ -1241,10 +1357,9 @@
 
         form.querySelectorAll('[data-gio-line]').forEach(function (line) {
             var lineTotal = line.querySelector('[data-gio-line-total]');
-            var pick = line.querySelector('[data-gio-pick]');
 
             if (lineTotal) { lineTotal.textContent = money(form, lineAmount(line)); }
-            if (!pick || pick.checked) { count += 1; }
+            if (ticked(line)) { count += 1; }
 
             subtotal += lineSubtotal(line);
         });
@@ -1808,6 +1923,19 @@
     document.addEventListener('input', function (event) {
         var form = formFor(event);
         if (form) { retotal(form); }
+    });
+
+    /*
+     * Touching a question is what counts, not answering one: a customer who
+     * taps into the name box has started filling the form whether or not they
+     * type anything. `focusin` rather than `focus`, because only the former
+     * reaches a listener on the document — and this one signal rather than
+     * `input` beside it, because a browser autofilling a form nobody has
+     * touched has started nothing.
+     */
+    document.addEventListener('focusin', function (event) {
+        var form = formFor(event);
+        if (form) { noteStarted(form, event.target); }
     });
 
     /*

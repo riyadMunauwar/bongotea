@@ -114,7 +114,9 @@ class TrackingPreview
      *
      * A Moment about a page load carries no Order — its server copy reports
      * no money and no basket — so the row is built the way the recorder
-     * builds it rather than given the sample Order regardless.
+     * builds it rather than given the sample Order regardless. A visitor
+     * starting the Checkout has no Order either, and carries instead what
+     * they had ticked, which is previewed as the Page's own Products.
      */
     private function sampleRow(
         Destination $destination,
@@ -138,6 +140,16 @@ class TrackingPreview
             'user_agent' => 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
             'click_ids' => $this->clickIds($destination),
             'content_detail' => $contentDetail,
+
+            /**
+             * What a visitor starting the form would have ticked: this
+             * Page's Products, one of each, and worth what they come to —
+             * the Delivery Charge the Order's total carries is an
+             * arrangement nobody has agreed to at that point.
+             */
+            'selection' => $moment === TrackingMoment::CheckoutStarted
+                ? Selection::forLines($this->sampleLines($page))
+                : null,
         ]);
 
         /** Set rather than saved: a driver reads `$event->order`, and a preview writes nothing. */

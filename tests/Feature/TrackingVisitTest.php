@@ -66,7 +66,7 @@ describe('what a served page tells the browser to report', function () {
 
         expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue();
 
-        $events = $script->browserEventsIn($html);
+        $events = $script->browserEventsIn(onLoad($html));
 
         /** The Moment's own events, the load among them and reported once, not a bare one beside it. */
         expect(array_map($script->eventNameOf(...), $events))->toBe($script->visitEvents());
@@ -118,7 +118,8 @@ describe('what a served page tells the browser to report', function () {
      */
     it('posts the visit without waiting for anyone', function (ProviderScript $script) {
         expect(visitedPage($script))
-            ->toContain('navigator.sendBeacon(gioBeacon)')
+            ->toContain('navigator.sendBeacon(address)')
+            ->toContain('gioReport(gioBeacon)')
             ->toContain('keepalive: true');
     })->with('tracking providers');
 

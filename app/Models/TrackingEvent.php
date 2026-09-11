@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
+use App\Support\Tracking\AsSelection;
 use Database\Factories\TrackingEventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_agent',
     'click_ids',
     'content_detail',
+    'selection',
     'state',
 ])]
 class TrackingEvent extends Model
@@ -71,6 +73,13 @@ class TrackingEvent extends Model
              * change what a queued event says.
              */
             'content_detail' => 'boolean',
+
+            /**
+             * What was being bought when the Moment happened, where there is
+             * no Order to read it from. Null on every row that has one: an
+             * Order holds the same answer and holds it better.
+             */
+            'selection' => AsSelection::class,
 
             'attempts' => 'integer',
         ];

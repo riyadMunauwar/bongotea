@@ -43,6 +43,14 @@ abstract class ProviderScript
     abstract public function pageViewEvent(): string;
 
     /**
+     * Everything this Provider is told when a visitor starts filling in the
+     * Checkout, in the order it is reported.
+     *
+     * @return list<string>
+     */
+    abstract public function checkoutStartedEvents(): array;
+
+    /**
      * Everything this Provider is told when a Page is loaded, in the order
      * it is reported — the load itself among them, since a landing Page is a
      * page view and a look at the thing being sold at once.
@@ -80,6 +88,11 @@ abstract class ProviderScript
      * in order, each in the same shape `sentEvents()` hands back — so the
      * readers below answer for the browser's copy exactly as they do for the
      * server's, and one test body can hold the two against each other.
+     *
+     * Each also carries the call as it was written, under `source`. An event
+     * whose parameters are worked out at the moment it fires has none to read
+     * back in a delivered event's shape, and what that expression says is the
+     * only thing a rendered document can be asked about it.
      *
      * @return list<array<string, mixed>>
      */
@@ -149,6 +162,30 @@ abstract class ProviderScript
      * @param  array<string, mixed>  $event
      */
     abstract public function deduplicationIdOf(array $event): ?string;
+
+    /**
+     * Whether this browser event works out what it reports at the moment it
+     * fires, rather than carrying what the document already knew.
+     *
+     * Only a rendered document can be asked this, and only a Moment that
+     * happens after the load answers yes: one file is served to every
+     * visitor, so what a particular one has ticked cannot be written into it.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    abstract public function reportsLiveSelection(array $event): bool;
+
+    /**
+     * Whether this event names what was bought, as against carrying the money
+     * alone — the thing a Page suppressing its content detail withholds.
+     *
+     * Answered for a browser event whose parameters are written into the
+     * document and for one that works them out as it fires alike, so one test
+     * body can hold a suppression against both copies of the same event.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    abstract public function namesWhatWasBought(array $event): bool;
 
     /** The Merchant's own reference for the Order. @param array<string, mixed> $event */
     abstract public function orderReferenceOf(array $event): ?string;

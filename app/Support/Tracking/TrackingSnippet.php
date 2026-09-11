@@ -6,6 +6,7 @@ use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Page;
+use App\Shortcodes\Definitions\CheckoutShortcode;
 
 /**
  * The browser's half of the same events the outbox carries, as the one
@@ -18,10 +19,11 @@ use App\Models\Page;
  * two.
  *
  * What is built here is the element, the consent hook, the identifier a Page
- * load is deduplicated on, the beacon that carries that load to the server,
- * and the choice of what fires. What goes inside it is each Provider's own
- * `script()`: one base code per Destination, and nothing in this class ever
- * names an event of any platform's.
+ * load is deduplicated on, the beacons that carry what only the browser saw
+ * to the server, and the choice of what fires and when. What goes inside it
+ * is each Provider's own `script()` and `calls()`: one base code per
+ * Destination, and nothing in this class ever names an event of any
+ * platform's.
  *
  * Where a page reports and what it reports there is `TrackingPlans::forPage()`,
  * the same answer the recorder takes, so the two halves cannot disagree
@@ -46,6 +48,24 @@ class TrackingSnippet
      * being handed the same one is the whole of the deduplication.
      */
     private const LOAD_IDENTIFIER = 'gioLoadId';
+
+    /**
+     * What the snippet calls the Selection a visitor currently has in front
+     * of them, handed over by the Checkout island at the moment they start
+     * filling the form.
+     *
+     * A name rather than a value for the reason the identifier above is one:
+     * a published Page is one file served to everyone, and what a particular
+     * visitor has ticked is not knowable when the document is written.
+     */
+    private const SELECTION = 'gioSelection';
+
+    /**
+     * Whether the Checkout Started Moment has already been reported for this
+     * page load. A Moment that happens once per load is reported once per
+     * load, whatever the form does afterwards.
+     */
+    private const STARTED = 'gioStarted';
 
     /**
      * Where the snippet inserts itself, in the order it tries.
@@ -95,8 +115,9 @@ class TrackingSnippet
 
     /**
      * The Pixel a published Page carries: an identifier for this load, each
-     * Destination's base code reporting the Visit, and the beacon that tells
-     * the server the same thing.
+     * Destination's base code reporting the Visit, what to report should the
+     * visitor start filling the Checkout, and the beacons that tell the
+     * server the same things.
      *
      * Nothing at all where the Page reports nowhere. A Page with no
      * Destination is injected with nothing and serves the document it has
@@ -107,10 +128,12 @@ class TrackingSnippet
      * still gets the beacon: the server half stands alone, and the rows it
      * writes are what the Merchant is owed once the credential is pasted.
      *
-     * The beacon is carried only where some Destination still reports a Visit
-     * event. A Page whose Visit events are all switched off would write no
-     * row for the load whatever the beacon said, and a request that can only
-     * be discarded is not one to put on the path of an ad click.
+     * Each beacon is carried only where some Destination still reports the
+     * Moment it is about. A Page whose Visit events are all switched off
+     * would write no row for the load whatever the beacon said, and a
+     * request that can only be discarded is not one to put on the path of an
+     * ad click; the same holds for the listener a Checkout Started is
+     * reported from.
      */
     public function forPage(Page $page): string
     {
@@ -121,13 +144,17 @@ class TrackingSnippet
         }
 
         $scripts = [];
+        $started = [];
         $reportsVisit = false;
+        $reportsStart = false;
 
         foreach ($plan->destinations() as $destination) {
             $driver = $destination->driver();
             $events = $plan->eventsFor($destination, TrackingMoment::Visit);
+            $starts = $plan->eventsFor($destination, TrackingMoment::CheckoutStarted);
 
             $reportsVisit = $reportsVisit || $events !== [];
+            $reportsStart = $reportsStart || $starts !== [];
 
             $script = $driver->script(
                 $destination,
@@ -138,17 +165,36 @@ class TrackingSnippet
             if ($script !== '') {
                 $scripts[] = $script;
             }
+
+            $calls = $driver->calls($destination, $this->checkoutStarted($starts, $plan->sendsContentDetail()));
+
+            if ($calls !== '') {
+                $started[] = $calls;
+            }
         }
 
-        /** No script to run and no load to report is the document as it was. */
-        if ($scripts === [] && ! $reportsVisit) {
+        /** No script to run and nothing to report is the document as it was. */
+        if ($scripts === [] && ! $reportsVisit && ! $reportsStart) {
             return '';
         }
 
         return $this->element([
             $this->identifier(),
+
+            /** The one sender both beacons go through, and nothing at all where neither is carried. */
+            ...($reportsVisit || $reportsStart ? [$this->reporter()] : []),
+
             ...$scripts,
-            ...($reportsVisit ? [$this->beacon($page)] : []),
+
+            /**
+             * The listener is registered before the Visit is posted, so that
+             * a visitor who reaches the form while the first beacon is still
+             * in flight is not missed. It costs nothing to register early and
+             * a Moment to register late.
+             */
+            ...($reportsStart ? [$this->whenCheckoutStarts($page, $started)] : []),
+
+            ...($reportsVisit ? [$this->reportVisit($page)] : []),
         ]);
     }
 
@@ -208,6 +254,34 @@ class TrackingSnippet
     }
 
     /**
+     * The Checkout Started as the browser is told to report it: each event
+     * this Page reports for the Moment, about whatever the visitor has ticked
+     * at the moment they touch the first question, deduplicated against the
+     * copy the beacon is about to write.
+     *
+     * The same identifier the load carries. A Moment that happens once per
+     * page load is counted once per page load, and a Provider deduplicates an
+     * event name against its own — so the load's own events and this one
+     * sharing a string is not a collision, it is the two of them agreeing
+     * which load they belong to.
+     *
+     * @param  list<string>  $events
+     * @return list<BrowserEvent>
+     */
+    private function checkoutStarted(array $events, bool $contentDetail): array
+    {
+        return array_map(
+            fn (string $event): BrowserEvent => BrowserEvent::forSelection(
+                $event,
+                self::LOAD_IDENTIFIER,
+                self::SELECTION,
+                $contentDetail,
+            ),
+            $events,
+        );
+    }
+
+    /**
      * The Purchase this Destination reports for the Order, or nothing where
      * this browser is not the one that placed it.
      *
@@ -254,45 +328,119 @@ class TrackingSnippet
     }
 
     /**
-     * The server's copy of the same Visit, posted the moment the page runs.
+     * How the server is told anything at all: one sender, used by every
+     * Moment the browser is the only witness to.
      *
      * `sendBeacon` first, because it survives the visitor leaving for the
      * next page, and a `keepalive` fetch for a browser without it. Both are
      * fire-and-forget: nothing waits on the answer, the answer is empty, and
      * a refusal — a rate limit, an outage — costs the redundancy and not the
-     * event, because the Pixel above has already fired.
-     *
-     * What it says rides in the address. Every alternative needs either an
-     * API the older webviews here do not have (`URLSearchParams`) or a
-     * content type `sendBeacon` will not set from a string, and three short
-     * public values in a query string cost nothing.
+     * event, because the Pixel has already fired.
      *
      * Nothing here may raise. `sendBeacon` returns false where a browser
      * declines and throws outright in a few, and this runs in the Merchant's
      * `<head>`: an unhandled raise would leave a red line in the console of
      * a page that is working, and stop the fallback from being tried at all.
      */
-    private function beacon(Page $page): string
+    private function reporter(): string
     {
-        $address = $this->encode(route('tracking.report').'?'.http_build_query([
-            'slug' => $page->slug,
-            'moment' => TrackingMoment::Visit->value,
-        ]).'&id=');
+        return <<<'JS'
+        function gioReport(address) {
+            var gioReported = false;
 
+            try {
+                gioReported = !!(navigator.sendBeacon && navigator.sendBeacon(address));
+            } catch (e) {}
+
+            if (!gioReported && window.fetch) {
+                fetch(address, {method: 'POST', keepalive: true, credentials: 'omit'}).catch(function () {});
+            }
+        }
+        JS;
+    }
+
+    /**
+     * The server's copy of the same Visit, posted the moment the page runs.
+     *
+     * What it says rides in the address. Every alternative needs either an
+     * API the older webviews here do not have (`URLSearchParams`) or a
+     * content type `sendBeacon` will not set from a string, and three short
+     * public values in a query string cost nothing.
+     */
+    private function reportVisit(Page $page): string
+    {
+        $address = $this->address($page, TrackingMoment::Visit);
         $name = self::LOAD_IDENTIFIER;
 
         return <<<JS
         var gioBeacon = {$address} + encodeURIComponent({$name});
-        var gioReported = false;
 
-        try {
-            gioReported = !!(navigator.sendBeacon && navigator.sendBeacon(gioBeacon));
-        } catch (e) {}
-
-        if (!gioReported && window.fetch) {
-            fetch(gioBeacon, {method: 'POST', keepalive: true, credentials: 'omit'}).catch(function () {});
-        }
+        gioReport(gioBeacon);
         JS;
+    }
+
+    /**
+     * What runs when the Checkout island says a visitor has started filling
+     * the form: the Pixel's copy of the Moment, and the server's.
+     *
+     * The island raises the event and says what is ticked; nothing here
+     * reads the form, and nothing in the form knows this is listening — which
+     * is why the event is named where it is raised and read from there. A
+     * Page whose Merchant never wrote a Checkout into it raises it never and
+     * reports nothing, which is right: there was no Checkout to start.
+     *
+     * Once per page load, whatever the form does afterwards: a visitor who
+     * leaves the form and comes back to it has not started a second checkout,
+     * and the copy the beacon writes lands on the outbox's unique index
+     * anyway.
+     *
+     * The Selection is taken as the island hands it over, and a detail that
+     * is missing reads as an empty one rather than throwing: this runs inside
+     * a listener on the Merchant's own page, and a raise here would be a red
+     * line in the console of a page that is working.
+     *
+     * @param  list<string>  $scripts  each Provider's calls for the Moment
+     */
+    private function whenCheckoutStarts(Page $page, array $scripts): string
+    {
+        $address = $this->address($page, TrackingMoment::CheckoutStarted);
+        $identifier = self::LOAD_IDENTIFIER;
+        $selection = self::SELECTION;
+        $started = self::STARTED;
+        $event = $this->encode(CheckoutShortcode::STARTED_EVENT);
+        $body = $this->indented($this->indented(implode("\n\n", $scripts)));
+
+        return <<<JS
+        var {$selection} = null;
+        var {$started} = false;
+
+        document.addEventListener({$event}, function (e) {
+            if ({$started}) {
+                return;
+            }
+
+            {$started} = true;
+            {$selection} = (e && e.detail) || {value: 0, count: 0, lines: []};
+
+        {$body}
+
+            gioReport({$address} + encodeURIComponent({$identifier}) + '&items=' + encodeURIComponent(
+                ({$selection}.lines || []).map(function (l) { return l.id + ':' + l.quantity; }).join(',')
+            ));
+        });
+        JS;
+    }
+
+    /**
+     * Where a Moment is reported to, up to but not including the identifier
+     * it is deduplicated on — which the browser makes up and appends itself.
+     */
+    private function address(Page $page, TrackingMoment $moment): string
+    {
+        return $this->encode(route('tracking.report').'?'.http_build_query([
+            'slug' => $page->slug,
+            'moment' => $moment->value,
+        ]).'&id=');
     }
 
     /**

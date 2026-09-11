@@ -43,6 +43,18 @@ final class BrowserEvent
 
         /** Whether the deduplication id above is JavaScript naming a value rather than the value. */
         private readonly bool $browserGenerated,
+
+        /**
+         * JavaScript naming the Selection this event reports, where the
+         * browser is the only one that knows it yet — and null where the
+         * document already knows what the event is about, or where it is
+         * about nothing.
+         *
+         * Carried the way the deduplication id above is, and for the same
+         * reason: a published Page is one file served to everyone, so what a
+         * particular visitor has ticked cannot be written into it.
+         */
+        public readonly ?string $selectionSource = null,
     ) {}
 
     /**
@@ -69,6 +81,23 @@ final class BrowserEvent
     public static function forLoad(string $event, string $identifier): self
     {
         return new self($event, $identifier, null, contentDetail: true, browserGenerated: true);
+    }
+
+    /**
+     * An event about what a visitor currently has ticked: no Order yet, and
+     * a basket the document cannot know, so both the deduplication id and the
+     * parameters are JavaScript naming what the browser worked out.
+     *
+     * Deduplicated on the identifier the browser made up for this page load,
+     * like the load itself — a Moment that happens once per load is counted
+     * once per load, and the copy the beacon writes carries the same string.
+     *
+     * @param  string  $identifier  JavaScript naming the identifier, not the identifier
+     * @param  string  $selection  JavaScript naming the Selection, not the Selection
+     */
+    public static function forSelection(string $event, string $identifier, string $selection, bool $contentDetail): self
+    {
+        return new self($event, $identifier, null, $contentDetail, browserGenerated: true, selectionSource: $selection);
     }
 
     /**

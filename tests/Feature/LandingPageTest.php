@@ -1514,7 +1514,7 @@ it('totals a checkout with its product list hidden off the same line markers as 
      * one it is looking at — and the rendered subtotal is already the price of
      * everything sold.
      */
-    expect($html)->toContain('data-gio-line data-unit-price="'.$product->price.'"')
+    expect($html)->toContain('data-gio-line data-product-id="'.$product->getKey().'" data-unit-price="'.$product->price.'"')
         ->and($html)->toContain('<span data-gio-subtotal>'.Money::format($product->price).'</span>');
 });
 
@@ -2349,7 +2349,7 @@ it('leaves a question at full width when the page says nothing about it', functi
      * another, and the markup is the markup those pages already carry.
      */
     expect(checkoutMarkup($this->get('/promo')->getContent()))
-        ->toContain('<div class="gio-checkout-field">')
+        ->toContain('<div class="gio-checkout-field" data-gio-field>')
         ->not->toContain('gio-checkout-field-half');
 });
 

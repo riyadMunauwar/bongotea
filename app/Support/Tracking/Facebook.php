@@ -6,7 +6,6 @@ use App\Enums\TrackingMoment;
 use App\Enums\TrackingProvider;
 use App\Models\Destination;
 use App\Models\Order;
-use App\Models\OrderLine;
 use App\Models\TrackingEvent;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
@@ -203,11 +202,29 @@ class Facebook implements Provider
             $lines[] = $this->call('track', self::PAGE_VIEW);
         }
 
-        foreach ($events as $event) {
-            $lines[] = $this->track($event);
+        $calls = $this->calls($destination, $events);
+
+        return implode("\n", $calls === '' ? $lines : [...$lines, $calls]);
+    }
+
+    /**
+     * The same calls with no base code around them, for an event the page
+     * reports after it has loaded.
+     *
+     * A Pixel is initialised once and then told things, so a Moment that
+     * happens later — a visitor starting the Checkout — is these calls alone,
+     * run where it happens. Empty for a Destination the browser cannot
+     * address, exactly as the base code is: there is nothing to tell.
+     *
+     * @param  list<BrowserEvent>  $events
+     */
+    public function calls(Destination $destination, array $events): string
+    {
+        if (blank($destination->dataset)) {
+            return '';
         }
 
-        return implode("\n", $lines);
+        return implode("\n", array_map($this->track(...), $events));
     }
 
     /**
@@ -229,24 +246,78 @@ class Facebook implements Provider
     /**
      * One tracked event: what it reports, and the `eventID` its server copy
      * carries too.
-     *
-     * An event about no Order reports no parameters — as an empty object
-     * rather than an empty array, since `fbq` reads its third argument as
-     * one, and because that is exactly what its server copy sends.
      */
     private function track(BrowserEvent $event): string
     {
-        $parameters = $event->order === null
-            ? $this->encode(new stdClass)
-            : $this->encode($this->customData($event->order, $event->contentDetail));
-
         return sprintf(
             'fbq(%s, %s, %s, {"eventID": %s});',
             $this->encode('track'),
             $this->encode($event->event),
-            $parameters,
+            $this->parameters($event),
             $event->deduplicationIdSource(),
         );
+    }
+
+    /**
+     * What this event reports, as JavaScript.
+     *
+     * Three shapes, and the server copy of each sends the same thing. An
+     * event about an Order reports the Order, written out at render time
+     * because the document already knows it. An event about what a visitor
+     * currently has ticked reports an expression, because the document
+     * cannot know it: one file is served to everyone, and the answer is
+     * whatever the form says at the moment the Moment happens. An event
+     * about neither reports no parameters — as an empty object rather than
+     * an empty array, since `fbq` reads its third argument as one.
+     */
+    private function parameters(BrowserEvent $event): string
+    {
+        if ($event->order !== null) {
+            return $this->encode($this->customData(
+                Selection::forOrder($event->order),
+                $event->contentDetail,
+                $event->order->order_number,
+            ));
+        }
+
+        if ($event->selectionSource !== null) {
+            return $this->customDataSource($event->selectionSource, $event->contentDetail);
+        }
+
+        return $this->encode(new stdClass);
+    }
+
+    /**
+     * `custom_data` for a Selection the browser is the only one that knows
+     * yet, as an expression over the Selection the snippet hands it.
+     *
+     * The Selection arrives in our own terms — a value, a count, and a line
+     * per Product with its quantity and its unit price — and this is where it
+     * becomes Meta's, exactly as `customData()` is for the server copy. The
+     * two are written beside each other for that reason: a key added to one
+     * and not the other is two copies of one event disagreeing about what it
+     * was.
+     *
+     * There is no `order_id`, because there is no Order: the visitor has
+     * started filling the form and nothing has been captured.
+     *
+     * @param  string  $selection  JavaScript naming the Selection, not the Selection
+     */
+    private function customDataSource(string $selection, bool $contentDetail): string
+    {
+        $line = 'function (l) { return {"id": l.id, "quantity": l.quantity, "item_price": l.unitPrice}; }';
+
+        $fields = array_filter([
+            '"value": s.value',
+            '"currency": '.$this->encode($this->currency()),
+            $contentDetail ? '"content_type": '.$this->encode(self::CONTENT_TYPE) : null,
+            $contentDetail ? '"contents": (s.lines || []).map('.$line.')' : null,
+            $contentDetail ? '"content_ids": (s.lines || []).map(function (l) { return l.id; })' : null,
+            '"num_items": s.count',
+            '"delivery_category": '.$this->encode(self::DELIVERY_CATEGORY),
+        ], fn (?string $field): bool => $field !== null);
+
+        return '(function (s) { return {'.implode(', ', $fields).'}; })('.$selection.')';
     }
 
     /**
@@ -327,13 +398,21 @@ class Facebook implements Provider
     {
         $order = $event->order;
 
+        /**
+         * What was bought: the Order where the row has one, and what the row
+         * froze at the Moment where it has not — a visitor who started the
+         * Checkout had ticked something, and there was no Order yet to hold
+         * it. Nothing at all for a page load, which reports no money.
+         */
+        $selection = $order === null ? $event->selection : Selection::forOrder($order);
+
         $payload = array_filter([
             'event_name' => $event->event,
             'event_time' => $event->occurred_at->getTimestamp(),
             'event_id' => $event->deduplication_id,
             'event_source_url' => $event->source_url,
             'action_source' => self::ACTION_SOURCE,
-            'custom_data' => $order === null ? [] : $this->customData($order, $event->content_detail),
+            'custom_data' => $selection === null ? [] : $this->customData($selection, $event->content_detail, $order?->order_number),
         ], fn (mixed $value): bool => $value !== null && $value !== []);
 
         /**
@@ -394,10 +473,11 @@ class Facebook implements Provider
     /**
      * What was bought and for how much.
      *
-     * The value is the Order's total, which already carries the Delivery
-     * Charge — the same figure the Merchant's own Dashboard calls Sales, so
-     * the two never disagree. The currency is the installation's, read from
-     * Settings rather than from config.
+     * The Selection already says both in our own terms, and this is only the
+     * translation: for an Order its value is the total, which carries the
+     * Delivery Charge — the same figure the Merchant's own Dashboard calls
+     * Sales, so the two never disagree. The currency is the installation's,
+     * read from Settings rather than from config.
      *
      * A Page may withhold the content detail — what was bought, by name and
      * by id — and still report the money. That is what a Merchant selling
@@ -406,39 +486,36 @@ class Facebook implements Provider
      * up, and no product name leaves the installation. The count and the
      * delivery category stay: neither says what the parcel holds.
      *
+     * @param  ?string  $orderNumber  the Merchant's own reference, where a Moment has an Order behind it
      * @return array<string, mixed>
      */
-    private function customData(Order $order, bool $contentDetail): array
+    private function customData(Selection $selection, bool $contentDetail, ?string $orderNumber): array
     {
-        $lines = $order->lines;
+        $lines = $selection->lines;
 
         return array_filter([
-            'value' => Money::toMajor($order->total),
-            'currency' => Str::upper(app(GeneralSettings::class)->currencyCode),
+            'value' => Money::toMajor($selection->value),
+            'currency' => $this->currency(),
             'content_type' => $contentDetail ? self::CONTENT_TYPE : null,
-            'contents' => $contentDetail ? $lines->map(fn (OrderLine $line): array => [
-                'id' => self::contentId($line),
-                'quantity' => $line->quantity,
-                'item_price' => Money::toMajor($line->unit_price),
-            ])->values()->all() : null,
-            'content_ids' => $contentDetail ? $lines->map(self::contentId(...))->values()->all() : null,
+            'contents' => $contentDetail ? array_map(fn (array $line): array => [
+                'id' => $line['id'],
+                'quantity' => $line['quantity'],
+                'item_price' => Money::toMajor($line['unit_price']),
+            ], $lines) : null,
+            'content_ids' => $contentDetail ? array_column($lines, 'id') : null,
 
             /** The order number: the same string the event deduplicates on, so Events Manager reads as the Merchant's own admin does. */
-            'order_id' => $order->order_number,
+            'order_id' => $orderNumber,
 
-            'num_items' => (int) $lines->sum('quantity'),
+            'num_items' => $selection->quantity(),
             'delivery_category' => self::DELIVERY_CATEGORY,
         ], fn (mixed $value): bool => $value !== null);
     }
 
-    /**
-     * A line's Product as Meta identifies it: the Product's id while the
-     * Product exists, and the name snapshotted on the line otherwise, so a
-     * catalogue match survives a deletion as far as it can.
-     */
-    private static function contentId(OrderLine $line): string
+    /** The installation's currency, as Meta spells one. */
+    private function currency(): string
     {
-        return (string) ($line->product_id ?? $line->product_name);
+        return Str::upper(app(GeneralSettings::class)->currencyCode);
     }
 
     /**

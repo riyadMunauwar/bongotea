@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Enums\TrackingMoment;
 use App\Models\Page;
 use App\Models\TrackingContext;
+use App\Support\Settings\GeneralSettings;
 use App\Support\Tracking\MomentRecorder;
+use App\Support\Tracking\Selection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
@@ -40,6 +42,21 @@ class TrackingController extends Controller
      * to prevent.
      */
     private const MAX_IDENTIFIER_LENGTH = 100;
+
+    /**
+     * The longest list of ticked Products accepted, and the most pairs read
+     * out of it.
+     *
+     * Both are ceilings on the work a hand-made request can ask for rather
+     * than rules about a Page: what a Page actually sells is settled below by
+     * reading the Products back off it, so a list naming a hundred ids adds no
+     * line and no charge either way. Over the ceiling the list is treated as
+     * nothing said — an essay is not a Selection — and the Moment reports what
+     * the Page's Checkout opens on.
+     */
+    private const MAX_SELECTION_LENGTH = 500;
+
+    private const MAX_SELECTION_ITEMS = 50;
 
     /**
      * What a User-Agent says when nobody is there.
@@ -93,10 +110,13 @@ class TrackingController extends Controller
             return $this->taken();
         }
 
-        $this->moments->reportedByBrowser($page, $moment, $identifier, TrackingContext::fromRequest(
-            $request,
-            route('landing.show', $page->slug),
-        ));
+        $this->moments->reportedByBrowser(
+            $page,
+            $moment,
+            $identifier,
+            TrackingContext::fromRequest($request, route('landing.show', $page->slug)),
+            $moment === TrackingMoment::CheckoutStarted ? $this->selection($request, $page) : null,
+        );
 
         return $this->taken();
     }
@@ -149,6 +169,64 @@ class TrackingController extends Controller
         $identifier = trim($identifier);
 
         return $identifier !== '' && strlen($identifier) <= self::MAX_IDENTIFIER_LENGTH ? $identifier : null;
+    }
+
+    /**
+     * What the visitor had ticked when they started filling the Checkout.
+     *
+     * The browser names Products and counts, and the prices come from the
+     * Page — exactly as a Delivery Charge is derived from the Page at
+     * Capture. Nothing that arrives may say what anything costs, so a
+     * hand-made post can name a hundred things and still report what this
+     * Page charges for the ones it actually sells.
+     *
+     * A request that names no Products at all reports what the Page's
+     * Checkout opens on: its Default Selection where it asks the Customer to
+     * choose, everything it sells where it does not. That is the figure the
+     * form's first paint shows, and so it is the right one for a visitor who
+     * has chosen nothing yet.
+     */
+    private function selection(Request $request, Page $page): Selection
+    {
+        $items = $request->input('items');
+
+        if (! is_string($items) || strlen($items) > self::MAX_SELECTION_LENGTH) {
+            return Selection::forProducts($page->productsOpenWith(), []);
+        }
+
+        $quantities = $this->quantities($items);
+
+        return Selection::forProducts($page->productsChosen(array_keys($quantities)), $quantities);
+    }
+
+    /**
+     * The `id:quantity` pairs the browser posted, read forgivingly: a pair
+     * that is not two numbers is dropped, and a quantity outside what a
+     * Checkout would take is brought back inside it.
+     *
+     * Forgiving rather than refusing, because this is a report and not a
+     * Capture. An Order is refused over a figure that does not add up; a
+     * Moment reported with one Product's count corrected is still the Moment
+     * that happened.
+     *
+     * @return array<int, int>
+     */
+    private function quantities(string $items): array
+    {
+        $maximum = app(GeneralSettings::class)->checkoutMaxQuantity;
+        $quantities = [];
+
+        foreach (array_slice(array_filter(explode(',', $items)), 0, self::MAX_SELECTION_ITEMS) as $item) {
+            [$product, $quantity] = array_pad(explode(':', $item, 2), 2, '1');
+
+            if (! ctype_digit($product) || $product === '0') {
+                continue;
+            }
+
+            $quantities[(int) $product] = max(1, min($maximum, ctype_digit($quantity) ? (int) $quantity : 1));
+        }
+
+        return $quantities;
     }
 
     private function looksLikeABot(Request $request): bool

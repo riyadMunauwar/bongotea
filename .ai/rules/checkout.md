@@ -182,3 +182,10 @@ The Checkout island's script reads the ad platforms' cookies (`_fbc`, `_fbp`) an
 `_fbc` falls back to `fb.1.{now}.{fbclid}`, Meta's own shape, where the Pixel has not written the cookie yet or is blocked. What the server does with them is `.ai/rules/tracking.md`; the Capture carries no rule for the field, because an Order refused over a click identifier is a sale lost to tracking.
 
 Nothing on this path may throw. It runs after the submit has been taken over and the button disabled, so an unhandled raise leaves the Customer looking at a dead "Placing your order…" and no Order placed: `cookie()` catches the `URIError` a stray `%` produces, the `fbclid` is read with a pattern rather than `URLSearchParams` (absent in the older webviews a good share of this market orders from), and `stampClickIdsQuietly()` swallows whatever is left. `click_ids` is in `CustomCheckoutField::RESERVED_KEYS` because it is posted as a bag: a question under that name would arrive as an array where a string was asked for.
+
+## The island says one thing to the outside world: gio:checkout-started
+`noteStarted()` raises `CheckoutShortcode::STARTED_EVENT` on the document from the `focusin` listener, the first time a visitor touches a control inside a `[data-gio-field]` wrapper, once per page load, with `selectionOf(form)` in its detail — value, count and a line per ticked product (`id`, `quantity`, `unitPrice`) in whole currency, named in this page's own words and in no platform's. That is the island's only outward statement; it must not learn what listens, and the marker stays on the question wrappers alone. Ticking a product or stepping a quantity is arranging an order, not filling in the form, and deliberately does not count.
+
+`data-gio-line` carries `data-product-id` for the same reason. Do not drop either marker or rename the event: `.ai/rules/tracking.md` is the other half, and `TrackingCheckoutStartedTest` pins the seam from both sides.
+
+The dispatch is wrapped in try/catch like `stampClickIdsQuietly()` — a browser with no `CustomEvent` reports nothing and still orders.

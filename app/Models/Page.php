@@ -145,6 +145,25 @@ class Page extends Model
     }
 
     /**
+     * The Products this Page's Checkout opens on: its Default Selection where
+     * it asks the Customer to choose, and everything it sells where it does
+     * not.
+     *
+     * The two sides of `defaultSelection()`'s emptiness told apart — a Page
+     * that asks nothing sells all of it, and a Page whose Picker opens ticking
+     * nothing opens on nothing — so a caller that needs the opening position
+     * rather than the Merchant's list does not have to re-derive which kind of
+     * emptiness it is holding. It is what the form's first paint totals up,
+     * and what a visitor who has touched nothing is looking at.
+     *
+     * @return Collection<int, Product>
+     */
+    public function productsOpenWith(): Collection
+    {
+        return $this->productsChosen($this->offersProductChoice() ? $this->defaultSelection() : null);
+    }
+
+    /**
      * The Products of this Page a Customer's selection names — or everything it
      * sells, where they were never asked to choose.
      *

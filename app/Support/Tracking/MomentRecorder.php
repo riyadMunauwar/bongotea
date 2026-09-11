@@ -42,9 +42,20 @@ class MomentRecorder
      * Nothing at all where the Page reports nowhere — which is also what
      * makes the beacon free on a Page nobody is tracking, since no such Page
      * carries one.
+     *
+     * What was being bought comes in from the caller rather than from an
+     * Order, because a visitor who has started filling the Checkout has not
+     * placed one yet. It is frozen onto the row for the reason the content
+     * detail is: the sweep runs later, and the Page may be repriced or in the
+     * bin by then. A Page load is about no Products at all and carries none.
      */
-    public function reportedByBrowser(Page $page, TrackingMoment $moment, string $deduplicationId, TrackingContext $context): void
-    {
+    public function reportedByBrowser(
+        Page $page,
+        TrackingMoment $moment,
+        string $deduplicationId,
+        TrackingContext $context,
+        ?Selection $selection = null,
+    ): void {
         $this->record(
             $this->plans->forPage($page),
             $moment,
@@ -53,6 +64,7 @@ class MomentRecorder
             page: $page,
             order: null,
             context: $context,
+            selection: $selection,
         );
     }
 
@@ -171,10 +183,11 @@ class MomentRecorder
         ?Page $page,
         ?Order $order,
         TrackingContext $context,
+        ?Selection $selection = null,
     ): void {
         foreach ($plan->destinations() as $destination) {
             foreach ($plan->eventsFor($destination, $moment) as $event) {
-                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context, $plan->sendsContentDetail());
+                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context, $plan->sendsContentDetail(), $selection);
             }
         }
     }
@@ -189,6 +202,7 @@ class MomentRecorder
         ?Order $order,
         TrackingContext $context,
         bool $contentDetail,
+        ?Selection $selection,
     ): void {
         TrackingEvent::query()->firstOrCreate(
             [
@@ -217,6 +231,13 @@ class MomentRecorder
                  * in the bin by then.
                  */
                 'content_detail' => $contentDetail,
+
+                /**
+                 * Frozen for the same reason, and null wherever an Order
+                 * holds the answer: a driver reads it off the Order there,
+                 * and a second copy would be a second thing to keep true.
+                 */
+                'selection' => $order === null ? $selection : null,
             ],
         );
     }

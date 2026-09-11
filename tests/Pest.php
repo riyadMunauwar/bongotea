@@ -7,6 +7,7 @@ use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Shortcodes\AttributeSchema;
+use App\Shortcodes\Definitions\CheckoutShortcode;
 use App\Shortcodes\Node;
 use App\Shortcodes\ShortcodeDefinition;
 use App\Shortcodes\ShortcodeRegistry;
@@ -362,6 +363,36 @@ function beaconIn(string $html): array
         ->toBe(1, 'The document carries no beacon.');
 
     return ['address' => $found[1], 'identifier' => $found[2]];
+}
+
+/**
+ * The part of a served document that runs as the page loads: everything
+ * before the listener waiting for a visitor to start filling the Checkout.
+ *
+ * What a Page reports on load and what it reports later are two questions,
+ * and one document holds both — so a test asking about the Visit reads this
+ * rather than the whole of the bytes.
+ */
+function onLoad(string $html): string
+{
+    return Str::before($html, 'document.addEventListener("'.CheckoutShortcode::STARTED_EVENT.'"');
+}
+
+/**
+ * The address the browser reports a Checkout Started to, and the names of the
+ * two things it appends: the identifier this page load is deduplicated on,
+ * and the Selection the items ride from.
+ *
+ * @return array{address: string, identifier: string, selection: string}
+ */
+function startedBeaconIn(string $html): array
+{
+    $found = [];
+
+    expect(preg_match('/gioReport\("([^"]+)" \+ encodeURIComponent\(([A-Za-z_$][A-Za-z0-9_$]*)\) \+ \'&items=\' \+ encodeURIComponent\(\s*\(?([A-Za-z_$][A-Za-z0-9_$]*)\.lines/', $html, $found))
+        ->toBe(1, 'The document reports no Checkout Started to the server.');
+
+    return ['address' => $found[1], 'identifier' => $found[2], 'selection' => $found[3]];
 }
 
 /*
