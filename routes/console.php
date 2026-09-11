@@ -26,3 +26,17 @@ Schedule::command('payments:sweep')->everyFiveMinutes()->withoutOverlapping();
 */
 
 Schedule::command('tracking:sweep')->everyFiveMinutes()->withoutOverlapping();
+
+/*
+| The prune over what tracking has accumulated: once a day, in the quiet hour
+| before the Merchant's morning, because it is the only scheduled thing here
+| that deletes. Never two at once — two prunes deleting the same batch is two
+| long statements for one result.
+|
+| Nothing Pending is touched, so this may run while the sweep is behind: a
+| week of events waiting on a broken cron is still waiting after it, which is
+| the outbox's whole promise. The Visit aggregate is not touched either, and
+| needs no rollup first — it is written as the Visits happen.
+*/
+
+Schedule::command('tracking:prune')->dailyAt('03:10')->withoutOverlapping();

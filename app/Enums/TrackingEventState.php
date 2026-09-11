@@ -23,6 +23,19 @@ enum TrackingEventState: string implements HasColor, HasLabel
     case Failed = 'failed';
     case Expired = 'expired';
 
+    /**
+     * The states that mean an event a Provider was owed never got there: one
+     * it refused, and one it would no longer accept. One wording, because
+     * both the prune's longer retention and the diagnostics screen's list are
+     * about the same set and must not be able to disagree about it.
+     *
+     * @return list<self>
+     */
+    public static function undelivered(): array
+    {
+        return [self::Failed, self::Expired];
+    }
+
     public function getLabel(): string
     {
         return match ($this) {

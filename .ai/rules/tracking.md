@@ -6,7 +6,7 @@ paths:
   - 'app/Models/TrackingContext.php'
   - 'app/Observers/DestinationObserver.php'
   - 'app/Enums/Tracking*.php'
-  - 'app/Console/Commands/SweepTrackingCommand.php'
+  - 'app/Console/Commands/*Tracking*.php'
   - 'app/Filament/Resources/Destinations/**'
   - 'tests/Fixtures/Tracking/**'
 ---
@@ -75,3 +75,17 @@ The switch is `TrackingSettings::$countsVisits`, default off, and exactly three 
 The aggregate is written at report time, not rolled up from `tracking_events`. #103/#118 describe a "rollup before prune" — there is nothing to roll up: rolling up outbox rows would count nothing for a Page with no Destination, would over-count (one row per provider event), and would leave the tile blank until the nightly command ran. `tracking:prune` must simply never touch `visit_counts`.
 
 A count cannot deduplicate (that would mean keeping a row per load, which is the thing it exists not to do), so a beacon that somehow arrives twice is two Visits here and one event at the Provider. Accepted trade.
+
+## Retention is bound to purpose, and prune never touches what is still owed
+`TrackingPrune` holds every retention as a constant, never a Setting. Sent outbox rows 7 days, Failed and Expired 30 (the diagnostics screen is what reads them), Tracking Contexts the longest `Provider::acceptanceWindowSeconds()` across Providers — asked of the drivers rather than written down as seven days, so the number and the reason cannot drift and a Provider added later moves it on its own.
+
+Two things must never be deleted. **Nothing Pending**, at any age: a Merchant whose cron has been broken for a week must find the backlog and see all of it go out on the first run after it is fixed, and only the sweep may settle a row. **`visit_counts`**, ever: it is written at report time by `VisitCounter`, so it is already complete before prune runs. #103/#118 call for "rollup before prune"; there is nothing to roll up, and deriving it from the outbox would be wrong as well as late (a Page with no Destination writes no row, and a Page with two provider events per load would double-count). If anything is ever added that a kept figure is derived from, derive it inside `TrackingPrune::run()` before the delete that removes it.
+
+Outbox rows are cut on `updated_at` — the instant the sweep settled them, for all three settled states alike. Contexts on `created_at`, written once at Capture. Deletes are batched at 1000 because a Page under paid traffic writes a row per provider event per load.
+
+`DeliveryHealth` answers the diagnostics screen's four questions and records when the sweep last ran. That marker is written by `TrackingSweep::run()` every time, whatever it found — an empty outbox and a scheduler that never fired look identical from the rows, and telling those apart is the whole point. It lives in the cache (`tracking.swept_at`) because it is operational state, not a domain record; the scheduler already depends on the cache for the sweep's overlap mutex.
+
+## Delivery diagnostics ride on the Destinations screen, and a widget table there needs its own paging key
+`DeliveryHealthStats` (header) and `RecentDeliveryFailures` (footer) hang off `ListDestinations`, not the Dashboard: anything under `app/Filament/Widgets` is discovered onto the panel and drawn on the Dashboard, and this is an operator's "is my tracking working" question, asked beside the list that already names an unusable Destination. Both `canView()` on a Destination existing, so a fresh installation is never told its scheduler is broken. They label and never count — the figures are `DeliveryHealth`'s.
+
+`RecentDeliveryFailures` is query-backed (settled rows, possibly thousands), so it needs neither `PaginatesRows` nor its clamp — but it does need `->queryStringIdentifier('failures')` **on the table**. Filament names every table's page plainly `page` otherwise and Livewire reads that off the request, so the Destinations list above would hand its page number down and Filament would draw the *empty state* — a green tick over a list of failures. Note that overriding `getTableQueryStringIdentifier()` on the component does nothing in Filament v4: `InteractsWithTable::makeTable()` never reads it.

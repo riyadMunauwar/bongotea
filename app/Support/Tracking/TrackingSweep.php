@@ -27,6 +27,8 @@ use Illuminate\Support\Facades\Log;
  */
 class TrackingSweep
 {
+    public function __construct(private readonly DeliveryHealth $health) {}
+
     /**
      * What one sweep did: how many rows were delivered, refused, given up on
      * and left for next time, and why each unusable Destination was passed
@@ -53,6 +55,14 @@ class TrackingSweep
 
             $this->deliver($destination, $tally);
         }
+
+        /**
+         * Last of all, and whatever was found. An empty outbox and a
+         * scheduler that never fired look identical from the rows alone, and
+         * telling those two apart is the whole reason the diagnostics screen
+         * carries this figure.
+         */
+        $this->health->sweptNow();
 
         return $tally;
     }

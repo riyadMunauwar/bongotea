@@ -1,6 +1,7 @@
 ---
 paths:
   - 'app/Filament/Widgets/**'
+  - 'app/Filament/Resources/**/Widgets/**'
 ---
 
 # Widgets
@@ -13,9 +14,13 @@ So a collection-backed widget table paginates by returning one: `use PaginatesRo
 Sorting is the same shape: the closure is handed `$sortColumn` and `$sortDirection` and must sort the rows itself; a `sortable()` column on its own does nothing. Sort the **whole** result before handing it over, never the page in view — `paginateRows()` cuts the page afterwards, and a sort applied after the cut silently ranks ten rows instead of the leaderboard.
 
 ## Every widget table's page number is the same `page`, and a stale one draws the empty state
-A table's pagination key is `getTablePaginationPageName()`, which is plain `page` unless the widget declares `getTableQueryStringIdentifier()` — and none do. Livewire then reads that key straight off the request (`SupportPagination::resolvePage()` is `request()->query($alias, $default)`) and, by default, writes it back to the address bar, so `?page=2` left by one widget arrives at all of them on the next visit, refresh or Back. `PaginatesRows` answers both halves: `WithoutUrlPagination` keeps widget paging out of the URL, and `paginateRows()` clamps the requested page to the last page that exists.
+A table's pagination key is `getTablePaginationPageName()`, which is plain `page` unless the **table** is given `->queryStringIdentifier(...)`. Note that overriding the component's `getTableQueryStringIdentifier()` does nothing: `InteractsWithTable::makeTable()` never reads that method, and `getIdentifiedTableQueryStringPropertyNameFor()` asks the Table. Livewire then reads that key straight off the request (`SupportPagination::resolvePage()` is `request()->query($alias, $default)`) and, by default, writes it back to the address bar, so `?page=2` left by one widget arrives at all of them on the next visit, refresh or Back. `PaginatesRows` answers both halves: `WithoutUrlPagination` keeps widget paging out of the URL, and `paginateRows()` clamps the requested page to the last page that exists.
 
 The clamp is the load-bearing half, because Filament's table view draws the **empty state** for a page holding no rows however large the total is (`index.blade.php`'s `! count($records)`). An out-of-range page therefore does not look like a short table; on Needs Attention it looks like a green tick over an unworked backlog. Rows shrinking between renders is enough to cause it, so never reach for `resetPage()` alone as the defence.
+
+A **query**-backed widget table owes both guarantees too, and `PaginatesRows` cannot give them: the trait is for a collection. `RecentDeliveryFailures` is the one that is query-backed (thirty days of failures is not worth loading into memory to draw ten) and pays them itself — `use WithoutUrlPagination;` plus `->queryStringIdentifier(...)` on the table for the key, and an override of `paginateTableQuery()` for the clamp. The override re-paginates on the last page when the paginator comes back empty past page one, which costs a second query only in the case it is fixing.
+
+That clamp needs `->paginationMode(PaginationMode::Default)`, and a widget table does not have it: a `TableWidget` paginates **simply**, so `paginateTableQuery()` hands back an `Illuminate\Pagination\Paginator` with no total and no `lastPage()` — nothing to clamp to. The symptom is silent, a clamp that compiles and never fires, so check what the paginator actually is before trusting one.
 
 ## A page filter does not reset the table page
 Filament calls `resetPage()` for every filter it owns (`HasFilters::updatedTableFilters()`) and for none of the page filters a widget reads through `InteractsWithPageFilters`. So a widget paginating a result that the Reporting Window shortens declares `updatedPageFilters(): void { $this->resetPage(); }`, or narrowing the window from the second page leaves the table asking for a page that no longer exists — an empty table, which a Merchant reads as no Sales. Livewire does fire that hook for a `#[Reactive]` property (`SupportReactiveProps\BaseReactive::hydrate()` queues the update), but a test cannot `->set('pageFilters', ...)` to trigger it: mutating a reactive prop throws `CannotMutateReactivePropException`, so call the hook.
