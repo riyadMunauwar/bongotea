@@ -27,7 +27,7 @@ Nothing is written for an attempt that did not happen: the Shipment is `make()`d
 
 Two exceptions, not one: `CourierRefusedBooking` is the Courier's own answer (final, worded back to the operator), `CourierUnreachable` is silence (nothing concluded, try again). Both extend `BookingNotMade`. The sweep will retry only the second. `OrderAlreadyShipping` is neither — no Courier was asked.
 
-Pathao and RedEx implement `book()` by throwing `CourierRefusedBooking('… cannot be booked from here yet.')` until #129/#130 build them, so an operator gets a worded refusal and an untouched Order rather than a crash. Delete the throw when the real booking lands; do not add a `supportsBooking()` capability.
+RedEx implements `book()` by throwing `CourierNotUsable('RedEx cannot be booked from here yet.')` until #130 builds it, so an operator gets a worded refusal and an untouched Order rather than a crash — and never "RedEx refused", because RedEx was never asked. Delete the throw when the real booking lands; do not add a `supportsBooking()` capability. Steadfast (#127) and Pathao (#129) book for real.
 
 ## Active is status-plus-abandonment, and a Shipment Event is deduplicated by the database
 `Shipment::isActive()` and the `active()` scope are the one reading of Active: the canonical status is not terminal (`ShipmentStatus::isTerminal()` — Delivered, PartlyDelivered, Returned) and `abandoned_at` is null. The third arm the glossary names — "not refused at booking" — has no column, because a synchronous booking records nothing when it is refused (ADR-0020) and so no such row can exist yet; add it when bulk booking (#135) starts writing rows before dispatching them, and change those two places only.
@@ -49,3 +49,18 @@ Two times per event, both kept: `occurred_at` is the Courier's and is usually nu
 `CourierBooker::book()` takes a `ParcelDetails`. `CourierBooker::correct()` commits `ParcelDetails::corrections()` in a transaction of its **own**, before the booking's — the one place this class does not hold everything under one lock. A Courier usually refuses a parcel *because* the address was wrong, so a correction rolled back with the refusal is the User's own work discarded at the moment they are rescuing the Order; what they typed is true whatever the Courier says. The booking re-reads the Order under its lock, so the Shipment still snapshots the correction and "at most one Active Shipment" is unaffected. Note the unreachable notification says the correction was kept — keep the two in step.
 
 Two things are deliberately not corrections: the phone (a Customer *is* their number — changing it re-points the Order, which is `EditOrder`'s job) and the delivery note (the Customer's own captured answer; a note typed in the dialog is sent with that parcel only, and clearing the box sends none — `ParcelDetails::noteOr()`).
+
+## Pathao's access token is derived state the driver holds, never a Setting
+`PathaoAccessToken` issues Pathao's token from the four credentials in `CourierSettings`, caches it under a sha256 of those credentials, and lets it go 5 minutes before Pathao's own expiry (floor 60s) — so a Merchant pastes no token and a booking never fails on one that aged out overnight. Changing a credential changes the key, so a corrected password takes effect at once. The refresh-token grant is deliberately unused: the password grant is always available, so a refresh path would be a second way to get a token wrong.
+
+A rejected token is never a refused parcel. Both the grant answering and refusing, and a 401 on the booking itself, raise `CourierNotUsable` — never `CourierRefusedBooking`, which would send an operator to ring Pathao about a word only this system issues. `Pathao::read()` calls `$this->token->forget()` on the 401 so the next attempt is signed with a fresh token, and still does not retry inside the call: a booking is asked once while a User waits (ADR-0020), and pressing the button again is the retry, which is what the notification tells them to do.
+
+`PathaoAnswer` reads the envelope (`message`/`type`/`code`/`data`/`errors`) both the grant and the booking arrive in. Steadfast reads its own answers its own way — do not hoist this above the drivers.
+
+Booking omits `recipient_city`, `recipient_zone` and `recipient_area` entirely and sends the free-text address; `PathaoScript::assertBookedFor()` asserts their absence, because a blank or zero added later routes parcels to whatever depot that resolves to. Pathao issues no second tracking code — the Consignment id is both.
+
+RedEx is now the only driver still throwing `CourierNotUsable('… cannot be booked from here yet.')`; the "booking not built yet" test in `CourierBookingTest` names it.
+
+The shared pickup-store key is `ParcelField::PICKUP_STORE` and a driver reading what it sent (`Shipment::parcelDetail()`) must use that constant — a second spelling in a driver sends a blank store rather than failing. A Courier's own fields keep their names on the driver, as Pathao's three do.
+
+`CourierScript::parcelRowFor()` is what a booked attempt's `parcel_details` should equal exactly: the User's answers plus whatever that Courier asks and nobody is shown. It exists because `ParcelField::isWorthAsking()` leaves a one-answer question out of the dialog and still sends it, so Pathao's row holds a `pickupStore` its `parcelDefaults()` does not. Assert with `toBe()` and not a subset — the point is that the row holds no key nobody meant.

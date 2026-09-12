@@ -8,7 +8,6 @@ use App\Models\Shipment;
 use App\Support\Money;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -106,13 +105,6 @@ final class SteadfastScript extends CourierScript
     public function refusalWording(): string
     {
         return self::REFUSAL;
-    }
-
-    public function fakeOutage(): void
-    {
-        Http::fake(fn (Request $request) => throw new ConnectionException(
-            "cURL error 28: Connection timed out after 5000 milliseconds for {$request->url()}"
-        ));
     }
 
     /**

@@ -27,6 +27,16 @@ use App\Support\Settings\CourierSettings;
 final class ParcelField
 {
     /**
+     * The name the shared pickup-store declaration is made under.
+     *
+     * Named here because the declaration is shared: a driver reading what it
+     * sent back off the Shipment (`Shipment::parcelDetail()`) has to spell the
+     * same key this declared it under, and a second spelling in a driver would
+     * send that Courier a blank store rather than fail.
+     */
+    public const PICKUP_STORE = 'pickupStore';
+
+    /**
      * @param  array<string, string>|null  $options  what may be chosen, or null where anything may be typed
      */
     private function __construct(
@@ -76,7 +86,7 @@ final class ParcelField
         $property = CourierSettings::property($courier, 'PickupStore');
         $store = (string) $settings->{$property};
 
-        return self::choice('pickupStore', 'Pickup store', $property, blank($store) ? [] : [$store => $store]);
+        return self::choice(self::PICKUP_STORE, 'Pickup store', $property, blank($store) ? [] : [$store => $store]);
     }
 
     /** Whether this is one of a fixed set of the Courier's own codes, rather than something typed. */

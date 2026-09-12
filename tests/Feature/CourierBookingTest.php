@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Http as HttpFacade;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
+use Tests\Fixtures\Couriers\PathaoScript;
 
 /**
  * Booking one Order with one Courier: the action on the Order's screens, the
@@ -536,11 +537,8 @@ it('dials a stored number the way a domestic courier takes it', function () {
 
 it('says a courier whose booking is not built yet cannot be used, and never that it refused', function () {
     app(CourierSettings::class)->with([
-        'pathaoEnabled' => true,
-        'pathaoClientId' => 'supplied',
-        'pathaoClientSecret' => 'supplied',
-        'pathaoUsername' => 'supplied',
-        'pathaoPassword' => 'supplied',
+        'redexEnabled' => true,
+        'redexAccessToken' => 'supplied',
     ])->save();
 
     app()->forgetInstance(CourierSettings::class);
@@ -548,13 +546,13 @@ it('says a courier whose booking is not built yet cannot be used, and never that
     $order = Order::factory()->create();
 
     Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-        ->callAction('bookWithCourier', ['courier' => Courier::Pathao->value]);
+        ->callAction('bookWithCourier', ['courier' => Courier::RedEx->value]);
 
     $notification = lastNotification();
 
-    /** Nobody asked Pathao anything, so nothing says Pathao refused: an operator must not ring a Courier about a setting. */
+    /** Nobody asked RedEx anything, so nothing says RedEx refused: an operator must not ring a Courier about a setting. */
     expect(Shipment::count())->toBe(0)
-        ->and($notification?->getTitle())->toBe('Pathao cannot be used')
+        ->and($notification?->getTitle())->toBe('RedEx cannot be used')
         ->and($notification?->getBody())->toContain('cannot be booked from here yet');
 });
 
@@ -788,8 +786,14 @@ it('opens the courier\'s own questions on what the merchant decided in settings'
 
     $script->assertBookedWithParcelDetails($script->parcelDefaults());
 
-    /** Written onto the attempt, so what the row says was sent is what was sent. */
-    expect(Shipment::sole()->parcel_details)->toBe($script->parcelDefaults());
+    /**
+     * Written onto the attempt, exactly: what the row says was sent is what
+     * was sent, no more and no fewer keys. The row is the User's answers plus
+     * whatever this Courier asks that nobody is ever shown — a pickup store
+     * with one possible answer — which is why the script says what the whole
+     * row should be rather than the test assuming it is the questions.
+     */
+    expect(Shipment::sole()->parcel_details)->toBe($script->parcelRowFor($script->parcelDefaults()));
 })->with('courier scripts');
 
 it('sends what a user overrode for this parcel, and leaves the installation\'s own defaults alone', function (CourierScript $script) {
@@ -804,7 +808,7 @@ it('sends what a user overrode for this parcel, and leaves the installation\'s o
 
     $first = Shipment::sole();
 
-    expect($first->parcel_details)->toBe($script->parcelOverrides());
+    expect($first->parcel_details)->toBe($script->parcelRowFor($script->parcelOverrides()));
 
     /** The parcel came back and the next one goes out on the Merchant's defaults: the dialog configured nothing. */
     $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
@@ -885,3 +889,143 @@ it('offers no courier the installation cannot speak to, and says why in settings
         }
     }
 })->with('courier scripts');
+
+/*
+|--------------------------------------------------------------------------
+| Pathao's own access token
+|--------------------------------------------------------------------------
+|
+| One Courier's own machinery, and so the one section here that names a
+| Courier. Everything above is a shared body run once per Courier over the
+| dataset, because every Courier books a parcel the same way from the outside;
+| a token issued, held and renewed has no outside to share. Pathao is the only
+| one of the three that must be authenticated before it can be asked anything,
+| and the whole point of this is that a Merchant never learns that.
+|
+*/
+
+it('issues pathao one access token and signs every parcel with it', function () {
+    $script = new PathaoScript;
+
+    $first = orderReadyToSend($script);
+    $second = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($first, $script)->assertNotified();
+    sendWithCourier($second, $script)->assertNotified();
+
+    $script->assertBookingsSent(2);
+
+    /** Held between requests: a second parcel a moment later does not cost a second grant. */
+    $script->assertTokensIssued(1);
+
+    /** And both went out under it — `assertBookedFor()` holds the bearer header against each attempt. */
+    foreach (Shipment::all() as $shipment) {
+        $script->assertBookedFor($shipment);
+    }
+});
+
+it('keeps pathao\'s access token out of the merchant\'s settings entirely', function () {
+    $script = new PathaoScript;
+
+    $script->fakeBooked();
+
+    sendWithCourier(orderReadyToSend($script), $script)->assertNotified();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    /**
+     * Derived state a machine issued and will age out, not a credential a
+     * Merchant owns — so a settings group is not where it belongs. Read across
+     * every property rather than naming one, because a token saved under any
+     * name at all is the thing this is here to catch.
+     */
+    expect(collect((array) app(CourierSettings::class))->containsStrict($script->issuedAccessToken()))->toBeFalse()
+        ->and(CourierSettings::secrets())->not->toContain('pathaoAccessToken');
+});
+
+it('records what pathao said the delivery would cost, in minor units', function () {
+    $script = new PathaoScript;
+
+    $script->fakeBooked();
+
+    sendWithCourier(orderReadyToSend($script), $script)->assertNotified();
+
+    /** Pathao quotes a delivery fee in taka at booking; the Shipment keeps money the way every other row does. */
+    expect(Shipment::sole()->courier_charge)->toBe(Money::toMinorUnits($script->deliveryFee()));
+});
+
+it('renews pathao\'s access token before pathao\'s own expiry, with nobody pasting anything', function () {
+    $script = new PathaoScript;
+
+    /** Pathao says ten minutes. The token is let go of after five, while Pathao would still take it. */
+    $script->fakeBookedWithTokenLasting(600);
+
+    sendWithCourier(orderReadyToSend($script), $script)->assertNotified();
+
+    $script->assertTokensIssued(1);
+
+    $this->travel(301)->seconds();
+
+    $later = orderReadyToSend($script);
+
+    courierAnsweringAfresh();
+    $script->fakeBookedWithTokenLasting(600);
+
+    sendWithCourier($later, $script)->assertNotified();
+
+    /**
+     * Counted since the fake was laid afresh: a token was asked for again five
+     * minutes into a ten-minute lifetime, which is the margin that keeps a
+     * parcel from being refused because a token expired between the button and
+     * the call.
+     */
+    $script->assertTokensIssued(1);
+    $script->assertBookedFor(Shipment::all()->last());
+});
+
+it('says pathao cannot be used when it will not issue a token, and never that it refused the parcel', function () {
+    $script = new PathaoScript;
+
+    $order = orderReadyToSend($script);
+
+    $script->fakeTokenRefused();
+
+    sendWithCourier($order, $script);
+
+    $notification = lastNotification();
+
+    /** Nobody asked Pathao about a parcel, and the answer is a Merchant's to give in Settings. */
+    expect(Shipment::count())->toBe(0)
+        ->and($order->refresh()->isShipping())->toBeFalse()
+        ->and($notification?->getTitle())->toBe('Pathao cannot be used')
+        ->and($notification?->getBody())->toContain($script->tokenRefusalWording());
+
+    $script->assertBookingsSent(0);
+});
+
+it('lets go of a token pathao has stopped recognising, so the next parcel goes under a fresh one', function () {
+    $script = new PathaoScript;
+
+    $order = orderReadyToSend($script);
+
+    $script->fakeTokenRejected();
+
+    sendWithCourier($order, $script);
+
+    /** Pathao never looked at the parcel, so nothing says it refused one: it declined the word the call was signed with. */
+    expect(lastNotification()?->getTitle())->toBe('Pathao cannot be used')
+        ->and(Shipment::count())->toBe(0);
+
+    $script->assertTokensIssued(1);
+
+    courierAnsweringAfresh();
+    $script->fakeBooked();
+
+    sendWithCourier($order->refresh(), $script)->assertNotified();
+
+    /** A held token Pathao had already disowned would have refused this one too. */
+    $script->assertTokensIssued(1);
+    $script->assertBookedFor(Shipment::sole());
+});

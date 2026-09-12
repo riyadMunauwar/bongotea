@@ -5,6 +5,9 @@ namespace Tests\Fixtures\Couriers;
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
 use App\Models\Shipment;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 
 /**
  * One Courier's documented request and response shapes, scripted for the
@@ -49,8 +52,20 @@ abstract class CourierScript
     /** What the Courier says when it refuses, so a test can prove the operator is told it verbatim. */
     abstract public function refusalWording(): string;
 
-    /** Fake the Courier being unreachable for every call. */
-    abstract public function fakeOutage(): void;
+    /**
+     * Fake the Courier being unreachable for every call.
+     *
+     * The one thing every Courier does identically, because silence has no
+     * vocabulary: a connection that will not open is the same fact whoever was
+     * being called, and it reaches the driver as the same exception. A Courier
+     * with a stranger outage overrides this.
+     */
+    public function fakeOutage(): void
+    {
+        Http::fake(fn (Request $request) => throw new ConnectionException(
+            "cURL error 28: Connection timed out after 5000 milliseconds for {$request->url()}"
+        ));
+    }
 
     /** Assert a booking went out for this Shipment carrying every field the Courier calls mandatory, filled. */
     abstract public function assertBookedFor(Shipment $shipment): void;
@@ -82,6 +97,27 @@ abstract class CourierScript
      * @param  array<string, string>  $values
      */
     abstract public function assertBookedWithParcelDetails(array $values): void;
+
+    /**
+     * The whole of what is written onto the attempt when the User answered
+     * this Courier's questions this way — their answers, plus whatever this
+     * Courier asks that nobody is ever shown, in the order the driver declares
+     * them.
+     *
+     * Usually just the answers back. It is a question at all because a
+     * question with one possible answer is left out of the dialog and still
+     * sent (`ParcelField::isWorthAsking()`), so a Merchant with one pickup
+     * store has a row holding a field they were never asked about — and what
+     * the row says was sent must be exactly what was sent, no more and no
+     * fewer keys.
+     *
+     * @param  array<string, string>  $answers
+     * @return array<string, string>
+     */
+    public function parcelRowFor(array $answers): array
+    {
+        return $answers;
+    }
 
     /**
      * How many pickup stores this Courier gives the Merchant a choice between
