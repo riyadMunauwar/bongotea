@@ -123,7 +123,7 @@ The amount added to an Order for getting the parcel to the door, taken from the 
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
-An Order that genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel. Distinct from a deleted Order, which is one that should never have existed at all. Cancelling says nothing about money: a Payment that completes against a Cancelled Order is recorded Paid, and the Order is both at once until somebody refunds it.
+An Order that genuinely happened but will not be fulfilled — an unreachable number, a changed mind, a refused parcel. Distinct from a deleted Order, which is one that should never have existed at all. Cancelling says nothing about money: a Payment that completes against a Cancelled Order is recorded Paid, and the Order is both at once until somebody refunds it. It says nothing about a parcel either: a Shipment already moving goes on moving, and the Order is Cancelled and out for delivery at once until it comes back.
 _Avoid_: rejected, void, failed, refunded
 
 ### Paying
@@ -180,6 +180,40 @@ _Avoid_: template, theme, skin, variant, design
 Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Order Complete Page.
 _Avoid_: failure page, error page, payment page
 
+### Delivering
+
+**Courier**:
+A delivery company a parcel is handed to, known to the system by name — Steadfast, Pathao and RedEx to begin with. Like a Payment Method, the Merchant supplies what it needs once for the whole installation and a Courier that has not been supplied is offered nowhere. What any one of them can be asked is its own answer and no two agree: on what an address is, on whether a parcel's progress is announced or must be asked for, on whether many may be booked at once, or on whether they will say what they are holding.
+_Avoid_: carrier, delivery partner, logistics provider, shipping method, vendor
+
+**Shipment**:
+One attempt to get one Order to a door through one Courier. An Order holds as many as it took — a parcel that came back and was sent again is two, each with its own Consignment, its own charge and its own account of what happened, because the first attempt cost money whatever the second one does. A Shipment records the recipient details it was actually sent with, which need not be what the Order says today.
+_Avoid_: delivery, parcel, booking, dispatch, consignment
+
+**Consignment**:
+The Courier's own identifier for a parcel, handed back when a Shipment is booked, and the only name that Courier will answer to afterwards. Every Courier spells it differently and issues it on its own terms, so a Consignment is quoted back and never interpreted, and it is never what the system knows a Shipment by.
+_Avoid_: tracking id, tracking code, AWB, waybill, reference
+
+**Shipment Event**:
+One thing that happened to a Shipment, as the system came to know it. It carries two times and not one: when the Courier says it happened, where the Courier said, and when we found out, which is always. The two sit far apart for a Courier that must be asked rather than one that announces, and a timeline showing only one would quietly misdate every parcel from the couriers that say least.
+_Avoid_: status change, tracking update, history entry, log
+
+**Active**:
+Said of a Shipment still worth waiting on: not Delivered, not partly delivered, not Returned, not refused at booking, and not Abandoned. An Order has at most one, which is what stops a parcel being booked twice and what the Orders list draws. An Order with none is an Order that may be sent.
+_Avoid_: open, live, in progress, pending, current
+
+**Returned**:
+Said of a Shipment whose parcel came back undelivered. It is the Courier's outcome and not the Merchant's decision, and it is emphatically not Cancelled: a returned parcel is a question — ring the Customer, correct the address, send it again, or give up — and the answer is a User's. Two of the three couriers say "cancelled" in their own words for exactly this, which is precisely why the system does not.
+_Avoid_: cancelled, failed, undelivered, refused, RTO
+
+**Abandoned**:
+Said of a Shipment a User has written off — a parcel a Courier never collected, or one held so long there is nothing left to wait for. It is a time and a name and never a status, because the Courier's last word is worth keeping: a Shipment On Hold and then abandoned says both, where a status overwritten would say only that somebody gave up. Abandoning frees the Order to be sent again, and asserts that the first parcel is dead.
+_Avoid_: cancelled, void, closed, written off, expired
+
+**COD in Flight**:
+What the couriers are between them holding of the Merchant's money: what every Active Shipment was sent out to collect. Counted from the Merchant's own Orders rather than from anything a Courier says, so every Courier has the figure alike — and never added to a Courier's reported balance, because one is what we believe and the other is what we were told.
+_Avoid_: outstanding, receivable, pending COD, courier balance, float
+
 ### Reporting
 
 **Reporting Window**:
@@ -217,6 +251,10 @@ _Avoid_: page view, hit, session, traffic
 **Conversion Rate**:
 Orders as a share of Visits in a Reporting Window, drawn per Page on the Page leaderboard. Every Order counts towards it, Cancelled ones included, for the same reason `Orders` as a figure counts them: the Visit converted whatever became of the Order afterwards. It owes nothing to any ad platform — a Merchant who reports to none still has one — and it is unknown rather than zero where Visits are not counted.
 _Avoid_: CVR, conversion, close rate, win rate
+
+**Courier Report**:
+Everything the couriers' figures say over a Reporting Window — parcels sent, delivered and returned, how often each Courier delivers, how long it takes, and what it charged — on a screen of its own, broken down by Courier and never blended into one total. A figure a Courier never reports reads as nothing for that Courier rather than as zero for the trade, because the couriers do not answer the same questions and a single blended figure would present one courier's silence as everybody's.
+_Avoid_: delivery analytics, logistics report, shipping stats, courier dashboard
 
 ### Tracking
 
