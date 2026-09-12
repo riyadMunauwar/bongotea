@@ -123,6 +123,77 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Couriers
+    |--------------------------------------------------------------------------
+    |
+    | What an ordinary parcel of this merchant's looks like to each courier,
+    | before they have said otherwise on the Couriers settings page. Nothing
+    | here decides which couriers exist — the `Courier` enum is the registry
+    | (ADR-0013) — and nothing here is a credential: a key in an environment
+    | file is a key the settings group never got to seal.
+    |
+    | Weight and declared value are what make an unattended booking possible
+    | at all. RedEx refuses a parcel without either, and the system holds
+    | neither: no page asks a customer how heavy their order is, and it must
+    | not start. The type codes are each courier's own documented words for
+    | "an ordinary parcel going to a home", spelled as that courier spells
+    | them, and a merchant with a different arrangement overrides them in
+    | Settings rather than here.
+    |
+    */
+
+    'couriers' => [
+
+        'steadfast' => [
+            /** Steadfast collects from one arrangement per account and takes no store. */
+            'pickup_store' => '',
+
+            /** Steadfast's `delivery_type`: 0 is to the door, 1 is to one of their points. */
+            'delivery_type' => '0',
+
+            'item_type' => '',
+
+            /** Kilograms. */
+            'parcel_weight' => 0.5,
+
+            /** Major units, in the installation currency. */
+            'declared_value' => 1000.0,
+        ],
+
+        'pathao' => [
+            /** Pathao insists on a store, and its id is the merchant's own. Blank until they fill it in. */
+            'pickup_store' => '',
+
+            /** Pathao's `delivery_type`: 48 is normal delivery, 12 is on demand. */
+            'delivery_type' => '48',
+
+            /** Pathao's `item_type`: 2 is a parcel, 1 is a document. */
+            'item_type' => '2',
+
+            'parcel_weight' => 0.5,
+
+            'declared_value' => 1000.0,
+        ],
+
+        'redex' => [
+            /** RedEx collects from a pickup store the merchant registers with them. */
+            'pickup_store' => '',
+
+            'delivery_type' => '',
+
+            'item_type' => '',
+
+            /** RedEx refuses a parcel with no weight, so this is never blank. */
+            'parcel_weight' => 0.5,
+
+            /** RedEx refuses a parcel with no declared value either. */
+            'declared_value' => 1000.0,
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Tracking
     |--------------------------------------------------------------------------
     |
