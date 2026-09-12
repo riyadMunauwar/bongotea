@@ -5,6 +5,7 @@ namespace Tests\Fixtures\Couriers;
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
 use App\Models\Shipment;
+use App\Support\Couriers\DeliveryArea;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -170,4 +171,32 @@ abstract class CourierScript
     abstract public function needsAreaResolution(): bool;
 
     abstract public function batchLimit(): int;
+
+    /**
+     * Fake this Courier answering with the delivery areas it serves.
+     *
+     * Nothing for a Courier that reads an address in free text and is never
+     * asked for a list — which is the honest answer rather than a gap, and
+     * what lets a test that must offer every Courier at once say "and each of
+     * them answers with its areas" without naming the one that has any.
+     */
+    public function fakeAreas(): void {}
+
+    /**
+     * Which of this Courier's own areas its list resolves the address
+     * `orderReadyToSend()` builds — "House 4, Road 12, Banani", in Dhaka — to,
+     * and a second area a User might correct that guess to.
+     *
+     * Both nothing for a Courier that resolves the destination itself, which
+     * is what a test asks before expecting either.
+     */
+    public function guessedArea(): ?DeliveryArea
+    {
+        return null;
+    }
+
+    public function correctedArea(): ?DeliveryArea
+    {
+        return null;
+    }
 }

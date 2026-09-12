@@ -67,6 +67,7 @@ class CourierBooker
      *
      * @throws OrderAlreadyShipping when a parcel is already out for this Order.
      * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
+     * @throws DeliveryAreaNotResolved when the Courier names its own areas and none was chosen.
      * @throws CourierRefusedBooking when the Courier answered and said no.
      * @throws CourierUnreachable when the Courier could not be asked.
      */
@@ -186,16 +187,48 @@ class CourierBooker
      * are applied the same way, and so a Courier asking a question nobody was
      * shown — a choice with one answer — still sends it.
      *
+     * The delivery area leads, where the Courier insists on one, because it is
+     * the thing that decides where the parcel goes rather than what it is.
+     *
      * @return array<string, string>
+     *
+     * @throws DeliveryAreaNotResolved when the Courier names areas and this parcel names none.
      */
     private function parcelDetails(Courier $courier, ParcelDetails $details): array
     {
-        $resolved = [];
+        $driver = $courier->driver();
+        $resolved = $driver->needsAreaResolution() ? $this->deliveryArea($driver, $details)->asParcelDetails() : [];
 
-        foreach ($courier->driver()->parcelFields() as $field) {
+        foreach ($driver->parcelFields() as $field) {
             $resolved[$field->name] = $field->valueFor($details->answerTo($field->name), $this->settings);
         }
 
         return $resolved;
+    }
+
+    /**
+     * The area this parcel was confirmed to be going to, out of the Courier's
+     * own list.
+     *
+     * Asked of the driver and never of a Courier by name, and refused here
+     * rather than by the Courier — `DeliveryAreaNotResolved` says why. An id
+     * the Courier's list no longer holds is refused the same way as none at
+     * all: a Courier that has dropped an area since the dialog opened has not
+     * agreed to deliver there.
+     *
+     * @throws DeliveryAreaNotResolved
+     */
+    private function deliveryArea(CourierDriver $driver, ParcelDetails $details): DeliveryArea
+    {
+        $chosen = $details->deliveryArea();
+
+        /** Nothing chosen is answered without asking the Courier for its list: there is nothing to look an answer up in. */
+        $area = $chosen === null ? null : DeliveryArea::find($chosen, $driver->deliveryAreas());
+
+        if ($area === null) {
+            throw new DeliveryAreaNotResolved($driver->courier());
+        }
+
+        return $area;
     }
 }

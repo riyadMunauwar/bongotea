@@ -25,9 +25,9 @@ The contract declares only what is implemented. `book()` and `canonicalStatus()`
 
 Nothing is written for an attempt that did not happen: the Shipment is `make()`d unsaved, handed to the driver, and saved only once a Consignment comes back (ADR-0020). So a refused attempt leaves the invoice reference free for the next one — `Shipment::nextInvoiceReference()` counts rows, not tries.
 
-Two exceptions, not one: `CourierRefusedBooking` is the Courier's own answer (final, worded back to the operator), `CourierUnreachable` is silence (nothing concluded, try again). Both extend `BookingNotMade`. The sweep will retry only the second. `OrderAlreadyShipping` is neither — no Courier was asked.
+Four exceptions and not one: `CourierRefusedBooking` is the Courier's own answer (final, worded back to the operator), `CourierUnreachable` is silence (nothing concluded, try again), `CourierNotUsable` is a Courier this installation cannot speak to, and `DeliveryAreaNotResolved` is a parcel nobody said where to send. All four extend `BookingNotMade`, so a new one must be caught in `BookWithCourierAction` **above** the `BookingNotMade` fallback or it is worded as "the Courier refused this parcel". The sweep will retry only the silence. `OrderAlreadyShipping` is outside them all — no Courier was asked.
 
-RedEx implements `book()` by throwing `CourierNotUsable('RedEx cannot be booked from here yet.')` until #130 builds it, so an operator gets a worded refusal and an untouched Order rather than a crash — and never "RedEx refused", because RedEx was never asked. Delete the throw when the real booking lands; do not add a `supportsBooking()` capability. Steadfast (#127) and Pathao (#129) book for real.
+All three couriers book for real: Steadfast (#127), Pathao (#129), RedEx (#130). Do not add a `supportsBooking()` capability.
 
 ## Active is status-plus-abandonment, and a Shipment Event is deduplicated by the database
 `Shipment::isActive()` and the `active()` scope are the one reading of Active: the canonical status is not terminal (`ShipmentStatus::isTerminal()` — Delivered, PartlyDelivered, Returned) and `abandoned_at` is null. The third arm the glossary names — "not refused at booking" — has no column, because a synchronous booking records nothing when it is refused (ADR-0020) and so no such row can exist yet; add it when bulk booking (#135) starts writing rows before dispatching them, and change those two places only.
@@ -59,8 +59,22 @@ A rejected token is never a refused parcel. Both the grant answering and refusin
 
 Booking omits `recipient_city`, `recipient_zone` and `recipient_area` entirely and sends the free-text address; `PathaoScript::assertBookedFor()` asserts their absence, because a blank or zero added later routes parcels to whatever depot that resolves to. Pathao issues no second tracking code — the Consignment id is both.
 
-RedEx is now the only driver still throwing `CourierNotUsable('… cannot be booked from here yet.')`; the "booking not built yet" test in `CourierBookingTest` names it.
-
 The shared pickup-store key is `ParcelField::PICKUP_STORE` and a driver reading what it sent (`Shipment::parcelDetail()`) must use that constant — a second spelling in a driver sends a blank store rather than failing. A Courier's own fields keep their names on the driver, as Pathao's three do.
 
 `CourierScript::parcelRowFor()` is what a booked attempt's `parcel_details` should equal exactly: the User's answers plus whatever that Courier asks and nobody is shown. It exists because `ParcelField::isWorthAsking()` leaves a one-answer question out of the dialog and still sends it, so Pathao's row holds a `pickupStore` its `parcelDefaults()` does not. Assert with `toBe()` and not a subset — the point is that the row holds no key nobody meant.
+
+## A delivery area is asked of `needsAreaResolution()`, not declared as a `ParcelField`
+RedEx alone refuses a free-text address, so the area is its own question and not a `ParcelField`: a `ParcelField` is an override of a per-installation Settings default, and an area belongs to one Order's address. It rides in `ParcelDetails`' `courierFields` under `DeliveryArea::ANSWER`, and `CourierBooker::parcelDetails()` writes `DeliveryArea::asParcelDetails()` (id **and** name, under `DeliveryArea::ANSWER`/`::NAME`) at the head of `parcel_details` whenever the driver says `needsAreaResolution()`. Nothing branches on RedEx.
+
+The id is looked up once, at booking, and both id and name are recorded: a driver that looked the name up again when it sent would send a name the cached list may have changed. Nothing chosen (or an id the list no longer holds) raises `DeliveryAreaNotResolved` before the Courier is asked — a blank area comes back rejected and reads to an operator as "RedEx refused your parcel".
+
+`DeliveryAreaMatcher::guess()` is pure and unit-tested directly (`tests/Unit/DeliveryAreaMatcherTest.php`) — the one sanctioned exception to the top seam. Whole-word names only; a name another matched name spells out in full gives way to it (**containment, never length** — two areas an address names in different breaths are two answers whatever their names are the length of); the District settles a tie between areas sharing a name, and stands in for the address only where the address named nothing at all, and only where it narrows to one. Anything it cannot settle is null: it guesses, it never decides.
+
+`RedExAreas` caches the list for a day under one fixed key — not keyed by the token, unlike `PathaoAccessToken`, because areas are RedEx's geography and not that Merchant's credentials' product. A failed fetch answers `[]` rather than raising — the list is read while the dialog is being drawn, and a screen that will not open is worse than an empty chooser plus a booking that refuses itself in words — and that emptiness is held for **60s**, not a day: RedEx has no bulk endpoint, so an unheld failure is one timed-out list per parcel on a sweep. `DeliveryAreaNotResolved` therefore words an empty chooser and an unanswered question together; do not narrow it to "you did not choose one".
+
+## A faked outage that throws throws for every call, not just the one you meant
+`PendingRequest::buildStubHandler()` **invokes every registered stub callback** on every request and then takes the first non-null answer. So a catch-all stub that throws (`fakeOutage()`) throws even for a URL an earlier stub already answered. `RedExScript::fakeOutage()` is therefore one closure that decides both — the area list answers, everything else raises `ConnectionException` — and not an areas stub plus a throwing `'*'`.
+
+RedEx cannot have its dialog drawn until it has said where it delivers, so `RedExScript::makeUsable()` lays the areas stub and every `fake*()` merges it back in (`RedExScript::fake()`), exactly as `PathaoScript` lays the token grant beside everything. `CourierScript::fakeAreas()` is a no-op for the two couriers that read a free-text address, which is what lets `makeEveryCourierUsable()` say "and each of them answers with its areas" without naming RedEx.
+
+`guessedArea()`/`correctedArea()` are the script's answer to "what does your list make of `orderReadyToSend()`'s address, and what would a User correct it to"; `parcelRowFor()` prepends the guess, because the area leads `parcel_details`.

@@ -13,10 +13,11 @@ use RuntimeException;
  * instead. Where a Courier said something, its answer rides along whole, so
  * that the wording an operator reads is the Courier's own rather than ours.
  *
- * Three reasons and three classes, because they are not the same fact to
+ * Four reasons and four classes, because they are not the same fact to
  * anything that retries or to anybody reading the sentence: a Courier's own
- * refusal is an answer, a Courier that could not be reached is silence, and a
- * Courier this installation cannot speak to was never asked at all.
+ * refusal is an answer, a Courier that could not be reached is silence, a
+ * Courier this installation cannot speak to was never asked at all, and a
+ * parcel with no delivery area on it waits on a human choosing one.
  */
 abstract class BookingNotMade extends RuntimeException
 {

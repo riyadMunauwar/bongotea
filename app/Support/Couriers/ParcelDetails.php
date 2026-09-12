@@ -18,7 +18,7 @@ namespace App\Support\Couriers;
 final class ParcelDetails
 {
     /**
-     * @param  array<string, mixed>  $courierFields  the chosen Courier's own `ParcelField` values, by name
+     * @param  array<string, mixed>  $courierFields  the chosen Courier's own answers, by name: a `ParcelField` each, and the delivery area where that Courier insists on one
      */
     private function __construct(
         public readonly ?string $recipientName,
@@ -76,6 +76,27 @@ final class ParcelDetails
     public function answerTo(string $name): mixed
     {
         return $this->courierFields[$name] ?? null;
+    }
+
+    /**
+     * Which of the Courier's own delivery areas the User confirmed this
+     * parcel is going to, or nothing where they were not asked or left it
+     * unanswered.
+     *
+     * An answer like any other and so kept with the rest, rather than a
+     * property of its own: only a Courier that says it `needsAreaResolution()`
+     * ever asks, and what it is asked under is that Courier's section of the
+     * dialog.
+     *
+     * Read as any scalar and not only as a string, unlike the shared details
+     * above: a chooser hands an id made of digits back as a number, and an id
+     * is a word a Courier chose rather than a figure.
+     */
+    public function deliveryArea(): ?string
+    {
+        $chosen = $this->answerTo(DeliveryArea::ANSWER);
+
+        return is_scalar($chosen) ? self::given((string) $chosen) : null;
     }
 
     /**

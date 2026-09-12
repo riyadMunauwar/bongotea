@@ -10,6 +10,9 @@ use App\Support\Couriers\BookingNotMade;
 use App\Support\Couriers\CourierBooker;
 use App\Support\Couriers\CourierNotUsable;
 use App\Support\Couriers\CourierUnreachable;
+use App\Support\Couriers\DeliveryArea;
+use App\Support\Couriers\DeliveryAreaMatcher;
+use App\Support\Couriers\DeliveryAreaNotResolved;
 use App\Support\Couriers\OrderAlreadyShipping;
 use App\Support\Couriers\ParcelDetails;
 use App\Support\Couriers\ParcelField;
@@ -46,6 +49,12 @@ use Filament\Support\Icons\Heroicon;
  * installation's Settings, and a change is an override for this parcel rather
  * than a second place to configure the installation. A question with a single
  * possible answer — a Merchant with one pickup store — is never asked at all.
+ *
+ * One Courier's question is not an override of anything: a Courier that will
+ * not read an address in free text (`needsAreaResolution()`) is asked which of
+ * its own delivery areas the parcel is going to, guessed from the address and
+ * pre-selected for a human to confirm. Nothing is sent until one is chosen —
+ * a guessed depot is a parcel in the wrong city.
  *
  * The Courier is asked inside the request and the answer is shown at once —
  * the Consignment and the tracking code, which is the entire reason a single
@@ -96,6 +105,11 @@ class BookWithCourierAction
                     $shipment = $booker->book($record, $courier, $details);
                 } catch (OrderAlreadyShipping $refusal) {
                     self::refuse('Already with a courier', $refusal->getMessage());
+
+                    return;
+                } catch (DeliveryAreaNotResolved $unresolved) {
+                    /** A box on this screen and not a Courier's objection: nobody was asked, and the answer is on the dialog the User is looking at. */
+                    self::refuse("{$courier->getLabel()} needs a delivery area", $unresolved->getMessage());
 
                     return;
                 } catch (CourierUnreachable) {
@@ -214,12 +228,22 @@ class BookWithCourierAction
         $sections = [];
 
         foreach (self::offered() as $courier) {
-            $fields = array_values(array_filter(
-                $courier->driver()->parcelFields(),
-                fn (ParcelField $field): bool => $field->isWorthAsking(),
-            ));
+            $driver = $courier->driver();
 
-            if ($fields === []) {
+            $questions = array_map(
+                fn (ParcelField $field): TextInput|Select => self::question($courier, $field),
+                array_values(array_filter(
+                    $driver->parcelFields(),
+                    fn (ParcelField $field): bool => $field->isWorthAsking(),
+                )),
+            );
+
+            /** Leads the Courier's own questions: it decides where the parcel goes, where the rest describe what it is. */
+            if ($driver->needsAreaResolution()) {
+                array_unshift($questions, self::deliveryArea($courier));
+            }
+
+            if ($questions === []) {
                 continue;
             }
 
@@ -227,13 +251,38 @@ class BookWithCourierAction
                 ->description('Filled in from Settings. A change here applies to this parcel only.')
                 ->columns(2)
                 ->visible(fn (Get $get): bool => $get('courier') === $courier->value)
-                ->schema(array_map(
-                    fn (ParcelField $field): TextInput|Select => self::question($courier, $field),
-                    $fields,
-                ));
+                ->schema($questions);
         }
 
         return $sections;
+    }
+
+    /**
+     * Which of this Courier's own delivery areas the parcel is going to,
+     * opened on the system's guess and searchable so a User can correct it.
+     *
+     * Asked of every Courier that says it `needsAreaResolution()` and of no
+     * Courier by name. The guess comes from the address and the District
+     * (`DeliveryAreaMatcher`) and is pre-selected rather than merely offered,
+     * because the common case is that it is right and the User is on the
+     * phone — but it is a guess, so it is a box they can change, and a parcel
+     * whose area the system could not guess opens on an empty one rather than
+     * on the first area in the list.
+     *
+     * Searched rather than listed: a Courier publishes thousands of areas,
+     * which is a chooser nobody can read and a payload nobody should be sent.
+     */
+    private static function deliveryArea(Courier $courier): Select
+    {
+        return Select::make("{$courier->value}.".DeliveryArea::ANSWER)
+            ->label('Delivery area')
+            ->helperText("{$courier->getLabel()} will not take a parcel without one of its own areas. Guessed from the address — correct it if it is wrong.")
+            ->required()
+            ->searchable()
+            ->native(false)
+            ->getSearchResultsUsing(fn (string $search): array => DeliveryArea::search($search, $courier->driver()->deliveryAreas()))
+            ->getOptionLabelUsing(fn (mixed $value): ?string => DeliveryArea::find($value, $courier->driver()->deliveryAreas())?->label())
+            ->columnSpanFull();
     }
 
     /** One of a Courier's own questions, drawn as the declaration describes it. */
@@ -297,8 +346,19 @@ class BookWithCourierAction
         ];
 
         foreach (self::offered() as $courier) {
-            foreach ($courier->driver()->parcelFields() as $field) {
+            $driver = $courier->driver();
+
+            foreach ($driver->parcelFields() as $field) {
                 $filled[$courier->value][$field->name] = $field->default($settings);
+            }
+
+            /** A guess and not a default: it is read off this Order's own address rather than off anything a Merchant decided. */
+            if ($driver->needsAreaResolution()) {
+                $filled[$courier->value][DeliveryArea::ANSWER] = DeliveryAreaMatcher::guess(
+                    $record->customer_address,
+                    $record->customer_district,
+                    $driver->deliveryAreas(),
+                )?->id;
             }
         }
 

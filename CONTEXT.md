@@ -198,6 +198,10 @@ _Avoid_: tracking id, tracking code, AWB, waybill, reference
 Something one Courier needs told about a parcel that no other Courier asks about — how it is to be delivered, what is inside it, what it weighs, which store it leaves from. Each is declared by that Courier's driver and nowhere else, so the send dialog puts the chosen Courier's questions and no other's in front of a User, opened on what the Merchant decided once in Settings. A change there belongs to that parcel alone: it is recorded on the Shipment as sent and configures nothing. A question with only one possible answer — a Merchant with a single pickup store — is never asked, and is sent all the same.
 _Avoid_: courier option, custom field, extra field, metadata, parameter
 
+**Delivery Area**:
+One of a Courier's own delivery areas, known by the id that Courier gave it. Not somewhere the system knows of: it is a word one Courier insists on hearing, because it will not read an address in free text the way the others do. The system caches that Courier's list, guesses which area an Order's address and District mean, and puts the guess in front of a User already chosen for them to confirm or correct — a guess, never a decision, because a parcel sent to a guessed depot is one the Merchant pays to have returned. A parcel whose area nobody chose is not sent at all.
+_Avoid_: zone, thana, area id, location, region
+
 **Shipment Event**:
 One thing that happened to a Shipment, as the system came to know it. It carries two times and not one: when the Courier says it happened, where the Courier said, and when we found out, which is always. The two sit far apart for a Courier that must be asked rather than one that announces, and a timeline showing only one would quietly misdate every parcel from the couriers that say least.
 _Avoid_: status change, tracking update, history entry, log

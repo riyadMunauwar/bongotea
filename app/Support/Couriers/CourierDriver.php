@@ -79,6 +79,25 @@ interface CourierDriver
     public function parcelFields(): array;
 
     /**
+     * The delivery areas this Courier will take a parcel to, by the ids it
+     * knows them under.
+     *
+     * Empty for a Courier that reads a free-text address and resolves the
+     * destination itself, which is two of the three — and that is an honest
+     * answer rather than a gap: those couriers publish no such list because
+     * nothing about them needs one. The pair to `needsAreaResolution()`: a
+     * Courier that answers true there is the one this is asked of, and a
+     * booking dialog guesses from this list and asks a human to confirm it.
+     *
+     * Held between requests rather than fetched per parcel, so a
+     * two-hundred-parcel batch costs one list and not two hundred. Where it is
+     * held is the driver's business; a caller asks for areas.
+     *
+     * @return list<DeliveryArea>
+     */
+    public function deliveryAreas(): array;
+
+    /**
      * The names of the credentials this driver needs from the installation's
      * Courier settings, every one of which is a secret there.
      *

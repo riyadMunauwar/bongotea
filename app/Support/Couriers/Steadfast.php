@@ -174,6 +174,18 @@ class Steadfast implements CourierDriver
     }
 
     /**
+     * Steadfast resolves the destination from the free-text address itself
+     * and publishes no area list, so there is none to offer and none to guess
+     * from (ADR-0018).
+     *
+     * @return list<DeliveryArea>
+     */
+    public function deliveryAreas(): array
+    {
+        return [];
+    }
+
+    /**
      * @return list<string>
      */
     public function credentialProperties(): array

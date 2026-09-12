@@ -240,6 +240,18 @@ class Pathao implements CourierDriver
     }
 
     /**
+     * Pathao resolves the destination from the free-text address itself and
+     * is sent no city, zone or area at all, so there is no list to offer and
+     * nothing to guess from (ADR-0018).
+     *
+     * @return list<DeliveryArea>
+     */
+    public function deliveryAreas(): array
+    {
+        return [];
+    }
+
+    /**
      * @return list<string>
      */
     public function credentialProperties(): array

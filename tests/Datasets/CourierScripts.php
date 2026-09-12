@@ -1,6 +1,8 @@
 <?php
 
+use Tests\Fixtures\Couriers\CourierScript;
 use Tests\Fixtures\Couriers\PathaoScript;
+use Tests\Fixtures\Couriers\RedExScript;
 use Tests\Fixtures\Couriers\SteadfastScript;
 
 /**
@@ -9,14 +11,26 @@ use Tests\Fixtures\Couriers\SteadfastScript;
  * courier tests run once per Courier over its own documented shapes. A later
  * Courier is a new script and a new row here, nothing more (ADR-0013).
  *
- * Two so far, and they disagree about almost everything underneath: one signs
- * every call with two static keys and the other has to be issued a token
- * first, one has no notion of a store and the other will not take a parcel
- * without one, and each has its own words for where a parcel stands. RedEx
- * has a driver that declares itself and refuses to book, and gains its row
- * with the ticket that builds its booking.
+ * Three, and they disagree about almost everything underneath: one signs
+ * every call with two static keys, one has to be issued a token first and one
+ * pastes a token that never expires; one has no notion of a store and two
+ * will not take a parcel without one; two read the Customer's address in free
+ * text and the third refuses it, insisting on an area out of a list only it
+ * holds. Each has its own words for where a parcel stands, and each proves
+ * its own vocabulary in its own script.
+ *
+ * @return array<string, CourierScript>
  */
-dataset('courier scripts', [
-    'Steadfast' => [new SteadfastScript],
-    'Pathao' => [new PathaoScript],
-]);
+function courierScripts(): array
+{
+    return [
+        'Steadfast' => new SteadfastScript,
+        'Pathao' => new PathaoScript,
+        'RedEx' => new RedExScript,
+    ];
+}
+
+dataset('courier scripts', array_map(
+    fn (CourierScript $script): array => [$script],
+    courierScripts(),
+));

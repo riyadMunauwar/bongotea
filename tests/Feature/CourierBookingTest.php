@@ -17,7 +17,10 @@ use App\Models\User;
 use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Couriers\CourierBooker;
 use App\Support\Couriers\CourierNotUsable;
+use App\Support\Couriers\DeliveryArea;
+use App\Support\Couriers\DeliveryAreaNotResolved;
 use App\Support\Couriers\OrderAlreadyShipping;
+use App\Support\Couriers\ParcelDetails;
 use App\Support\Money;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\PhoneNumber;
@@ -34,6 +37,7 @@ use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
 use Tests\Fixtures\Couriers\PathaoScript;
+use Tests\Fixtures\Couriers\RedExScript;
 
 /**
  * Booking one Order with one Courier: the action on the Order's screens, the
@@ -152,6 +156,17 @@ function makeEveryCourierUsable(): void
     app(CourierSettings::class)->with($supplied)->save();
 
     app()->forgetInstance(CourierSettings::class);
+
+    /**
+     * And each of them answering with the delivery areas it serves, where it
+     * has any. A Courier that will not read an address in free text cannot
+     * have its questions drawn at all until it has said where it delivers, so
+     * "every Courier offered at once" means every list answered too — asked of
+     * the scripts rather than of the one Courier that has a list.
+     */
+    foreach (courierScripts() as $script) {
+        $script->fakeAreas();
+    }
 }
 
 /**
@@ -535,27 +550,6 @@ it('dials a stored number the way a domestic courier takes it', function () {
         ->and(PhoneNumber::asDialled('nonsense'))->toBeNull();
 });
 
-it('says a courier whose booking is not built yet cannot be used, and never that it refused', function () {
-    app(CourierSettings::class)->with([
-        'redexEnabled' => true,
-        'redexAccessToken' => 'supplied',
-    ])->save();
-
-    app()->forgetInstance(CourierSettings::class);
-
-    $order = Order::factory()->create();
-
-    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-        ->callAction('bookWithCourier', ['courier' => Courier::RedEx->value]);
-
-    $notification = lastNotification();
-
-    /** Nobody asked RedEx anything, so nothing says RedEx refused: an operator must not ring a Courier about a setting. */
-    expect(Shipment::count())->toBe(0)
-        ->and($notification?->getTitle())->toBe('RedEx cannot be used')
-        ->and($notification?->getBody())->toContain('cannot be booked from here yet');
-});
-
 it('asks whether a courier can be used at the booking itself, not only at the screen that offered it', function (CourierScript $script) {
     $order = orderReadyToSend($script);
 
@@ -892,11 +886,182 @@ it('offers no courier the installation cannot speak to, and says why in settings
 
 /*
 |--------------------------------------------------------------------------
+| Where the parcel is going
+|--------------------------------------------------------------------------
+|
+| One Courier of the three refuses an address in free text and insists on an
+| area out of a list only it holds. Every case here is run over the whole
+| dataset all the same, and asks the script whether its Courier needs an area
+| rather than which Courier it is — so the two that resolve a destination
+| themselves prove they are never held up by any of it, and a fourth Courier
+| that does insist is covered the moment it has a script.
+|
+*/
+
+it('guesses the delivery area a courier insists on, shows it pre-selected, and sends the one the user chooses instead', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $area = "{$script->courier()->value}.".DeliveryArea::ANSWER;
+
+    $dialog = openSendDialog($order, $script);
+
+    if (! $script->needsAreaResolution()) {
+        /** A Courier that reads the address itself is asked nothing, and a box nobody has to answer is not drawn. */
+        $dialog->assertSchemaComponentDoesNotExist($area);
+
+        return;
+    }
+
+    $guess = $script->guessedArea();
+    $chosen = $script->correctedArea();
+
+    /**
+     * Guessed from "House 4, Road 12, Banani" and put in front of the User
+     * already chosen, because the common case is that it is right and they
+     * have the Customer on the phone — and searchable, because the Courier
+     * lists thousands and the guess is only a guess.
+     */
+    $dialog->assertActionDataSet(answering($script, [DeliveryArea::ANSWER => $guess->id]))
+        ->assertSchemaComponentExists(
+            $area,
+            checkComponentUsing: fn (Select $field): bool => $field->isSearchable() && $field->isRequired(),
+        );
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, answering($script, [DeliveryArea::ANSWER => $chosen->id]))
+        ->assertNotified();
+
+    /** A guess and never a decision: what the User corrected it to is what the attempt records and what went out. */
+    expect(Shipment::sole()->parcel_details)->toMatchArray($chosen->asParcelDetails());
+
+    $script->assertBookedFor(Shipment::sole());
+})->with('courier scripts');
+
+it('refuses a parcel locally when a courier insists on a delivery area and none was chosen', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    $refusal = null;
+
+    try {
+        app(CourierBooker::class)->book($order, $script->courier(), ParcelDetails::confirmed());
+    } catch (DeliveryAreaNotResolved $exception) {
+        $refusal = $exception;
+    }
+
+    if (! $script->needsAreaResolution()) {
+        /** A Courier that resolves the destination from the address has nothing here to be held up by. */
+        expect($refusal)->toBeNull()
+            ->and(Shipment::count())->toBe(1);
+
+        return;
+    }
+
+    /**
+     * Refused before anything was sent, and not by the Courier: a booking with
+     * a blank area comes back rejected, which reads to an operator as the
+     * Courier refusing their parcel and sends them to ring it about a box on
+     * our own screen.
+     */
+    expect($refusal?->getMessage())->toContain('delivery area')
+        ->and(Shipment::count())->toBe(0)
+        ->and($order->refresh()->isShipping())->toBeFalse();
+
+    $script->assertBookingsSent(0);
+})->with('courier scripts');
+
+it('opens on no area at all, and sends nothing, when nothing about the order resolves one', function (CourierScript $script) {
+    /** A landmark for an address and a District this Courier serves several areas in: there is nothing here to guess from. */
+    $order = orderReadyToSend($script, ['customer_address' => 'Beside the big mosque, opposite the bank']);
+
+    $script->fakeBooked();
+
+    if (! $script->needsAreaResolution()) {
+        /** A Courier that reads the address itself takes this Order exactly as it takes any other. */
+        sendWithCourier($order, $script)->assertNotified();
+
+        return;
+    }
+
+    $area = "{$script->courier()->value}.".DeliveryArea::ANSWER;
+
+    /** No guess rather than the first area in the list, and the parcel stopped at the screen rather than sent to it. */
+    openSendDialog($order, $script)->assertActionDataSet([$area => null]);
+
+    sendWithCourier($order, $script)->assertHasActionErrors([$area]);
+
+    expect(Shipment::count())->toBe(0)
+        ->and($order->refresh()->isShipping())->toBeFalse();
+
+    $script->assertBookingsSent(0);
+})->with('courier scripts');
+
+/*
+|--------------------------------------------------------------------------
+| RedEx's own delivery areas
+|--------------------------------------------------------------------------
+|
+| One Courier's own machinery, and so one of the two sections here that names
+| a Courier. Everything above is a shared body run once per Courier over the
+| dataset; a list fetched, held and spent has no outside to share, and the
+| whole point of it is that a Merchant never learns there is one.
+|
+*/
+
+it('asks redex for its delivery areas once and addresses every parcel after that from the list it kept', function () {
+    $script = new RedExScript;
+
+    $first = orderReadyToSend($script);
+    $second = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($first, $script)->assertNotified();
+    sendWithCourier($second, $script)->assertNotified();
+
+    $script->assertBookingsSent(2);
+
+    /**
+     * Held between requests. RedEx lists thousands of areas and has no bulk
+     * endpoint, so a two-hundred-parcel batch is two hundred bookings — and
+     * would be two hundred area lists as well if this were asked per parcel.
+     */
+    $script->assertAreasFetched(1);
+
+    foreach (Shipment::all() as $shipment) {
+        $script->assertBookedFor($shipment);
+    }
+});
+
+it('tells redex the area a user confirmed, by the id it routes on and the name it prints', function () {
+    $script = new RedExScript;
+
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script)->assertNotified();
+
+    /**
+     * Both, and both recorded, at the head of the row: RedEx routes on the id
+     * and prints the name, and a name looked up afresh when the parcel goes
+     * could be a name the cached list has since changed. What the row says was
+     * sent is what was sent — exactly, no more keys and no fewer.
+     */
+    expect(Shipment::sole()->parcel_details)->toBe($script->parcelRowFor($script->parcelDefaults()));
+
+    $script->assertBookedFor(Shipment::sole());
+});
+
+/*
+|--------------------------------------------------------------------------
 | Pathao's own access token
 |--------------------------------------------------------------------------
 |
-| One Courier's own machinery, and so the one section here that names a
-| Courier. Everything above is a shared body run once per Courier over the
+| The other of the two sections here that names a Courier, and for the same
+| reason. Everything above is a shared body run once per Courier over the
 | dataset, because every Courier books a parcel the same way from the outside;
 | a token issued, held and renewed has no outside to share. Pathao is the only
 | one of the three that must be authenticated before it can be asked anything,
