@@ -5,6 +5,7 @@ namespace App\Support\Couriers;
 use App\Enums\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
+use App\Support\Settings\CourierSettings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -24,6 +25,10 @@ use Illuminate\Support\Facades\Log;
  * be an attempt the Merchant is shown, filtered and reported on that never
  * cost them anything. The row is written only once a Courier has answered
  * with a Consignment.
+ *
+ * One thing does outlive a refusal, and only one: what a User corrected about
+ * the Order in the send dialog (`correct()`). That is their own work and not
+ * an attempt, and it is most often the very thing the Courier objected to.
  */
 class CourierBooker
 {
@@ -38,28 +43,40 @@ class CourierBooker
      * corrects on the next attempt is visibly different from what went out on
      * this one.
      */
-    private const PLACEHOLDER_NAME = 'Customer';
+    public const PLACEHOLDER_NAME = 'Customer';
 
-    private const PLACEHOLDER_ADDRESS = 'Not provided';
+    public const PLACEHOLDER_ADDRESS = 'Not provided';
+
+    public function __construct(private readonly CourierSettings $settings) {}
 
     /**
      * Book this Order with this Courier and answer with the Shipment that
      * records it.
      *
-     * The whole of it happens under the Order's lock, including the call
+     * The booking happens under the Order's lock, including the call
      * itself: "an Order has at most one Active Shipment" is the invariant
      * that stops a Merchant paying for two parcels, and a lock released
      * before the Courier answers does not hold it. Only this Order's row is
      * held, and only for as long as one Courier takes to answer.
+     *
+     * The details are what a User confirmed in the send dialog, or `none()`
+     * where nobody was asked. Their corrections are saved first and on their
+     * own (`correct()`), so the Order carries the address we now know is right
+     * and the attempt, reading it back under the lock, snapshots exactly what
+     * went out with it.
      *
      * @throws OrderAlreadyShipping when a parcel is already out for this Order.
      * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
      * @throws CourierRefusedBooking when the Courier answered and said no.
      * @throws CourierUnreachable when the Courier could not be asked.
      */
-    public function book(Order $order, Courier $courier): Shipment
+    public function book(Order $order, Courier $courier, ?ParcelDetails $details = null): Shipment
     {
-        return DB::transaction(function () use ($order, $courier): Shipment {
+        $details ??= ParcelDetails::none();
+
+        $this->correct($order, $details);
+
+        return DB::transaction(function () use ($order, $courier, $details): Shipment {
             /** Read fresh under the lock: the screen the User pressed the button on may be minutes old. */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
 
@@ -72,7 +89,7 @@ class CourierBooker
                 throw new CourierNotUsable($refusal);
             }
 
-            $shipment = $this->attempt($locked, $courier);
+            $shipment = $this->attempt($locked, $courier, $details);
 
             try {
                 $booked = $courier->driver()->book($shipment);
@@ -104,6 +121,33 @@ class CourierBooker
     }
 
     /**
+     * Save what the User corrected onto the Order, before a Courier is asked
+     * anything and in a transaction of its own.
+     *
+     * Deliberately outside the booking's, which is the one place this class
+     * keeps something short-lived: a Courier that refuses a parcel usually
+     * refuses it *because* the address was wrong, and a correction rolled back
+     * with the refusal is the User's own work thrown away at exactly the moment
+     * they are rescuing the Order. What they typed is true whatever the Courier
+     * then says about it, so it is committed on its own account.
+     *
+     * The invariant is untouched: the booking re-reads the Order under its own
+     * lock and still refuses a second parcel there.
+     */
+    private function correct(Order $order, ParcelDetails $details): void
+    {
+        $corrections = $details->corrections();
+
+        if ($corrections === []) {
+            return;
+        }
+
+        DB::transaction(function () use ($order, $corrections): void {
+            Order::query()->lockForUpdate()->findOrFail($order->getKey())->fill($corrections)->save();
+        });
+    }
+
+    /**
      * The attempt as it will be sent, not yet saved: its own invoice
      * reference, what the Courier is to collect, and the recipient as this
      * attempt is being told it.
@@ -111,8 +155,14 @@ class CourierBooker
      * Unsaved on purpose — a Courier that refuses must leave nothing behind —
      * and the driver takes it rather than the Order so that what was sent and
      * what was recorded cannot drift apart.
+     *
+     * The recipient is read off the Order, which the corrections have already
+     * been written onto. The note is the one detail read off the dialog
+     * instead: it is a Customer's own answer to a Merchant's question, and an
+     * instruction a User adds for this rider does not get to rewrite what the
+     * Customer wrote on the Page.
      */
-    private function attempt(Order $order, Courier $courier): Shipment
+    private function attempt(Order $order, Courier $courier, ParcelDetails $details): Shipment
     {
         return $order->shipments()->make([
             'courier' => $courier,
@@ -122,7 +172,30 @@ class CourierBooker
             'recipient_phone' => $order->customer_phone,
             'recipient_address' => $order->customer_address ?: self::PLACEHOLDER_ADDRESS,
             'recipient_district' => $order->customer_district,
-            'recipient_note' => $order->deliveryNote(),
+            'recipient_note' => $details->noteOr($order->deliveryNote()),
+            'parcel_details' => $this->parcelDetails($courier, $details),
         ]);
+    }
+
+    /**
+     * Everything this Courier asks about the parcel itself, resolved once and
+     * written onto the attempt: what the User overrode where they overrode it,
+     * the Merchant's installation-wide default everywhere else.
+     *
+     * Resolved here rather than in the driver so that every Courier's defaults
+     * are applied the same way, and so a Courier asking a question nobody was
+     * shown — a choice with one answer — still sends it.
+     *
+     * @return array<string, string>
+     */
+    private function parcelDetails(Courier $courier, ParcelDetails $details): array
+    {
+        $resolved = [];
+
+        foreach ($courier->driver()->parcelFields() as $field) {
+            $resolved[$field->name] = $field->valueFor($details->answerTo($field->name), $this->settings);
+        }
+
+        return $resolved;
     }
 }

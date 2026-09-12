@@ -36,12 +36,24 @@ final class SteadfastScript extends CourierScript
         return Courier::Steadfast;
     }
 
+    /**
+     * What Steadfast is told about an ordinary parcel of this Merchant's, set
+     * the way a Merchant filling in Settings sets it — deliberately not the
+     * shipped config defaults, so a test proving the dialog opens on the
+     * Merchant's decision cannot pass by accident on ours.
+     */
+    private const DELIVERY_TYPE = '1';
+
+    private const ITEM_TYPE = 'Clothing';
+
     public function makeUsable(): void
     {
         app(CourierSettings::class)->with([
             'steadfastEnabled' => true,
             'steadfastApiKey' => self::API_KEY,
             'steadfastSecretKey' => self::SECRET_KEY,
+            'steadfastDeliveryType' => self::DELIVERY_TYPE,
+            'steadfastItemType' => self::ITEM_TYPE,
         ])->save();
 
         app()->forgetInstance(CourierSettings::class);
@@ -125,6 +137,47 @@ final class SteadfastScript extends CourierScript
     public function assertBookingsSent(int $count): void
     {
         Http::assertSentCount($count);
+    }
+
+    /**
+     * Steadfast's two: the delivery type and what it is told is inside. It has
+     * no notion of a pickup store, so there is none here to ask about.
+     *
+     * @return array<string, string>
+     */
+    public function parcelDefaults(): array
+    {
+        return [
+            'deliveryType' => self::DELIVERY_TYPE,
+            'itemType' => self::ITEM_TYPE,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function parcelOverrides(): array
+    {
+        return [
+            'deliveryType' => '0',
+            'itemType' => 'Fragile glassware',
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     */
+    public function assertBookedWithParcelDetails(array $values): void
+    {
+        Http::assertSent(fn (Request $request): bool => $request->url() === $this->bookingUrl()
+            && $request['delivery_type'] === $values['deliveryType']
+            && $request['item_description'] === $values['itemType']);
+    }
+
+    /** Steadfast collects from one arrangement per account and takes no store at all. */
+    public function pickupStoreCount(): int
+    {
+        return 0;
     }
 
     /**

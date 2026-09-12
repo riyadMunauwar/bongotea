@@ -12,7 +12,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
 | app/Filament/Resources/Orders/** | .ai/rules/orders.md |
 | app/Support/PageCache/**, public/index.php, public/.htaccess, public/robots.txt, deploy/** | .ai/rules/page-cache.md |
-| app/Support/Payments/**, app/Models/Payment.php, app/Http/Controllers/PaymentController.php, resources/views/checkout/processing.blade.php, tests/Fixtures/Payments/**, app/Models/Shipment.php | .ai/rules/payments.md |
+| app/Support/Payments/**, app/Models/Payment.php, app/Http/Controllers/PaymentController.php, resources/views/checkout/processing.blade.php, tests/Fixtures/Payments/** | .ai/rules/payments.md |
 | app/Filament/Resources/** | .ai/rules/resources.md |
 | routes/*.php, app/Http/Controllers/TrackingController.php | .ai/rules/routes.md |
 | app/Filament/Resources/Pages/Schemas/OrderComplete/** | .ai/rules/schemas-order-complete.md |

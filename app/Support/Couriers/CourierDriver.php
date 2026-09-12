@@ -62,6 +62,23 @@ interface CourierDriver
     public function canonicalStatus(string $rawStatus): ShipmentStatus;
 
     /**
+     * What this Courier needs to know about a parcel beyond who it is going
+     * to — and what no other Courier is asked.
+     *
+     * The one place a Courier's own questions are spelled out, so the send
+     * dialog draws the chosen Courier's and nobody else's, and a fourth
+     * Courier's arrive with its driver rather than with a change to a screen.
+     * Each field names the settings property holding the installation's
+     * default for it, which is what makes the dialog an override of what the
+     * Merchant decided once rather than a second place to decide it.
+     *
+     * Empty for a Courier that asks nothing beyond the recipient.
+     *
+     * @return list<ParcelField>
+     */
+    public function parcelFields(): array;
+
+    /**
      * The names of the credentials this driver needs from the installation's
      * Courier settings, every one of which is a secret there.
      *

@@ -79,6 +79,15 @@ class Steadfast implements CourierDriver
      */
     private const RE_ASK_INTERVAL_SECONDS = 1800;
 
+    /**
+     * The two things Steadfast is told about the parcel itself, by the names
+     * its own `ParcelField`s are declared under. Named once, because a
+     * renamed key read under the old spelling sends a blank field.
+     */
+    private const DELIVERY_TYPE = 'deliveryType';
+
+    private const ITEM_TYPE = 'itemType';
+
     public function __construct(
         private readonly CourierSettings $settings,
         private readonly Http $http,
@@ -112,8 +121,10 @@ class Steadfast implements CourierDriver
                 /** Major units, as Steadfast documents it: "including all charges", which is what the Order's total already is. */
                 'cod_amount' => Money::toMajor($shipment->collect_amount),
                 'note' => $shipment->recipient_note ?? '',
-                'item_description' => $this->settings->steadfastItemType,
-                'delivery_type' => $this->settings->steadfastDeliveryType,
+
+                /** Read off the attempt and never off Settings: what the row says was sent is what was sent. */
+                'item_description' => $shipment->parcelDetail(self::ITEM_TYPE) ?? '',
+                'delivery_type' => $shipment->parcelDetail(self::DELIVERY_TYPE) ?? '',
             ]);
         } catch (ConnectionException $exception) {
             throw new CourierUnreachable(
@@ -128,6 +139,38 @@ class Steadfast implements CourierDriver
     public function canonicalStatus(string $rawStatus): ShipmentStatus
     {
         return self::STATUSES[strtolower(trim($rawStatus))] ?? ShipmentStatus::Unknown;
+    }
+
+    /**
+     * The two things Steadfast is told about a parcel that are not the
+     * recipient: where it is going to be handed over, and what is inside it.
+     *
+     * No pickup store: Steadfast collects from one arrangement per account and
+     * has no notion of a store at all, so a User booking with it is never
+     * asked which warehouse the parcel leaves from.
+     *
+     * @return list<ParcelField>
+     */
+    public function parcelFields(): array
+    {
+        return [
+            ParcelField::choice(
+                self::DELIVERY_TYPE,
+                'Delivery type',
+                CourierSettings::property($this->courier(), 'DeliveryType'),
+                [
+                    '0' => 'To the customer’s door',
+                    '1' => 'To a Steadfast point',
+                ],
+            ),
+
+            ParcelField::text(
+                self::ITEM_TYPE,
+                'What is inside',
+                CourierSettings::property($this->courier(), 'ItemType'),
+                'What the rider is told the parcel holds.',
+            ),
+        ];
     }
 
     /**

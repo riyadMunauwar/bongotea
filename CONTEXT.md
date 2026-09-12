@@ -194,6 +194,10 @@ _Avoid_: delivery, parcel, booking, dispatch, consignment
 The Courier's own identifier for a parcel, handed back when a Shipment is booked, and the only name that Courier will answer to afterwards. Every Courier spells it differently and issues it on its own terms, so a Consignment is quoted back and never interpreted, and it is never what the system knows a Shipment by.
 _Avoid_: tracking id, tracking code, AWB, waybill, reference
 
+**Parcel Detail**:
+Something one Courier needs told about a parcel that no other Courier asks about — how it is to be delivered, what is inside it, what it weighs, which store it leaves from. Each is declared by that Courier's driver and nowhere else, so the send dialog puts the chosen Courier's questions and no other's in front of a User, opened on what the Merchant decided once in Settings. A change there belongs to that parcel alone: it is recorded on the Shipment as sent and configures nothing. A question with only one possible answer — a Merchant with a single pickup store — is never asked, and is sent all the same.
+_Avoid_: courier option, custom field, extra field, metadata, parameter
+
 **Shipment Event**:
 One thing that happened to a Shipment, as the system came to know it. It carries two times and not one: when the Courier says it happened, where the Courier said, and when we found out, which is always. The two sit far apart for a Courier that must be asked rather than one that announces, and a timeline showing only one would quietly misdate every parcel from the couriers that say least.
 _Avoid_: status change, tracking update, history entry, log

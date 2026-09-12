@@ -55,6 +55,44 @@ abstract class CourierScript
     /** Assert a booking went out for this Shipment carrying every field the Courier calls mandatory, filled. */
     abstract public function assertBookedFor(Shipment $shipment): void;
 
+    /**
+     * What this Courier asks about a parcel beyond the recipient, by the name
+     * its driver declares, and the value `makeUsable()` left in Settings as
+     * the installation's default for it.
+     *
+     * What the send dialog should open pre-filled with. Empty for a Courier
+     * that asks nothing.
+     *
+     * @return array<string, string>
+     */
+    abstract public function parcelDefaults(): array;
+
+    /**
+     * The same questions answered differently, as a User overriding them for
+     * one unusual parcel would. Every value differs from `parcelDefaults()`.
+     *
+     * @return array<string, string>
+     */
+    abstract public function parcelOverrides(): array;
+
+    /**
+     * Assert the booking that went out carried these answers to this Courier's
+     * own questions, in the Courier's own field names.
+     *
+     * @param  array<string, string>  $values
+     */
+    abstract public function assertBookedWithParcelDetails(array $values): void;
+
+    /**
+     * How many pickup stores this Courier gives the Merchant a choice between
+     * on an installation `makeUsable()` has set up.
+     *
+     * Zero for a Courier with no notion of a store at all, one for a Merchant
+     * with a single warehouse — and either way nobody is asked which store the
+     * parcel leaves from, which is what this is here to prove.
+     */
+    abstract public function pickupStoreCount(): int;
+
     /** Assert the Courier was asked to take a parcel exactly this many times since the last fake was laid. */
     abstract public function assertBookingsSent(int $count): void;
 

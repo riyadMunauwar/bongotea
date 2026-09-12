@@ -114,6 +114,51 @@ class Pathao implements CourierDriver
         return ShipmentStatus::Unknown;
     }
 
+    /**
+     * What Pathao is told about a parcel: which of the Merchant's stores it
+     * leaves from, how fast it is to go, what it holds, and what it weighs.
+     *
+     * The store is declared as a choice and is therefore not put in front of a
+     * User until this installation knows of more than one — which, while a
+     * store is a single Setting, is never. Declaring it rather than leaving it
+     * out is what makes a Merchant with two stores a change to `pickupStores()`
+     * and to nothing else.
+     *
+     * @return list<ParcelField>
+     */
+    public function parcelFields(): array
+    {
+        return [
+            ParcelField::pickupStore($this->courier(), $this->settings),
+
+            ParcelField::choice(
+                'deliveryType',
+                'Delivery type',
+                CourierSettings::property($this->courier(), 'DeliveryType'),
+                [
+                    '48' => 'Normal delivery',
+                    '12' => 'On demand',
+                ],
+            ),
+
+            ParcelField::choice(
+                'itemType',
+                'What is inside',
+                CourierSettings::property($this->courier(), 'ItemType'),
+                [
+                    '2' => 'A parcel',
+                    '1' => 'A document',
+                ],
+            ),
+
+            ParcelField::number(
+                'parcelWeight',
+                'Weight (kg)',
+                CourierSettings::property($this->courier(), 'ParcelWeight'),
+            ),
+        ];
+    }
+
     public function refusal(): ?string
     {
         return $this->settings->refusal($this->courier());

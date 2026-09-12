@@ -14,11 +14,17 @@ use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Models\User;
+use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Couriers\CourierBooker;
 use App\Support\Couriers\CourierNotUsable;
 use App\Support\Couriers\OrderAlreadyShipping;
+use App\Support\Money;
+use App\Support\Orders\CapturedAnswer;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Livewire\Notifications;
 use Filament\Notifications\Notification;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -72,10 +78,79 @@ function orderReadyToSend(CourierScript $script, array $attributes = []): Order
  * Press "Send with courier" on one of the Order's screens, choosing this
  * Courier, the way a User on the call does.
  */
-function sendWithCourier(Order $order, CourierScript $script, string $page = ViewOrder::class): Testable
+function sendWithCourier(Order $order, CourierScript $script, string $page = ViewOrder::class, array $confirming = []): Testable
 {
     return Livewire::test($page, ['record' => $order->getKey()])
-        ->callAction('bookWithCourier', ['courier' => $script->courier()->value]);
+        ->callAction('bookWithCourier', array_merge(['courier' => $script->courier()->value], $confirming));
+}
+
+/**
+ * Open the send dialog on this Courier without sending anything, the way a
+ * User reading back what is about to go out does.
+ */
+function openSendDialog(Order $order, CourierScript $script, string $page = ViewOrder::class): Testable
+{
+    return Livewire::test($page, ['record' => $order->getKey()])
+        ->mountAction('bookWithCourier')
+        ->setActionData(['courier' => $script->courier()->value]);
+}
+
+/**
+ * This Courier's own answers, where the dialog keeps them: under the Courier's
+ * own name, so two couriers asking the same thing cannot read each other's.
+ *
+ * @param  array<string, string>  $answers
+ * @return array<string, string>
+ */
+function answering(CourierScript $script, array $answers): array
+{
+    $keyed = [];
+
+    foreach ($answers as $name => $answer) {
+        $keyed["{$script->courier()->value}.{$name}"] = $answer;
+    }
+
+    return $keyed;
+}
+
+/**
+ * An Order carrying the note its Customer wrote for the rider, which is a
+ * Merchant's own question keyed `note` and not a column.
+ */
+function orderWithDeliveryNote(CourierScript $script, string $note): Order
+{
+    $order = orderReadyToSend($script);
+
+    $order->update(['answers' => [
+        new CapturedAnswer('note', 'Note for the courier', CheckoutFieldType::Textarea, $note),
+    ]]);
+
+    return $order->refresh();
+}
+
+/**
+ * Every Courier on this installation switched on and supplied, so a dialog
+ * claiming to draw only the chosen Courier's questions has the other two to be
+ * wrong about.
+ *
+ * Built from each driver's own credential declaration rather than from a list
+ * here, so a fourth Courier is covered the moment it exists.
+ */
+function makeEveryCourierUsable(): void
+{
+    $supplied = [];
+
+    foreach (Courier::cases() as $courier) {
+        $supplied[CourierSettings::property($courier, 'Enabled')] = true;
+
+        foreach ($courier->driver()->credentialProperties() as $credential) {
+            $supplied[$credential] = 'supplied';
+        }
+    }
+
+    app(CourierSettings::class)->with($supplied)->save();
+
+    app()->forgetInstance(CourierSettings::class);
 }
 
 /**
@@ -505,4 +580,308 @@ it('asks whether a courier can be used at the booking itself, not only at the sc
     /** The one wording Settings gives, and not a word about the Courier refusing: nobody asked it anything. */
     expect($refusal?->getMessage())->toBe($script->courier()->getLabel().' is switched off in Settings.')
         ->and(Shipment::count())->toBe(0);
+})->with('courier scripts');
+
+/*
+|--------------------------------------------------------------------------
+| The send dialog
+|--------------------------------------------------------------------------
+*/
+
+it('shows what the courier will be told, and sends nothing until the user says so', function (CourierScript $script) {
+    $order = orderWithDeliveryNote($script, 'Ring the bell twice.');
+
+    openSendDialog($order, $script)
+        ->assertActionDataSet([
+            'recipientName' => 'Rahim Uddin',
+            'recipientPhone' => $order->customer_phone,
+            'recipientAddress' => 'House 4, Road 12, Banani',
+            'recipientDistrict' => 'Dhaka',
+            'note' => 'Ring the bell twice.',
+        ])
+
+        /** 990.00 for the jacket and 60.00 to get it there, said before the parcel goes rather than discovered after. */
+        ->assertMountedActionModalSee(Money::format($order->total));
+
+    expect(Shipment::count())->toBe(0);
+})->with('courier scripts');
+
+it('reads back what a blank detail will go out as, rather than an empty box', function (CourierScript $script) {
+    $order = orderReadyToSend($script, ['customer_name' => null, 'customer_address' => null]);
+
+    openSendDialog($order, $script)
+        ->assertSchemaComponentExists(
+            'recipientName',
+            checkComponentUsing: fn (TextInput $field): bool => $field->getPlaceholder() === CourierBooker::PLACEHOLDER_NAME,
+        )
+        ->assertSchemaComponentExists(
+            'recipientAddress',
+            checkComponentUsing: fn (Textarea $field): bool => $field->getPlaceholder() === CourierBooker::PLACEHOLDER_ADDRESS,
+        );
+})->with('courier scripts');
+
+it('sends a correction to the courier and saves it onto the order as well', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, [
+        'recipientName' => 'Rahim Uddin Ahmed',
+        'recipientAddress' => 'House 9, Road 3, Uttara',
+        'recipientDistrict' => 'Gazipur',
+    ])->assertNotified();
+
+    $shipment = Shipment::sole();
+
+    /** `assertBookedFor()` holds the request against the Shipment, so this is the corrected address reaching the Courier. */
+    $script->assertBookedFor($shipment);
+
+    expect($shipment->recipient_name)->toBe('Rahim Uddin Ahmed')
+        ->and($shipment->recipient_address)->toBe('House 9, Road 3, Uttara')
+        ->and($shipment->recipient_district)->toBe('Gazipur');
+
+    /** And the next person to open the Order sees the address we now know is right. */
+    expect($order->refresh()->customer_name)->toBe('Rahim Uddin Ahmed')
+        ->and($order->customer_address)->toBe('House 9, Road 3, Uttara')
+        ->and($order->customer_district)->toBe('Gazipur');
+})->with('courier scripts');
+
+it('leaves a detail the checkout never captured alone rather than reading a blank box as an erasure', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, [
+        'recipientName' => '   ',
+        'recipientAddress' => '',
+    ])->assertNotified();
+
+    expect($order->refresh()->customer_name)->toBe('Rahim Uddin')
+        ->and($order->customer_address)->toBe('House 4, Road 12, Banani');
+})->with('courier scripts');
+
+it('sends a note a user wrote for this rider without rewriting what the customer wrote', function (CourierScript $script) {
+    $order = orderWithDeliveryNote($script, 'Ring the bell twice.');
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, [
+        'note' => 'Ring the bell twice. Call before 9pm.',
+    ])->assertNotified();
+
+    expect(Shipment::sole()->recipient_note)->toBe('Ring the bell twice. Call before 9pm.')
+
+        /** The Customer's own answer to a Merchant's question, kept as they gave it (ADR-0006). */
+        ->and($order->refresh()->deliveryNote())->toBe('Ring the bell twice.');
+})->with('courier scripts');
+
+it('keeps a correction on the order when the courier refuses the parcel', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBookingRefused();
+
+    sendWithCourier($order, $script, ViewOrder::class, ['recipientAddress' => 'House 9, Road 3, Uttara'])
+        ->assertNotified($script->courier()->getLabel().' refused this parcel');
+
+    /**
+     * A Courier usually refuses a parcel *because* the address was wrong, so a
+     * correction rolled back with the refusal is the User's own work thrown
+     * away at the moment they are rescuing the Order. Nothing was sent all the
+     * same.
+     */
+    expect($order->refresh()->customer_address)->toBe('House 9, Road 3, Uttara')
+        ->and(Shipment::count())->toBe(0)
+        ->and($order->isShipping())->toBeFalse();
+})->with('courier scripts');
+
+it('keeps a correction on the order when the courier cannot be reached', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeOutage();
+
+    sendWithCourier($order, $script, ViewOrder::class, ['recipientAddress' => 'House 9, Road 3, Uttara'])
+        ->assertNotified($script->courier()->getLabel().' could not be reached');
+
+    expect($order->refresh()->customer_address)->toBe('House 9, Road 3, Uttara')
+        ->and(Shipment::count())->toBe(0);
+})->with('courier scripts');
+
+it('sends no note at all when the user clears the box', function (CourierScript $script) {
+    $order = orderWithDeliveryNote($script, 'Ring the bell twice.');
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, ['note' => ''])->assertNotified();
+
+    /** An emptied box means this parcel carries no note, never the Customer's note over again. */
+    expect(Shipment::sole()->recipient_note)->toBeNull()
+        ->and($order->refresh()->deliveryNote())->toBe('Ring the bell twice.');
+})->with('courier scripts');
+
+it('keeps each attempt as that attempt was told it, so two attempts on one order differ', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, ['recipientAddress' => 'House 4, Road 12, Banani']);
+
+    $first = Shipment::sole();
+
+    /** The parcel came back, the Customer gave a better address, and it goes again. */
+    $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
+
+    courierAnsweringAfresh();
+    $script->fakeBooked();
+
+    sendWithCourier($order->refresh(), $script, ViewOrder::class, ['recipientAddress' => 'House 9, Road 3, Uttara'])
+        ->assertNotified();
+
+    $second = $order->refresh()->shipments()->get()->last();
+
+    expect($first->refresh()->recipient_address)->toBe('House 4, Road 12, Banani')
+        ->and($second->recipient_address)->toBe('House 9, Road 3, Uttara')
+        ->and($order->customer_address)->toBe('House 9, Road 3, Uttara');
+})->with('courier scripts');
+
+/*
+|--------------------------------------------------------------------------
+| What each courier asks of its own
+|--------------------------------------------------------------------------
+*/
+
+it('asks the chosen courier\'s own questions and no other courier\'s', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    /** Every Courier offered at once, so "only its own" is a claim with something to be wrong about. */
+    makeEveryCourierUsable();
+
+    $dialog = openSendDialog($order, $script);
+
+    foreach (array_keys($script->parcelDefaults()) as $question) {
+        $dialog->assertSchemaComponentVisible("{$script->courier()->value}.{$question}");
+    }
+
+    foreach (Courier::cases() as $courier) {
+        if ($courier === $script->courier()) {
+            continue;
+        }
+
+        foreach ($courier->driver()->parcelFields() as $field) {
+            if (! $field->isWorthAsking()) {
+                continue;
+            }
+
+            $dialog->assertSchemaComponentHidden("{$courier->value}.{$field->name}");
+        }
+    }
+})->with('courier scripts');
+
+it('opens the courier\'s own questions on what the merchant decided in settings', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    openSendDialog($order, $script)
+        ->assertActionDataSet(answering($script, $script->parcelDefaults()))
+        ->callMountedAction()
+        ->assertNotified();
+
+    $script->assertBookedWithParcelDetails($script->parcelDefaults());
+
+    /** Written onto the attempt, so what the row says was sent is what was sent. */
+    expect(Shipment::sole()->parcel_details)->toBe($script->parcelDefaults());
+})->with('courier scripts');
+
+it('sends what a user overrode for this parcel, and leaves the installation\'s own defaults alone', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, answering($script, $script->parcelOverrides()))
+        ->assertNotified();
+
+    $script->assertBookedWithParcelDetails($script->parcelOverrides());
+
+    $first = Shipment::sole();
+
+    expect($first->parcel_details)->toBe($script->parcelOverrides());
+
+    /** The parcel came back and the next one goes out on the Merchant's defaults: the dialog configured nothing. */
+    $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
+
+    courierAnsweringAfresh();
+    $script->fakeBooked();
+
+    sendWithCourier($order->refresh(), $script)->assertNotified();
+
+    $script->assertBookedWithParcelDetails($script->parcelDefaults());
+})->with('courier scripts');
+
+it('never asks which store a parcel leaves from while the merchant has only one', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $dialog = openSendDialog($order, $script);
+
+    /** A choice of one is not a choice; a Merchant with a second store starts being asked with no change to the dialog. */
+    $script->pickupStoreCount() > 1
+        ? $dialog->assertSchemaComponentVisible("{$script->courier()->value}.pickupStore")
+        : $dialog->assertSchemaComponentDoesNotExist("{$script->courier()->value}.pickupStore");
+})->with('courier scripts');
+
+it('never asks which store a parcel leaves from, even of a courier that insists on one', function () {
+    makeEveryCourierUsable();
+
+    /** One warehouse each, which is what the Merchants this is for have. */
+    $stores = [];
+    $insisting = 0;
+
+    foreach (Courier::cases() as $courier) {
+        $stores[CourierSettings::property($courier, 'PickupStore')] = '12345';
+
+        foreach ($courier->driver()->parcelFields() as $field) {
+            $insisting += $field->name === 'pickupStore' ? 1 : 0;
+        }
+    }
+
+    app(CourierSettings::class)->with($stores)->save();
+    app()->forgetInstance(CourierSettings::class);
+
+    /** Or this proves nothing: some Courier in the registry must actually have a store to be asked about. */
+    expect($insisting)->toBeGreaterThan(0);
+
+    $dialog = Livewire::test(ViewOrder::class, ['record' => Order::factory()->create()->getKey()])
+        ->mountAction('bookWithCourier');
+
+    foreach (Courier::cases() as $courier) {
+        $dialog->assertSchemaComponentDoesNotExist("{$courier->value}.pickupStore");
+    }
+});
+
+it('offers no courier the installation cannot speak to, and says why in settings rather than in the dialog', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    /** Every other Courier switched on and left unsupplied: meant to be used, and not usable yet. */
+    $enabled = [];
+
+    foreach (Courier::cases() as $courier) {
+        if ($courier !== $script->courier()) {
+            $enabled[CourierSettings::property($courier, 'Enabled')] = true;
+        }
+    }
+
+    app(CourierSettings::class)->with($enabled)->save();
+    app()->forgetInstance(CourierSettings::class);
+
+    openSendDialog($order, $script)
+        ->assertSchemaComponentExists(
+            'courier',
+            checkComponentUsing: fn (Select $chooser): bool => array_keys($chooser->getOptions()) === [$script->courier()->value],
+        );
+
+    /** And the refusal itself is worded in one place, which is Settings, in the words every screen draws. */
+    foreach (Courier::cases() as $courier) {
+        if ($courier !== $script->courier()) {
+            expect(app(CourierSettings::class)->refusal($courier))->toBe("{$courier->getLabel()} has blank credentials in Settings.");
+        }
+    }
 })->with('courier scripts');

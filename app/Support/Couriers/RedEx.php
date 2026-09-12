@@ -104,6 +104,42 @@ class RedEx implements CourierDriver
         return ShipmentStatus::Unknown;
     }
 
+    /**
+     * What RedEx is told about a parcel: which pickup store it leaves from,
+     * what it weighs and what it is worth.
+     *
+     * The weight and the declared value are the two RedEx refuses a parcel
+     * without and the system holds neither — no Page asks a Customer how heavy
+     * their order is — so the Merchant's defaults are what make a RedEx
+     * booking possible at all, and this dialog is where an unusual parcel
+     * departs from them.
+     *
+     * The store is declared as a choice and so is never put in front of a User
+     * while this installation knows of only one.
+     *
+     * @return list<ParcelField>
+     */
+    public function parcelFields(): array
+    {
+        return [
+            ParcelField::pickupStore($this->courier(), $this->settings),
+
+            ParcelField::number(
+                'parcelWeight',
+                'Weight (kg)',
+                CourierSettings::property($this->courier(), 'ParcelWeight'),
+                'RedEx refuses a parcel with no weight.',
+            ),
+
+            ParcelField::number(
+                'declaredValue',
+                'Declared value',
+                CourierSettings::property($this->courier(), 'DeclaredValue'),
+                'What the parcel is declared to be worth, in major units.',
+            ),
+        ];
+    }
+
     public function refusal(): ?string
     {
         return $this->settings->refusal($this->courier());

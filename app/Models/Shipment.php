@@ -45,6 +45,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
     'recipient_address',
     'recipient_district',
     'recipient_note',
+    'parcel_details',
     'booked_at',
     'abandoned_at',
     'abandoned_by',
@@ -64,6 +65,7 @@ class Shipment extends Model
             'courier_charge' => 'integer',
             'booked_at' => 'datetime',
             'abandoned_at' => 'datetime',
+            'parcel_details' => 'array',
             'booking_response' => 'array',
         ];
     }
@@ -86,6 +88,23 @@ class Shipment extends Model
     public static function nextInvoiceReference(Order $order): string
     {
         return $order->order_number.'-'.($order->shipments()->count() + 1);
+    }
+
+    /**
+     * What this Courier was told about the parcel itself, by the name its
+     * driver declared the `ParcelField` under, or null where it was told
+     * nothing of the sort.
+     *
+     * A driver reads what it sends from here rather than from Settings, so a
+     * default changed between two attempts cannot rewrite what the first one
+     * carried, and a per-parcel override in the send dialog is visible on the
+     * row for as long as the row lives.
+     */
+    public function parcelDetail(string $name): ?string
+    {
+        $value = $this->parcel_details[$name] ?? null;
+
+        return is_scalar($value) ? (string) $value : null;
     }
 
     /**
