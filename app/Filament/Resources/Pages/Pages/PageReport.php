@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Pages\Pages;
 
 use App\Filament\Concerns\HasReportingWindow;
 use App\Filament\Resources\Pages\PageResource;
+use App\Filament\Widgets\DeliveryMixTable;
+use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
@@ -30,7 +32,7 @@ use Illuminate\Contracts\Support\Htmlable;
  * `ScopedToPage`, which Filament fills from
  * `InteractsWithRecord::getWidgetData()`, and asks `ReportingQuery` for the
  * same figures over that Page alone. They stay lazy, so opening the screen
- * is not held up by four aggregate queries, and a Page that never took an
+ * is not held up by six aggregate queries, and a Page that never took an
  * Order reads as zeros and an empty chart rather than as an error. A
  * retired Page still reports — `PageResource` resolves a trashed record,
  * and what it earned before it was taken down is still worth reading.
@@ -109,7 +111,9 @@ class PageReport extends ResourcePage
 
     /**
      * The report: the stat tiles and Sales over time full width, then Top
-     * Products beside the Payment Method mix.
+     * Products beside the Payment Method mix and the Order status breakdown
+     * beside the Delivery mix — how much the Page sold, then what became of
+     * the Orders and where they went.
      *
      * Named here rather than discovered and sorted, because the first thing
      * asked of a single Page is which of its Products carries it — the
@@ -125,6 +129,8 @@ class PageReport extends ResourcePage
             SalesOverTimeChart::class,
             TopProductsTable::class,
             PaymentMethodMixChart::class,
+            OrderStatusBreakdownChart::class,
+            DeliveryMixTable::class,
         ];
     }
 

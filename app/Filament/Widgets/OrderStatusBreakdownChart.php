@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\OrderStatus;
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\ReportingWindow;
 use Filament\Support\RawJs;
@@ -20,11 +21,17 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
  * here counts. A window with no Orders draws an empty ring rather than an
  * error.
  *
+ * One class in both places it is drawn: the whole installation on the
+ * Dashboard, and one Page on that Page's Report, which is the record
+ * `ScopedToPage` hands to the module — nothing else here changes, so a Page
+ * whose Orders are all still New simply draws one arc.
+ *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class OrderStatusBreakdownChart extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ScopedToPage;
 
     /**
      * The slice colours, one per status in the order the ring is drawn:
@@ -56,7 +63,7 @@ class OrderStatusBreakdownChart extends ChartWidget
      */
     protected function getData(): array
     {
-        $breakdown = app(ReportingQuery::class)->statusBreakdown(ReportingWindow::fromFilters($this->pageFilters));
+        $breakdown = app(ReportingQuery::class)->statusBreakdown(ReportingWindow::fromFilters($this->pageFilters), $this->record);
         $statuses = OrderStatus::cases();
 
         return [

@@ -360,8 +360,9 @@ function orderCapturedAt(string $instant, int $subtotal = 50000, array $attribut
  * Clay mug, due on delivery) — 820.00 across the window, 410.00 an Order —
  * while the other Page took 960.00 today.
  *
- * Read by both screens that carry a Page's report, which is why it lives
- * here rather than in whichever suite needed it first.
+ * Every Order is delivered under a label and to a District its own Page uses
+ * and the other never does, so a figure about delivery names the Page it
+ * belongs to as plainly as a figure about money does.
  *
  * @return array{Page, Page}
  */
@@ -376,7 +377,9 @@ function twoReportedPages(): array
 
     $today = Order::factory()->create([
         'page_id' => $reported->id,
+        'delivery_label' => 'Inside Dhaka',
         'delivery_charge' => 6000,
+        'customer_district' => 'Dhaka',
         'payment_method' => PaymentMethod::Bkash,
         'created_at' => now(),
     ]);
@@ -385,7 +388,9 @@ function twoReportedPages(): array
 
     $earlier = Order::factory()->create([
         'page_id' => $reported->id,
+        'delivery_label' => 'Inside Dhaka',
         'delivery_charge' => 6000,
+        'customer_district' => 'Dhaka',
         'payment_method' => PaymentMethod::CashOnDelivery,
         'created_at' => now()->subDays(3),
     ]);
@@ -393,7 +398,9 @@ function twoReportedPages(): array
 
     $elsewhere = Order::factory()->create([
         'page_id' => $other->id,
+        'delivery_label' => 'Outside Dhaka',
         'delivery_charge' => 6000,
+        'customer_district' => 'Sylhet',
         'payment_method' => PaymentMethod::CashOnDelivery,
         'created_at' => now(),
     ]);

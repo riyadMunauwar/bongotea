@@ -8,7 +8,7 @@ use Carbon\CarbonInterface;
 /**
  * One line of the Page leaderboard: a Page and what its Orders in the
  * window came to, by the glossary's rules. The Page is carried whole,
- * trashed or not, so the widget can link to its edit screen and say it is
+ * trashed or not, so the widget can link to its Report and say it is
  * deleted; an Order whose Page was deleted for good has only its recorded
  * slug left, and the row carries that instead with no Page at all.
  *

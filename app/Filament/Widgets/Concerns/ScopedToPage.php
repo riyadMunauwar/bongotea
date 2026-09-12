@@ -9,9 +9,8 @@ use App\Models\Page;
  *
  * A report widget is one class wherever it is drawn: on the Dashboard the
  * property is null and the figures cover the whole installation, and on a
- * screen about one Page — its Page Report, and its edit screen while that
- * still carries a report — it holds that record and the same figures cover
- * that Page alone. Filament hands a resource page's record to every
+ * Page Report it holds that Page and the same figures cover that Page
+ * alone. Filament hands a resource page's record to every
  * widget it draws under exactly this name
  * (`InteractsWithRecord::getWidgetData()`), so declaring the property is
  * the whole of the wiring; the scoping itself is `ReportingQuery`'s, which

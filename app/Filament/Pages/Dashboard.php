@@ -63,8 +63,8 @@ class Dashboard extends BaseDashboard
     /**
      * The Reporting Window control itself, drawn here as a filter form
      * across the top of the screen. Its components are
-     * `HasReportingWindow`'s, so the Page edit screen's header action
-     * offers the same presets and the same two date pickers.
+     * `HasReportingWindow`'s, so a Page Report offers the same presets and
+     * the same two date pickers, drawn the same way.
      */
     public function filtersForm(Schema $schema): Schema
     {

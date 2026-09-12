@@ -28,7 +28,7 @@ use Illuminate\Support\Js;
  * widget labels the buckets and hands the figures to Chart.js.
  *
  * One class in both places it is drawn: the whole installation on the
- * Dashboard, and one Page on that Page's edit screen, which is the record
+ * Dashboard, and one Page on that Page's Report, which is the record
  * `ScopedToPage` hands to the module — nothing else here changes.
  *
  * Lazy, like every report widget, so the shell renders before the query.

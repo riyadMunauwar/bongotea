@@ -29,7 +29,7 @@ use Illuminate\Support\Js;
  * error.
  *
  * One class in both places it is drawn: the whole installation on the
- * Dashboard, and one Page on that Page's edit screen, which is the record
+ * Dashboard, and one Page on that Page's Report, which is the record
  * `ScopedToPage` hands to the module — nothing else here changes, so a Page
  * that offers only Cash on Delivery simply has one group of bars.
  *

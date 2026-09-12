@@ -31,8 +31,8 @@ use Illuminate\Support\Collection;
  * is reachable rather than drawn.
  *
  * It sits under the Payment Method mix on the Dashboard and above it on a
- * Page edit screen, where which Product carries this Page is the first
- * thing asked of the report.
+ * Page Report, where which Product carries this Page is the first thing
+ * asked of the report.
  *
  * A Product deleted since it sold keeps its row under the name its Order
  * Lines recorded, marked deleted while it is only soft-deleted, which is

@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\PaginatesRows;
+use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\DeliveryMix;
 use App\Support\Reporting\DeliveryMixRow;
@@ -30,12 +31,18 @@ use Illuminate\Support\Collection;
  * result is asked for once per render and read twice, because the heading
  * and the rows are two halves of one answer.
  *
+ * One class in both places it is drawn: the whole installation on the
+ * Dashboard, and one Page on that Page's Report, which is the record
+ * `ScopedToPage` hands to the module — nothing else here changes, so a Page
+ * that offers one Delivery Option simply has one row.
+ *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class DeliveryMixTable extends TableWidget
 {
     use InteractsWithPageFilters;
     use PaginatesRows;
+    use ScopedToPage;
 
     protected static ?int $sort = 60;
 
@@ -123,6 +130,6 @@ class DeliveryMixTable extends TableWidget
 
     private function mix(): DeliveryMix
     {
-        return $this->mix ??= app(ReportingQuery::class)->deliveryMix(ReportingWindow::fromFilters($this->pageFilters));
+        return $this->mix ??= app(ReportingQuery::class)->deliveryMix(ReportingWindow::fromFilters($this->pageFilters), $this->record);
     }
 }

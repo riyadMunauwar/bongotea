@@ -12,12 +12,10 @@ use Filament\Schemas\Components\Utilities\Get;
 
 /**
  * The Reporting Window control, and the screen state behind it, shared by
- * every screen that carries a report: the Dashboard and the Page Report
- * both draw it as a filter form above their widgets, and the Page edit
- * screen — where the form below is the reason a Merchant opened the screen
- * — offers it as a header action beside its own. All three read the same
- * presets, so a Merchant moving between them meets one control rather than
- * several that resemble each other.
+ * every screen that carries a report: the Dashboard and the Page Report,
+ * each of which draws it as a filter form across the top, above the widgets
+ * that obey it. Both read the same presets, so a Merchant moving between
+ * them meets one control rather than two that resemble each other.
  *
  * Filament's `HasFilters` is what the widgets are actually wired to: it
  * holds the chosen window under `$filters`, keeps it in the session per
@@ -38,11 +36,11 @@ trait HasReportingWindow
      * builder tolerates it anyway, for a session that stored them before
      * the bound was there.
      *
-     * Every field is live because each one is read by another: the pickers
-     * appear on the select, and each picker bounds the other. The Dashboard
-     * gets that for free — `HasFiltersForm` makes the whole filter schema
-     * live — but a modal's schema does not, and a bound that never
-     * re-evaluates is a calendar that offers a date the form then refuses.
+     * Every field says it is live, though a filter form is live already —
+     * `HasFiltersForm` makes the whole schema so. It is stated here because
+     * each field is read by another: the pickers appear on the select, and
+     * each picker bounds the other, and a bound that never re-evaluates is
+     * a calendar offering a date the form then refuses.
      *
      * @return array<Component>
      */
@@ -68,23 +66,5 @@ trait HasReportingWindow
                 ->live()
                 ->minDate(fn (Get $get): ?string => $get(ReportingWindow::FROM_FILTER)),
         ];
-    }
-
-    /**
-     * What the chosen window is called where the control itself is not on
-     * screen — a screen that keeps it behind a header action still has to
-     * say which days its figures cover, or a report pinned to Today reads
-     * as a Page that never sold. The preset's own name, or the two days a
-     * Custom window runs between as the Merchant reads them.
-     */
-    protected function reportingWindowName(): string
-    {
-        $window = ReportingWindow::fromFilters($this->filters);
-
-        if ($window->preset !== ReportingPreset::Custom) {
-            return $window->preset->label();
-        }
-
-        return $window->localStart()->format('j M').' – '.$window->localEnd()->subDay()->format('j M Y');
     }
 }

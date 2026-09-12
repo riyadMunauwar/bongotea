@@ -2,6 +2,8 @@
 
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Pages\Pages\PageReport;
+use App\Filament\Widgets\DeliveryMixTable;
+use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
@@ -11,6 +13,7 @@ use App\Models\Page;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
+use Filament\Widgets\Widget;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -19,12 +22,15 @@ beforeEach(function (): void {
 
 /*
 | The counting is proved against the query module in ReportingOverviewTest,
-| ReportingSalesOverTimeTest, ReportingProductRankingTest and
-| ReportingPaymentMixTest. What is asserted here is the screen a Merchant
+| ReportingSalesOverTimeTest, ReportingProductRankingTest,
+| ReportingPaymentMixTest, ReportingStatusBreakdownTest and
+| ReportingDeliveryMixTest. What is asserted here is the screen a Merchant
 | opens: that it is reachable at an address of its own, that it draws the
 | Dashboard's own widget classes in a stated order, that the Reporting
 | Window sits across the top as a form every other Page's Report opens on,
-| and that a screen about a Page's past offers no way to destroy the Page.
+| that a screen about a Page's past offers no way to destroy the Page — and
+| that the edit screen, which used to carry all of this, now carries none of
+| it and points here instead.
 |
 | Two seams, both of them existing. The rendered screen over HTTP is where
 | everything provable there is proved; a widget in isolation is driven only
@@ -40,6 +46,20 @@ function reportUrl(Page $page): string
     return PageResource::getUrl('report', ['record' => $page]);
 }
 
+/**
+ * The widgets the Report is made of, read off the screen itself rather than
+ * restated here: a seventh added to the Report has to stay off the edit
+ * screen too, and a list copied into the suite would let it through in
+ * silence. What the order is remains stated by hand, below, where it is the
+ * thing being asserted.
+ *
+ * @return list<class-string<Widget>>
+ */
+function pageReportWidgets(): array
+{
+    return array_values(app(PageReport::class)->getWidgets());
+}
+
 it('opens a Page\'s Report at an address of its own under the Pages resource', function () {
     [$reported] = twoReportedPages();
 
@@ -49,7 +69,7 @@ it('opens a Page\'s Report at an address of its own under the Pages resource', f
     $this->get(reportUrl($reported))->assertOk();
 });
 
-it('draws the Reporting Window across the top and then the report, Top Products before the Payment Method mix', function () {
+it('draws the Reporting Window across the top and then the six reports, Top Products before the Payment Method mix', function () {
     [$reported] = twoReportedPages();
 
     $this->get(reportUrl($reported))
@@ -58,6 +78,8 @@ it('draws the Reporting Window across the top and then the report, Top Products 
         ->assertSeeLivewire(SalesOverTimeChart::class)
         ->assertSeeLivewire(TopProductsTable::class)
         ->assertSeeLivewire(PaymentMethodMixChart::class)
+        ->assertSeeLivewire(OrderStatusBreakdownChart::class)
+        ->assertSeeLivewire(DeliveryMixTable::class)
         /** Lazy, so the screen carries only each mount; the window's control comes before all of them. */
         ->assertSeeInOrder([
             'Reporting Window',
@@ -65,17 +87,19 @@ it('draws the Reporting Window across the top and then the report, Top Products 
             'wire:name="'.SalesOverTimeChart::class.'"',
             'wire:name="'.TopProductsTable::class.'"',
             'wire:name="'.PaymentMethodMixChart::class.'"',
+            'wire:name="'.OrderStatusBreakdownChart::class.'"',
+            'wire:name="'.DeliveryMixTable::class.'"',
         ], escape: false);
 
     /**
      * The mount markers are the whole of the proof, and they are enough:
-     * the widgets' own sort puts the Payment Method mix above Top Products,
-     * so drawing them the other way round can only come from this screen
-     * saying so.
+     * the widgets' own sort puts the Payment Method mix above Top Products
+     * and the status breakdown above both, so drawing them in this order
+     * can only come from this screen saying so.
      *
-     * Each of them lazy, so four aggregate queries never hold up the screen.
+     * Each of them lazy, so six aggregate queries never hold up the screen.
      */
-    foreach ([OverviewStats::class, SalesOverTimeChart::class, TopProductsTable::class, PaymentMethodMixChart::class] as $widget) {
+    foreach (pageReportWidgets() as $widget) {
         expect($widget::isLazy())->toBeTrue();
     }
 });
@@ -87,14 +111,37 @@ it('reports one Page\'s figures and never another Page\'s', function () {
 
     /** Two Orders on this Page, 820.00 between them; the other Page's 960.00 is nowhere. */
     Livewire::test(OverviewStats::class, ['record' => $reported, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Orders')
+        ->assertSee('Sales')
+        ->assertSee('Average Order Value')
+        ->assertSee('Cancellation Rate')
+        ->assertSee('Unpaid')
+        ->assertSee('New awaiting call')
+        ->assertSee('Visits')
+        ->assertSee('Not counted')
         ->assertSee($symbol.'820.00')
         ->assertSee($symbol.'410.00')
         ->assertDontSee($symbol.'960.00');
 
     Livewire::test(TopProductsTable::class, ['record' => $reported, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Top Products')
         ->assertSee('Sylhet tea')
         ->assertSee('Clay mug')
         ->assertDontSee('Rangpur rug');
+
+    /** What became of this Page's Orders: its two, never the three the installation took. */
+    $statuses = pageChartData(OrderStatusBreakdownChart::class, $reported);
+
+    expect($statuses['labels'])->toBe(['New', 'Confirmed', 'Cancelled'])
+        ->and($statuses['datasets'][0]['data'])->toBe([2, 0, 0]);
+
+    /** And where they went: this Page delivers Inside Dhaka, the other Outside it. */
+    Livewire::test(DeliveryMixTable::class, ['record' => $reported, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Delivery mix')
+        ->assertSee('Inside Dhaka')
+        ->assertSee($symbol.'120.00')
+        ->assertSee('Most Orders to Dhaka (2)')
+        ->assertDontSee('Outside Dhaka');
 
     $sales = pageChartData(SalesOverTimeChart::class, $reported);
 
@@ -118,6 +165,13 @@ it('reports one Page\'s figures and never another Page\'s', function () {
     Livewire::test(TopProductsTable::class, ['record' => $other, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
         ->assertSee('Rangpur rug')
         ->assertDontSee('Sylhet tea');
+
+    expect(pageChartData(OrderStatusBreakdownChart::class, $other)['datasets'][0]['data'])->toBe([1, 0, 0]);
+
+    Livewire::test(DeliveryMixTable::class, ['record' => $other, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSee('Outside Dhaka')
+        ->assertSee('Most Orders to Sylhet (1)')
+        ->assertDontSee('Inside Dhaka');
 });
 
 it('opens on the last seven days and reveals the two pickers, each bounding the other, once Custom is chosen', function () {
@@ -182,7 +236,13 @@ it('narrows every widget when the window narrows, and opens every other Page\'s 
 
     expect($sales['labels'])->toHaveCount(24)
         ->and(array_sum($sales['datasets'][1]['data']))->toBe(1)
-        ->and($mix['labels'])->toBe(['bKash']);
+        ->and($mix['labels'])->toBe(['bKash'])
+        /** One Order left in the window, so one still New and one Delivery Charge collected. */
+        ->and(pageChartData(OrderStatusBreakdownChart::class, $reported, 'today')['datasets'][0]['data'])->toBe([1, 0, 0]);
+
+    Livewire::test(DeliveryMixTable::class, ['record' => $reported, 'pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+        ->assertSee($symbol.'60.00')
+        ->assertSee('Most Orders to Dhaka (1)');
 });
 
 it('names the Page in the heading and states Report in the breadcrumb', function () {
@@ -197,6 +257,25 @@ it('names the Page in the heading and states Report in the breadcrumb', function
         ->assertOk()
         ->assertSee('Summer combo')
         ->assertSee('Report');
+});
+
+it('leaves the edit screen carrying no figures at all, and pointing here instead', function () {
+    [$reported] = twoReportedPages();
+
+    $screen = $this->get(PageResource::getUrl('edit', ['record' => $reported]))->assertOk();
+
+    /**
+     * The exact half of the pair: not one of the six is mounted, which no
+     * absent label could prove. The label is the other half — a Reporting
+     * Window would be a control governing nothing.
+     */
+    foreach (pageReportWidgets() as $widget) {
+        $screen->assertDontSeeLivewire($widget);
+    }
+
+    $screen->assertDontSee('Reporting Window')
+        /** The way back to them, beside Preview. */
+        ->assertSee(reportUrl($reported));
 });
 
 it('offers Edit and Preview, and no way at all to destroy the Page', function () {

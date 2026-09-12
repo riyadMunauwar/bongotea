@@ -22,8 +22,9 @@ use Illuminate\Support\Collection;
  * Window, so a Merchant can set Pages against each other and against their
  * campaigns. Each row carries the Page's title, Orders, Sales, Cancellation
  * Rate, Average Order Value, when it went live and its Visits with the
- * Conversion Rate they produced, and opens that Page's edit screen; Sales
- * first by default, and any figure sorts.
+ * Conversion Rate they produced, and opens that Page's Report — a Merchant
+ * drilling down from figures arrives at figures, not at a form; Sales first
+ * by default, and any figure sorts.
  *
  * It sits at the foot of the screen rather than among the figures because it
  * is the one report whose height grows with the installation — a Merchant
@@ -190,7 +191,7 @@ class PageLeaderboardTable extends TableWidget
             'conversion_rate' => $row->conversionRate(),
             'counts_visits' => $leaderboard->countsVisits,
 
-            'url' => $row->page === null ? null : PageResource::getUrl('edit', ['record' => $row->page]),
+            'url' => $row->page === null ? null : PageResource::getUrl('report', ['record' => $row->page]),
         ]);
 
         if ($sortColumn === null) {

@@ -187,7 +187,7 @@ The span of days every report figure is counted over, chosen once for a whole sc
 _Avoid_: date range, period, filter, timeframe
 
 **Page Report**:
-Everything one Page's own figures say over a Reporting Window — its Orders, Sales, Cancellation Rate and Average Order Value, what it sold and how it was paid for — on a screen of its own. One Page's answer to the questions the Dashboard asks of every Page at once, which is why it is drawn by the Dashboard's own widgets counting that Page alone. A Page that never took an Order has one, reading as zeros; a retired Page keeps one, because what it earned before it was taken down is still worth reading.
+Everything one Page's own figures say over a Reporting Window — its Orders, Sales, Cancellation Rate and Average Order Value, what became of its Orders, which of its Products carried it, and how it was paid and delivered — on a screen of its own. One Page's answer to the questions the Dashboard asks of every Page at once, which is why it is drawn by the Dashboard's own widgets counting that Page alone. A Page that never took an Order has one, reading as zeros; a retired Page keeps one, because what it earned before it was taken down is still worth reading.
 _Avoid_: analytics, stats, insights, page metrics
 
 **Orders (as a figure)**:

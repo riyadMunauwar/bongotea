@@ -161,7 +161,7 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
         ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
 });
 
-it('draws the Page leaderboard last of the reports, above the Cache Path indicator: a row per Page with its own figures, Sales first and sortable, each row opening its Page', function () {
+it('draws the Page leaderboard last of the reports, above the Cache Path indicator: a row per Page with its own figures, Sales first and sortable, each row opening that Page\'s Report', function () {
     $top = Page::factory()->published()->create(['title' => 'Summer combo', 'published_at' => now()->subDays(10)]);
     $other = Page::factory()->create(['title' => 'Winter combo']);
     $retired = Page::factory()->published()->create(['title' => 'Retired combo']);
@@ -204,8 +204,10 @@ it('draws the Page leaderboard last of the reports, above the Cache Path indicat
         ->assertSeeHtml('">deleted</span>')
         ->assertSee('gone-combo')
         ->assertSee('Not counted')
-        ->assertSee(PageResource::getUrl('edit', ['record' => $top]))
-        ->assertSee(PageResource::getUrl('edit', ['record' => $retired]));
+        /** A Merchant drilling down from figures arrives at figures, never at the form. */
+        ->assertSee(PageResource::getUrl('report', ['record' => $top]))
+        ->assertSee(PageResource::getUrl('report', ['record' => $retired]))
+        ->assertDontSee(PageResource::getUrl('edit', ['record' => $top]));
 
     $titles = fn (): array => $leaderboard->instance()->getTableRecords()->pluck('title')->values()->all();
 
