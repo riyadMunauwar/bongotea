@@ -57,3 +57,8 @@ Filament reads an undeclared `$navigationSort` as `-1`, not as "last". Every top
 Resources inside the Settings cluster are numbered separately (General 0, Payment Methods 1, Destinations 2, Tracking 3) and are not part of the top-level order.
 
 The full reasoning, including why Pages uses the custom `giopages-funnel` icon rather than `Heroicon::OutlinedFunnel`, is in the AdminPanelProvider rules.
+
+## A resource page needing a control above its widgets writes content() itself
+`getHeaderWidgets()` draws *above* the page content, so a screen whose widgets must sit under a control — the Page Report's Reporting Window — cannot use that slot: the widgets would render above the form that governs them. Write `content(Schema $schema)` instead, the way `Filament\Pages\Dashboard` does: `EmbeddedSchema::make('filtersForm')` followed by `Grid::make(2)->schema(fn () => $this->getWidgetsSchemaComponents($this->getWidgets()))`. `HasFiltersForm::bootedHasFiltersForm()` is what caches the `filtersForm` schema the embed names.
+
+A custom resource page's `getTitle()` is the class basename unless overridden, and `getRecordTitle()` answers with the model label because `PageResource` sets no `$recordTitleAttribute`. Read the record's own attribute in `getTitle()` rather than adding that property — it would rename every other page of the resource too.

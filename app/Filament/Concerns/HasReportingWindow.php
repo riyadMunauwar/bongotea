@@ -12,11 +12,12 @@ use Filament\Schemas\Components\Utilities\Get;
 
 /**
  * The Reporting Window control, and the screen state behind it, shared by
- * every screen that carries a report: the Dashboard draws it as a filter
- * form above its widgets, and the Page edit screen offers it as a header
- * action beside its own. Both read the same presets, so a Merchant moving
- * between the two meets one control rather than two that resemble each
- * other.
+ * every screen that carries a report: the Dashboard and the Page Report
+ * both draw it as a filter form above their widgets, and the Page edit
+ * screen — where the form below is the reason a Merchant opened the screen
+ * — offers it as a header action beside its own. All three read the same
+ * presets, so a Merchant moving between them meets one control rather than
+ * several that resemble each other.
  *
  * Filament's `HasFilters` is what the widgets are actually wired to: it
  * holds the chosen window under `$filters`, keeps it in the session per

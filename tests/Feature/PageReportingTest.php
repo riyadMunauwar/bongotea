@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\PaymentMethod;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Filament\Widgets\OverviewStats;
@@ -8,10 +7,7 @@ use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
 use App\Filament\Widgets\TopProductsTable;
 use App\Models\Order;
-use App\Models\OrderLine;
 use App\Models\Page;
-use App\Models\Payment;
-use App\Models\Product;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
@@ -29,70 +25,6 @@ beforeEach(function (): void {
 | record, that one Page's figures appear and another's do not, and that the
 | Reporting Window is offered as a header action the widgets obey.
 */
-
-/**
- * The Page every test below opens, with one Order today and one three days
- * ago, and a second Page whose Orders must never reach the first one's
- * report.
- *
- * Each Order's money comes from its Lines: the Order Line observer
- * recalculates the subtotal on every line saved, and the Order observer
- * puts the Delivery Charge on top. So this Page took 660.00 today (two
- * Sylhet tea at 300.00, paid through bKash) and 160.00 three days ago (one
- * Clay mug, due on delivery) — 820.00 across the window, 410.00 an Order —
- * while the other Page took 960.00 today.
- *
- * @return array{Page, Page}
- */
-function twoReportedPages(): array
-{
-    $reported = Page::factory()->published()->create(['title' => 'Summer combo']);
-    $other = Page::factory()->published()->create(['title' => 'Winter combo']);
-
-    $tea = Product::factory()->create(['name' => 'Sylhet tea', 'price' => 30000]);
-    $mug = Product::factory()->create(['name' => 'Clay mug', 'price' => 10000]);
-    $rug = Product::factory()->create(['name' => 'Rangpur rug', 'price' => 90000]);
-
-    $today = Order::factory()->create([
-        'page_id' => $reported->id,
-        'delivery_charge' => 6000,
-        'payment_method' => PaymentMethod::Bkash,
-        'created_at' => now(),
-    ]);
-    Payment::factory()->for($today)->paid()->create(['method' => PaymentMethod::Bkash]);
-    OrderLine::factory()->for($today)->create(['product_id' => $tea->id, 'product_name' => $tea->name, 'unit_price' => $tea->price, 'quantity' => 2]);
-
-    $earlier = Order::factory()->create([
-        'page_id' => $reported->id,
-        'delivery_charge' => 6000,
-        'payment_method' => PaymentMethod::CashOnDelivery,
-        'created_at' => now()->subDays(3),
-    ]);
-    OrderLine::factory()->for($earlier)->create(['product_id' => $mug->id, 'product_name' => $mug->name, 'unit_price' => $mug->price, 'quantity' => 1]);
-
-    $elsewhere = Order::factory()->create([
-        'page_id' => $other->id,
-        'delivery_charge' => 6000,
-        'payment_method' => PaymentMethod::CashOnDelivery,
-        'created_at' => now(),
-    ]);
-    OrderLine::factory()->for($elsewhere)->create(['product_id' => $rug->id, 'product_name' => $rug->name, 'unit_price' => $rug->price, 'quantity' => 1]);
-
-    return [$reported, $other];
-}
-
-/**
- * The data a chart widget hands to Chart.js, read off the widget rather
- * than out of the HTML, for one Page and one preset.
- *
- * @return array{labels: list<string>, datasets: list<array<string, mixed>>}
- */
-function pageChartData(string $widget, Page $page, string $preset = 'last_7_days'): array
-{
-    return (fn (): array => $this->getData())->call(
-        Livewire::test($widget, ['record' => $page, 'pageFilters' => [ReportingWindow::PRESET_FILTER => $preset]])->instance(),
-    );
-}
 
 it('draws the Dashboard\'s own report widgets above the form, in the order the Dashboard draws them', function () {
     [$reported] = twoReportedPages();

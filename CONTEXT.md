@@ -186,6 +186,10 @@ _Avoid_: failure page, error page, payment page
 The span of days every report figure is counted over, chosen once for a whole screen and obeyed by everything on it: Today, Yesterday, Last 7 days, Last 30 days, This month, or two dates. A day begins and ends in the Merchant's timezone, never the server's, because a Merchant judges a day's spend against a day's Orders and both happen in the same place. Every window has a comparison window of the same length immediately before it, which is what a change is measured against.
 _Avoid_: date range, period, filter, timeframe
 
+**Page Report**:
+Everything one Page's own figures say over a Reporting Window — its Orders, Sales, Cancellation Rate and Average Order Value, what it sold and how it was paid for — on a screen of its own. One Page's answer to the questions the Dashboard asks of every Page at once, which is why it is drawn by the Dashboard's own widgets counting that Page alone. A Page that never took an Order has one, reading as zeros; a retired Page keeps one, because what it earned before it was taken down is still worth reading.
+_Avoid_: analytics, stats, insights, page metrics
+
 **Orders (as a figure)**:
 How many Orders were captured in a Reporting Window, whatever became of them afterwards. It is the number ad spend is judged against: a Cancelled Order still cost a click.
 _Avoid_: conversions, leads, sales
