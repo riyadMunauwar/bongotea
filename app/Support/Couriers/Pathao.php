@@ -3,6 +3,8 @@
 namespace App\Support\Couriers;
 
 use App\Enums\Courier;
+use App\Enums\ShipmentStatus;
+use App\Models\Shipment;
 use App\Support\Settings\CourierSettings;
 
 /**
@@ -89,6 +91,27 @@ class Pathao implements CourierDriver
     public function reAskIntervalSeconds(): int
     {
         return self::RE_ASK_INTERVAL_SECONDS;
+    }
+
+    /**
+     * Pathao's booking is built by its own ticket. Until then it says it
+     * cannot be used, which leaves an Order exactly as it was and words
+     * itself back to the operator rather than failing in front of them —
+     * and never says Pathao refused, because Pathao was never asked.
+     */
+    public function book(Shipment $shipment): ShipmentBooked
+    {
+        throw new CourierNotUsable('Pathao cannot be booked from here yet.');
+    }
+
+    /**
+     * Pathao's own vocabulary arrives with its booking. Every word reads as
+     * Unknown until then, which is what an unread status has always meant: a
+     * parcel still to be asked about, never one concluded about.
+     */
+    public function canonicalStatus(string $rawStatus): ShipmentStatus
+    {
+        return ShipmentStatus::Unknown;
     }
 
     public function refusal(): ?string

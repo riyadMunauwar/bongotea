@@ -179,6 +179,57 @@ class Order extends Model
     }
 
     /**
+     * Every attempt to get this Order to a door, oldest first: at most one of
+     * them Active, and the rest are what became of the parcels that went
+     * before it (ADR-0018).
+     *
+     * @return HasMany<Shipment, $this>
+     */
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(Shipment::class)->orderBy('id');
+    }
+
+    /**
+     * The attempt still worth waiting on, if there is one: what stops a
+     * parcel being booked twice, and what an Orders screen draws. Null for an
+     * Order that has never been sent, and for one whose every attempt is over.
+     *
+     * @return HasOne<Shipment, $this>
+     */
+    public function activeShipment(): HasOne
+    {
+        /** Newest first and read as one: the invariant says there is at most one, and an ordering says which even if that is ever broken. */
+        return $this->hasOne(Shipment::class)->active()->latest('id');
+    }
+
+    /**
+     * Whether a parcel is out for this Order. The one reading of it, asked by
+     * the booking action, by the booking itself under the Order's lock, and
+     * by the Orders list alike.
+     */
+    public function isShipping(): bool
+    {
+        return $this->shipments()->active()->exists();
+    }
+
+    /**
+     * What a Courier is told to collect at the door, in minor units: nothing
+     * where money has already moved, the Order's total — Delivery Charge
+     * included — otherwise.
+     *
+     * Read off the Payments and never off the Payment Method (ADR-0018): an
+     * Unpaid Order that chose an online method ships with the full total,
+     * because choosing to pay online is not paying, and a Cash on Delivery
+     * Order whose Pending Payment turned out to have been taken must not be
+     * collected from twice.
+     */
+    public function amountDueOnDelivery(): int
+    {
+        return $this->isPaid() ? 0 : $this->total;
+    }
+
+    /**
      * What the browser told us when this Order was captured, kept only where
      * the Moment that will report it is still to come — an Order paid online,
      * whose `Purchase` belongs to the Verification that says Paid and happens

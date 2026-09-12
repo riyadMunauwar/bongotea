@@ -1,0 +1,179 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\Courier;
+use App\Enums\ShipmentStatus;
+use Database\Factories\ShipmentFactory;
+use DateTimeInterface;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\UniqueConstraintViolationException;
+
+/**
+ * One attempt to get one Order to a door through one Courier.
+ *
+ * Its own axis on the Order (ADR-0018), exactly as a Payment is: an Order
+ * holds as many Shipments as it took, at most one of them Active, and neither
+ * this nor `OrderStatus` ever writes the other. A parcel that came back and
+ * was sent again is two rows, because the first attempt cost money whatever
+ * the second one does.
+ *
+ * It records what it was told rather than what the Order says now: the
+ * recipient as sent, what the Courier was told to collect, the Consignment
+ * the Courier answered with, and what the Courier charged. What the Courier
+ * said at the time is kept whole on the row, because a dispute months later
+ * needs what was actually said rather than what was made of it.
+ */
+#[Fillable([
+    'order_id',
+    'courier',
+    'status',
+    'raw_status',
+    'invoice_reference',
+    'consignment_reference',
+    'tracking_code',
+    'collect_amount',
+    'courier_charge',
+    'recipient_name',
+    'recipient_phone',
+    'recipient_address',
+    'recipient_district',
+    'recipient_note',
+    'booked_at',
+    'abandoned_at',
+    'abandoned_by',
+    'booking_response',
+])]
+class Shipment extends Model
+{
+    /** @use HasFactory<ShipmentFactory> */
+    use HasFactory;
+
+    protected function casts(): array
+    {
+        return [
+            'courier' => Courier::class,
+            'status' => ShipmentStatus::class,
+            'collect_amount' => 'integer',
+            'courier_charge' => 'integer',
+            'booked_at' => 'datetime',
+            'abandoned_at' => 'datetime',
+            'booking_response' => 'array',
+        ];
+    }
+
+    /**
+     * Our reference for the next attempt on an Order: the order number plus
+     * an attempt sequence, because a Courier refuses a duplicate invoice and
+     * echoes this back on every answer it gives about the parcel.
+     *
+     * Shaped like a Payment's invoice reference and counted separately from
+     * it: the two sequences are told to different companies and neither ever
+     * sees the other's.
+     *
+     * Counted over the attempts that were actually made, so an attempt a
+     * Courier refused — which records nothing (ADR-0020) — leaves the next
+     * one free to take the number it would have had. A booking asks for it
+     * under the Order's lock, or two bookings a second apart would count the
+     * same.
+     */
+    public static function nextInvoiceReference(Order $order): string
+    {
+        return $order->order_number.'-'.($order->shipments()->count() + 1);
+    }
+
+    /**
+     * @return BelongsTo<Order, $this>
+     */
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    /**
+     * Who wrote this attempt off, where somebody did. Abandoning is a time
+     * and a name and never a status, so the Courier's last word survives it.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function abandonedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandoned_by');
+    }
+
+    /**
+     * Everything that happened to this attempt, as the system came to know
+     * it, oldest first.
+     *
+     * @return HasMany<ShipmentEvent, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(ShipmentEvent::class)->orderBy('id');
+    }
+
+    /**
+     * Whether this attempt is still worth waiting on: the Courier has not
+     * finished with it and nobody has written it off.
+     *
+     * An Order has at most one, which is what stops a parcel being booked
+     * twice, and an Order with none is an Order that may be sent. The arm
+     * this cannot express yet is a Shipment a Courier refused at booking:
+     * every booking is made inside the request and records nothing when it is
+     * refused (ADR-0020), so no such row can exist until a bulk booking
+     * writes one before dispatching it.
+     */
+    public function isActive(): bool
+    {
+        return ! $this->status->isTerminal() && $this->abandoned_at === null;
+    }
+
+    /**
+     * The attempts still worth waiting on. The query behind `isActive()`,
+     * and the one every Orders screen asks.
+     *
+     * @param  Builder<Shipment>  $query
+     */
+    #[Scope]
+    protected function active(Builder $query): void
+    {
+        $query->whereNotIn('status', ShipmentStatus::terminalValues())
+            ->whereNull('abandoned_at');
+    }
+
+    /**
+     * Write down something that happened to this parcel, once however many
+     * times we are told it.
+     *
+     * The Courier's own word and its own time are what two tellings agree on,
+     * so they are what the row is deduplicated by — and the database is what
+     * enforces it (ADR-0019). The insert is made and the constraint is let to
+     * refuse it, rather than asked about first: a poll and a webhook about
+     * the same happening arrive at once, and a question asked before an
+     * insert answers for a moment that has passed by the time it is written.
+     * The first telling is answered with either way, so a caller can never
+     * tell how many times it was told.
+     */
+    public function recordEvent(ShipmentStatus $status, ?string $rawStatus = null, DateTimeInterface|string|null $occurredAt = null): ShipmentEvent
+    {
+        $deduplicationId = ShipmentEvent::deduplicationIdFor($rawStatus ?? $status->value, $occurredAt);
+
+        try {
+            return $this->events()->create([
+                'status' => $status,
+                'raw_status' => $rawStatus,
+                'occurred_at' => $occurredAt,
+                'recorded_at' => now(),
+                'deduplication_id' => $deduplicationId,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return $this->events()->where('deduplication_id', $deduplicationId)->sole();
+        }
+    }
+}

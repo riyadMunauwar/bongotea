@@ -3,6 +3,8 @@
 namespace App\Support\Couriers;
 
 use App\Enums\Courier;
+use App\Enums\ShipmentStatus;
+use App\Models\Shipment;
 
 /**
  * What every Courier is behind.
@@ -21,14 +23,43 @@ use App\Enums\Courier;
  * declaration here, so a caller asks what a Courier supports and never which
  * Courier it is.
  *
- * Booking, status, webhooks and balance arrive with the tickets that need
- * them (#127 onwards). This is deliberately the whole contract today: a
- * method declared here with three drivers throwing from it would be a
- * contract that lies about what can be asked.
+ * Status, webhooks and balance arrive with the tickets that need them. The
+ * contract declares only what is implemented: a method declared here that
+ * every driver throws from would be a contract that lies about what can be
+ * asked.
  */
 interface CourierDriver
 {
     public function courier(): Courier;
+
+    /**
+     * Hand this parcel to the Courier and answer with what it said: the
+     * Consignment, the tracking code, and where it says the parcel stands.
+     *
+     * Called inside the request with a User waiting on the Consignment
+     * (ADR-0020), so it is asked once and never retried here. A Courier that
+     * says no and a Courier that cannot be reached are different facts and
+     * are raised as different exceptions; neither records anything as sent.
+     *
+     * The Shipment carries what to send — the invoice reference for this
+     * attempt, what to collect, and the recipient as this attempt is being
+     * told it — and is not saved yet: a refused booking leaves no row behind.
+     *
+     * @throws CourierRefusedBooking when the Courier answered and said no.
+     * @throws CourierUnreachable when the Courier could not be asked.
+     */
+    public function book(Shipment $shipment): ShipmentBooked;
+
+    /**
+     * What one of this Courier's own status words means in the system's
+     * vocabulary (ADR-0018).
+     *
+     * The only place a Courier's vocabulary is spoken. A word this Courier
+     * has never documented is Unknown rather than an exception: couriers add
+     * statuses without telling anyone, and a parcel whose status we cannot
+     * read is still a parcel to be asked about again.
+     */
+    public function canonicalStatus(string $rawStatus): ShipmentStatus;
 
     /**
      * The names of the credentials this driver needs from the installation's

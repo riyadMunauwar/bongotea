@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
 use App\Filament\Resources\Orders\OrderResource;
@@ -20,10 +21,12 @@ class EditOrder extends EditRecord
     {
         return [
             /**
-             * The payment axis, worked from the header rather than the form:
-             * the form never holds `payment_method`, so a save after either
-             * action cannot write a stale method back over it.
+             * The payment and parcel axes, worked from the header rather than
+             * the form: the form holds neither `payment_method` nor anything
+             * of a Shipment's, so a save after any of these actions cannot
+             * write stale data back over what they wrote.
              */
+            BookWithCourierAction::make(),
             CheckWithGatewayAction::make(),
             SwitchToCashOnDeliveryAction::make(),
 

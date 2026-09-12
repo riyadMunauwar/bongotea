@@ -40,6 +40,23 @@ class PhoneNumber
     }
 
     /**
+     * A stored number as it is dialled at home — the trunk prefix and the
+     * national digits, no country code and no punctuation — or null when what
+     * was stored cannot be one.
+     *
+     * Every Courier here is a domestic one and takes a domestic number:
+     * Steadfast documents `recipient_phone` as eleven digits and refuses
+     * `+8801712345678`. The rule for turning one form into the other is the
+     * dialling rules, which live here, so no driver has to know them.
+     */
+    public static function asDialled(string $number): ?string
+    {
+        $national = self::nationalDigits($number);
+
+        return $national === null ? null : self::settings()->phoneTrunkPrefix.$national;
+    }
+
+    /**
      * Strip the number down to its national digits — no country code, no trunk
      * prefix, no punctuation — or null when the result is not a plausible
      * length.

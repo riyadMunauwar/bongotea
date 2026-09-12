@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
 use App\Filament\Resources\Orders\OrderResource;
@@ -13,12 +14,14 @@ class ViewOrder extends ViewRecord
     protected static string $resource = OrderResource::class;
 
     /**
-     * The two things an operator does about the money on the call, offered
-     * on both screens so nobody has to open the editor to resolve a payment.
+     * What an operator does about an Order on the call — the money, and
+     * getting the parcel moving — offered on both screens so nobody has to
+     * open the editor to resolve a payment or send a parcel.
      */
     protected function getHeaderActions(): array
     {
         return [
+            BookWithCourierAction::make(),
             CheckWithGatewayAction::make(),
             SwitchToCashOnDeliveryAction::make(),
             EditAction::make(),
