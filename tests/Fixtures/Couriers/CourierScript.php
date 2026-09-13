@@ -71,6 +71,85 @@ abstract class CourierScript
     /** Assert a booking went out for this Shipment carrying every field the Courier calls mandatory, filled. */
     abstract public function assertBookedFor(Shipment $shipment): void;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Being asked where a parcel is
+    |--------------------------------------------------------------------------
+    |
+    | The couriers disagree about this more than about anything else. One
+    | keeps a whole history and times every line of it; one answers with a
+    | single word and no time at all; one answers with a word and the moment
+    | it last changed. Every one of those differences is declared here and
+    | asked, never branched on by name.
+    |
+    */
+
+    /**
+     * Fake the Courier answering a question about a parcel with these, its
+     * own, status words.
+     *
+     * A Courier that keeps a history answers with all of them, oldest first;
+     * one that keeps none answers with the last of them, which is where the
+     * parcel stands now. So one call scripts either shape and a test never
+     * asks which it got.
+     */
+    abstract public function fakeTracking(string ...$rawStatuses): void;
+
+    /** Fake the Courier answering and refusing to account for the parcel at all. */
+    abstract public function fakeTrackingRefused(): void;
+
+    /** What the Courier says when it will not account for a parcel, so a test can prove it reaches the timeline verbatim. */
+    abstract public function trackingRefusalWording(): string;
+
+    /** Assert the Courier was asked about this parcel, by the name the Courier knows it under. */
+    abstract public function assertTrackedFor(Shipment $shipment): void;
+
+    /** Assert the Courier was asked where a parcel is exactly this many times since the last fake was laid. */
+    abstract public function assertPollsSent(int $count): void;
+
+    /**
+     * How long this Courier says a parcel may be left alone before it is
+     * asked about again.
+     *
+     * Deliberately a second transcription of the driver's own constant, for
+     * the reason `rawStatusesFor()` is one: read off the driver, a test that
+     * the interval is honoured would pass against any number at all,
+     * including the one global constant this is here to prove does not exist.
+     */
+    abstract public function reAskIntervalSeconds(): int;
+
+    /**
+     * Whether this Courier answers with everything that has happened to a
+     * parcel rather than only with where it stands now.
+     *
+     * True for exactly one of the three, and the whole reason a Shipment
+     * Event is deduplicated by a unique key rather than by a check at the
+     * call site (ADR-0019).
+     */
+    abstract public function tracksWholeHistory(): bool;
+
+    /**
+     * Whether this Courier says when a thing happened, or only that it did.
+     *
+     * The asymmetry a Shipment Event's two timestamps exist for: a Courier
+     * that gives no times of its own leaves `occurred_at` null on every row
+     * and the timeline is drawn from ours.
+     */
+    abstract public function reportsItsOwnTime(): bool;
+
+    /**
+     * How many timeline entries this Courier's answer to one question makes,
+     * where it was scripted with this many status words.
+     *
+     * One for a Courier that only ever says where a parcel is now, whatever
+     * it was scripted with — which is what lets a test say "it re-imported
+     * the same history" without knowing that only RedEx has one.
+     */
+    public function timelineEntriesFor(string ...$rawStatuses): int
+    {
+        return $this->tracksWholeHistory() ? count($rawStatuses) : 1;
+    }
+
     /**
      * What this Courier asks about a parcel beyond the recipient, by the name
      * its driver declares, and the value `makeUsable()` left in Settings as

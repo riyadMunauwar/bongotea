@@ -25,6 +25,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -264,6 +265,26 @@ function verifyUrl(Payment $payment): string
 function notificationUrl(Payment $payment): string
 {
     return route('payment.notify', ['method' => $payment->method->value]);
+}
+
+/**
+ * Forget every HTTP fake laid so far, so one test can hear the same service
+ * answer two different ways.
+ *
+ * `Http::fake()` stacks and the first callback to answer wins — a refusal
+ * faked before an acceptance answers for both — and nothing clears the stubs,
+ * so the client itself is replaced. Stray requests stay barred.
+ *
+ * Here rather than in whichever test file needed it first, because the
+ * courier suites are two files now and a helper defined in one of them is a
+ * fatal error for anybody running only the other.
+ */
+function answeringAfresh(): void
+{
+    app()->forgetInstance(HttpFactory::class);
+
+    Http::clearResolvedInstances();
+    Http::preventStrayRequests();
 }
 
 /**

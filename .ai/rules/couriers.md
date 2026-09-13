@@ -7,6 +7,7 @@ paths:
   - app/Models/ShipmentEvent.php
   - app/Filament/Resources/Orders/Actions/BookWithCourierAction.php
   - 'tests/Fixtures/Couriers/**'
+  - app/Console/Commands/SweepCouriersCommand.php
 ---
 
 # Couriers
@@ -78,3 +79,30 @@ The id is looked up once, at booking, and both id and name are recorded: a drive
 RedEx cannot have its dialog drawn until it has said where it delivers, so `RedExScript::makeUsable()` lays the areas stub and every `fake*()` merges it back in (`RedExScript::fake()`), exactly as `PathaoScript` lays the token grant beside everything. `CourierScript::fakeAreas()` is a no-op for the two couriers that read a free-text address, which is what lets `makeEveryCourierUsable()` say "and each of them answers with its areas" without naming RedEx.
 
 `guessedArea()`/`correctedArea()` are the script's answer to "what does your list make of `orderReadyToSend()`'s address, and what would a User correct it to"; `parcelRowFor()` prepends the guess, because the area leads `parcel_details`.
+
+## The poll answers rather than throws, and silence writes nothing at all
+`CourierDriver::track()` returns a `ShipmentProgress` and never throws — unlike `book()`, which raises one of the four `BookingNotMade`s. A sweep walks every parcel the couriers are carrying, so one that could not be asked about must not unwind the rest.
+
+Three outcomes, mirroring `Delivery` exactly (ADR-0019). `reported()` carries `list<ReportedStatus>` **oldest first, the last being where the parcel stands now** — one entry for Steadfast and Pathao, RedEx's whole history every poll. `refused()` is the Courier answering about *this parcel* and refusing to account for it; `CourierSweep` writes it as a `ShipmentStatus::Unknown` event in the Courier's own words (cut to `CourierSweep::REFUSAL_LIMIT`, which leaves headroom for the timestamp `deduplicationIdFor()` appends; the full answer is in the log), which is not terminal, so the parcel keeps being followed. `unreachable()` is silence and **writes nothing at all — not even `polled_at`** — which is exactly what makes the Shipment due again on the next sweep; do not "tidy" that by stamping `polled_at`.
+
+`ShipmentProgress::silenceFrom()` is the one reading of "settles nothing": a 5xx, a 401 or a 403. A rejected credential is the installation's and never this parcel's, so it must not reach 200 timelines — Pathao's 401 additionally calls `$this->token->forget()` so the next sweep signs afresh, and the grant's own `CourierUnreachable`/`CourierNotUsable` are caught in `track()` and answered as silence too.
+
+`CourierSweep::poll()` stops a Courier's whole run on the first silence (`return`, not `continue`), as `TrackingSweep::deliver()` does for a Destination: every later parcel would fail the same way and cost a call to find out. That is what caps a broken Courier at one call per sweep.
+
+## The re-ask interval is the driver's; stuck and give-up are the sweep's constants
+`couriers:sweep` (scheduled every five minutes in `routes/console.php` beside `payments:sweep` and `tracking:sweep`, `withoutOverlapping`) asks each Courier where its Active Shipments stand. That cadence is only how often the *question* is put: whether a given parcel is due is `CourierDriver::reAskIntervalSeconds()` against `shipments.polled_at` — Steadfast 1800s because it announces nothing, Pathao and RedEx 14400s because they do. Never one global constant.
+
+`CourierSweep::STUCK_AFTER_SECONDS` (a week) and `GIVE_UP_AFTER_SECONDS` (a month) are constants on the class and never Settings (ADR-0020). Both are measured from `booked_at`. Stuck writes `shipments.stuck_at` once, never clears it, and changes nothing else — a stuck parcel is still polled. Giving up only stops the asking: the Shipment stays Active and stays in COD in Flight, because only a User writing it off (Abandoned) may say a parcel is dead.
+
+The sweep never reads or writes an Order (ADR-0018). A Courier with a non-null `refusal()` is passed over whole, before a parcel of its is read, and the refusal is printed verbatim — it already names the Courier.
+
+`Shipment::recordEvent()` is the only writer of timeline rows and is deduplicated by the unique key, so the sweep loops the reported list and never asks first.
+
+## A poll is scripted with status words; the script declares the asymmetries
+`CourierScript::fakeTracking(string ...$rawStatuses)` scripts one answer to "where is this parcel": a Courier that keeps a history answers with all of them oldest first, one that keeps none answers with the **last** of them. So a test scripts the sequence once and `timelineEntriesFor(...$rawStatuses)` says how many rows that makes (`tracksWholeHistory()` ? count : 1) — never `count()` directly, or Steadfast and Pathao fail.
+
+`reAskIntervalSeconds()`, `tracksWholeHistory()` and `reportsItsOwnTime()` are declared on the script as a **second transcription** of the driver's own constants, for the reason `rawStatusesFor()` is one: read off the driver, "the interval is honoured" would pass against any number, including the one global constant this proves does not exist.
+
+`answeringAfresh()` lives in `tests/Pest.php`, not in a test file — the courier suites are two files now and a helper defined in one is a fatal error for anybody running only the other. Call it before laying a second, different fake in one test (`Http::fake()` stacks and the first answering callback wins).
+
+`assertPollsSent()` counts questions about a parcel only, filtered by URL: Pathao's token grant and RedEx's area list are calls to the same host and counting them would make "one parcel was asked about" depend on whether a token or a list happened to still be held.

@@ -30,6 +30,12 @@ final class SteadfastScript extends CourierScript
     /** What Steadfast says when it will not take a parcel, in the shape its errors arrive in. */
     private const REFUSAL = 'The recipient phone must be 11 digits.';
 
+    /** Where Steadfast is asked where a parcel is: by its own Consignment id, which is appended to this. */
+    private const TRACKING_PREFIX = 'https://portal.packzy.com/api/v1/status_by_cid/';
+
+    /** What Steadfast says when it has no record of the Consignment it was asked about. */
+    private const TRACKING_REFUSAL = 'No consignment found with this id.';
+
     public function courier(): Courier
     {
         return Courier::Steadfast;
@@ -129,6 +135,73 @@ final class SteadfastScript extends CourierScript
     public function assertBookingsSent(int $count): void
     {
         Http::assertSentCount($count);
+    }
+
+    /**
+     * Steadfast answering where a parcel is: one word, no time, and no
+     * history of how it got there. It is scripted with whatever the last word
+     * was, because that is the whole of what Steadfast will ever say.
+     */
+    public function fakeTracking(string ...$rawStatuses): void
+    {
+        Http::fake([self::TRACKING_PREFIX.'*' => Http::response([
+            'status' => 200,
+            'delivery_status' => end($rawStatuses),
+        ])]);
+    }
+
+    /** Steadfast answering about a Consignment it has no record of. */
+    public function fakeTrackingRefused(): void
+    {
+        Http::fake([self::TRACKING_PREFIX.'*' => Http::response([
+            'status' => 404,
+            'message' => self::TRACKING_REFUSAL,
+        ], 404)]);
+    }
+
+    public function trackingRefusalWording(): string
+    {
+        return self::TRACKING_REFUSAL;
+    }
+
+    /**
+     * Asked by Steadfast's own Consignment id, with both keys in the headers
+     * as on every other call.
+     */
+    public function assertTrackedFor(Shipment $shipment): void
+    {
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
+            && $request->url() === self::TRACKING_PREFIX.$shipment->consignment_reference
+            && $request->hasHeader('Api-Key', self::API_KEY)
+            && $request->hasHeader('Secret-Key', self::SECRET_KEY));
+    }
+
+    public function assertPollsSent(int $count): void
+    {
+        expect(Http::recorded(fn (Request $request): bool => str_starts_with($request->url(), self::TRACKING_PREFIX))->count())
+            ->toBe($count, "Steadfast was asked where a parcel is other than {$count} times.");
+    }
+
+    /**
+     * Half an hour, because Steadfast announces nothing whatsoever: this is
+     * not a backstop, it is the only channel there is, and it is the
+     * resolution of every Steadfast timeline.
+     */
+    public function reAskIntervalSeconds(): int
+    {
+        return 1800;
+    }
+
+    /** Steadfast answers with where a parcel stands and keeps no history at all. */
+    public function tracksWholeHistory(): bool
+    {
+        return false;
+    }
+
+    /** And gives no time with it, which is exactly why a Shipment Event carries ours. */
+    public function reportsItsOwnTime(): bool
+    {
+        return false;
     }
 
     /**

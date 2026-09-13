@@ -10,6 +10,7 @@ use App\Support\Couriers\ParcelField;
 use App\Support\Money;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -47,6 +48,17 @@ final class RedExScript extends CourierScript
 
     /** What RedEx says when it will not take a parcel, in the shape its errors arrive in. */
     private const REFUSAL = 'Delivery area is not serviceable.';
+
+    /** What RedEx says when it has no record of the tracking id it was asked about. */
+    private const TRACKING_REFUSAL = 'Parcel not found.';
+
+    /**
+     * When the first line of a scripted history happened, with each later one
+     * an hour after the last. Fixed rather than relative to now, because a
+     * test that travels in time must still find the same history — RedEx's
+     * times are RedEx's and do not move when ours do.
+     */
+    private const HISTORY_BEGAN = '2026-09-12T06:00:00Z';
 
     /**
      * What RedEx is told about an ordinary parcel of this Merchant's, set the
@@ -190,6 +202,82 @@ final class RedExScript extends CourierScript
     {
         expect(Http::recorded(fn (Request $request): bool => $request->url() === $this->bookingUrl())->count())
             ->toBe($count, "RedEx was asked to take a parcel other than {$count} times.");
+    }
+
+    /**
+     * RedEx answering where a parcel is: its whole history, oldest first,
+     * every line of it timed, which is what it answers with on every poll
+     * however many times it has been asked before.
+     */
+    public function fakeTracking(string ...$rawStatuses): void
+    {
+        $at = CarbonImmutable::parse(self::HISTORY_BEGAN);
+
+        $this->fake([$this->trackingUrl() => Http::response([
+            'tracking' => array_values(array_map(
+                fn (string $rawStatus, int $step): array => [
+                    'message_en' => ucwords(str_replace('-', ' ', $rawStatus)),
+                    'time' => $at->addHours($step)->toIso8601ZuluString(),
+                    'status' => $rawStatus,
+                ],
+                $rawStatuses,
+                array_keys($rawStatuses),
+            )),
+        ])]);
+    }
+
+    /** RedEx answering about a tracking id it has no record of. */
+    public function fakeTrackingRefused(): void
+    {
+        $this->fake([$this->trackingUrl() => Http::response([
+            'message' => self::TRACKING_REFUSAL,
+            'statusCode' => 404,
+        ], 404)]);
+    }
+
+    public function trackingRefusalWording(): string
+    {
+        return self::TRACKING_REFUSAL;
+    }
+
+    /** Asked by the one id RedEx knows a parcel under, with the Merchant's token in RedEx's own header. */
+    public function assertTrackedFor(Shipment $shipment): void
+    {
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
+            && $request->url() === self::HOST.'/parcel/track/'.$shipment->consignment_reference
+            && $request->hasHeader('API-ACCESS-TOKEN', 'Bearer '.self::ACCESS_TOKEN));
+    }
+
+    /**
+     * Questions about a parcel only. The area list is a call to RedEx as
+     * well, and counting it here would make "one parcel was asked about"
+     * depend on whether the list happened to still be held.
+     */
+    public function assertPollsSent(int $count): void
+    {
+        expect(Http::recorded(fn (Request $request): bool => str_starts_with($request->url(), self::HOST.'/parcel/track/'))->count())
+            ->toBe($count, "RedEx was asked where a parcel is other than {$count} times.");
+    }
+
+    /**
+     * Four hours, because RedEx calls back as a parcel moves and this is only
+     * the backstop against a callback that never arrived.
+     */
+    public function reAskIntervalSeconds(): int
+    {
+        return 14400;
+    }
+
+    /** RedEx re-imports its whole history on every poll, which is the one this constraint exists for (ADR-0019). */
+    public function tracksWholeHistory(): bool
+    {
+        return true;
+    }
+
+    /** And times every line of it, which is why a RedEx timeline reads like a courier's own tracking page. */
+    public function reportsItsOwnTime(): bool
+    {
+        return true;
     }
 
     /**
@@ -391,6 +479,12 @@ final class RedExScript extends CourierScript
             [$this->areasUrl() => Http::response($this->areaList())],
             $stubs,
         ));
+    }
+
+    /** Any parcel: the tracking id is the last segment, so the stub is matched on the prefix. */
+    private function trackingUrl(): string
+    {
+        return self::HOST.'/parcel/track/*';
     }
 
     private function bookingUrl(): string

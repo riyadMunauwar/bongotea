@@ -44,6 +44,14 @@ class Pathao implements CourierDriver
     private const BOOKING_PATH = '/aladdin/api/v1/orders';
 
     /**
+     * Where Pathao is asked about a parcel, by the Consignment it issued. It
+     * answers with where the parcel stands now and keeps no history of how it
+     * got there, which is why a Pathao timeline is built out of what its
+     * webhook narrated and what these polls caught (ADR-0019).
+     */
+    private const TRACKING_PATH = '/aladdin/api/v1/orders/%s/info';
+
+    /**
      * Pathao's own status words, as its documentation lists them, in the
      * system's vocabulary (ADR-0018).
      *
@@ -187,6 +195,65 @@ class Pathao implements CourierDriver
         }
 
         return $this->read($shipment, PathaoAnswer::of($response));
+    }
+
+    /**
+     * Pathao's order-info call: one Consignment, the status it stands at now,
+     * and the time Pathao last touched it.
+     *
+     * The time is Pathao's own and is kept as such — it is what a Shipment
+     * Event's `occurred_at` is for — and it is also what stops a poll every
+     * four hours writing the same happening twice: a status Pathao has not
+     * changed carries the moment it last changed, so two polls agree on one
+     * deduplication id (ADR-0019).
+     *
+     * A rejected token is nothing about this parcel. The held token is let go
+     * of and the answer is silence, so the next sweep signs with a fresh one
+     * and asks again — where a refusal would put "Pathao would not accept its
+     * own access token" on the timeline of every parcel Pathao is carrying.
+     */
+    public function track(Shipment $shipment): ShipmentProgress
+    {
+        try {
+            $response = $this->client($this->token->value())
+                ->get(self::HOST.sprintf(self::TRACKING_PATH, $shipment->consignment_reference));
+        } catch (ConnectionException $exception) {
+            return ShipmentProgress::unreachable(
+                "Pathao could not be reached about parcel [{$shipment->invoice_reference}]: ".$exception->getMessage(),
+            );
+        } catch (BookingNotMade $exception) {
+            /** The token grant's own two outcomes, and neither is an answer about this parcel. */
+            return ShipmentProgress::unreachable($exception->getMessage());
+        }
+
+        if ($response->status() === 401) {
+            $this->token->forget();
+
+            return ShipmentProgress::unreachable(
+                'Pathao would not accept its own access token; a fresh one is issued before the next sweep.',
+            );
+        }
+
+        if (($silence = ShipmentProgress::silenceFrom($response, $this->courier())) !== null) {
+            return $silence;
+        }
+
+        $answer = PathaoAnswer::of($response);
+
+        /** The slug is the word Pathao's own status table is written in; the prose beside it is what a human reads. */
+        $rawStatus = $answer->text('data.order_status_slug') ?? $answer->text('data.order_status');
+
+        if ($rawStatus === null) {
+            return ShipmentProgress::refused(
+                "Pathao would not say where parcel [{$shipment->invoice_reference}] is: ".$answer->reason(),
+                $answer->body(),
+            );
+        }
+
+        return ShipmentProgress::reported(
+            [new ReportedStatus($this->canonicalStatus($rawStatus), $rawStatus, $answer->text('data.updated_at'))],
+            $answer->body(),
+        );
     }
 
     public function canonicalStatus(string $rawStatus): ShipmentStatus

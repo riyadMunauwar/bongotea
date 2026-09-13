@@ -8,7 +8,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/Checkout/**, resources/views/shortcodes/checkout.blade.php, app/Filament/Resources/Pages/Schemas/** | .ai/rules/checkout.md |
 | app/Filament/Forms/Components/** | .ai/rules/components.md |
 | app/Filament/Concerns/** | .ai/rules/concerns.md |
-| app/Support/Couriers/**, app/Enums/Courier.php, app/Enums/ShipmentStatus.php, app/Models/Shipment.php, app/Models/ShipmentEvent.php, app/Filament/Resources/Orders/Actions/BookWithCourierAction.php, tests/Fixtures/Couriers/** | .ai/rules/couriers.md |
+| app/Support/Couriers/**, app/Enums/Courier.php, app/Enums/ShipmentStatus.php, app/Models/Shipment.php, app/Models/ShipmentEvent.php, app/Filament/Resources/Orders/Actions/BookWithCourierAction.php, tests/Fixtures/Couriers/**, app/Console/Commands/SweepCouriersCommand.php | .ai/rules/couriers.md |
 | app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
 | app/Filament/Resources/Orders/** | .ai/rules/orders.md |
 | app/Support/PageCache/**, public/index.php, public/.htaccess, public/robots.txt, deploy/** | .ai/rules/page-cache.md |

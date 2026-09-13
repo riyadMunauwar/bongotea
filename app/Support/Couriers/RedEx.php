@@ -48,6 +48,14 @@ class RedEx implements CourierDriver
     private const BOOKING_PATH = '/parcel';
 
     /**
+     * Where RedEx is asked about a parcel, by the one id it knows it under.
+     * It answers with the parcel's whole history every time, which is the
+     * reason a Shipment Event is deduplicated by the database rather than by
+     * a check at the call site (ADR-0019).
+     */
+    private const TRACKING_PATH = '/parcel/track/';
+
+    /**
      * RedEx's own parcel statuses, as its documentation lists them, in the
      * system's vocabulary (ADR-0018).
      *
@@ -174,6 +182,50 @@ class RedEx implements CourierDriver
         }
 
         return $this->read($shipment, $response);
+    }
+
+    /**
+     * RedEx's tracking call: one id, and the parcel's whole history back —
+     * every state it has passed through, in RedEx's own words and at RedEx's
+     * own times, oldest first.
+     *
+     * All of it is handed on and none of it is compared with what is already
+     * known: re-importing a history the sweep has already seen is the
+     * ordinary case here and not the exception, and the unique key on the
+     * timeline is what makes it cost one row rather than one row per poll
+     * (ADR-0019).
+     *
+     * An entry RedEx gave no status word for is dropped rather than read as
+     * Unknown. RedEx names every state it reports, so a nameless entry is
+     * narration — a line of message with no state behind it — and narration
+     * may never move a canonical status.
+     */
+    public function track(Shipment $shipment): ShipmentProgress
+    {
+        try {
+            $response = $this->client()->get(self::HOST.self::TRACKING_PATH.$shipment->consignment_reference);
+        } catch (ConnectionException $exception) {
+            return ShipmentProgress::unreachable(
+                "RedEx could not be reached about parcel [{$shipment->invoice_reference}]: ".$exception->getMessage(),
+            );
+        }
+
+        if (($silence = ShipmentProgress::silenceFrom($response, $this->courier())) !== null) {
+            return $silence;
+        }
+
+        $body = $response->json();
+        $body = is_array($body) ? $body : [];
+        $history = $body['tracking'] ?? null;
+
+        if (! is_array($history)) {
+            return ShipmentProgress::refused(
+                "RedEx would not say where parcel [{$shipment->invoice_reference}] is: ".self::reason($response, $body),
+                $body,
+            );
+        }
+
+        return ShipmentProgress::reported($this->history($history), $body);
     }
 
     public function canonicalStatus(string $rawStatus): ShipmentStatus
@@ -317,6 +369,40 @@ class RedEx implements CourierDriver
             /** RedEx quotes no charge when it takes a parcel; what the delivery cost arrives with the invoice. */
             response: $body,
         );
+    }
+
+    /**
+     * RedEx's history as states this system has words for, in the order RedEx
+     * listed them, which is oldest first.
+     *
+     * Total, like every reading of something that arrived over the wire: an
+     * entry that is not an object, or that names no state, is dropped rather
+     * than guessed at.
+     *
+     * @param  array<int|string, mixed>  $history
+     * @return list<ReportedStatus>
+     */
+    private function history(array $history): array
+    {
+        $reported = [];
+
+        foreach ($history as $entry) {
+            $rawStatus = is_array($entry) && is_scalar($entry['status'] ?? null) ? trim((string) $entry['status']) : '';
+
+            if ($rawStatus === '') {
+                continue;
+            }
+
+            $reported[] = new ReportedStatus(
+                $this->canonicalStatus($rawStatus),
+                $rawStatus,
+
+                /** RedEx times every entry it gives, which is why its timeline reads like a courier's own tracking page. */
+                is_scalar($entry['time'] ?? null) && filled($entry['time']) ? (string) $entry['time'] : null,
+            );
+        }
+
+        return $reported;
     }
 
     /**

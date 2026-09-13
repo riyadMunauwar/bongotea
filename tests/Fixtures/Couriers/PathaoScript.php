@@ -53,6 +53,16 @@ final class PathaoScript extends CourierScript
     /** What Pathao says when it will not issue a token on these credentials. */
     private const TOKEN_REFUSAL = 'The user credentials were incorrect.';
 
+    /** What Pathao says when it has no record of the Consignment it was asked about. */
+    private const TRACKING_REFUSAL = 'Order not found.';
+
+    /**
+     * When Pathao says it last touched the parcel, in the spelling its order
+     * info answers with. It is the Courier's own time and lands on the
+     * Shipment Event as one.
+     */
+    private const UPDATED_AT = '2026-09-12 14:03:36';
+
     /**
      * What Pathao is told about an ordinary parcel of this Merchant's, set the
      * way a Merchant filling in Settings sets it — deliberately not the
@@ -179,6 +189,83 @@ final class PathaoScript extends CourierScript
     {
         expect(Http::recorded(fn (Request $request): bool => $request->url() === $this->bookingUrl())->count())
             ->toBe($count, "Pathao was asked to take a parcel other than {$count} times.");
+    }
+
+    /**
+     * Pathao answering where a parcel is: the slug its own status table is
+     * written in, the prose beside it, and the moment Pathao last touched the
+     * parcel. No history — Pathao keeps none — so it is scripted with the last
+     * word it was given.
+     */
+    public function fakeTracking(string ...$rawStatuses): void
+    {
+        $this->fake([$this->trackingUrl() => Http::response([
+            'message' => 'Successful',
+            'type' => 'success',
+            'code' => 200,
+            'data' => [
+                'consignment_id' => self::CONSIGNMENT_ID,
+                'merchant_order_id' => 'GIO-1001-1',
+                'order_status' => str_replace('_', ' ', end($rawStatuses)),
+                'order_status_slug' => end($rawStatuses),
+                'updated_at' => self::UPDATED_AT,
+            ],
+        ])]);
+    }
+
+    /** Pathao answering about a Consignment it has no record of, in the envelope every one of its answers arrives in. */
+    public function fakeTrackingRefused(): void
+    {
+        $this->fake([$this->trackingUrl() => Http::response([
+            'message' => self::TRACKING_REFUSAL,
+            'type' => 'error',
+            'code' => 404,
+        ], 404)]);
+    }
+
+    public function trackingRefusalWording(): string
+    {
+        return self::TRACKING_REFUSAL;
+    }
+
+    /** Asked by the Consignment Pathao issued, carrying the token the driver obtained for itself. */
+    public function assertTrackedFor(Shipment $shipment): void
+    {
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
+            && $request->url() === self::HOST.'/aladdin/api/v1/orders/'.$shipment->consignment_reference.'/info'
+            && $request->hasHeader('Authorization', 'Bearer '.self::ACCESS_TOKEN));
+    }
+
+    /**
+     * Questions about a parcel only. The token grant is a call to Pathao as
+     * well, and counting it here would make "one parcel was asked about"
+     * depend on whether a token happened to still be held.
+     */
+    public function assertPollsSent(int $count): void
+    {
+        expect(Http::recorded(fn (Request $request): bool => str_contains($request->url(), '/orders/') && str_ends_with($request->url(), '/info'))->count())
+            ->toBe($count, "Pathao was asked where a parcel is other than {$count} times.");
+    }
+
+    /**
+     * Four hours, because Pathao announces a change as it happens and this is
+     * only the backstop against an announcement that never arrived.
+     */
+    public function reAskIntervalSeconds(): int
+    {
+        return 14400;
+    }
+
+    /** Pathao answers with where a parcel stands now and offers no tracking history at all. */
+    public function tracksWholeHistory(): bool
+    {
+        return false;
+    }
+
+    /** It does say when it last touched the parcel, which is what a Shipment Event's `occurred_at` takes. */
+    public function reportsItsOwnTime(): bool
+    {
+        return true;
     }
 
     /**
@@ -417,5 +504,11 @@ final class PathaoScript extends CourierScript
     private function bookingUrl(): string
     {
         return self::HOST.'/aladdin/api/v1/orders';
+    }
+
+    /** Any parcel: the Consignment sits in the middle of the path, so the stub is matched around it. */
+    private function trackingUrl(): string
+    {
+        return self::HOST.'/aladdin/api/v1/orders/*/info';
     }
 }

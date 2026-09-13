@@ -29,10 +29,20 @@ use Illuminate\Support\Str;
  */
 class Steadfast implements CourierDriver
 {
-    /** Where Steadfast answers, and the one call this driver makes so far. */
+    /** Where Steadfast answers, and the calls this driver makes. */
     private const HOST = 'https://portal.packzy.com/api/v1';
 
     private const BOOKING_PATH = '/create_order';
+
+    /**
+     * Where Steadfast is asked about a parcel, by its own Consignment id.
+     *
+     * Steadfast answers the same question by invoice and by tracking code as
+     * well; the Consignment is what is asked by, because it is the one name
+     * Steadfast issued itself and so the one it cannot disagree with us
+     * about.
+     */
+    private const TRACKING_PATH = '/status_by_cid/';
 
     /**
      * Steadfast's own status words, as its documentation lists them, in the
@@ -134,6 +144,46 @@ class Steadfast implements CourierDriver
         }
 
         return $this->read($shipment, $response);
+    }
+
+    /**
+     * Steadfast's status call: one Consignment, one word back, and no time of
+     * its own and no history at all.
+     *
+     * This is the whole of what is ever known about a Steadfast parcel, which
+     * is why it is asked every half hour and why the Shipment Event it
+     * produces leans on our own timestamp. A word Steadfast has stopped
+     * documenting reads as Unknown rather than as an error: a parcel whose
+     * status we cannot read is still a parcel to ask about again.
+     */
+    public function track(Shipment $shipment): ShipmentProgress
+    {
+        try {
+            $response = $this->client()->get(self::HOST.self::TRACKING_PATH.$shipment->consignment_reference);
+        } catch (ConnectionException $exception) {
+            return ShipmentProgress::unreachable(
+                "Steadfast could not be reached about parcel [{$shipment->invoice_reference}]: ".$exception->getMessage(),
+            );
+        }
+
+        if (($silence = ShipmentProgress::silenceFrom($response, $this->courier())) !== null) {
+            return $silence;
+        }
+
+        $answer = is_array($response->json()) ? $response->json() : [];
+        $rawStatus = is_scalar($answer['delivery_status'] ?? null) ? trim((string) $answer['delivery_status']) : '';
+
+        if ($rawStatus === '') {
+            return ShipmentProgress::refused(
+                "Steadfast would not say where parcel [{$shipment->invoice_reference}] is: ".$this->reason($answer, $response),
+                $answer,
+            );
+        }
+
+        return ShipmentProgress::reported(
+            [new ReportedStatus($this->canonicalStatus($rawStatus), $rawStatus)],
+            $answer,
+        );
     }
 
     public function canonicalStatus(string $rawStatus): ShipmentStatus

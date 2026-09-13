@@ -23,10 +23,9 @@ use App\Models\Shipment;
  * declaration here, so a caller asks what a Courier supports and never which
  * Courier it is.
  *
- * Status, webhooks and balance arrive with the tickets that need them. The
- * contract declares only what is implemented: a method declared here that
- * every driver throws from would be a contract that lies about what can be
- * asked.
+ * Webhooks and balance arrive with the tickets that need them. The contract
+ * declares only what is implemented: a method declared here that every driver
+ * throws from would be a contract that lies about what can be asked.
  */
 interface CourierDriver
 {
@@ -49,6 +48,29 @@ interface CourierDriver
      * @throws CourierUnreachable when the Courier could not be asked.
      */
     public function book(Shipment $shipment): ShipmentBooked;
+
+    /**
+     * Ask this Courier where a parcel it took stands, and answer with what it
+     * said.
+     *
+     * The other half of `book()`, and for one Courier of the three the only
+     * half there is: Steadfast announces nothing, so polling is not a backstop
+     * against a missed webhook but the only channel that exists, and the
+     * timeline's resolution is `reAskIntervalSeconds()` (ADR-0019).
+     *
+     * Answers rather than throws, unlike a booking: this is called from a
+     * sweep walking every parcel the couriers are carrying, and a Courier that
+     * could not be asked about one of them must not stop the rest. The three
+     * outcomes are `ShipmentProgress`' own, and the distinction that matters
+     * is between a Courier that answered and one that merely failed to.
+     *
+     * What comes back is what the Courier reports, oldest first, the last of
+     * it being where the parcel stands now — one entry for a Courier that
+     * keeps no history, and the whole history for the one that does. Nothing
+     * here deduplicates: the same history re-imported on every poll is one
+     * timeline, and the database is what carries that (ADR-0019).
+     */
+    public function track(Shipment $shipment): ShipmentProgress;
 
     /**
      * What one of this Courier's own status words means in the system's

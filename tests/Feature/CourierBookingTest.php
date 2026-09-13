@@ -31,8 +31,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Livewire\Notifications;
 use Filament\Notifications\Notification;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Http\Client\Factory as Http;
-use Illuminate\Support\Facades\Http as HttpFacade;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
@@ -167,22 +165,6 @@ function makeEveryCourierUsable(): void
     foreach (courierScripts() as $script) {
         $script->fakeAreas();
     }
-}
-
-/**
- * Forget every fake laid so far, so one test can hear the Courier answer two
- * different ways.
- *
- * `Http::fake()` stacks and the first callback to answer wins — a refusal
- * faked before an acceptance answers for both — and nothing clears the stubs,
- * so the client itself is replaced. Stray requests stay barred.
- */
-function courierAnsweringAfresh(): void
-{
-    app()->forgetInstance(Http::class);
-
-    HttpFacade::clearResolvedInstances();
-    HttpFacade::preventStrayRequests();
 }
 
 /**
@@ -416,7 +398,7 @@ it('sends a second attempt under a reference the courier will accept once the fi
     /** The parcel came back. The attempt is over, the Order may be sent again, and the first row stays as it is. */
     $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBooked();
 
     sendWithCourier($order->refresh(), $script)->assertNotified();
@@ -436,7 +418,7 @@ it('counts an attempt a courier refused as no attempt at all', function (Courier
     $script->fakeBookingRefused();
     sendWithCourier($order, $script);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBooked();
     sendWithCourier($order->refresh(), $script);
 
@@ -457,7 +439,7 @@ it('translates every one of a courier\'s own status words into the canonical voc
         foreach ($script->rawStatusesFor($status) as $rawStatus) {
             $order->shipments()->delete();
 
-            courierAnsweringAfresh();
+            answeringAfresh();
             $script->fakeBookedReporting($rawStatus);
 
             sendWithCourier($order->refresh(), $script);
@@ -722,7 +704,7 @@ it('keeps each attempt as that attempt was told it, so two attempts on one order
     /** The parcel came back, the Customer gave a better address, and it goes again. */
     $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBooked();
 
     sendWithCourier($order->refresh(), $script, ViewOrder::class, ['recipientAddress' => 'House 9, Road 3, Uttara'])
@@ -807,7 +789,7 @@ it('sends what a user overrode for this parcel, and leaves the installation\'s o
     /** The parcel came back and the next one goes out on the Merchant's defaults: the dialog configured nothing. */
     $first->update(['status' => ShipmentStatus::Returned, 'raw_status' => $script->returnedWording()]);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBooked();
 
     sendWithCourier($order->refresh(), $script)->assertNotified();
@@ -1135,7 +1117,7 @@ it('renews pathao\'s access token before pathao\'s own expiry, with nobody pasti
 
     $later = orderReadyToSend($script);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBookedWithTokenLasting(600);
 
     sendWithCourier($later, $script)->assertNotified();
@@ -1185,7 +1167,7 @@ it('lets go of a token pathao has stopped recognising, so the next parcel goes u
 
     $script->assertTokensIssued(1);
 
-    courierAnsweringAfresh();
+    answeringAfresh();
     $script->fakeBooked();
 
     sendWithCourier($order->refresh(), $script)->assertNotified();

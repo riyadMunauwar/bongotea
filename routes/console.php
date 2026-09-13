@@ -28,6 +28,17 @@ Schedule::command('payments:sweep')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('tracking:sweep')->everyFiveMinutes()->withoutOverlapping();
 
 /*
+| The sweep over the parcels the couriers are carrying, beside the payment and
+| tracking ones and on the same cadence. This is how often the question is
+| put; how often any one parcel is actually asked about is its Courier's own
+| property, because one of the three announces nothing at all and the other
+| two announce as a parcel moves. Never two at once, because two sweeps asking
+| about the same parcel is two calls to a courier for one answer.
+*/
+
+Schedule::command('couriers:sweep')->everyFiveMinutes()->withoutOverlapping();
+
+/*
 | The prune over what tracking has accumulated: once a day, in the quiet hour
 | before the Merchant's morning, because it is the only scheduled thing here
 | that deletes. Never two at once — two prunes deleting the same batch is two
