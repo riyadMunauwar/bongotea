@@ -171,6 +171,19 @@ class Shipment extends Model
     }
 
     /**
+     * The attempts that got the parcel to the door. The other half of over,
+     * beside the one that came back — and what stops a delivered Order from
+     * reading as one nobody ever sent.
+     *
+     * @param  Builder<Shipment>  $query
+     */
+    #[Scope]
+    protected function arrived(Builder $query): void
+    {
+        $query->whereIn('status', ShipmentStatus::arrivalValues());
+    }
+
+    /**
      * Write down something that happened to this parcel, once however many
      * times we are told it.
      *

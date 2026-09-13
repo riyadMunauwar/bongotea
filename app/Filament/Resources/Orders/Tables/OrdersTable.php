@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Models\Order;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
@@ -110,9 +111,33 @@ class OrdersTable
                 TextColumn::make('status')
                     ->badge()
                     ->sortable(),
+
+                /**
+                 * The delivery axis, and the third one on this row: an Order
+                 * is New, Unpaid and On Hold at once, and none of the three
+                 * ever writes another (ADR-0018). Drawn from the Active
+                 * Shipment, so it is blank for an Order nobody has sent and
+                 * blank again once a parcel is over — a Returned Order is one
+                 * to send again, not one still out.
+                 *
+                 * Neither sortable nor searchable: both would mean a join or
+                 * an index for a column an operator scans rather than looks
+                 * something up by, and the Shipments list is where a parcel is
+                 * found by name.
+                 */
+                TextColumn::make('activeShipment.status')
+                    ->label('Delivery')
+                    ->badge()
+                    ->placeholder('—')
+                    /** The Courier under its own word: "on hold" is a different phone call depending on who is holding it. */
+                    ->description(fn (Order $record): ?string => $record->activeShipment?->courier->getLabel()),
             ])
-            /** One query answers "is it Paid" for the whole page, not one per row. */
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withPaidFlag())
+            /**
+             * One query answers "is it Paid" for the whole page, not one per
+             * row — and one more answers where every parcel is, which the
+             * Delivery column draws and the send action asks again.
+             */
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withPaidFlag()->with('activeShipment'))
             ->filters([
                 /**
                  * The two lists the payment axis is opened for: the Unpaid
@@ -129,6 +154,20 @@ class OrdersTable
                     ->label('Paid but cancelled')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => $query->paidButCancelled()),
+
+                /**
+                 * The gap parcels fall through silently: an Order captured
+                 * three days ago that nobody ever sent reads exactly like one
+                 * booked this morning. A toggle like the payment pair, and
+                 * cross-status like them too — an Order is unsent and New, or
+                 * unsent and Confirmed, and the question is the same one from
+                 * every tab, which is why it is a filter rather than a fourth
+                 * tab.
+                 */
+                Filter::make('not_yet_sent')
+                    ->label('Not yet sent to a courier')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => $query->notYetSent()),
 
                 /**
                  * "What came in today" is the question this screen is opened
@@ -207,6 +246,15 @@ class OrdersTable
                     }),
             ])
             ->recordActions([
+                /**
+                 * The same dialog the Order's own screens open, reached from
+                 * the row: a User working down a day's Orders sends each
+                 * parcel without opening any of them, and reads back exactly
+                 * what the Courier will be told before it goes. The action
+                 * hides itself on an Order already out, here as there.
+                 */
+                BookWithCourierAction::make(),
+
                 ViewAction::make(),
                 EditAction::make(),
             ])
@@ -222,14 +270,15 @@ class OrdersTable
     /**
      * The filters that ask something the status tabs cannot answer from where
      * they stand: "Paid but cancelled" is a Cancelled-only question, and
-     * "Unpaid online orders" spans all three. Deliberately not every filter —
-     * the date range and TrashedFilter say nothing about status, so an empty
-     * table under one of those must not be blamed on the tab, and offering to
-     * move to All would only trade a named cause for Filament's silent one.
+     * "Unpaid online orders" and "Not yet sent to a courier" span all three.
+     * Deliberately not every filter — the date range and TrashedFilter say
+     * nothing about status, so an empty table under one of those must not be
+     * blamed on the tab, and offering to move to All would only trade a named
+     * cause for Filament's silent one.
      *
      * @var list<string>
      */
-    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled'];
+    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', 'not_yet_sent'];
 
     private static function isNarrowedAcrossStatuses(Table $table): bool
     {

@@ -76,8 +76,17 @@ class BookWithCourierAction
              * usable Courier, and nothing is already out for the Order. The
              * booking asks both again under the Order's lock, because a
              * screen is only as fresh as the moment it was drawn.
+             *
+             * And never on a deleted Order. `OrderResource::getEloquentQuery()`
+             * drops the soft-delete scope, so all three screens open one and
+             * the row shows under the Trashed filter — but the booking reads
+             * the Order back under its lock through the scope that is still
+             * on the model, so a parcel nobody may send would be refused with
+             * a 404 after the User had filled the whole dialog in. An Order
+             * that should never have existed is not one to send; restoring it
+             * first is the answer, and that action is on the same row.
              */
-            ->visible(fn (Order $record): bool => filled(self::couriers()) && ! $record->isShipping())
+            ->visible(fn (Order $record): bool => filled(self::couriers()) && ! $record->trashed() && ! $record->isShipping())
             ->modalHeading('Send this order with a courier')
             ->modalDescription(fn (Order $record): string => self::whatWillBeCollected($record))
             ->modalSubmitActionLabel('Send')

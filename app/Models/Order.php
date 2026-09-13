@@ -207,10 +207,44 @@ class Order extends Model
      * Whether a parcel is out for this Order. The one reading of it, asked by
      * the booking action, by the booking itself under the Order's lock, and
      * by the Orders list alike.
+     *
+     * The Orders list draws the Active Shipment on every row and then asks
+     * this of every row again, so the loaded relation answers where there is
+     * one: a page of fifty rows is one query rather than fifty-one. The
+     * booking reads the Order fresh under its lock (`CourierBooker::book()`),
+     * which loads no relations, so the invariant is never decided off a
+     * relation somebody loaded a moment ago.
      */
     public function isShipping(): bool
     {
+        if ($this->relationLoaded('activeShipment')) {
+            return $this->activeShipment !== null;
+        }
+
         return $this->shipments()->active()->exists();
+    }
+
+    /**
+     * The Orders still to be handed to a Courier: nothing out for them, and
+     * nothing of theirs that ever reached a door.
+     *
+     * Deliberately not "no Active Shipment", which every delivered Order
+     * satisfies too — a week-old installation would answer this with its
+     * whole archive and bury the handful of Orders nobody has sent. Two
+     * readings of over, and only one of them puts an Order back on the list:
+     * a parcel that came back is a question a User has to answer — ring the
+     * Customer, correct the address, send it again — where a parcel that
+     * arrived is finished (ADR-0018). An attempt a User wrote off says the
+     * parcel is dead, so its Order is to send again as well.
+     *
+     * @param  Builder<Order>  $query
+     */
+    #[Scope]
+    protected function notYetSent(Builder $query): void
+    {
+        $query->whereDoesntHave('shipments', fn (Builder $shipments): Builder => $shipments
+            ->where(fn (Builder $stillOut): Builder => $stillOut->active())
+            ->orWhere(fn (Builder $atTheDoor): Builder => $atTheDoor->arrived()));
     }
 
     /**

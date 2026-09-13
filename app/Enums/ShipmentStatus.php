@@ -92,9 +92,46 @@ enum ShipmentStatus: string implements HasColor, HasLabel
      */
     public static function terminalValues(): array
     {
+        return self::valuesWhere(fn (self $status): bool => $status->isTerminal());
+    }
+
+    /**
+     * Whether the parcel got to the door — all of it, or some of it.
+     *
+     * The half of terminal that settles an Order's delivery. Returned is over
+     * too, and is the opposite: a parcel that came back is a question a User
+     * has to answer, and the Order is one to send again (ADR-0018). So "is
+     * this Order still to be sent" cannot be read off `isTerminal()`, which
+     * says only that the Courier has stopped.
+     */
+    public function isArrival(): bool
+    {
+        return match ($this) {
+            self::Delivered, self::PartlyDelivered => true,
+            self::Booked, self::InTransit, self::OnHold, self::Returned, self::Unknown => false,
+        };
+    }
+
+    /**
+     * The states a parcel got to the door in, by name, for a query that
+     * cannot ask an object.
+     *
+     * @return list<string>
+     */
+    public static function arrivalValues(): array
+    {
+        return self::valuesWhere(fn (self $status): bool => $status->isArrival());
+    }
+
+    /**
+     * @param  callable(self): bool  $wanted
+     * @return list<string>
+     */
+    private static function valuesWhere(callable $wanted): array
+    {
         return array_values(array_map(
             fn (self $status): string => $status->value,
-            array_filter(self::cases(), fn (self $status): bool => $status->isTerminal()),
+            array_filter(self::cases(), $wanted),
         ));
     }
 }

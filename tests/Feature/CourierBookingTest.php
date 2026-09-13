@@ -6,6 +6,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Enums\ShipmentStatus;
 use App\Filament\Resources\Orders\Pages\EditOrder;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -80,20 +81,30 @@ function orderReadyToSend(CourierScript $script, array $attributes = []): Order
 /**
  * Press "Send with courier" on one of the Order's screens, choosing this
  * Courier, the way a User on the call does.
+ *
+ * The queue reaches the same action by the row rather than by the header, so
+ * a User working down a day's Orders sends each parcel without opening any of
+ * them. One action, three screens, one dialog.
  */
 function sendWithCourier(Order $order, CourierScript $script, string $page = ViewOrder::class, array $confirming = []): Testable
 {
+    $answers = array_merge(['courier' => $script->courier()->value], $confirming);
+
+    if ($page === ListOrders::class) {
+        return Livewire::test(ListOrders::class)->callTableAction('bookWithCourier', $order, $answers);
+    }
+
     return Livewire::test($page, ['record' => $order->getKey()])
-        ->callAction('bookWithCourier', array_merge(['courier' => $script->courier()->value], $confirming));
+        ->callAction('bookWithCourier', $answers);
 }
 
 /**
  * Open the send dialog on this Courier without sending anything, the way a
  * User reading back what is about to go out does.
  */
-function openSendDialog(Order $order, CourierScript $script, string $page = ViewOrder::class): Testable
+function openSendDialog(Order $order, CourierScript $script): Testable
 {
-    return Livewire::test($page, ['record' => $order->getKey()])
+    return Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
         ->mountAction('bookWithCourier')
         ->setActionData(['courier' => $script->courier()->value]);
 }
@@ -213,6 +224,7 @@ it('books an order with a courier and shows the consignment and tracking code st
 })->with('courier scripts')->with([
     'reading it' => ViewOrder::class,
     'working it' => EditOrder::class,
+    'from the queue, without opening it' => ListOrders::class,
 ]);
 
 it('sends every field the courier calls mandatory, filled from the order', function (CourierScript $script) {
@@ -364,6 +376,25 @@ it('offers no courier at all until one is switched on and supplied', function (C
         ->assertActionVisible('bookWithCourier');
 })->with('courier scripts');
 
+it('offers no courier for an order that should never have existed', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+    $order->delete();
+
+    /**
+     * `OrderResource` drops the soft-delete scope, so a deleted Order opens on
+     * every screen and shows on the queue under the Trashed filter — and the
+     * booking would read it back under its lock through the scope still on
+     * the model and refuse it after the User had filled the dialog in.
+     * Restoring it first is the answer, and that action is on the same row.
+     */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertActionHidden('bookWithCourier');
+
+    Livewire::test(ListOrders::class)
+        ->filterTable('trashed', ['value' => true])
+        ->assertTableActionHidden('bookWithCourier', $order);
+})->with('courier scripts');
+
 /*
 |--------------------------------------------------------------------------
 | One parcel at a time
@@ -377,9 +408,12 @@ it('will not send a second parcel while one is still out', function (CourierScri
 
     sendWithCourier($order, $script);
 
-    /** The action is gone from the screen, and the booking itself refuses against a fresh read. */
+    /** The action is gone from the screens and from the row, and the booking itself refuses against a fresh read. */
     Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
         ->assertActionHidden('bookWithCourier');
+
+    Livewire::test(ListOrders::class)
+        ->assertTableActionHidden('bookWithCourier', $order);
 
     app(CourierBooker::class)->book($order, $script->courier());
 })->with('courier scripts')->throws(OrderAlreadyShipping::class);
