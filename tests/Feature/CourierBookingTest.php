@@ -484,6 +484,38 @@ it('offers the abandon action only while a parcel is out, and never beside the s
         ->assertActionVisible('abandonShipment');
 })->with('courier scripts');
 
+it('will not write off a parcel no courier has been handed yet', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    /** What a batch leaves behind until the sweep dispatches it: Active, and never offered to anybody (ADR-0020). */
+    $waiting = Shipment::factory()->for($order)->create([
+        'courier' => $script->courier(),
+        'status' => ShipmentStatus::Written,
+        'raw_status' => null,
+        'consignment_reference' => null,
+        'tracking_code' => null,
+        'booked_at' => null,
+    ]);
+
+    expect($waiting->isAwaitingDispatch())->toBeTrue();
+
+    /** Neither action: nothing to write off yet, and nothing to send while one is on its way to going. */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertActionHidden('abandonShipment')
+        ->assertActionHidden('bookWithCourier');
+
+    /**
+     * And refused at the model, which is what closes the race the hidden
+     * button cannot: written off while the sweep is inside its bulk call, this
+     * row would come back holding a Consignment for a real parcel and be out
+     * of Active all the same.
+     */
+    $waiting->abandon(User::factory()->create());
+
+    expect($waiting->refresh()->abandoned_at)->toBeNull()
+        ->and($waiting->isActive())->toBeTrue();
+})->with('courier scripts');
+
 it('records who wrote a parcel off and when, and leaves the courier\'s last word standing', function (CourierScript $script) {
     [$movingStatus, $movingWord] = stillMoving($script);
 

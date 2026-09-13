@@ -6,6 +6,7 @@ use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 /**
@@ -149,4 +150,28 @@ it('offers an order whose only parcel came back as one nobody has sent', functio
     Livewire::test(ListOrders::class)
         ->filterTable('not_yet_sent')
         ->assertCanSeeTableRecords([$order]);
+});
+
+it('asks the delivery questions once for a page of orders, not once per row', function () {
+    $orders = Order::factory()->count(10)->create();
+
+    Shipment::factory()->for($orders[0])->delivered()->create();
+    Shipment::factory()->for($orders[1])->create();
+
+    DB::enableQueryLog();
+
+    Livewire::test(ListOrders::class)->assertCanSeeTableRecords($orders);
+
+    /**
+     * Both halves of "may this order still be sent" are loaded with the page:
+     * the Active Shipment the Delivery column draws, and the flag that says
+     * whether a parcel of the Order's ever arrived. The send action asks each
+     * of them of every row it draws, so a reading that fell back to the
+     * database would be a query a row — invisible on ten and a page that
+     * crawls on a real queue.
+     */
+    $perRow = collect(DB::getQueryLog())
+        ->filter(fn (array $query): bool => str_contains($query['query'], 'shipments'));
+
+    expect($perRow->count())->toBeLessThanOrEqual(2);
 });

@@ -213,6 +213,21 @@ class Shipment extends Model
     }
 
     /**
+     * Whether this attempt is written down and still waiting to be handed to
+     * anybody: the `awaitingDispatch()` scope, asked of a row.
+     *
+     * Only a batch leaves one, and only until the next sweep (ADR-0020). The
+     * Consignment is the half that matters to a caller — a row that has one
+     * has been offered and taken, whatever else it says.
+     */
+    public function isAwaitingDispatch(): bool
+    {
+        return $this->isActive()
+            && $this->status === ShipmentStatus::Written
+            && $this->consignment_reference === null;
+    }
+
+    /**
      * Write this attempt off: a parcel a Courier never collected, or one held
      * so long there is nothing left to wait for.
      *
@@ -223,10 +238,19 @@ class Shipment extends Model
      * is left exactly as the Courier wrote it. What the row loses is its
      * Active-ness, which is what frees the Order to be sent again.
      *
-     * Under no lock, unlike a booking: this only ever takes a parcel *out* of
-     * Active, so it cannot make two parcels out for one Order however it
-     * interleaves with a booking — the booking's own locked read either still
-     * sees this attempt and refuses, or no longer does and is right not to.
+     * A parcel nobody has handed over yet cannot be written off, which is the
+     * glossary read literally: Abandoned is said of a parcel a Courier never
+     * *collected*, and a row awaiting dispatch has never been offered to one.
+     * It is also what makes the missing lock sound. Abandoning otherwise only
+     * ever takes a parcel out of Active, so it cannot make two parcels out for
+     * one Order however it interleaves with a booking — but a row the sweep is
+     * inside `bookAll()` for is the one case where that is untrue: written off
+     * mid-call, it would come back holding a Consignment for a real parcel and
+     * be out of Active all the same, freeing the Order to be sent a second
+     * parcel nobody ordered. The state this refuses on is exactly the state
+     * `CourierDispatcher::place()` writes, so there is no window between the
+     * two: either the Consignment is not there yet and this refuses, or it is
+     * and the parcel is a real one to write off.
      *
      * An attempt already written off is left exactly as it was: the decision
      * belongs to whoever made it, and a second User pressing the same button
@@ -234,7 +258,7 @@ class Shipment extends Model
      */
     public function abandon(User $by): void
     {
-        if ($this->abandoned_at !== null) {
+        if ($this->abandoned_at !== null || $this->isAwaitingDispatch()) {
             return;
         }
 

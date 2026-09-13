@@ -135,10 +135,13 @@ class OrdersTable
             ])
             /**
              * One query answers "is it Paid" for the whole page, not one per
-             * row — and one more answers where every parcel is, which the
-             * Delivery column draws and the send action asks again.
+             * row — one more answers where every parcel is, which the Delivery
+             * column draws and the send action asks again, and one more
+             * answers whether a parcel of the Order's ever arrived, which is
+             * the other half of what the send action asks and the half no
+             * loaded relation can answer.
              */
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withPaidFlag()->with('activeShipment'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withPaidFlag()->withArrivedFlag()->with('activeShipment'))
             ->filters([
                 /**
                  * The two lists the payment axis is opened for: the Unpaid

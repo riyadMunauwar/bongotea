@@ -75,6 +75,12 @@ class Order extends Model
     private const PAID_FLAG = 'is_paid';
 
     /**
+     * The attribute `withArrivedFlag()` loads the answer to `hasArrived()`
+     * under.
+     */
+    private const ARRIVED_FLAG = 'has_arrived';
+
+    /**
      * The key of the Merchant's question whose answer is the Customer's note
      * for the courier; see `deliveryNote()`.
      */
@@ -234,9 +240,20 @@ class Order extends Model
      * parcel the Merchant pays for (ADR-0018). Asked by the booking under the
      * Order's lock and by the action that offers it, the way `isShipping()` is
      * — and by nothing else, so "already delivered" has one reading.
+     *
+     * The Orders list asks this of every row it draws, so it answers off the
+     * flag where a query loaded one (`withArrivedFlag()`), exactly as
+     * `isPaid()` does: a page of fifty rows is one query rather than fifty.
+     * The booking reads the Order fresh under its lock, which loads no flag,
+     * so the refusal is never decided off a column somebody selected a moment
+     * ago.
      */
     public function hasArrived(): bool
     {
+        if ($this->hasAttribute(self::ARRIVED_FLAG)) {
+            return (bool) $this->getAttribute(self::ARRIVED_FLAG);
+        }
+
         return $this->shipments()->arrived()->exists();
     }
 
@@ -354,6 +371,21 @@ class Order extends Model
     protected function withPaidFlag(Builder $query): void
     {
         $query->withExists('paidPayments as '.self::PAID_FLAG);
+    }
+
+    /**
+     * Load the answer to `hasArrived()` onto every Order a query returns, for
+     * the reason `withPaidFlag()` exists: the Orders list asks it of every row
+     * to decide whether that row may still be sent, and a relation cannot
+     * answer it the way the loaded Active Shipment answers `isShipping()` —
+     * an Order's arrivals are the attempts it is *not* holding.
+     *
+     * @param  Builder<Order>  $query
+     */
+    #[Scope]
+    protected function withArrivedFlag(Builder $query): void
+    {
+        $query->withExists(['shipments as '.self::ARRIVED_FLAG => fn (Builder $shipments): Builder => $shipments->arrived()]);
     }
 
     /**

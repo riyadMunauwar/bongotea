@@ -23,7 +23,10 @@ use Filament\Support\Icons\Heroicon;
  * abandoning a parcel is a User about to send that Order again. It sits
  * beside "Send with courier" on both of the Order's screens, and the two are
  * never offered at once — one is for an Order with a parcel out, the other
- * for an Order with none.
+ * for an Order with none. An Order whose parcel is written down and not yet
+ * dispatched is briefly offered neither, which is correct: there is nothing
+ * to write off until a Courier has been handed it, and nothing to send while
+ * one is on its way to being.
  *
  * What it writes is a time and a name and never a status. The Courier's last
  * word stays exactly as the Courier left it, so a Shipment On Hold and then
@@ -41,13 +44,23 @@ class AbandonShipmentAction
             ->color('danger')
 
             /**
-             * Offered while there is a parcel to write off. Never on a deleted
-             * Order, for the reason the booking is not: the Orders screens drop
-             * the soft-delete scope so all three open one, and an Order that
-             * should never have existed is not one to make decisions about —
-             * restoring it first is the answer.
+             * Offered while there is a parcel to write off — which means a
+             * parcel a Courier has actually been handed. A row a batch wrote
+             * and the sweep has not dispatched yet is Active and is still not
+             * one to abandon: nobody has been offered it, so nobody failed to
+             * collect it, and writing it off while the sweep is inside its
+             * bulk call is the one way this could leave a live Consignment on
+             * a dead attempt (`Shipment::abandon()`). It goes out within
+             * minutes and can be written off then.
+             *
+             * Never on a deleted Order, for the reason the booking is not: the
+             * Orders screens drop the soft-delete scope so a deleted one still
+             * opens, and an Order that should never have existed is not one to
+             * make decisions about — restoring it first is the answer.
              */
-            ->visible(fn (Order $record): bool => ! $record->trashed() && $record->isShipping())
+            ->visible(fn (Order $record): bool => ! $record->trashed()
+                && ($shipment = self::parcelOut($record)) !== null
+                && ! $shipment->isAwaitingDispatch())
             ->requiresConfirmation()
             ->modalHeading('Write this parcel off?')
             ->modalDescription(fn (Order $record): string => self::whatWillHappen($record))
@@ -61,10 +74,12 @@ class AbandonShipmentAction
                  */
                 $shipment = self::parcelOut($record->refresh());
 
-                if ($shipment === null) {
+                if ($shipment === null || $shipment->isAwaitingDispatch()) {
                     Notification::make()
                         ->title('Nothing to abandon')
-                        ->body("No parcel is out for order {$record->order_number} any more.")
+                        ->body($shipment === null
+                            ? "No parcel is out for order {$record->order_number} any more."
+                            : 'This parcel has not been handed to the courier yet. It goes out on the next sweep, and can be written off after that.')
                         ->warning()
                         ->send();
 

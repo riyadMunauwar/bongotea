@@ -131,3 +131,15 @@ The delivery area for a batch is guessed once per batch (`ParcelDetails::guessed
 The cache key carries a sha256 of that Courier's `credentialProperties()`, as `PathaoAccessToken`'s does: a balance is one account's product, and a Merchant pasting a second account's keys must not be shown the first one's money under the new name.
 
 `CourierMoney` puts that beside COD in Flight, which is `SUM(collect_amount)` over `Shipment::active()` — what the parcel was sent out to collect, so an Order Paid online contributes nothing. The two are never summed and never presented as one number: one is a Courier's word about an account, the other is the Merchant's own Orders.
+
+## Two readings of "this Order may not be sent", and only one is temporary
+`CourierBooker::readyToSend()` refuses an Order twice over: `OrderAlreadyShipping` (a parcel is out now — an Order to send later) and `OrderAlreadyDelivered` (`Order::hasArrived()` — finished, and a second parcel is one nobody ordered). Neither is a `BookingNotMade`: no Courier was asked. A Returned Shipment is neither, which is exactly what makes a re-send the answer to it (ADR-0018), and a row a batch booking had refused (`refused_at`) is out of Active, so its Order is re-sendable at once.
+
+Every caller must handle both: `BookWithCourierAction` catches `OrderAlreadyDelivered` above the `BookingNotMade` fallback and hides itself on `hasArrived()`; `BatchBooker` collects them into `BatchWritten::$alreadyDelivered`, which the bulk action names back. `BookBatchWithCourierAction::whatWillBeSent()` counts what will actually go with `Order::notYetSent()` in one query — never two `exists()` per ticked row.
+
+## Abandoning is Shipment::abandon() and writes no status
+`Shipment::abandon(User $by)` is the only writer of `abandoned_at`/`abandoned_by`. It touches neither `status` nor `raw_status` nor the timeline — a parcel On Hold and then abandoned says both (ADR-0018) — and an already-abandoned row is left exactly as it was, so a second presser is never credited with somebody else's decision.
+
+It refuses a row that is still `isAwaitingDispatch()`, and that is what makes the missing lock sound rather than a shortcut. Abandoning otherwise only removes a parcel from Active and cannot produce two parcels for one Order; a row the sweep is inside `bookAll()` for is the exception — written off mid-call it would come back holding a real Consignment and be out of Active all the same, and the Order would be offered a second parcel. The refused state is exactly the state `CourierDispatcher::place()` writes, so there is no window between them. Do not "allow cancelling a batch row" here: that is a different capability and Abandoned is said of a parcel a Courier never *collected*.
+
+Reached from the Order (`AbandonShipmentAction` on ViewOrder and EditOrder) and never from `ShipmentResource`, which stays read-only. Screens that draw a written-off parcel must show the Courier's last word beside "Abandoned", never instead of it (`ShipmentInfolist` callout, `ShipmentsTable` status description).

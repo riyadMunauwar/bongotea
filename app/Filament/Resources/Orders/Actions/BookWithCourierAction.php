@@ -83,9 +83,10 @@ class BookWithCourierAction
              * that came back is a question a User answers by sending again,
              * where a parcel that arrived is finished (ADR-0018).
              *
-             * And never on a deleted Order. `OrderResource::getEloquentQuery()`
-             * drops the soft-delete scope, so all three screens open one and
-             * the row shows under the Trashed filter — but the booking reads
+             * And never on a deleted Order.
+             * `OrderResource::getRecordRouteBindingEloquentQuery()` drops the
+             * soft-delete scope, so both of the Order's own screens open one
+             * and the row shows under the Trashed filter — but the booking reads
              * the Order back under its lock through the scope that is still
              * on the model, so a parcel nobody may send would be refused with
              * a 404 after the User had filled the whole dialog in. An Order

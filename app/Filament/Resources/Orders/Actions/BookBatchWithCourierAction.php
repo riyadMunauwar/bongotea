@@ -113,6 +113,13 @@ class BookBatchWithCourierAction
      * asking each ticked Order in turn would be two questions per row on a
      * screen where a User may have ticked a fortnight.
      *
+     * The scope reads through the soft-delete scope and the queue can show
+     * trashed rows under its own filter, so a ticked deleted Order counts
+     * among the skipped here — which is true, and why the sentence names
+     * deletion as one of the three reasons rather than only the two the
+     * booking refuses for. Which Orders those were is the batch's own answer
+     * to give, and it names them.
+     *
      * @param  Collection<int, Order>  $records
      */
     private static function whatWillBeSent(Collection $records): string
@@ -130,7 +137,7 @@ class BookBatchWithCourierAction
 
         return $sentence." {$skipped} ".Str::plural('order', $skipped)
             .' will be skipped: a parcel is already out for '.($skipped === 1 ? 'it' : 'them')
-            .', or one has already been delivered.';
+            .', one has already been delivered, or the order is deleted.';
     }
 
     /**

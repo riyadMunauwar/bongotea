@@ -265,7 +265,7 @@ Sales divided by the Orders that count towards Sales in a Reporting Window. Zero
 _Avoid_: AOV, basket size, ticket size
 
 **Needs Attention**:
-The Orders and Payments an operator must act on regardless of any Reporting Window: a New Order nobody has called in a day, a Payment Pending for over an hour, an Order Paid twice, an Order Paid and Cancelled at once. It is a to-do list, not a report, so it ignores the window.
+The Orders, Payments and parcels an operator must act on regardless of any Reporting Window: a New Order nobody has called in a day, a Payment Pending for over an hour, an Order Paid twice, an Order Paid and Cancelled at once, an Order whose parcel came back and nobody has decided about, and a parcel nobody has heard about in roughly a week. It is a to-do list, not a report, so it ignores the window. A returned parcel is here rather than anywhere else because it changes nothing by itself: what becomes of the Order is a decision a User makes, and until they make it the return is a question nobody has answered.
 _Avoid_: alerts, exceptions, issues, anomalies
 
 **Visit**:
