@@ -24,46 +24,6 @@ use Tests\Fixtures\Couriers\CourierScript;
  * test here reaches for a driver: the asymmetries are asked of the script.
  */
 
-/**
- * A parcel a Courier has just taken, with that Courier switched on and
- * supplied — the state the sweep finds everything in.
- *
- * @param  array<string, mixed>  $attributes
- */
-function parcelInFlight(CourierScript $script, array $attributes = []): Shipment
-{
-    $script->makeUsable();
-
-    return Shipment::factory()->create(array_merge([
-        'courier' => $script->courier(),
-        'status' => ShipmentStatus::Booked,
-        'raw_status' => $script->rawStatusesFor(ShipmentStatus::Booked)[0],
-        'consignment_reference' => $script->consignmentReference(),
-        'tracking_code' => $script->trackingCode(),
-        'booked_at' => now(),
-    ], $attributes));
-}
-
-/**
- * A state this Courier reports while a parcel is still on its way, and its
- * own word for it.
- *
- * In Transit where the Courier has a word for that, On Hold where it has
- * none — Steadfast never says a parcel is moving, and that is expected rather
- * than a gap (ADR-0018). Either way it is somewhere the Courier has not
- * finished with the parcel, which is what these cases need of it.
- *
- * @return array{ShipmentStatus, string}
- */
-function stillMoving(CourierScript $script): array
-{
-    $status = $script->rawStatusesFor(ShipmentStatus::InTransit) === []
-        ? ShipmentStatus::OnHold
-        : ShipmentStatus::InTransit;
-
-    return [$status, $script->rawStatusesFor($status)[0]];
-}
-
 /*
 |--------------------------------------------------------------------------
 | Asking, and writing down what was said

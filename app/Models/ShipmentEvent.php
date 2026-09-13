@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 /**
  * One thing that happened to a Shipment, as the system came to know it.
@@ -38,6 +39,9 @@ class ShipmentEvent extends Model
     /** @use HasFactory<ShipmentEventFactory> */
     use HasFactory;
 
+    /** How much of a Courier's prose a row keeps, as `asAWord()` explains. */
+    private const WORD_LIMIT = 200;
+
     protected function casts(): array
     {
         return [
@@ -61,6 +65,28 @@ class ShipmentEvent extends Model
         $at = blank($occurredAt) ? '' : CarbonImmutable::parse($occurredAt)->utc()->toAtomString();
 
         return $word.'@'.$at;
+    }
+
+    /**
+     * A Courier's own words, cut to a length a timeline row can be
+     * deduplicated by.
+     *
+     * The one place the length is decided, because both things written here
+     * in a Courier's prose rather than in one of its status words need it: a
+     * refusal the sweep records as Unknown, and a line of narration. Well
+     * short of what `raw_status` holds, because the words are not written
+     * alone — `deduplicationIdFor()` spells them into a string with the
+     * Courier's time after them, and *that* is what a `string` column carries
+     * a unique key over, so a sentence cut to the column width would be a row
+     * too long to write.
+     *
+     * Kept as words rather than reduced to a code: the column is printed
+     * verbatim on the timeline, and "no such consignment" is the whole of
+     * what an operator needs before they ring somebody.
+     */
+    public static function asAWord(string $words): string
+    {
+        return Str::limit($words, self::WORD_LIMIT, '');
     }
 
     /**

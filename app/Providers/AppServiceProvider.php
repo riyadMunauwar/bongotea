@@ -20,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
     /** Notifications one address may post in a minute before it is refused. */
     private const NOTIFICATIONS_PER_MINUTE = 60;
 
+    /** Announcements one address may post in a minute before it is refused. */
+    private const ANNOUNCEMENTS_PER_MINUTE = 60;
+
     /**
      * Register any application services.
      */
@@ -84,6 +87,17 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('payment-notification', fn (Request $request): Limit => Limit::perMinute(
             self::NOTIFICATIONS_PER_MINUTE,
+        )->by($request->ip()));
+
+        /**
+         * An Announcement is an unauthenticated POST that costs a call back
+         * to the Courier, so it is throttled per address like a Notification.
+         * Set to what a Courier's own servers plausibly send an installation
+         * in a minute, with room: a Courier that is refused retries, and the
+         * sweep catches what never arrives, so nothing is lost but time.
+         */
+        RateLimiter::for('courier-announcement', fn (Request $request): Limit => Limit::perMinute(
+            self::ANNOUNCEMENTS_PER_MINUTE,
         )->by($request->ip()));
 
         /**

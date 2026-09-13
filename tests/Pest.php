@@ -2,12 +2,14 @@
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
+use App\Enums\ShipmentStatus;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Shipment;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Definitions\CheckoutShortcode;
 use App\Shortcodes\Node;
@@ -32,6 +34,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Pest\Expectation;
+use Tests\Fixtures\Couriers\CourierScript;
 use Tests\Fixtures\Payments\GatewayScript;
 use Tests\TestCase;
 
@@ -285,6 +288,59 @@ function answeringAfresh(): void
 
     Http::clearResolvedInstances();
     Http::preventStrayRequests();
+}
+
+/**
+ * A parcel a Courier has just taken, with that Courier switched on and
+ * supplied — the state the sweep and the webhook both find everything in.
+ *
+ * Here rather than in whichever courier suite needed it first, for the reason
+ * `answeringAfresh()` is: the courier suites are three files now and a helper
+ * defined in one of them is a fatal error for anybody running only another.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function parcelInFlight(CourierScript $script, array $attributes = []): Shipment
+{
+    $script->makeUsable();
+
+    return Shipment::factory()->create(array_merge([
+        'courier' => $script->courier(),
+        'status' => ShipmentStatus::Booked,
+        'raw_status' => $script->rawStatusesFor(ShipmentStatus::Booked)[0],
+        'consignment_reference' => $script->consignmentReference(),
+        'tracking_code' => $script->trackingCode(),
+        'booked_at' => now(),
+    ], $attributes));
+}
+
+/**
+ * A state this Courier reports while a parcel is still on its way, and its
+ * own word for it.
+ *
+ * In Transit where the Courier has a word for that, On Hold where it has
+ * none — Steadfast never says a parcel is moving, and that is expected rather
+ * than a gap (ADR-0018). Either way it is somewhere the Courier has not
+ * finished with the parcel, which is what these cases need of it.
+ *
+ * @return array{ShipmentStatus, string}
+ */
+function stillMoving(CourierScript $script): array
+{
+    $status = $script->rawStatusesFor(ShipmentStatus::InTransit) === []
+        ? ShipmentStatus::OnHold
+        : ShipmentStatus::InTransit;
+
+    return [$status, $script->rawStatusesFor($status)[0]];
+}
+
+/**
+ * The Announcement address for a Courier: one per Courier, naming no parcel,
+ * because the Courier says which one in its own words.
+ */
+function announcementUrl(CourierScript $script): string
+{
+    return route('courier.notify', ['courier' => $script->courier()->value]);
 }
 
 /**

@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\Courier;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CourierController;
 use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\PaymentController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -91,3 +93,28 @@ Route::match(['get', 'post'], '/pay/{method}/{payment:invoice_reference}/verify'
     ->whereIn('method', PaymentMethod::names(PaymentMethod::online()))
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('payment.verify');
+
+/*
+| The Announcement: where a Courier tells the system on its own that
+| something happened to a parcel, one address per Courier. POST only, since
+| nothing but a Courier's server ever calls it; outside request-forgery
+| protection because that call carries no session and no token; throttled,
+| because it is unauthenticated and triggers a call back to the Courier.
+| Three segments deep, so a slug cannot shadow it.
+|
+| Registered before anything else under `/courier/{courier}/`, so that
+| `notify` can never be read as a reference by a later route taking one in
+| that position — the reason the Notification sits above the Processing Page.
+|
+| Constrained to every name the enum holds and not only to the couriers that
+| announce: which of them could ever post here is a driver's answer, and
+| asking it would read this installation's Settings while a route file is
+| being read. A Courier that announces nothing reads nothing off the request
+| and is heard all the same (ADR-0019).
+*/
+
+Route::post('/courier/{courier}/notify', [CourierController::class, 'notify'])
+    ->whereIn('courier', Courier::names())
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->middleware('throttle:courier-announcement')
+    ->name('courier.notify');

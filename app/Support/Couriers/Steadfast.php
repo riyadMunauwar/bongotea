@@ -12,6 +12,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
@@ -189,6 +190,23 @@ class Steadfast implements CourierDriver
     public function canonicalStatus(string $rawStatus): ShipmentStatus
     {
         return self::STATUSES[strtolower(trim($rawStatus))] ?? ShipmentStatus::Unknown;
+    }
+
+    /**
+     * Steadfast announces nothing at all — it publishes no webhook, so its
+     * address is never handed to it and nothing it sends could arrive there.
+     *
+     * Null rather than an exception, for the reason `deliveryAreas()` is
+     * empty for a Courier that reads a free-text address: it is an honest
+     * answer to a question the contract is entitled to put to every Courier,
+     * and it is what lets one address serve all of them without anybody
+     * speaking a courier's name. A probe at Steadfast's address is heard and
+     * ignored, and the parcel goes on being polled, which for this Courier is
+     * the only channel there ever was (ADR-0019).
+     */
+    public function readAnnouncement(Request $request): ?Announcement
+    {
+        return null;
     }
 
     /**

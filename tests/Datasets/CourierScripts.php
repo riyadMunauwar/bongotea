@@ -34,3 +34,27 @@ dataset('courier scripts', array_map(
     fn (CourierScript $script): array => [$script],
     courierScripts(),
 ));
+
+/**
+ * The couriers that announce a parcel's progress on their own, and the ones
+ * that never do.
+ *
+ * Split by what the script says it supports and never by name, exactly as the
+ * application asks the driver: the webhook suite runs over the first and
+ * proves the second is untouched by any of it. A Courier that starts
+ * announcing moves between these two on the strength of one declaration.
+ *
+ * @param  bool  $announcing  whether to take the couriers that announce, or the ones that do not.
+ * @return array<string, array{CourierScript}>
+ */
+function courierScriptsAnnouncing(bool $announcing): array
+{
+    return array_map(
+        fn (CourierScript $script): array => [$script],
+        array_filter(courierScripts(), fn (CourierScript $script): bool => $script->supportsWebhook() === $announcing),
+    );
+}
+
+dataset('announcing couriers', courierScriptsAnnouncing(true));
+
+dataset('silent couriers', courierScriptsAnnouncing(false));

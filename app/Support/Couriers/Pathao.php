@@ -11,6 +11,7 @@ use App\Support\Settings\CourierSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
@@ -259,6 +260,44 @@ class Pathao implements CourierDriver
     public function canonicalStatus(string $rawStatus): ShipmentStatus
     {
         return self::STATUSES[strtolower(trim($rawStatus))] ?? ShipmentStatus::Unknown;
+    }
+
+    /**
+     * Pathao's webhook, read for the attempt it names and for nothing that
+     * could move state.
+     *
+     * Pathao announces two different things at the same address. Most of its
+     * events carry a status word, and that word is carried here as Pathao's
+     * own and never translated: a status claimed to a guessable address sends
+     * the system to Pathao's own order-info call, which is the only thing
+     * that may write where the parcel stands (ADR-0019).
+     *
+     * One event carries no status at all — a tracking update, which is a line
+     * of prose about the parcel and nothing else. That line is the one thing
+     * here taken on trust, because Pathao keeps no tracking history and there
+     * is no call that could ask whether it was ever said. It is written to
+     * the timeline as text and moves nothing.
+     *
+     * The reference is `merchant_order_id`, which is ours: Pathao echoes back
+     * what the booking told it, so an announcement names one attempt and
+     * never an Order. A body naming none is null and is heard and dropped.
+     */
+    public function readAnnouncement(Request $request): ?Announcement
+    {
+        $invoiceReference = Announcement::text($request, 'merchant_order_id');
+
+        if ($invoiceReference === null) {
+            return null;
+        }
+
+        return new Announcement(
+            invoiceReference: $invoiceReference,
+
+            /** The slug is the word Pathao's own status table is written in; the prose beside it is what a human reads. */
+            claimedStatus: Announcement::text($request, 'order_status_slug') ?? Announcement::text($request, 'order_status'),
+            narration: Announcement::text($request, 'message'),
+            occurredAt: Announcement::text($request, 'updated_at') ?? Announcement::text($request, 'timestamp'),
+        );
     }
 
     /**

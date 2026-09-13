@@ -61,6 +61,21 @@ final class RedExScript extends CourierScript
     private const HISTORY_BEGAN = '2026-09-12T06:00:00Z';
 
     /**
+     * When RedEx says the thing it is calling back about happened. Its own
+     * time, as every line it writes carries one, and not one of the history's
+     * — a callback is RedEx speaking about the moment, not re-reading its
+     * list.
+     */
+    private const ANNOUNCED_AT = '2026-09-12T11:30:00Z';
+
+    /**
+     * What a RedEx callback with nothing to report says. RedEx names a state
+     * on almost everything it sends, so this is the unusual shape rather than
+     * the ordinary one — and it must still move nothing at all.
+     */
+    private const NARRATION = 'Rider could not reach the customer by phone';
+
+    /**
      * What RedEx is told about an ordinary parcel of this Merchant's, set the
      * way a Merchant filling in Settings sets it — deliberately not the
      * shipped config defaults, so a test proving the dialog opens on the
@@ -257,6 +272,49 @@ final class RedExScript extends CourierScript
     {
         expect(Http::recorded(fn (Request $request): bool => str_starts_with($request->url(), self::HOST.'/parcel/track/'))->count())
             ->toBe($count, "RedEx was asked where a parcel is other than {$count} times.");
+    }
+
+    /**
+     * RedEx calling back to say a parcel has moved: our own invoice reference
+     * echoed back, the one id it knows the parcel under, its own status word
+     * and its own time.
+     *
+     * Nothing here carries the token RedEx authenticates a callback with,
+     * because that token rides in the URL's query string — which is exactly
+     * why nothing about this body is believed (ADR-0019).
+     *
+     * @return array<string, mixed>
+     */
+    public function statusAnnouncement(string $invoiceReference, string $rawStatus): array
+    {
+        return [
+            'merchant_invoice_id' => $invoiceReference,
+            'tracking_id' => self::TRACKING_ID,
+            'status' => $rawStatus,
+            'message_en' => ucwords(str_replace('-', ' ', $rawStatus)),
+            'time' => self::ANNOUNCED_AT,
+        ];
+    }
+
+    /**
+     * RedEx calling back with a line about the parcel and no state word in
+     * it.
+     *
+     * @return array<string, mixed>
+     */
+    public function narrationAnnouncement(string $invoiceReference): array
+    {
+        return [
+            'merchant_invoice_id' => $invoiceReference,
+            'tracking_id' => self::TRACKING_ID,
+            'message_en' => self::NARRATION,
+            'time' => self::ANNOUNCED_AT,
+        ];
+    }
+
+    public function narrationWording(): string
+    {
+        return self::NARRATION;
     }
 
     /**

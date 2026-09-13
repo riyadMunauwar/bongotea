@@ -5,6 +5,7 @@ namespace App\Support\Couriers;
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
 use App\Models\Shipment;
+use Illuminate\Http\Request;
 
 /**
  * What every Courier is behind.
@@ -23,9 +24,9 @@ use App\Models\Shipment;
  * declaration here, so a caller asks what a Courier supports and never which
  * Courier it is.
  *
- * Webhooks and balance arrive with the tickets that need them. The contract
- * declares only what is implemented: a method declared here that every driver
- * throws from would be a contract that lies about what can be asked.
+ * Balance arrives with the ticket that needs it. The contract declares only
+ * what is implemented: a method declared here that every driver throws from
+ * would be a contract that lies about what can be asked.
  */
 interface CourierDriver
 {
@@ -82,6 +83,27 @@ interface CourierDriver
      * read is still a parcel to be asked about again.
      */
     public function canonicalStatus(string $rawStatus): ShipmentStatus;
+
+    /**
+     * What this Courier just announced about a parcel, read off the webhook
+     * it announced it on, or null where the request names no parcel of ours.
+     *
+     * Read far enough to find the Shipment and no further (ADR-0019). The
+     * status a body claims is carried as the Courier's own word so that a log
+     * can name what was claimed, and is never translated and never written:
+     * a claim sends the system to ask the Courier itself, and what that call
+     * answers is the only thing that moves a canonical status. The one thing
+     * taken on trust is a line of narration with no state behind it, which is
+     * written to the timeline as text and moves nothing.
+     *
+     * Null for a Courier that announces nothing — `supportsWebhook()` is
+     * false and its address is never handed out, so anything arriving there
+     * is a probe. That is an honest answer rather than a gap, exactly as an
+     * empty `deliveryAreas()` is for a Courier that reads a free-text
+     * address, and it is what keeps the address one shape for every Courier
+     * without anybody branching on a name.
+     */
+    public function readAnnouncement(Request $request): ?Announcement;
 
     /**
      * What this Courier needs to know about a parcel beyond who it is going

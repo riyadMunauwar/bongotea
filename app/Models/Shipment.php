@@ -199,4 +199,27 @@ class Shipment extends Model
             return $this->events()->where('deduplication_id', $deduplicationId)->sole();
         }
     }
+
+    /**
+     * Write down a line a Courier said about this parcel that has no state
+     * behind it — Pathao's "Package arrived at the sorting center" — without
+     * moving anything.
+     *
+     * The bounded exception to "nothing inbound is believed" and the whole of
+     * it (ADR-0019): narration arrives on a webhook and cannot be verified,
+     * because the Courier that sends it keeps no history to ask. So it is
+     * written as text and the row takes the state the parcel is **already**
+     * in, which is exactly where it stood when the line was said. Nothing on
+     * the Shipment is touched — not the canonical status, not `polled_at`,
+     * not its Active-ness — so forged narration can add a noise line to one
+     * timeline and move nothing else.
+     *
+     * Deduplicated on the words and the Courier's time like any other event,
+     * so the same line told twice is one row — which is what the words are
+     * cut to a row's length for.
+     */
+    public function recordNarration(string $narration, DateTimeInterface|string|null $occurredAt = null): ShipmentEvent
+    {
+        return $this->recordEvent($this->status, ShipmentEvent::asAWord($narration), $occurredAt);
+    }
 }

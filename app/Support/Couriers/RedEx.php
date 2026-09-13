@@ -12,6 +12,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
@@ -231,6 +232,45 @@ class RedEx implements CourierDriver
     public function canonicalStatus(string $rawStatus): ShipmentStatus
     {
         return self::STATUSES[strtolower(trim($rawStatus))] ?? ShipmentStatus::Unknown;
+    }
+
+    /**
+     * RedEx's callback, read for the attempt it names and for nothing that
+     * could move state.
+     *
+     * This is the announcement the whole rule was written for. RedEx's only
+     * credential is a token it puts in the callback URL's query string, which
+     * lands in access logs, proxies and referrer headers — so anybody who has
+     * ever seen the address could claim a parcel was delivered. Nothing here
+     * reads that token and nothing here believes the status: the word is
+     * carried as RedEx's own so a log can name what was claimed, and the
+     * system then asks RedEx itself (ADR-0019).
+     *
+     * A callback line naming no state is narration, which is written to the
+     * timeline as text and moves nothing — the same reading `track()` gives a
+     * nameless history entry, which it drops precisely because the entries
+     * there decide where the parcel stands and this cannot.
+     *
+     * The reference is `merchant_invoice_id`, which is ours: RedEx echoes
+     * back what the booking told it, so a callback names one attempt and
+     * never an Order.
+     */
+    public function readAnnouncement(Request $request): ?Announcement
+    {
+        $invoiceReference = Announcement::text($request, 'merchant_invoice_id');
+
+        if ($invoiceReference === null) {
+            return null;
+        }
+
+        return new Announcement(
+            invoiceReference: $invoiceReference,
+            claimedStatus: Announcement::text($request, 'status'),
+            narration: Announcement::text($request, 'message_en'),
+
+            /** RedEx times what it says, which is what a Shipment Event's `occurred_at` takes. */
+            occurredAt: Announcement::text($request, 'time'),
+        );
     }
 
     /**

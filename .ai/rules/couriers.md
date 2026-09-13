@@ -19,7 +19,7 @@ Nothing outside `app/Support/Couriers/` may branch on a courier's name. Ask the 
 
 "Why this Courier cannot be used" has one wording, in `CourierSettings::refusal()`. `CourierDriver::refusal()` and `Courier::refusal()` are delegations to it — never restate the rule (on, and every credential filled) at a call site. A driver may later add its own reason; it must not re-implement the shared one.
 
-The contract declares only what is implemented. `book()` and `canonicalStatus()` joined it with #127; status polling, webhooks and balance arrive with the tickets that build them. Do not declare a method every driver would throw from.
+The contract declares only what is implemented. `book()` and `canonicalStatus()` joined it with #127, `track()` with #131, `readAnnouncement()` with #132; balance arrives with the ticket that builds it. Do not declare a method every driver would throw from.
 
 ## A single booking runs inside the Order's lock, and a refusal records nothing
 `CourierBooker::book()` holds `DB::transaction` + `lockForUpdate` on the Order across the driver's HTTP call — deliberately, unlike `PaymentStarter`, which writes the Pending row first and then calls out. "An Order has at most one Active Shipment" is the invariant that stops a Merchant paying for two parcels, and a lock released before the Courier answers does not hold it. Only that Order's row is held, for one driver timeout (Steadfast: 15s).
@@ -83,7 +83,7 @@ RedEx cannot have its dialog drawn until it has said where it delivers, so `RedE
 ## The poll answers rather than throws, and silence writes nothing at all
 `CourierDriver::track()` returns a `ShipmentProgress` and never throws — unlike `book()`, which raises one of the four `BookingNotMade`s. A sweep walks every parcel the couriers are carrying, so one that could not be asked about must not unwind the rest.
 
-Three outcomes, mirroring `Delivery` exactly (ADR-0019). `reported()` carries `list<ReportedStatus>` **oldest first, the last being where the parcel stands now** — one entry for Steadfast and Pathao, RedEx's whole history every poll. `refused()` is the Courier answering about *this parcel* and refusing to account for it; `CourierSweep` writes it as a `ShipmentStatus::Unknown` event in the Courier's own words (cut to `CourierSweep::REFUSAL_LIMIT`, which leaves headroom for the timestamp `deduplicationIdFor()` appends; the full answer is in the log), which is not terminal, so the parcel keeps being followed. `unreachable()` is silence and **writes nothing at all — not even `polled_at`** — which is exactly what makes the Shipment due again on the next sweep; do not "tidy" that by stamping `polled_at`.
+Three outcomes, mirroring `Delivery` exactly (ADR-0019). `reported()` carries `list<ReportedStatus>` **oldest first, the last being where the parcel stands now** — one entry for Steadfast and Pathao, RedEx's whole history every poll. `refused()` is the Courier answering about *this parcel* and refusing to account for it; `CourierPoller` writes it as a `ShipmentStatus::Unknown` event in the Courier's own words (cut by `ShipmentEvent::asAWord()`, which leaves headroom for the timestamp `deduplicationIdFor()` appends; the full answer is in the log), which is not terminal, so the parcel keeps being followed. `unreachable()` is silence and **writes nothing at all — not even `polled_at`** — which is exactly what makes the Shipment due again on the next sweep; do not "tidy" that by stamping `polled_at`.
 
 `ShipmentProgress::silenceFrom()` is the one reading of "settles nothing": a 5xx, a 401 or a 403. A rejected credential is the installation's and never this parcel's, so it must not reach 200 timelines — Pathao's 401 additionally calls `$this->token->forget()` so the next sweep signs afresh, and the grant's own `CourierUnreachable`/`CourierNotUsable` are caught in `track()` and answered as silence too.
 
@@ -96,13 +96,20 @@ Three outcomes, mirroring `Delivery` exactly (ADR-0019). `reported()` carries `l
 
 The sweep never reads or writes an Order (ADR-0018). A Courier with a non-null `refusal()` is passed over whole, before a parcel of its is read, and the refusal is printed verbatim — it already names the Courier.
 
-`Shipment::recordEvent()` is the only writer of timeline rows and is deduplicated by the unique key, so the sweep loops the reported list and never asks first.
+`Shipment::recordEvent()` is the only writer of timeline rows and is deduplicated by the unique key, so `CourierPoller::ask()` loops the reported list and never asks first.
 
 ## A poll is scripted with status words; the script declares the asymmetries
 `CourierScript::fakeTracking(string ...$rawStatuses)` scripts one answer to "where is this parcel": a Courier that keeps a history answers with all of them oldest first, one that keeps none answers with the **last** of them. So a test scripts the sequence once and `timelineEntriesFor(...$rawStatuses)` says how many rows that makes (`tracksWholeHistory()` ? count : 1) — never `count()` directly, or Steadfast and Pathao fail.
 
 `reAskIntervalSeconds()`, `tracksWholeHistory()` and `reportsItsOwnTime()` are declared on the script as a **second transcription** of the driver's own constants, for the reason `rawStatusesFor()` is one: read off the driver, "the interval is honoured" would pass against any number, including the one global constant this proves does not exist.
 
-`answeringAfresh()` lives in `tests/Pest.php`, not in a test file — the courier suites are two files now and a helper defined in one is a fatal error for anybody running only the other. Call it before laying a second, different fake in one test (`Http::fake()` stacks and the first answering callback wins).
+`answeringAfresh()` lives in `tests/Pest.php`, not in a test file, and so do `parcelInFlight()`, `stillMoving()` and `announcementUrl()` — the courier suites are three files now and a helper defined in one is a fatal error for anybody running only another. Call it before laying a second, different fake in one test (`Http::fake()` stacks and the first answering callback wins).
 
 `assertPollsSent()` counts questions about a parcel only, filtered by URL: Pathao's token grant and RedEx's area list are calls to the same host and counting them would make "one parcel was asked about" depend on whether a token or a list happened to still be held.
+
+## A webhook is read for a name and a line of prose, and one class puts the outbound question
+`CourierDriver::readAnnouncement(Request)` answers an `Announcement` — our invoice reference, the Courier's *own* claimed status word (logged, never translated, never written) and a line of narration. Steadfast answers null, exactly as it answers `[]` for `deliveryAreas()`; nothing branches on a name.
+
+`CourierPoller::ask()` is the only thing that may move a canonical status from a Courier's word. It was extracted out of `CourierSweep::record()` so that a webhook claiming a change and the sweep put the same question and write the answer down the same way (ADR-0019) — the sweep keeps only the sweeping (what is due, when to give up, the tally) and reads `ShipmentPolled::recorded()` for it. Do not re-implement "ask and write down" at a second call site.
+
+Narration is `Shipment::recordNarration()` and never `recordEvent()` at a call site: it takes the status the Shipment is **already** in, so the row says where the parcel stood and moves nothing — not the status, not `polled_at`, not Active-ness. That is the whole of the bounded exception; keep it in one method.

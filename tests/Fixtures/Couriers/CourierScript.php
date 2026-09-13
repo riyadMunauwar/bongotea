@@ -150,6 +150,53 @@ abstract class CourierScript
         return $this->tracksWholeHistory() ? count($rawStatuses) : 1;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Announcing, on its own
+    |--------------------------------------------------------------------------
+    |
+    | Two of the three announce and one does not, so everything below is
+    | defaulted to "nothing" rather than left abstract — the same shape
+    | `fakeAreas()` takes for the two couriers that read a free-text address.
+    | A test asks `supportsWebhook()` before it reaches for any of it, and the
+    | dataset does the asking for it.
+    |
+    */
+
+    /**
+     * The body this Courier posts when it says a parcel's state has moved, in
+     * its own field names and its own status word.
+     *
+     * Named by our invoice reference and never by ours-and-theirs: every one
+     * of these couriers echoes back what the booking told it, which is what
+     * makes an announcement name one attempt rather than an Order. A test
+     * hands a reference it holds no Shipment for to script the announcement
+     * that must be ignored.
+     *
+     * @return array<string, mixed>
+     */
+    public function statusAnnouncement(string $invoiceReference, string $rawStatus): array
+    {
+        return [];
+    }
+
+    /**
+     * The body this Courier posts when it has a line of prose about a parcel
+     * and no state to report — the one thing a webhook is believed for.
+     *
+     * @return array<string, mixed>
+     */
+    public function narrationAnnouncement(string $invoiceReference): array
+    {
+        return [];
+    }
+
+    /** What that line says, so a test can prove it reaches the timeline verbatim. */
+    public function narrationWording(): string
+    {
+        return '';
+    }
+
     /**
      * What this Courier asks about a parcel beyond the recipient, by the name
      * its driver declares, and the value `makeUsable()` left in Settings as

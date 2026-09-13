@@ -53,6 +53,23 @@ enum Courier: string implements HasLabel
     }
 
     /**
+     * Every Courier as the name it is stored and addressed under.
+     *
+     * The one place the mapping is written, so a column's stored shape and a
+     * route's constraint are one shape. Every Courier and not only the ones
+     * that announce: which of them a webhook could ever arrive from is a
+     * driver's answer (`supportsWebhook()`) and asking it here would resolve
+     * a driver, and so this installation's Settings, while a route file is
+     * being read.
+     *
+     * @return list<string>
+     */
+    public static function names(): array
+    {
+        return array_map(fn (self $courier): string => $courier->value, self::cases());
+    }
+
+    /**
      * The driver behind this Courier, resolved from the container so it takes
      * its Settings — and, once there is a call to make, its HTTP client
      * factory — by injection.

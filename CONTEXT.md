@@ -206,6 +206,10 @@ _Avoid_: zone, thana, area id, location, region
 One thing that happened to a Shipment, as the system came to know it. It carries two times and not one: when the Courier says it happened, where the Courier said, and when we found out, which is always. The two sit far apart for a Courier that must be asked rather than one that announces, and a timeline showing only one would quietly misdate every parcel from the couriers that say least.
 _Avoid_: status change, tracking update, history entry, log
 
+**Announcement**:
+A Courier telling the system, on its own, that something happened to a parcel. Like a Notification it is a hint and never an answer: one claiming a parcel's state has moved is read only far enough to name the Shipment, and the system then asks that Courier itself and records what its own call learned. One carrying only a message — a line of prose about the parcel, from the Courier that keeps no history anyone could ask — is written to the timeline as text and can move no status, no filter, no figure and no Shipment's Active-ness. A Courier that announces nothing is polled, which for it is the only channel there ever was. A webhook is the post it arrives on and a Courier is asked whether it has one; the Announcement is what the post said.
+_Avoid_: callback, push, tracking update, status update
+
 **Active**:
 Said of a Shipment still worth waiting on: not Delivered, not partly delivered, not Returned, not refused at booking, and not Abandoned. An Order has at most one, which is what stops a parcel being booked twice and what the Orders list draws. An Order with none is an Order that may be sent.
 _Avoid_: open, live, in progress, pending, current

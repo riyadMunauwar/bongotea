@@ -3,12 +3,10 @@
 namespace App\Support\Couriers;
 
 use App\Enums\Courier;
-use App\Enums\ShipmentStatus;
 use App\Models\Shipment;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\LazyCollection;
-use Illuminate\Support\Str;
 
 /**
  * The sweep over the parcels the couriers are carrying: it asks each Courier
@@ -29,12 +27,20 @@ use Illuminate\Support\Str;
  * are constants here and never Settings, matching how Tracking's retention is
  * held (ADR-0020).
  *
+ * What one question to one Courier comes to is `CourierPoller`'s and not
+ * this class's, because a webhook claiming something changed puts the same
+ * question and must write the answer down the same way (ADR-0019). What is
+ * left here is the sweeping: which parcels are due, when to stop asking, and
+ * what the whole run came to.
+ *
  * Nothing here writes an `OrderStatus`, in either direction. A parcel that
  * came back does not cancel an Order and a Cancelled Order is still followed
  * to the door (ADR-0018).
  */
 class CourierSweep
 {
+    public function __construct(private readonly CourierPoller $poller) {}
+
     /**
      * How long an attempt may go unresolved before somebody should look at
      * it: a week, which is well past any of these couriers' own promises and
@@ -57,18 +63,6 @@ class CourierSweep
      * a year from now about a parcel nobody has thought about since.
      */
     public const GIVE_UP_AFTER_SECONDS = 2592000;
-
-    /**
-     * How much of a Courier's refusal is kept as the word the timeline is
-     * deduplicated by.
-     *
-     * Well short of what the column holds, because the raw word is not
-     * written alone: `ShipmentEvent::deduplicationIdFor()` spells it into a
-     * string with the Courier's time after it, and *that* is what a
-     * `string` column carries a unique key over. A sentence cut to the column
-     * width here would be a row too long to write there.
-     */
-    private const REFUSAL_LIMIT = 200;
 
     /**
      * What one sweep did: how many parcels were asked about, how many
@@ -149,26 +143,25 @@ class CourierSweep
      */
     private function poll(Courier $courier, array &$tally): void
     {
-        $driver = $courier->driver();
-
-        foreach ($this->dueFor($courier, $driver->reAskIntervalSeconds()) as $shipment) {
+        foreach ($this->dueFor($courier, $courier->driver()->reAskIntervalSeconds()) as $shipment) {
             $tally['asked']++;
 
-            $progress = $driver->track($shipment);
+            $polled = $this->poller->ask($shipment);
 
-            if (! $progress->isFinal) {
-                $tally['skipped'][$courier->value] = (string) $progress->error;
+            if (! $polled->progress->isFinal) {
+                $tally['skipped'][$courier->value] = (string) $polled->progress->error;
 
                 Log::warning('A courier could not be asked where its parcels are, and will be asked again.', [
                     'courier' => $courier->value,
                     'invoice' => $shipment->invoice_reference,
-                    'error' => $progress->error,
+                    'error' => $polled->progress->error,
                 ]);
 
                 return;
             }
 
-            $this->record($shipment, $progress, $tally);
+            $tally['recorded'] += $polled->recorded;
+            $tally['refused'] += $polled->progress->answered ? 0 : 1;
         }
     }
 
@@ -196,67 +189,5 @@ class CourierSweep
                 ->orWhere('polled_at', '<=', now()->subSeconds($interval)))
             ->orderBy('id')
             ->lazyById();
-    }
-
-    /**
-     * Write down what the Courier said about one parcel.
-     *
-     * Every state it reported becomes a Shipment Event, and the database is
-     * what makes a history re-imported on every poll one timeline rather than
-     * one timeline per poll (ADR-0019) — so this loops and never asks first.
-     * Where the Courier reported anything, the last of it is where the parcel
-     * stands now and the Shipment's own columns follow it.
-     *
-     * A Courier that answered and would not account for the parcel is written
-     * down as Unknown in the Courier's own words, which is what Unknown is
-     * for: somebody has to look at this. It is not terminal, so the parcel
-     * goes on being asked about and is flagged stuck in its own time — and
-     * the same refusal repeated every half hour is one timeline entry, for
-     * the same reason a repeated status is.
-     *
-     * @param  array{asked: int, recorded: int, refused: int, stuck: int, skipped: array<string, string>}  $tally
-     */
-    private function record(Shipment $shipment, ShipmentProgress $progress, array &$tally): void
-    {
-        if (! $progress->answered) {
-            $tally['refused']++;
-
-            Log::warning('A courier would not account for a parcel it was asked about.', [
-                'courier' => $shipment->courier->value,
-                'invoice' => $shipment->invoice_reference,
-                'consignment' => $shipment->consignment_reference,
-                'error' => $progress->error,
-            ]);
-        }
-
-        $reported = $progress->answered
-            ? $progress->reported
-            : [new ReportedStatus(ShipmentStatus::Unknown, $this->asAWord((string) $progress->error))];
-
-        foreach ($reported as $state) {
-            if ($shipment->recordEvent($state->status, $state->rawStatus, $state->occurredAt)->wasRecentlyCreated) {
-                $tally['recorded']++;
-            }
-        }
-
-        $latest = $reported === [] ? null : $reported[array_key_last($reported)];
-
-        $shipment->fill(array_merge(
-            ['polled_at' => now()],
-            $latest === null ? [] : ['status' => $latest->status, 'raw_status' => $latest->rawStatus],
-        ))->save();
-    }
-
-    /**
-     * A Courier's refusal, cut to a length a timeline can be deduplicated by.
-     *
-     * Kept as words rather than reduced to a code, because the column is
-     * printed verbatim on the timeline and "no such consignment" is the whole
-     * of what an operator needs before they ring somebody. The answer it came
-     * in is in the log beside it.
-     */
-    private function asAWord(string $refusal): string
-    {
-        return Str::limit($refusal, self::REFUSAL_LIMIT, '');
     }
 }

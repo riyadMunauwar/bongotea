@@ -64,6 +64,13 @@ final class PathaoScript extends CourierScript
     private const UPDATED_AT = '2026-09-12 14:03:36';
 
     /**
+     * What Pathao's tracking update says, and the example ADR-0019 is written
+     * around: a sentence with no status word in it, about a parcel Pathao
+     * will answer no question about.
+     */
+    private const NARRATION = 'Package arrived at the sorting center';
+
+    /**
      * What Pathao is told about an ordinary parcel of this Merchant's, set the
      * way a Merchant filling in Settings sets it — deliberately not the
      * shipped config defaults, so a test proving the dialog opens on the
@@ -245,6 +252,53 @@ final class PathaoScript extends CourierScript
     {
         expect(Http::recorded(fn (Request $request): bool => str_contains($request->url(), '/orders/') && str_ends_with($request->url(), '/info'))->count())
             ->toBe($count, "Pathao was asked where a parcel is other than {$count} times.");
+    }
+
+    /**
+     * Pathao announcing that a parcel has moved: the event it names, the
+     * Consignment, our own reference echoed back, and the status in both the
+     * slug its status table is written in and the prose beside it.
+     *
+     * @return array<string, mixed>
+     */
+    public function statusAnnouncement(string $invoiceReference, string $rawStatus): array
+    {
+        return [
+            'event' => 'order.updated',
+            'consignment_id' => self::CONSIGNMENT_ID,
+            'merchant_order_id' => $invoiceReference,
+            'store_id' => self::PICKUP_STORE,
+            'order_status' => str_replace('_', ' ', $rawStatus),
+            'order_status_slug' => $rawStatus,
+            'updated_at' => self::UPDATED_AT,
+            'timestamp' => self::UPDATED_AT,
+        ];
+    }
+
+    /**
+     * Pathao's tracking update: a line of prose about the parcel, with no
+     * status word anywhere in it.
+     *
+     * The whole reason narration is believed at all (ADR-0019). Pathao keeps
+     * no tracking history, so this sentence exists in this body and nowhere
+     * else — there is no call that could ask whether it was ever said.
+     *
+     * @return array<string, mixed>
+     */
+    public function narrationAnnouncement(string $invoiceReference): array
+    {
+        return [
+            'event' => 'order.tracking-update',
+            'consignment_id' => self::CONSIGNMENT_ID,
+            'merchant_order_id' => $invoiceReference,
+            'message' => self::NARRATION,
+            'updated_at' => self::UPDATED_AT,
+        ];
+    }
+
+    public function narrationWording(): string
+    {
+        return self::NARRATION;
     }
 
     /**
