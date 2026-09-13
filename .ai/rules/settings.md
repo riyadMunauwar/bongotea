@@ -84,3 +84,10 @@ Nothing there re-derives a rule. "Arrived" is `Shipment::arrived()`; "when it ar
 Days to delivery is the one figure counted in PHP rather than in SQL: no arithmetic over two instants is spelled the same way on every driver, and the bucket-boundary CASE every other figure leans on cannot stand in for a duration. It loads the window's arrived parcels and two columns of each.
 
 Never add a total row to the Courier Report (ADR-0018). Counts are zero where a Courier carried nothing; a **rate** with no parcels under it and a **charge** no Courier has named are null, and the widget draws a sentence for each — a nought in a money column reads as free carriage.
+
+## A Select refuses a value it does not offer, so a field fed by a Repeater must settle its own state
+Filament's `Select` adds an implicit `in:` rule from its options (`Select::getInValidationRuleValues()`: a state whose option label is blank is invalid). So a Select whose options come from a sibling Repeater is *refused* the moment the Merchant deletes or renames the row it names — an error on a field they never touched, and the group's own guard (`CourierSettings::settleDefaultPickupStore()`) never runs, because validation fails before `with()` does. `Couriers::settleDefaultStore()` is the answer: the Repeater's `afterStateUpdated` repoints the default at a store that still exists (null where none does). The group keeps its guard for rows that never came through the page; both are needed.
+
+A form value a component reshapes on hydration — a Repeater keys its rows — must be set in `SettingsPage::formValues()`, which `mount()` fills from. Writing it into `$this->data` after `mount()` (as `Tracking` does for plain nested toggles) is too late for those.
+
+In tests, `fillForm()` merges into a Repeater's uuid-keyed state rather than replacing it, so a deleted row is `->set('data.<property>', [...])` — which is also what the browser sends.

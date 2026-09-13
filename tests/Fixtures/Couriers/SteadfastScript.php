@@ -252,6 +252,17 @@ final class SteadfastScript extends CourierScript
     }
 
     /**
+     * And so has no second one either: a Steadfast parcel leaves from the one
+     * arrangement or from nowhere.
+     *
+     * @return array<string, string>
+     */
+    public function registerSecondPickupStore(): array
+    {
+        return [];
+    }
+
+    /**
      * Steadfast's documented delivery statuses. It has no word for a parcel
      * in transit — it is the one Courier of the three that announces nothing
      * and is only ever asked — and `cancelled` is a parcel that came back.

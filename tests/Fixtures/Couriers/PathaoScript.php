@@ -80,6 +80,9 @@ final class PathaoScript extends CourierScript
      */
     private const PICKUP_STORE = '114983';
 
+    /** A second warehouse of the same Merchant's, as Pathao numbers one. */
+    private const SECOND_PICKUP_STORE = '205417';
+
     private const DELIVERY_TYPE = '12';
 
     private const ITEM_TYPE = '1';
@@ -363,26 +366,42 @@ final class PathaoScript extends CourierScript
             && $request['item_type'] === $values['itemType']
             && $request['item_weight'] === $values['parcelWeight']
 
-            /** Never asked about and sent regardless: a question with one answer is still answered. */
-            && $request['store_id'] === self::PICKUP_STORE);
+            /** The Merchant's default unless this parcel was sent from somewhere else: a question with one answer is still answered. */
+            && $request['store_id'] === ($values[ParcelField::PICKUP_STORE] ?? self::PICKUP_STORE));
     }
 
     /**
      * The store leads, because that is the order Pathao's driver declares its
-     * fields in and the order the attempt's row is built in.
+     * fields in and the order the attempt's row is built in — and it holds
+     * whichever warehouse this parcel actually left from.
      *
      * @param  array<string, string>  $answers
      * @return array<string, string>
      */
     public function parcelRowFor(array $answers): array
     {
-        return [ParcelField::PICKUP_STORE => self::PICKUP_STORE] + $answers;
+        return array_replace([ParcelField::PICKUP_STORE => self::PICKUP_STORE], $answers);
     }
 
     /** Pathao insists on a store, and this Merchant has registered exactly one. */
     public function pickupStoreCount(): int
     {
         return 1;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function registerSecondPickupStore(): array
+    {
+        $stores = [
+            self::PICKUP_STORE => 'Banani warehouse',
+            self::SECOND_PICKUP_STORE => 'Uttara warehouse',
+        ];
+
+        $this->registerPickupStores($stores);
+
+        return $stores;
     }
 
     /**

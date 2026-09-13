@@ -361,9 +361,49 @@ abstract class CourierScript
      *
      * Zero for a Courier with no notion of a store at all, one for a Merchant
      * with a single warehouse — and either way nobody is asked which store the
-     * parcel leaves from, which is what this is here to prove.
+     * parcel leaves from, which is what this is here to prove. A Merchant with
+     * a second warehouse is `registerSecondPickupStore()`, which every Courier
+     * that answers more than zero here can be given one.
      */
     abstract public function pickupStoreCount(): int;
+
+    /**
+     * Give this Courier's Merchant a second warehouse, the way one with two
+     * registers both, and answer every store they then have — this Courier's
+     * own id against the Merchant's own name for it, the default first.
+     *
+     * Empty for a Courier with no notion of a store at all: a second warehouse
+     * is not something it could be told about, whatever the Merchant has.
+     *
+     * Each Courier registers its own ids in its own spelling, because that is
+     * the whole of what a store is — the same warehouse is a different number
+     * at each of them, and an id shared between two would be a test that
+     * passed while the system quietly sent one Courier another's.
+     *
+     * @return array<string, string>
+     */
+    abstract public function registerSecondPickupStore(): array;
+
+    /**
+     * Register these warehouses for this Courier, the way a Merchant filling
+     * in Settings does.
+     *
+     * @param  array<string, string>  $stores  the Courier's own id against the Merchant's own name
+     */
+    protected function registerPickupStores(array $stores): void
+    {
+        $registered = [];
+
+        foreach ($stores as $id => $name) {
+            $registered[] = [CourierSettings::STORE_ID => (string) $id, CourierSettings::STORE_NAME => $name];
+        }
+
+        app(CourierSettings::class)->with([
+            CourierSettings::property($this->courier(), 'PickupStores') => $registered,
+        ])->save();
+
+        app()->forgetInstance(CourierSettings::class);
+    }
 
     /** Assert the Courier was asked to take a parcel exactly this many times since the last fake was laid. */
     abstract public function assertBookingsSent(int $count): void;

@@ -84,6 +84,9 @@ final class RedExScript extends CourierScript
      */
     private const PICKUP_STORE = '98765';
 
+    /** The same Merchant's second warehouse, as RedEx numbers one — nothing like the number Pathao gave it. */
+    private const SECOND_PICKUP_STORE = '43210';
+
     /** Kilograms here and in Settings; RedEx is told grams, which is the driver's conversion to make. */
     private const PARCEL_WEIGHT = 1.2;
 
@@ -377,29 +380,46 @@ final class RedExScript extends CourierScript
             && $request['parcel_weight'] === (int) round(((float) $values['parcelWeight']) * 1000)
             && $request['value'] === (int) round((float) $values['declaredValue'])
 
-            /** Never asked about and sent regardless: a question with one answer is still answered. */
-            && $request['pickup_store_id'] === (int) self::PICKUP_STORE);
+            /** The Merchant's default unless this parcel was sent from somewhere else: a question with one answer is still answered. */
+            && $request['pickup_store_id'] === (int) ($values[ParcelField::PICKUP_STORE] ?? self::PICKUP_STORE));
     }
 
     /**
      * The area leads and the store follows, because that is the order the
      * attempt's row is built in: where the parcel is going, then what the
-     * Courier's own questions were answered with.
+     * Courier's own questions were answered with — the store holding whichever
+     * warehouse this parcel actually left from.
      *
      * @param  array<string, string>  $answers
      * @return array<string, string>
      */
     public function parcelRowFor(array $answers): array
     {
-        return $this->guessedArea()->asParcelDetails()
-            + [ParcelField::PICKUP_STORE => self::PICKUP_STORE]
-            + $answers;
+        return array_replace(
+            $this->guessedArea()->asParcelDetails() + [ParcelField::PICKUP_STORE => self::PICKUP_STORE],
+            $answers,
+        );
     }
 
     /** RedEx insists on a store, and this Merchant has registered exactly one. */
     public function pickupStoreCount(): int
     {
         return 1;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function registerSecondPickupStore(): array
+    {
+        $stores = [
+            self::PICKUP_STORE => 'Banani warehouse',
+            self::SECOND_PICKUP_STORE => 'Uttara warehouse',
+        ];
+
+        $this->registerPickupStores($stores);
+
+        return $stores;
     }
 
     /**

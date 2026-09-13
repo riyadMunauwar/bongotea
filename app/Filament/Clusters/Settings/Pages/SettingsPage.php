@@ -62,18 +62,31 @@ abstract class SettingsPage extends Page
         return SettingsCluster::canAccess();
     }
 
-    /**
-     * The group's public properties, read straight off the instance rather
-     * than through `toArray()`, which is the row's shape and seals secrets —
-     * with every secret blanked before it reaches Livewire state, so the
-     * stored value is in neither the component's snapshot nor the HTML.
-     */
     public function mount(): void
     {
-        $this->form->fill([
+        $this->form->fill($this->formValues());
+    }
+
+    /**
+     * What the form opens on: the group's public properties, read straight off
+     * the instance rather than through `toArray()`, which is the row's shape
+     * and seals secrets — with every secret blanked before it reaches Livewire
+     * state, so the stored value is in neither the component's snapshot nor
+     * the HTML.
+     *
+     * A page whose field is not the property as the group holds it overrides
+     * this, and has to do it here rather than after `mount()`: filling is when
+     * a component that reshapes its own state gets to (a Repeater keys its
+     * rows then), and a value written afterwards has missed it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function formValues(): array
+    {
+        return [
             ...get_object_vars(app(static::$group)),
             ...array_fill_keys(static::$group::secrets(), null),
-        ]);
+        ];
     }
 
     /**

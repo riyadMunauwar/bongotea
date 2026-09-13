@@ -324,7 +324,7 @@ class RedEx implements CourierDriver
      * departs from them.
      *
      * The store is declared as a choice and so is never put in front of a User
-     * while this installation knows of only one.
+     * while this Merchant has registered only one RedEx pickup store.
      *
      * The delivery area is not declared here, though RedEx refuses a parcel
      * without one too: a `ParcelField` is an override of something the

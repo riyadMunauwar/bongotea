@@ -198,6 +198,10 @@ _Avoid_: tracking id, tracking code, AWB, waybill, reference
 Something one Courier needs told about a parcel that no other Courier asks about — how it is to be delivered, what is inside it, what it weighs, which store it leaves from. Each is declared by that Courier's driver and nowhere else, so the send dialog puts the chosen Courier's questions and no other's in front of a User, opened on what the Merchant decided once in Settings. A change there belongs to that parcel alone: it is recorded on the Shipment as sent and configures nothing. A question with only one possible answer — a Merchant with a single pickup store — is never asked, and is sent all the same.
 _Avoid_: courier option, custom field, extra field, metadata, parameter
 
+**Pickup Store**:
+A warehouse a Courier collects the Merchant's parcels from, known by the id that Courier gave it. It is one Courier's own name for the place and never the system's: the same warehouse is a different number at Pathao and at RedEx, so the Merchant registers it once per Courier and the two lists are never shared. Beside the id sits the Merchant's own name for it, which is theirs alone and is never sent anywhere — it is what makes the choice readable on the send dialog. One of a Courier's stores is the default a parcel leaves from when nobody chooses, which is the whole of the common case: a Merchant with one warehouse is never asked at all, and only a Merchant who registers a second starts being.
+_Avoid_: warehouse id, hub, depot, branch, location
+
 **Delivery Area**:
 One of a Courier's own delivery areas, known by the id that Courier gave it. Not somewhere the system knows of: it is a word one Courier insists on hearing, because it will not read an address in free text the way the others do. The system caches that Courier's list, guesses which area an Order's address and District mean, and puts the guess in front of a User already chosen for them to confirm or correct — a guess, never a decision, because a parcel sent to a guessed depot is one the Merchant pays to have returned. A parcel whose area nobody chose is not sent at all.
 _Avoid_: zone, thana, area id, location, region

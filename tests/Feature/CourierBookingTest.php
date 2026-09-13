@@ -21,6 +21,7 @@ use App\Support\Couriers\DeliveryAreaNotResolved;
 use App\Support\Couriers\OrderAlreadyDelivered;
 use App\Support\Couriers\OrderAlreadyShipping;
 use App\Support\Couriers\ParcelDetails;
+use App\Support\Couriers\ParcelField;
 use App\Support\Money;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\PhoneNumber;
@@ -971,6 +972,114 @@ it('never asks which store a parcel leaves from while the merchant has only one'
     $script->pickupStoreCount() > 1
         ? $dialog->assertSchemaComponentVisible("{$script->courier()->value}.pickupStore")
         : $dialog->assertSchemaComponentDoesNotExist("{$script->courier()->value}.pickupStore");
+})->with('courier scripts');
+
+it('asks which store a parcel leaves from once the merchant has registered a second, and opens on their default', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $stores = $script->registerSecondPickupStore();
+    $store = "{$script->courier()->value}.".ParcelField::PICKUP_STORE;
+
+    if ($stores === []) {
+        /** A Courier with no notion of a store has nothing to ask about, however many warehouses the Merchant keeps. */
+        openSendDialog($order, $script)->assertSchemaComponentDoesNotExist($store);
+
+        return;
+    }
+
+    /**
+     * The widening happened in Settings and nowhere else: the same
+     * declaration that was a choice of one is now a choice of two, and the
+     * dialog started asking without being told anything about stores.
+     */
+    openSendDialog($order, $script)
+        ->assertSchemaComponentVisible($store)
+        ->assertSchemaComponentExists(
+            $store,
+            checkComponentUsing: fn (Select $field): bool => $field->getOptions() === $stores,
+        )
+
+        /** Opened on what the Merchant decided once, so the common case is still one tap. */
+        ->assertActionDataSet([$store => (string) array_key_first($stores)]);
+})->with('courier scripts');
+
+it('sends the store a user chose for one parcel, records it, and leaves the merchant\'s default alone', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $stores = $script->registerSecondPickupStore();
+
+    if ($stores === []) {
+        /** A Courier with no notion of a store is told none and records none, whatever the Merchant keeps. */
+        $script->fakeBooked();
+
+        sendWithCourier($order, $script)->assertNotified();
+
+        expect(Shipment::sole()->parcelDetail(ParcelField::PICKUP_STORE))->toBeNull();
+
+        return;
+    }
+
+    $elsewhere = (string) array_key_last($stores);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, answering($script, [ParcelField::PICKUP_STORE => $elsewhere]))
+        ->assertNotified();
+
+    $chosen = $script->parcelDefaults() + [ParcelField::PICKUP_STORE => $elsewhere];
+
+    /** What the row says was sent is what was sent: the warehouse the parcel actually left from, not the default. */
+    $script->assertBookedWithParcelDetails($chosen);
+
+    $sent = Shipment::sole();
+
+    expect($sent->parcel_details)->toBe($script->parcelRowFor($chosen))
+        ->and($sent->parcelDetail(ParcelField::PICKUP_STORE))->toBe($elsewhere)
+
+        /** The dialog configured nothing: the installation's default is the one the Merchant named. */
+        ->and(app(CourierSettings::class)->{CourierSettings::property($script->courier(), 'PickupStore')})
+        ->toBe((string) array_key_first($stores));
+})->with('courier scripts');
+
+it('keeps what a parcel was sent with after the store it left from is deregistered', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $stores = $script->registerSecondPickupStore();
+
+    if ($stores === []) {
+        /** Nothing to deregister: this Courier collects from one arrangement per account and is told no store at all. */
+        expect(app(CourierSettings::class)->pickupStoresFor($script->courier()))->toBe([]);
+
+        return;
+    }
+
+    $closed = (string) array_key_last($stores);
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script, ViewOrder::class, answering($script, [ParcelField::PICKUP_STORE => $closed]))
+        ->assertNotified();
+
+    /** The warehouse is shut and taken off the list, with a parcel of ours still out of it. */
+    $courier = $script->courier();
+    $settings = app(CourierSettings::class);
+
+    $settings->with([
+        CourierSettings::property($courier, 'PickupStores') => [
+            [CourierSettings::STORE_ID => (string) array_key_first($stores), CourierSettings::STORE_NAME => 'The one that is left'],
+        ],
+    ])->save();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    /**
+     * The attempt is a record of what was sent and not a reading of Settings,
+     * so a store the installation has forgotten is still what this parcel
+     * left from — which is the whole reason the answer is written onto the
+     * row rather than looked up when a driver needs it.
+     */
+    expect(Shipment::sole()->parcelDetail(ParcelField::PICKUP_STORE))->toBe($closed)
+        ->and(app(CourierSettings::class)->pickupStoresFor($courier))->not->toHaveKey($closed);
 })->with('courier scripts');
 
 it('never asks which store a parcel leaves from, even of a courier that insists on one', function () {

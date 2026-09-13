@@ -344,10 +344,10 @@ class Pathao implements CourierDriver
      * leaves from, how fast it is to go, what it holds, and what it weighs.
      *
      * The store is declared as a choice and is therefore not put in front of a
-     * User until this installation knows of more than one — which, while a
-     * store is a single Setting, is never. Declaring it rather than leaving it
-     * out is what makes a Merchant with two stores a change to `pickupStore()`
-     * and to nothing else, and it goes out on every parcel either way.
+     * User until this Merchant has registered more than one Pathao store, and
+     * goes out on every parcel either way. Declaring it rather than leaving it
+     * out is what made a Merchant with two stores a change to `pickupStore()`
+     * and to nothing here.
      *
      * @return list<ParcelField>
      */

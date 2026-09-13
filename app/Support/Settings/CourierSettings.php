@@ -51,6 +51,18 @@ class CourierSettings extends SettingsGroup
      */
     public const DEFAULTS = ['PickupStore', 'DeliveryType', 'ItemType', 'ParcelWeight', 'DeclaredValue'];
 
+    /**
+     * The key a registered store's own id is held under.
+     *
+     * The id is the Courier's and never ours: the same warehouse is a
+     * different number at Pathao and at RedEx, which is why the stores are a
+     * list per Courier rather than one list of warehouses with a column each.
+     */
+    public const STORE_ID = 'id';
+
+    /** The key the Merchant's own name for a store is held under — what a chooser reads, never what a Courier is told. */
+    public const STORE_NAME = 'name';
+
     /** Steadfast: off until the Merchant has typed both of its keys. */
     public bool $steadfastEnabled = false;
 
@@ -60,8 +72,15 @@ class CourierSettings extends SettingsGroup
     /** The secret key Steadfast issued beside the API key. */
     public string $steadfastSecretKey = '';
 
-    /** Which of the Merchant's warehouses a Steadfast parcel leaves from. */
+    /** Which of the Merchant's warehouses a Steadfast parcel leaves from unless somebody says otherwise. */
     public string $steadfastPickupStore;
+
+    /**
+     * Every warehouse the Merchant has registered with Steadfast.
+     *
+     * @var list<array{id: string, name: string}>
+     */
+    public array $steadfastPickupStores = [];
 
     /** What Steadfast is told this kind of delivery is. */
     public string $steadfastDeliveryType;
@@ -90,8 +109,16 @@ class CourierSettings extends SettingsGroup
     /** The merchant account password Pathao's token grant takes. */
     public string $pathaoPassword = '';
 
-    /** Which of the Merchant's Pathao stores a parcel leaves from. */
+    /** Which of the Merchant's Pathao stores a parcel leaves from unless somebody says otherwise. */
     public string $pathaoPickupStore;
+
+    /**
+     * Every store the Merchant has registered with Pathao, by the id Pathao
+     * knows each by.
+     *
+     * @var list<array{id: string, name: string}>
+     */
+    public array $pathaoPickupStores = [];
 
     /** What Pathao is told this kind of delivery is. */
     public string $pathaoDeliveryType;
@@ -111,8 +138,16 @@ class CourierSettings extends SettingsGroup
     /** The access token RedEx issued. A credential, and so sealed and write-only. */
     public string $redexAccessToken = '';
 
-    /** Which of the Merchant's RedEx pickup stores a parcel leaves from. */
+    /** Which of the Merchant's RedEx pickup stores a parcel leaves from unless somebody says otherwise. */
     public string $redexPickupStore;
+
+    /**
+     * Every pickup store the Merchant has registered with RedEx, by the id
+     * RedEx knows each by.
+     *
+     * @var list<array{id: string, name: string}>
+     */
+    public array $redexPickupStores = [];
 
     /** What RedEx is told this kind of delivery is. */
     public string $redexDeliveryType;
@@ -157,6 +192,95 @@ class CourierSettings extends SettingsGroup
     public static function key(): string
     {
         return 'courier';
+    }
+
+    /**
+     * Two guards the base cannot give this group, in the shape
+     * `TrackingSettings::with()` established for the event switches.
+     *
+     * The first: a registered stores list is an array, and `coerce()` only
+     * casts scalars against a declared type — so a row holding a string, a
+     * null from a form, or rows a hand edit left half-written would reach
+     * `setValue()` and throw, and a `TypeError` from `load()` 500s every
+     * request including the page that could repair the row. It has to happen
+     * *before* the assignment rather than after it.
+     *
+     * The second: the default store is one of the registered ones or the
+     * Merchant has none at all. A Merchant who deletes the warehouse a parcel
+     * went from last week has not thereby decided that the next parcel goes
+     * from nowhere — and a default that is not on the list would open the send
+     * dialog on a store it does not offer. An installation that has registered
+     * nothing keeps whatever single store it has always had, which is what
+     * lets one upgrade into this without retyping anything.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function with(array $values): static
+    {
+        foreach (Courier::cases() as $courier) {
+            $property = self::property($courier, 'PickupStores');
+
+            if (property_exists($this, $property) && array_key_exists($property, $values)) {
+                $values[$property] = self::registeredStores($values[$property]);
+            }
+        }
+
+        $group = parent::with($values);
+
+        foreach (Courier::cases() as $courier) {
+            $group->settleDefaultPickupStore($courier);
+        }
+
+        return $group;
+    }
+
+    /**
+     * The warehouses a Courier collects from on this installation, by the id
+     * that Courier knows each by, in the order the Merchant registered them.
+     *
+     * The one reading of "which stores are there", and so the one thing that
+     * decides whether anybody is ever asked which store a parcel leaves from
+     * (`ParcelField::isWorthAsking()`). A Merchant who has registered nothing
+     * has exactly the single store they have always had, named after its own
+     * id — so an installation from before this list existed answers one store
+     * rather than none, and is asked nothing, which is what it did before.
+     *
+     * @return array<string, string>
+     */
+    public function pickupStoresFor(Courier $courier): array
+    {
+        $property = self::property($courier, 'PickupStores');
+        $registered = property_exists($this, $property) ? self::storeOptions($this->{$property}) : [];
+
+        if ($registered !== []) {
+            return $registered;
+        }
+
+        $only = $this->defaultPickupStore($courier);
+
+        return $only === '' ? [] : [$only => $only];
+    }
+
+    /**
+     * A registered stores list as a chooser reads it: the Courier's own id
+     * against the Merchant's own name for the store.
+     *
+     * Public and static because the Settings page draws the same options from
+     * the rows a User is still typing, which are not this group's values yet —
+     * and two readings of the same shape would be two chances to disagree
+     * about a half-written row.
+     *
+     * @return array<string, string>
+     */
+    public static function storeOptions(mixed $stored): array
+    {
+        $options = [];
+
+        foreach (self::registeredStores($stored) as $store) {
+            $options[$store[self::STORE_ID]] = $store[self::STORE_NAME];
+        }
+
+        return $options;
     }
 
     /**
@@ -281,5 +405,73 @@ class CourierSettings extends SettingsGroup
     private static function prefix(Courier $courier): string
     {
         return Str::camel($courier->value);
+    }
+
+    /**
+     * A stored stores list in the shape this group promises: a row with no id
+     * is not a store, a second row claiming an id the list already holds is
+     * the same store typed twice, and a store the Merchant never named is
+     * called after the id the Courier knows it by.
+     *
+     * Everything that is not a row of that shape is dropped rather than
+     * repaired. A row is the one input that must never throw, and a store is
+     * only ever an id a Courier issued: there is nothing to salvage from
+     * whatever an older shape or a hand edit left behind.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    private static function registeredStores(mixed $stored): array
+    {
+        $registered = [];
+
+        foreach (is_array($stored) ? $stored : [] as $store) {
+            if (! is_array($store)) {
+                continue;
+            }
+
+            $id = self::text($store[self::STORE_ID] ?? null);
+            $name = self::text($store[self::STORE_NAME] ?? null);
+
+            if ($id === '' || array_key_exists($id, $registered)) {
+                continue;
+            }
+
+            $registered[$id] = [self::STORE_ID => $id, self::STORE_NAME => $name === '' ? $id : $name];
+        }
+
+        return array_values($registered);
+    }
+
+    private static function text(mixed $value): string
+    {
+        return is_scalar($value) ? trim((string) $value) : '';
+    }
+
+    /** The store this Courier's parcels leave from when nobody has been asked. */
+    private function defaultPickupStore(Courier $courier): string
+    {
+        $property = self::property($courier, 'PickupStore');
+
+        return property_exists($this, $property) ? self::text($this->{$property}) : '';
+    }
+
+    /**
+     * Point a Courier's default at a store it actually has, where the
+     * Merchant's registered list no longer holds the one it named.
+     */
+    private function settleDefaultPickupStore(Courier $courier): void
+    {
+        $property = self::property($courier, 'PickupStore');
+        $registered = $this->pickupStoresFor($courier);
+
+        if (! property_exists($this, $property) || $registered === []) {
+            return;
+        }
+
+        if (array_key_exists($this->defaultPickupStore($courier), $registered)) {
+            return;
+        }
+
+        $this->{$property} = (string) array_key_first($registered);
     }
 }

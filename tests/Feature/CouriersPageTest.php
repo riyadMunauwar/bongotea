@@ -30,8 +30,10 @@ it('sits in the Settings cluster, one section per Courier, each asking for what 
         ->assertSee('Password')
         ->assertSee('RedEx')
         ->assertSee('Access token')
-        /** The five defaults, once per Courier, are what make an unattended booking possible. */
-        ->assertSee('Pickup store')
+        /** The warehouses a Courier collects from, and which of them a parcel goes from when nobody chooses. */
+        ->assertSee('Pickup stores')
+        ->assertSee('Default pickup store')
+        /** The four defaults, once per Courier, are what make an unattended booking possible. */
         ->assertSee('Delivery type')
         ->assertSee('Item type')
         ->assertSee('Parcel weight')
@@ -133,6 +135,7 @@ it('saves Pathao\'s four credentials sealed, and none of them reaches the browse
             'pathaoClientSecret' => 'pathao_secret_live_1',
             'pathaoUsername' => 'pathao_user_live_1',
             'pathaoPassword' => 'pathao_pw_live_1',
+            'pathaoPickupStores' => [['id' => '11223', 'name' => 'Banani warehouse']],
             'pathaoPickupStore' => '11223',
         ])
         ->call('save')
@@ -187,6 +190,168 @@ it('saves RedEx\'s token sealed, with the weight and value a parcel it will acce
         ->and(Courier::RedEx->isUsable())->toBeTrue();
 });
 
+it('registers several pickup stores for one Courier and names one of them the default', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(Couriers::class)
+        ->fillForm([
+            'pathaoEnabled' => true,
+            'pathaoClientId' => 'pathao_client_live_1',
+            'pathaoClientSecret' => 'pathao_secret_live_1',
+            'pathaoUsername' => 'pathao_user_live_1',
+            'pathaoPassword' => 'pathao_pw_live_1',
+            'pathaoPickupStores' => [
+                ['id' => '114983', 'name' => 'Banani warehouse'],
+                ['id' => '205417', 'name' => 'Uttara warehouse'],
+            ],
+            'pathaoPickupStore' => '205417',
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    $settings = app(CourierSettings::class);
+
+    expect($settings->pickupStoresFor(Courier::Pathao))->toBe([
+        '114983' => 'Banani warehouse',
+        '205417' => 'Uttara warehouse',
+    ])
+        ->and($settings->pathaoPickupStore)->toBe('205417')
+        /** A store is one Courier's own id for a warehouse, so registering Pathao's registers nothing for anybody else. */
+        ->and($settings->redexPickupStores)->toBe([]);
+});
+
+it('refuses the same store id registered twice for one Courier', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(Couriers::class)
+        ->fillForm([
+            'redexEnabled' => true,
+            'redexAccessToken' => 'redex_token_live_1',
+            'redexPickupStores' => [
+                ['id' => '98765', 'name' => 'Banani warehouse'],
+                ['id' => '98765', 'name' => 'The same one again'],
+            ],
+        ])
+        ->call('save')
+        /** Two of the same store is one store the Merchant is offered twice, and choosing between them decides nothing. */
+        ->assertHasFormErrors(['redexPickupStores']);
+
+    expect(Setting::query()->find(CourierSettings::key()))->toBeNull();
+});
+
+it('moves the default onto a store the merchant still has when they deregister the one it named', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    app(CourierSettings::class)->with([
+        'pathaoEnabled' => true,
+        'pathaoClientId' => 'pathao_client_live_1',
+        'pathaoClientSecret' => 'pathao_secret_live_1',
+        'pathaoUsername' => 'pathao_user_live_1',
+        'pathaoPassword' => 'pathao_pw_live_1',
+        'pathaoPickupStores' => [
+            ['id' => '114983', 'name' => 'Banani warehouse'],
+            ['id' => '205417', 'name' => 'Uttara warehouse'],
+        ],
+        'pathaoPickupStore' => '205417',
+    ])->save();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    /**
+     * Uttara shuts and its row is deleted, which is a write of the whole list
+     * and not a fill over it — and the Merchant is not refused over a box they
+     * never touched.
+     */
+    Livewire::test(Couriers::class)
+        ->set('data.pathaoPickupStores', [['id' => '114983', 'name' => 'Banani warehouse']])
+        ->assertSchemaStateSet(['pathaoPickupStore' => '114983'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    expect(app(CourierSettings::class)->pathaoPickupStore)->toBe('114983')
+        ->and(app(CourierSettings::class)->pickupStoresFor(Courier::Pathao))->toBe(['114983' => 'Banani warehouse']);
+});
+
+it('follows a corrected store id, and empties the default when the last store goes', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    app(CourierSettings::class)->with([
+        'redexEnabled' => true,
+        'redexAccessToken' => 'redex_token_live_1',
+        'redexPickupStores' => [['id' => '98765', 'name' => 'Banani warehouse']],
+        'redexPickupStore' => '98765',
+    ])->save();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    /** A mistyped id corrected: the store the default named is gone and the corrected one takes its place. */
+    Livewire::test(Couriers::class)
+        ->set('data.redexPickupStores', [['id' => '98764', 'name' => 'Banani warehouse']])
+        ->assertSchemaStateSet(['redexPickupStore' => '98764'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    expect(app(CourierSettings::class)->redexPickupStore)->toBe('98764');
+
+    /** And deregistering the last one leaves no default either: a default naming a store nobody has is worse than none. */
+    Livewire::test(Couriers::class)
+        ->set('data.redexPickupStores', [])
+        ->assertSchemaStateSet(['redexPickupStore' => null])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    expect(app(CourierSettings::class)->redexPickupStore)->toBe('')
+        ->and(app(CourierSettings::class)->pickupStoresFor(Courier::RedEx))->toBe([]);
+});
+
+it('names the first store the default where the merchant registered stores and named none', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(Couriers::class)
+        ->fillForm([
+            'redexEnabled' => true,
+            'redexAccessToken' => 'redex_token_live_1',
+            'redexPickupStores' => [
+                ['id' => '98765', 'name' => 'Banani warehouse'],
+                ['id' => '43210', 'name' => 'Uttara warehouse'],
+            ],
+        ])
+        /** Said on the screen rather than settled quietly on save: the Merchant reads where their parcels will leave from. */
+        ->assertSchemaStateSet(['redexPickupStore' => '98765'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    expect(app(CourierSettings::class)->redexPickupStore)->toBe('98765');
+});
+
+it('puts the single store an installation already had into the list, with nobody retyping it', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    app(CourierSettings::class)->with(['pathaoPickupStore' => '114983'])->save();
+    app()->forgetInstance(CourierSettings::class);
+
+    Livewire::test(Couriers::class)
+        ->assertSee('114983')
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(CourierSettings::class);
+
+    /** Their one store, now registered and still the default: an installation upgrades into this by opening the page. */
+    expect(app(CourierSettings::class)->pathaoPickupStores)->toBe([['id' => '114983', 'name' => '114983']])
+        ->and(app(CourierSettings::class)->pathaoPickupStore)->toBe('114983');
+});
+
 it('keeps the stored credentials when the page is saved with them blank', function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 
@@ -195,7 +360,11 @@ it('keeps the stored credentials when the page is saved with them blank', functi
 
     Livewire::test(Couriers::class)
         ->assertSee('A value is stored')
-        ->fillForm(['redexEnabled' => true, 'redexPickupStore' => 'RDX-7'])
+        ->fillForm([
+            'redexEnabled' => true,
+            'redexPickupStores' => [['id' => 'RDX-7', 'name' => 'Gulshan warehouse']],
+            'redexPickupStore' => 'RDX-7',
+        ])
         ->call('save')
         ->assertHasNoFormErrors();
 

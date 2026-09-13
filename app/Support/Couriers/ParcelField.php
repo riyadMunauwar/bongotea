@@ -75,18 +75,23 @@ final class ParcelField
      * Which of the Merchant's warehouses a parcel leaves from, declared once
      * here for every Courier that has a notion of one.
      *
-     * The stores to choose between are the ones the installation knows of,
-     * which is the single one the Merchant registered in Settings — so this is
-     * a choice of one, and `isWorthAsking()` is what keeps a Merchant with one
-     * warehouse from ever being shown it. A Courier that later learns of two
-     * widens the options and starts asking, here and nowhere else.
+     * The stores to choose between are the ones the Merchant registered with
+     * this Courier, by the id that Courier knows each by — so a Merchant with
+     * a single warehouse has a choice of one and `isWorthAsking()` keeps them
+     * from ever being shown it, and a Merchant who registers a second is asked
+     * from that moment on, with no change here or anywhere the dialog is
+     * drawn. The default the dialog opens on is the Merchant's own
+     * (`settingsProperty`), so the common case is still one tap.
      */
     public static function pickupStore(Courier $courier, CourierSettings $settings): self
     {
-        $property = CourierSettings::property($courier, 'PickupStore');
-        $store = (string) $settings->{$property};
-
-        return self::choice(self::PICKUP_STORE, 'Pickup store', $property, blank($store) ? [] : [$store => $store]);
+        return self::choice(
+            self::PICKUP_STORE,
+            'Pickup store',
+            CourierSettings::property($courier, 'PickupStore'),
+            $settings->pickupStoresFor($courier),
+            'Where this parcel is collected from. Your other orders are unaffected.',
+        );
     }
 
     /** Whether this is one of a fixed set of the Courier's own codes, rather than something typed. */
