@@ -37,6 +37,11 @@ final class SteadfastScript extends CourierScript
     /** What Steadfast says when it has no record of the Consignment it was asked about. */
     private const TRACKING_REFUSAL = 'No consignment found with this id.';
 
+    /** Where Steadfast says what it is holding of the Merchant's money, and what it answers — in taka, as it documents it. */
+    private const BALANCE_URL = 'https://portal.packzy.com/api/v1/get_balance';
+
+    private const BALANCE = 1275.5;
+
     public function courier(): Courier
     {
         return Courier::Steadfast;
@@ -280,6 +285,35 @@ final class SteadfastScript extends CourierScript
     public function supportsBalance(): bool
     {
         return true;
+    }
+
+    /**
+     * Steadfast saying what it is holding: one figure in taka, with neither a
+     * parcel nor an argument in the question.
+     */
+    public function fakeBalance(): void
+    {
+        Http::fake([self::BALANCE_URL => Http::response([
+            'status' => 200,
+            'current_balance' => self::BALANCE,
+        ])]);
+    }
+
+    /** Steadfast answering the balance question with a bad morning of its own. */
+    public function fakeBalanceUnavailable(): void
+    {
+        Http::fake([self::BALANCE_URL => Http::response(['status' => 500, 'message' => 'Server error.'], 500)]);
+    }
+
+    /** The same figure in minor units, which is the only shape this system holds money in. */
+    public function balanceReported(): ?int
+    {
+        return (int) round(self::BALANCE * 100);
+    }
+
+    public function balanceUrl(): ?string
+    {
+        return self::BALANCE_URL;
     }
 
     public function needsAreaResolution(): bool

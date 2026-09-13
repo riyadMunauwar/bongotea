@@ -19,7 +19,7 @@ Nothing outside `app/Support/Couriers/` may branch on a courier's name. Ask the 
 
 "Why this Courier cannot be used" has one wording, in `CourierSettings::refusal()`. `CourierDriver::refusal()` and `Courier::refusal()` are delegations to it — never restate the rule (on, and every credential filled) at a call site. A driver may later add its own reason; it must not re-implement the shared one.
 
-The contract declares only what is implemented. `book()` and `canonicalStatus()` joined it with #127, `track()` with #131, `readAnnouncement()` with #132, `bookAll()` with #135; balance arrives with the ticket that builds it. Do not declare a method every driver would throw from.
+The contract declares only what is implemented. `book()` and `canonicalStatus()` joined it with #127, `track()` with #131, `readAnnouncement()` with #132, `bookAll()` with #135, `balance()` with #137. Do not declare a method every driver would throw from.
 
 ## A single booking runs inside the Order's lock, and a refusal records nothing
 `CourierBooker::book()` holds `DB::transaction` + `lockForUpdate` on the Order across the driver's HTTP call — deliberately, unlike `PaymentStarter`, which writes the Pending row first and then calls out. "An Order has at most one Active Shipment" is the invariant that stops a Merchant paying for two parcels, and a lock released before the Courier answers does not hold it. Only that Order's row is held, for one driver timeout (Steadfast: 15s).
@@ -122,3 +122,12 @@ Narration is `Shipment::recordNarration()` and never `recordEvent()` at a call s
 Only Steadfast has a usable bulk endpoint (`/create_order/bulk-order`, 500 a call, a line per invoice, and **no delivery status word** — a bulk-accepted parcel is `Booked` with `raw_status` null). Pathao's bulk endpoint answers with no Consignment per parcel, which would be a batch of real parcels nothing could ever poll, so Pathao declares `supportsBulk()` false and `batchLimit()` 1 and loops through `ParcelsOneAtATime::handedTo()` like RedEx. Do not "restore" Pathao's bulk call without solving the missing Consignment. Note this contradicts an aside in ADR-0020's consequences ("Pathao takes an array"); the decision itself — batch size is the driver's own property — is unchanged.
 
 The delivery area for a batch is guessed once per batch (`ParcelDetails::guessed()` + `DeliveryAreaMatcher::guess()`, the driver's area list fetched once for the whole run); an Order it cannot settle is reported back as needing an area and never written.
+
+## A balance is the driver's answer, held by CourierBalances, and never added to COD in Flight
+`CourierDriver::balance()` joined the contract with #137 and is answered by all three — Steadfast for real off `/get_balance` (major units, converted with `Money::toMinorUnits()`), Pathao and RedEx with `CourierBalance::notReported()`, which is documentation and not a gap. It answers rather than throws, like `track()`.
+
+`CourierBalances::of()` is the only caller and reads `supportsBalance()` first, so a Courier that reports none is never asked at all; a `refusal()` is answered ahead of anything held, so a just-switched-off Courier says so rather than showing this morning's figure. The figure is re-read every five minutes (`RedExAreas`' shape) and a read that fails **keeps the figure last read**, carrying its age and what went wrong. It stands for a day measured from **when the Courier gave it** and never from the last attempt to replace it — a failed read that renewed the day would leave a revoked account showing Monday's money in April, and the cache's own TTL cannot bound it because every failed read rewrites the row. Nothing here may ever answer zero for a figure it could not fetch: a zero tells a Merchant their money has been paid over.
+
+The cache key carries a sha256 of that Courier's `credentialProperties()`, as `PathaoAccessToken`'s does: a balance is one account's product, and a Merchant pasting a second account's keys must not be shown the first one's money under the new name.
+
+`CourierMoney` puts that beside COD in Flight, which is `SUM(collect_amount)` over `Shipment::active()` — what the parcel was sent out to collect, so an Order Paid online contributes nothing. The two are never summed and never presented as one number: one is a Courier's word about an account, the other is the Merchant's own Orders.

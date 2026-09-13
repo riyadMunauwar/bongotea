@@ -83,3 +83,29 @@ function courierScriptsResolvingAreas(bool $resolving): array
 dataset('area-naming couriers', courierScriptsResolvingAreas(true));
 
 dataset('free-text couriers', courierScriptsResolvingAreas(false));
+
+/**
+ * The couriers that will say what they are holding of the Merchant's money,
+ * and the ones that publish no such figure at all.
+ *
+ * Split by what the script declares, exactly as the two pairs above are: one
+ * of the three reports a balance and two report none, and the money widget
+ * has something to prove about each kind — that the one is asked and its
+ * figure drawn, and that the others are never asked and say so in words
+ * rather than reading as zero. Neither test may name the Courier it happens
+ * to be about.
+ *
+ * @param  bool  $reporting  whether to take the couriers that report a balance, or the ones that do not.
+ * @return array<string, array{CourierScript}>
+ */
+function courierScriptsReportingBalance(bool $reporting): array
+{
+    return array_map(
+        fn (CourierScript $script): array => [$script],
+        array_filter(courierScripts(), fn (CourierScript $script): bool => $script->supportsBalance() === $reporting),
+    );
+}
+
+dataset('balance-reporting couriers', courierScriptsReportingBalance(true));
+
+dataset('balance-silent couriers', courierScriptsReportingBalance(false));

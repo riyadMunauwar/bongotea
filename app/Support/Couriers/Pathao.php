@@ -281,6 +281,21 @@ class Pathao implements CourierDriver
         );
     }
 
+    /**
+     * Pathao documents no balance endpoint, so there is none to call and
+     * nothing missing.
+     *
+     * The honest answer to a question the contract puts to every Courier,
+     * exactly as `deliveryAreas()` is empty for a Courier that reads a
+     * free-text address. Nothing asks this in practice — `supportsBalance()`
+     * is what a caller reads first — and the widget prints "Not reported"
+     * beside Pathao rather than a blank that would be read as zero.
+     */
+    public function balance(): CourierBalance
+    {
+        return CourierBalance::notReported();
+    }
+
     public function canonicalStatus(string $rawStatus): ShipmentStatus
     {
         return self::STATUSES[strtolower(trim($rawStatus))] ?? ShipmentStatus::Unknown;

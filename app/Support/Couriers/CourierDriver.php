@@ -24,9 +24,11 @@ use Illuminate\Http\Request;
  * declaration here, so a caller asks what a Courier supports and never which
  * Courier it is.
  *
- * Balance arrives with the ticket that needs it. The contract declares only
- * what is implemented: a method declared here that every driver throws from
- * would be a contract that lies about what can be asked.
+ * The contract declares only what is implemented: a method declared here
+ * that every driver throws from would be a contract that lies about what can
+ * be asked. `balance()` is declared for all three and answered honestly by
+ * all three — two of them by saying they report none, which is a documented
+ * fact about those couriers rather than a gap.
  */
 interface CourierDriver
 {
@@ -99,6 +101,26 @@ interface CourierDriver
      * timeline, and the database is what carries that (ADR-0019).
      */
     public function track(Shipment $shipment): ShipmentProgress;
+
+    /**
+     * Ask this Courier what it is holding of the Merchant's money, and answer
+     * with what it said.
+     *
+     * Answers rather than throws, like `track()` and unlike `book()`: this is
+     * read while a screen is being drawn, and a Courier having a bad morning
+     * must cost that screen a line of explanation rather than an error page.
+     *
+     * `CourierBalance::notReported()` for a Courier that publishes no such
+     * figure, which is the honest answer rather than a gap — exactly as an
+     * empty `deliveryAreas()` is for a Courier that reads a free-text
+     * address. Nothing calls this without asking `supportsBalance()` first,
+     * so those couriers are never actually asked; the answer is here so that
+     * the contract can be put to every Courier alike.
+     *
+     * Never zero for a figure that could not be had. A balance mistaken for
+     * nothing held is a Merchant told their money is gone.
+     */
+    public function balance(): CourierBalance;
 
     /**
      * What one of this Courier's own status words means in the system's

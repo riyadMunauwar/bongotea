@@ -6,6 +6,7 @@ use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
 use App\Models\Shipment;
 use App\Support\Couriers\DeliveryArea;
+use App\Support\Settings\CourierSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -31,6 +32,29 @@ abstract class CourierScript
 
     /** Switch the Courier on for the installation with its credentials filled, the way a Merchant would. */
     abstract public function makeUsable(): void;
+
+    /**
+     * Retype every one of this Courier's credentials as a second account's,
+     * the way a Merchant moving to one would — the Courier is still on and
+     * still usable, and nothing else about the installation changes.
+     *
+     * Written once for every Courier rather than per script, because the
+     * credentials a Courier has are already declared (`credentialsFor()`) and
+     * what they are worth is not the point: the point is that they are not
+     * the ones the last answer was read with.
+     */
+    public function makeUsableWithOtherCredentials(): void
+    {
+        $settings = app(CourierSettings::class);
+
+        $settings->with(array_reduce(
+            $settings->credentialsFor($this->courier()),
+            fn (array $carry, string $property): array => $carry + [$property => 'second-account-'.$property],
+            [],
+        ))->save();
+
+        app()->forgetInstance(CourierSettings::class);
+    }
 
     /** The Courier's own identifier for a parcel it accepted, as it spells one. */
     abstract public function consignmentReference(): string;
@@ -381,6 +405,67 @@ abstract class CourierScript
     abstract public function supportsWebhook(): bool;
 
     abstract public function supportsBalance(): bool;
+
+    /**
+     * Fake this Courier answering with what it is holding of the Merchant's
+     * money.
+     *
+     * Nothing at all for a Courier that publishes no balance, because there
+     * is no call to fake — and a test where one goes out anyway fails on a
+     * stray request rather than on an assertion, which is what proves such a
+     * Courier is never asked.
+     */
+    public function fakeBalance(): void {}
+
+    /**
+     * Fake this Courier answering the balance question and settling nothing:
+     * a bad morning at its end, which is a different fact from a line that
+     * would not open.
+     *
+     * It answers, so the call is recorded — which is what lets a test prove
+     * the Courier was asked again rather than infer it. A connection that
+     * never opens records nothing at all (the client records a pair only for
+     * a fulfilled promise), so `fakeOutage()` cannot prove that and must not
+     * be used for it.
+     */
+    public function fakeBalanceUnavailable(): void {}
+
+    /**
+     * What that answer comes to in minor units, or null for a Courier that
+     * publishes no balance at all.
+     */
+    public function balanceReported(): ?int
+    {
+        return null;
+    }
+
+    /**
+     * Where this Courier says what it is holding, or null for one that
+     * publishes no such figure.
+     */
+    public function balanceUrl(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Assert this Courier was asked what it is holding exactly this many
+     * times since the last fake was laid.
+     *
+     * A Courier with nowhere to ask is held to a stricter reading of the same
+     * sentence: nothing may have gone out anywhere at all, which is the only
+     * honest form of "it was not asked" for a Courier with no such endpoint.
+     */
+    public function assertBalanceAsked(int $count): void
+    {
+        $url = $this->balanceUrl();
+
+        $asked = $url === null
+            ? Http::recorded()->count()
+            : Http::recorded(fn (Request $request): bool => $request->url() === $url)->count();
+
+        expect($asked)->toBe($count, "{$this->courier()->getLabel()} was asked what it is holding other than {$count} times.");
+    }
 
     abstract public function needsAreaResolution(): bool;
 

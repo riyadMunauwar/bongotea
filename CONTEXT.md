@@ -230,6 +230,10 @@ _Avoid_: cancelled, failed, undelivered, refused, RTO
 Said of a Shipment a User has written off — a parcel a Courier never collected, or one held so long there is nothing left to wait for. It is a time and a name and never a status, because the Courier's last word is worth keeping: a Shipment On Hold and then abandoned says both, where a status overwritten would say only that somebody gave up. Abandoning frees the Order to be sent again, and asserts that the first parcel is dead.
 _Avoid_: cancelled, void, closed, written off, expired
 
+**Balance (courier-reported)**:
+What a Courier says it is holding of the Merchant's money, in that Courier's own words about its own account. Only one of the three publishes such a figure at all, and the other two are said to report none rather than shown a blank — a blank in a money column is read as a zero, and a zero here tells a Merchant their money has been paid over. A figure that could not be fetched is the last one read, with the time it was read at, or the reason there is none; it is never a zero and it is never added to COD in Flight.
+_Avoid_: courier balance, wallet, float, due, payable
+
 **COD in Flight**:
 What the couriers are between them holding of the Merchant's money: what every Active Shipment was sent out to collect. Counted from the Merchant's own Orders rather than from anything a Courier says, so every Courier has the figure alike — and never added to a Courier's reported balance, because one is what we believe and the other is what we were told.
 _Avoid_: outstanding, receivable, pending COD, courier balance, float

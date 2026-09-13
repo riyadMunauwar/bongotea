@@ -49,6 +49,9 @@ class Steadfast implements CourierDriver
      */
     private const TRACKING_PATH = '/status_by_cid/';
 
+    /** Where Steadfast says what it is holding of the Merchant's money — the one Courier of the three that will. */
+    private const BALANCE_PATH = '/get_balance';
+
     /**
      * Steadfast's own status words, as its documentation lists them, in the
      * system's vocabulary (ADR-0018).
@@ -230,6 +233,42 @@ class Steadfast implements CourierDriver
             [new ReportedStatus($this->canonicalStatus($rawStatus), $rawStatus)],
             $answer,
         );
+    }
+
+    /**
+     * Steadfast's balance call: no parcel, no arguments, one figure back.
+     *
+     * Everything that is not a figure is `unavailable()` in words — silence,
+     * a rejected credential, an answer with no readable balance in it — and
+     * never a zero, because a Merchant reading a zero here concludes the
+     * Courier has paid them and a figure we merely failed to fetch would say
+     * so falsely.
+     *
+     * Note the conversion: Steadfast reports major units, as it takes them on
+     * a booking, and every amount this system holds is minor.
+     */
+    public function balance(): CourierBalance
+    {
+        try {
+            $response = $this->client()->get(self::HOST.self::BALANCE_PATH);
+        } catch (ConnectionException $exception) {
+            return CourierBalance::unavailable('Steadfast could not be reached: '.$exception->getMessage());
+        }
+
+        $answer = is_array($response->json()) ? $response->json() : [];
+        $reported = $answer['current_balance'] ?? null;
+
+        /**
+         * One reading for a refusal and for an answer with no figure in it,
+         * because Steadfast words both the same way and sometimes words a
+         * refusal at HTTP 200: what an operator needs is Steadfast's own
+         * sentence, which `reason()` is the one place that is read from.
+         */
+        if ($response->failed() || ! is_numeric($reported)) {
+            return CourierBalance::unavailable('Steadfast would not say what it is holding: '.$this->reason($answer, $response));
+        }
+
+        return CourierBalance::of(Money::toMinorUnits($reported));
     }
 
     public function canonicalStatus(string $rawStatus): ShipmentStatus
