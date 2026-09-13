@@ -13,6 +13,7 @@ use App\Support\Couriers\CourierUnreachable;
 use App\Support\Couriers\DeliveryArea;
 use App\Support\Couriers\DeliveryAreaMatcher;
 use App\Support\Couriers\DeliveryAreaNotResolved;
+use App\Support\Couriers\OrderAlreadyDelivered;
 use App\Support\Couriers\OrderAlreadyShipping;
 use App\Support\Couriers\ParcelDetails;
 use App\Support\Couriers\ParcelField;
@@ -73,9 +74,14 @@ class BookWithCourierAction
 
             /**
              * Offered while a parcel may be sent: this installation has a
-             * usable Courier, and nothing is already out for the Order. The
-             * booking asks both again under the Order's lock, because a
-             * screen is only as fresh as the moment it was drawn.
+             * usable Courier, nothing is already out for the Order, and
+             * nothing of the Order's has reached a door. The booking asks all
+             * three again under the Order's lock, because a screen is only as
+             * fresh as the moment it was drawn.
+             *
+             * A returned Order is offered it, which is the point: a parcel
+             * that came back is a question a User answers by sending again,
+             * where a parcel that arrived is finished (ADR-0018).
              *
              * And never on a deleted Order. `OrderResource::getEloquentQuery()`
              * drops the soft-delete scope, so all three screens open one and
@@ -86,7 +92,10 @@ class BookWithCourierAction
              * that should never have existed is not one to send; restoring it
              * first is the answer, and that action is on the same row.
              */
-            ->visible(fn (Order $record): bool => filled(self::couriers()) && ! $record->trashed() && ! $record->isShipping())
+            ->visible(fn (Order $record): bool => filled(self::couriers())
+                && ! $record->trashed()
+                && ! $record->isShipping()
+                && ! $record->hasArrived())
             ->modalHeading('Send this order with a courier')
             ->modalDescription(fn (Order $record): string => self::whatWillBeCollected($record))
             ->modalSubmitActionLabel('Send')
@@ -114,6 +123,11 @@ class BookWithCourierAction
                     $shipment = $booker->book($record, $courier, $details);
                 } catch (OrderAlreadyShipping $refusal) {
                     self::refuse('Already with a courier', $refusal->getMessage());
+
+                    return;
+                } catch (OrderAlreadyDelivered $refusal) {
+                    /** Not a Courier's objection and not a temporary one: this Order is finished, and a second parcel would be one nobody ordered. */
+                    self::refuse('Already delivered', $refusal->getMessage());
 
                     return;
                 } catch (DeliveryAreaNotResolved $unresolved) {

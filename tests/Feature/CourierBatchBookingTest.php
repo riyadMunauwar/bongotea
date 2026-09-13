@@ -229,6 +229,26 @@ it('never books an order a parcel is already out for, and says so before it comm
         ->and(parcelFor($orders[1])->status)->toBe(ShipmentStatus::Written);
 })->with('courier scripts');
 
+it('never books an order whose parcel already arrived, and names it back rather than counting it', function (CourierScript $script) {
+    $orders = ordersReadyToSend($script, 2);
+
+    /** A User ticking a week of the queue ticks delivered Orders, and a second parcel for one is a parcel nobody ordered. */
+    Shipment::factory()->for($orders[0])->delivered()->create(['courier' => $script->courier()]);
+
+    Livewire::test(ListOrders::class)
+        ->set('activeTab', 'all')
+        ->selectTableRecords(array_map(fn (Order $order): int => $order->getKey(), $orders))
+        ->mountAction(TestAction::make('bookBatchWithCourier')->table()->bulk())
+        ->assertMountedActionModalSee('1 parcel will be booked')
+        ->assertMountedActionModalSee('1 order will be skipped');
+
+    sendBatchWithCourier($orders, $script);
+
+    expect(Shipment::query()->where('order_id', $orders[0]->getKey())->count())->toBe(1)
+        ->and(parcelFor($orders[1])->status)->toBe(ShipmentStatus::Written)
+        ->and(lastNotification()?->getBody())->toContain("Already delivered, so not sent again: {$orders[0]->order_number}");
+})->with('courier scripts');
+
 it('writes nothing twice when the same batch is sent again', function (CourierScript $script) {
     $orders = ordersReadyToSend($script, 2);
 

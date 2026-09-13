@@ -133,6 +133,27 @@ it('says so where nobody has been able to account for a parcel in a week', funct
         ->assertDontSeeText('Stuck');
 });
 
+it('says who wrote a parcel off and when, beside what the courier last said about it', function () {
+    $user = User::factory()->create(['name' => 'Nusrat Jahan']);
+
+    $abandoned = Shipment::factory()->abandoned()->create([
+        'abandoned_by' => $user->getKey(),
+        'abandoned_at' => now()->subDay(),
+        'stuck_at' => now()->subDays(9),
+    ]);
+
+    Livewire::test(ViewShipment::class, ['record' => $abandoned->getKey()])
+        ->assertSeeText('Abandoned')
+        ->assertSeeText('Nusrat Jahan')
+
+        /** The Courier's own last word is the whole reason abandoning is a time and a name (ADR-0018). */
+        ->assertSeeText(ShipmentStatus::OnHold->getLabel())
+        ->assertSeeText('hold')
+
+        /** And the parcel is nobody's to chase any more, so the older fact gives way to the decision that answered it. */
+        ->assertDontSeeText('Stuck');
+});
+
 it('says a charge has not been named rather than reading it as free', function () {
     $shipment = Shipment::factory()->create(['courier_charge' => null]);
 

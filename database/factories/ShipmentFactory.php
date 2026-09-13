@@ -66,4 +66,26 @@ class ShipmentFactory extends Factory
     {
         return $this->state(fn (): array => ['status' => ShipmentStatus::OnHold, 'raw_status' => 'hold', 'abandoned_at' => now()]);
     }
+
+    /**
+     * A parcel the Courier would not take when the sweep offered it: written
+     * down, never dispatched, and out of Active on the strength of the
+     * refusal rather than of any status — so the Order is one to send again
+     * at once (ADR-0020).
+     *
+     * Only a batch leaves a row like this: a booking made while a User waits
+     * words the refusal back at them and records nothing at all.
+     */
+    public function refused(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => ShipmentStatus::Written,
+            'raw_status' => null,
+            'consignment_reference' => null,
+            'tracking_code' => null,
+            'booked_at' => null,
+            'refused_at' => now(),
+            'refusal_reason' => 'The courier would not take this parcel.',
+        ]);
+    }
 }

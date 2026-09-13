@@ -18,7 +18,9 @@ use App\Models\Shipment;
  * is the one thing a batch must never do. An Order whose delivery area the
  * Courier insists on and nothing could name is a parcel somebody has to look
  * at: it is not sent, and it is not silently sent to a guessed depot either
- * (ADR-0020).
+ * (ADR-0020). An Order whose parcel already reached a door is the one skip
+ * that is permanent, and is kept apart from the rest for exactly that reason:
+ * every other one is an Order to send later.
  */
 final class BatchWritten
 {
@@ -27,12 +29,14 @@ final class BatchWritten
      * @param  list<Order>  $alreadyShipping  Orders passed over because a parcel is already out for them.
      * @param  list<Order>  $needingAnArea  Orders passed over because the Courier names its own areas and none matched.
      * @param  list<Order>  $deleted  Orders passed over because they were gone by the time the batch reached them.
+     * @param  list<Order>  $alreadyDelivered  Orders passed over because a parcel of theirs already reached the door.
      */
     public function __construct(
         public readonly array $written,
         public readonly array $alreadyShipping,
         public readonly array $needingAnArea,
         public readonly array $deleted = [],
+        public readonly array $alreadyDelivered = [],
     ) {}
 
     public function count(): int

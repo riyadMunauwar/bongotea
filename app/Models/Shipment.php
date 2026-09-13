@@ -213,6 +213,35 @@ class Shipment extends Model
     }
 
     /**
+     * Write this attempt off: a parcel a Courier never collected, or one held
+     * so long there is nothing left to wait for.
+     *
+     * A time and a name and **never a status** (ADR-0018). The Courier's last
+     * word is the fact worth keeping — a Shipment On Hold and then abandoned
+     * says both, where a status overwritten would say only that somebody gave
+     * up — so nothing here touches `status` or `raw_status`, and the timeline
+     * is left exactly as the Courier wrote it. What the row loses is its
+     * Active-ness, which is what frees the Order to be sent again.
+     *
+     * Under no lock, unlike a booking: this only ever takes a parcel *out* of
+     * Active, so it cannot make two parcels out for one Order however it
+     * interleaves with a booking — the booking's own locked read either still
+     * sees this attempt and refuses, or no longer does and is right not to.
+     *
+     * An attempt already written off is left exactly as it was: the decision
+     * belongs to whoever made it, and a second User pressing the same button
+     * must not be recorded as having made it.
+     */
+    public function abandon(User $by): void
+    {
+        if ($this->abandoned_at !== null) {
+            return;
+        }
+
+        $this->fill(['abandoned_at' => now(), 'abandoned_by' => $by->getKey()])->save();
+    }
+
+    /**
      * Write down something that happened to this parcel, once however many
      * times we are told it.
      *

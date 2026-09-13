@@ -225,6 +225,22 @@ class Order extends Model
     }
 
     /**
+     * Whether a parcel of this Order's ever got to the door — all of it, or
+     * some of it.
+     *
+     * The half of "over" that ends an Order rather than reopening it: a
+     * returned parcel is a question a User answers by sending again, where an
+     * arrival is finished, and sending again after one would be a duplicate
+     * parcel the Merchant pays for (ADR-0018). Asked by the booking under the
+     * Order's lock and by the action that offers it, the way `isShipping()` is
+     * — and by nothing else, so "already delivered" has one reading.
+     */
+    public function hasArrived(): bool
+    {
+        return $this->shipments()->arrived()->exists();
+    }
+
+    /**
      * The Orders still to be handed to a Courier: nothing out for them, and
      * nothing of theirs that ever reached a door.
      *

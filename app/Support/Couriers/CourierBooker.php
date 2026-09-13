@@ -67,6 +67,7 @@ class CourierBooker
      * went out with it.
      *
      * @throws OrderAlreadyShipping when a parcel is already out for this Order.
+     * @throws OrderAlreadyDelivered when a parcel of this Order's already reached the door.
      * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
      * @throws DeliveryAreaNotResolved when the Courier names its own areas and none was chosen.
      * @throws CourierRefusedBooking when the Courier answered and said no.
@@ -124,13 +125,14 @@ class CourierBooker
      * still waiting rather than lost.
      *
      * Everything the booking would have refused, this refuses now, under the
-     * same lock and in the same words: an Order already shipping, a Courier
-     * this installation cannot speak to, and a parcel whose delivery area the
-     * Courier insists on and nobody could name. Nothing is written for any of
-     * them, so a batch skips that Order and says why rather than committing a
-     * parcel it knows will not go.
+     * same lock and in the same words: an Order already shipping, an Order
+     * already delivered, a Courier this installation cannot speak to, and a
+     * parcel whose delivery area the Courier insists on and nobody could
+     * name. Nothing is written for any of them, so a batch skips that Order
+     * and says why rather than committing a parcel it knows will not go.
      *
      * @throws OrderAlreadyShipping when a parcel is already out for this Order.
+     * @throws OrderAlreadyDelivered when a parcel of this Order's already reached the door.
      * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
      * @throws DeliveryAreaNotResolved when the Courier names its own areas and none was resolved.
      */
@@ -150,15 +152,23 @@ class CourierBooker
     }
 
     /**
-     * This Order, read fresh under its own lock, with both of the things that
-     * stop a parcel going asked again.
+     * This Order, read fresh under its own lock, with all three of the things
+     * that stop a parcel going asked again.
      *
      * Asked here and not only by the screen: the screen a User pressed the
      * button on may be minutes old, a Merchant may have switched a Courier off
      * since it was drawn, and a batch may have written a row for this Order
      * between the list being counted and this Order being reached.
      *
+     * The two readings of "this Order is not one to send" are deliberately
+     * separate, because only one of them is temporary: a parcel out now is an
+     * Order to send later, where a parcel that arrived is an Order that is
+     * finished. A parcel that came back is neither — it is Active no longer
+     * and it never reached a door, which is exactly what makes a re-send the
+     * answer to it (ADR-0018).
+     *
      * @throws OrderAlreadyShipping
+     * @throws OrderAlreadyDelivered
      * @throws CourierNotUsable
      */
     private function readyToSend(Order $order, Courier $courier): Order
@@ -167,6 +177,10 @@ class CourierBooker
 
         if ($locked->isShipping()) {
             throw new OrderAlreadyShipping($locked);
+        }
+
+        if ($locked->hasArrived()) {
+            throw new OrderAlreadyDelivered($locked);
         }
 
         if (($refusal = $courier->refusal()) !== null) {

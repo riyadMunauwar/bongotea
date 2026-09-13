@@ -18,8 +18,9 @@ use Illuminate\Support\Collection;
  * the Page leaderboard: the Orders an operator must act on now, whatever
  * window the rest of the screen is counted over. One row per Order per
  * condition — New for over a day, a Payment Pending for over an hour, Paid
- * twice, Paid and Cancelled — naming the condition and what to do about
- * it, and every row opens the Order so acting on it is one click.
+ * twice, Paid and Cancelled, a parcel that came back, a parcel nobody has
+ * heard about in a week — naming the condition and what to do about it, and
+ * every row opens the Order so acting on it is one click.
  *
  * A to-do list, not a report: it reads no page filter, and when there is
  * nothing to do it says so in words rather than drawing an empty table, so
@@ -79,7 +80,7 @@ class NeedsAttentionTable extends TableWidget
             ])
             ->recordUrl(fn (array $record): string => $record['url'])
             ->emptyStateHeading('Nothing needs attention')
-            ->emptyStateDescription('Every New Order is under a day old, no Payment has been Pending for over an hour, and no Order is Paid twice or Paid and Cancelled.')
+            ->emptyStateDescription('Every New Order is under a day old, no Payment has been Pending for over an hour, no Order is Paid twice or Paid and Cancelled, and every parcel is accounted for.')
             ->emptyStateIcon('heroicon-o-check-circle');
     }
 

@@ -6,6 +6,9 @@ use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Support\Couriers\CourierSweep;
+use App\Support\Reporting\AttentionReason;
+use App\Support\Reporting\NeedsAttentionRow;
+use App\Support\Reporting\ReportingQuery;
 use App\Support\Settings\CourierSettings;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Http;
@@ -195,6 +198,23 @@ it('goes on following a parcel whose order a user has cancelled', function (Cour
     /** Two axes that never write each other: the parcel came back and the Order is still exactly what the User decided (ADR-0018). */
     expect($shipment->refresh()->status)->toBe(ShipmentStatus::Returned)
         ->and($order->refresh()->status)->toBe(OrderStatus::Cancelled);
+})->with('courier scripts');
+
+it('turns a parcel that came back into something a user must decide about, and decides nothing itself', function (CourierScript $script) {
+    $order = Order::factory()->confirmed()->create();
+    $shipment = parcelInFlight($script, ['order_id' => $order->getKey()]);
+
+    $script->fakeTracking($script->returnedWording());
+
+    $this->artisan('couriers:sweep')->assertSuccessful();
+
+    $rows = app(ReportingQuery::class)->needsAttention()->rows;
+
+    /** The parcel is over, the Order is exactly what its User left it, and the question is on somebody's list (ADR-0018). */
+    expect($shipment->refresh()->status)->toBe(ShipmentStatus::Returned)
+        ->and($order->refresh()->status)->toBe(OrderStatus::Confirmed)
+        ->and(array_map(fn (NeedsAttentionRow $row): array => [$row->order->getKey(), $row->reason], $rows))
+        ->toBe([[$order->getKey(), AttentionReason::ParcelReturned]]);
 })->with('courier scripts');
 
 it('never moves an order status whatever the courier says about the parcel', function (CourierScript $script) {

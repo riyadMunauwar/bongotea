@@ -66,16 +66,34 @@ class ShipmentInfolist
                     ->columnSpanFull(),
 
                 /**
+                 * A User gave up on this parcel. A time and a name and never
+                 * a status (ADR-0018), which is exactly why it needs a callout
+                 * of its own: the State badge beneath still reads whatever the
+                 * Courier last said, and it is meant to — a parcel On Hold and
+                 * then abandoned says both. Nothing but this says the Merchant
+                 * has stopped waiting.
+                 *
+                 * Above the stuck callout and instead of it, since a parcel
+                 * written off is one nobody is asking about any more: the
+                 * decision is the newer fact and the one that answers the
+                 * older.
+                 */
+                Callout::make('Abandoned — a user wrote this parcel off.')
+                    ->description(fn (Shipment $record): string => 'Given up by '
+                        .($record->abandonedBy?->name ?? 'someone since deleted')
+                        .' on '.$record->abandoned_at?->format('M j, Y')
+                        .'. The courier’s last word is kept as it was, and the order was freed to be sent again.')
+                    ->icon(Heroicon::OutlinedArchiveBoxXMark)
+                    ->danger()
+                    ->visible(fn (Shipment $record): bool => $record->abandoned_at !== null)
+                    ->columnSpanFull(),
+
+                /**
                  * A fact that is neither a status nor an outcome, and so
                  * cannot be read off the State badge: this attempt has gone on
                  * so long that somebody should look at it. Written once by the
                  * sweep and never cleared, which is why it is said as a date
                  * rather than as a flag.
-                 *
-                 * Abandonment is the third such fact and is deliberately not
-                 * drawn yet: nothing writes `abandoned_at` — the action that
-                 * will is still to be built — so a callout for it would be a
-                 * screen for a state this system cannot reach.
                  */
                 Callout::make('Stuck — this parcel has been out far longer than it should be.')
                     ->description(fn (Shipment $record): string => 'Nobody has been able to account for it since '.$record->stuck_at?->format('M j, Y').'. It is still being asked about.')

@@ -51,6 +51,11 @@ class BatchBooker
      * one fact about the installation and not a list of two hundred Orders'
      * problems.
      *
+     * An Order a parcel already reached a door for is passed over like any
+     * other Order that cannot be sent — a User who ticked a week of the queue
+     * has ticked delivered Orders, and a batch that booked them would be a
+     * duplicate parcel each, paid for and unordered.
+     *
      * @param  iterable<Order>  $orders
      *
      * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
@@ -64,6 +69,7 @@ class BatchBooker
 
         $written = [];
         $alreadyShipping = [];
+        $alreadyDelivered = [];
         $needingAnArea = [];
         $deleted = [];
 
@@ -72,6 +78,9 @@ class BatchBooker
                 $written[] = $this->booker->write($order, $courier, $this->detailsFor($order, $driver, $areas));
             } catch (OrderAlreadyShipping) {
                 $alreadyShipping[] = $order;
+            } catch (OrderAlreadyDelivered) {
+                /** Finished, and the only skip here that will still be true tomorrow: a second parcel is one nobody ordered. */
+                $alreadyDelivered[] = $order;
             } catch (DeliveryAreaNotResolved) {
                 $needingAnArea[] = $order;
             } catch (ModelNotFoundException) {
@@ -87,12 +96,13 @@ class BatchBooker
             }
         }
 
-        $batch = new BatchWritten($written, $alreadyShipping, $needingAnArea, $deleted);
+        $batch = new BatchWritten($written, $alreadyShipping, $needingAnArea, $deleted, $alreadyDelivered);
 
         Log::info('A batch of parcels was written down to be dispatched.', [
             'courier' => $courier->value,
             'written' => $batch->count(),
             'already_shipping' => count($alreadyShipping),
+            'already_delivered' => count($alreadyDelivered),
             'needing_an_area' => count($needingAnArea),
             'deleted' => count($deleted),
         ]);

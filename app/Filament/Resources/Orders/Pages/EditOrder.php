@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Filament\Resources\Orders\Actions\AbandonShipmentAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
@@ -27,6 +28,7 @@ class EditOrder extends EditRecord
              * write stale data back over what they wrote.
              */
             BookWithCourierAction::make(),
+            AbandonShipmentAction::make(),
             CheckWithGatewayAction::make(),
             SwitchToCashOnDeliveryAction::make(),
 

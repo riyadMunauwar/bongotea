@@ -4,6 +4,7 @@ namespace App\Support\Reporting;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
+use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Page;
@@ -360,12 +361,21 @@ final class ReportingQuery
      * The Orders an operator must act on as of one instant, whatever any
      * Reporting Window says: New Orders older than a day, Payments Pending
      * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
-     * once. Four queries, one per condition, each returning whole Orders
-     * with the instant the condition began loaded beside them; the rows
-     * come back in condition order, oldest first within each, and the
-     * largest thing looped over is the list of Orders that need attention.
-     * Soft-deleted Orders are gone through the model's scope, whatever
-     * their Payments say.
+     * once, Orders whose parcel came back and nobody has decided about, and
+     * Orders whose parcel nobody has heard about in a week. Six queries, one
+     * per condition, each returning whole Orders with the instant the
+     * condition began loaded beside them; the rows come back in condition
+     * order, oldest first within each, and the largest thing looped over is
+     * the list of Orders that need attention. Soft-deleted Orders are gone
+     * through the model's scope, whatever their Payments or Shipments say.
+     *
+     * The two parcel conditions are read off the Shipments and neither of
+     * them re-states a rule that lives elsewhere: "nothing has been decided"
+     * is `Order::notYetSent()`, the same scope the delivery queue filters
+     * by, and "nobody has heard about it in a week" is the `stuck_at` the
+     * sweep writes — `CourierSweep::STUCK_AFTER_SECONDS` is measured there
+     * and never again here, or a horizon changed on the sweep would leave
+     * this list quietly disagreeing with it.
      */
     public function needsAttention(?CarbonImmutable $now = null): NeedsAttention
     {
@@ -379,6 +389,10 @@ final class ReportingQuery
          * carries no verification time, so a refund is never dated "now".
          */
         $lastPaidAt = new Expression('coalesce(verified_at, created_at)');
+
+        /** The attempt that came back, and the attempt nobody can account for: each asked for twice, once to find the Order and once to date the condition. */
+        $returned = fn (Builder $shipments): Builder => $shipments->where('status', ShipmentStatus::Returned->value);
+        $stuck = fn (Builder $shipments): Builder => $shipments->active()->whereNotNull('stuck_at');
 
         return new NeedsAttention([
             ...$this->attentionRows(
@@ -405,6 +419,48 @@ final class ReportingQuery
                 Order::query()
                     ->paidButCancelled()
                     ->withMax('paidPayments as since', $lastPaidAt),
+            ),
+
+            /**
+             * A parcel came back and nothing has been decided since: no
+             * parcel out, nothing of this Order's ever at a door
+             * (`notYetSent()`), and the Order not Cancelled — because
+             * cancelling it *is* one of the two decisions, and the other is
+             * sending it again, which puts a parcel out and takes the Order
+             * off this list by itself. An Order whose re-send was itself
+             * written off is here again, and should be: nobody has decided
+             * what becomes of it.
+             *
+             * Since the return was recorded, which is the last thing written
+             * to that row: a terminal attempt is no longer polled, so nothing
+             * touches it afterwards.
+             */
+            ...$this->attentionRows(
+                AttentionReason::ParcelReturned,
+                Order::query()
+                    ->notYetSent()
+                    ->where('status', '!=', OrderStatus::Cancelled->value)
+                    ->whereHas('shipments', $returned)
+                    ->withMax(['shipments as since' => $returned], 'updated_at'),
+            ),
+
+            /**
+             * A parcel the sweep has flagged and nobody has resolved: still
+             * Active, so a parcel written off or since finished is gone from
+             * here, and still stuck, which is written once and never cleared.
+             *
+             * Since it was handed over, not since it was flagged: what an
+             * operator is owed is how long the Customer has been waiting, and
+             * the flag is a week into that wait rather than the start of it.
+             * A Cancelled Order is listed like any other — a parcel is still
+             * out for it, and that is a fact about the Merchant's money
+             * whatever they have decided about the Order (ADR-0018).
+             */
+            ...$this->attentionRows(
+                AttentionReason::ParcelStuck,
+                Order::query()
+                    ->whereHas('shipments', $stuck)
+                    ->withMin(['shipments as since' => $stuck], 'booked_at'),
             ),
         ]);
     }

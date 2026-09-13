@@ -69,10 +69,17 @@ class ShipmentsTable
                      * always will be — the refusal is a time and a reason,
                      * shaped like Abandoned — so a row saying only that would
                      * read as one still waiting to go.
+                     *
+                     * A parcel a User wrote off says so too, and says the
+                     * Courier's word after it rather than instead of it: the
+                     * whole point of Abandoned being a time and a name is that
+                     * On Hold and then abandoned goes on saying both.
                      */
-                    ->description(fn (Shipment $record): ?string => $record->refused_at === null
-                        ? $record->raw_status
-                        : 'Refused: '.$record->refusal_reason),
+                    ->description(fn (Shipment $record): ?string => match (true) {
+                        $record->abandoned_at !== null => 'Abandoned'.($record->raw_status === null ? '' : ' — the courier last said '.$record->raw_status),
+                        $record->refused_at !== null => 'Refused: '.$record->refusal_reason,
+                        default => $record->raw_status,
+                    }),
 
                 /** What a courier's support team will quote back down the phone, and what a webhook arrives carrying. */
                 TextColumn::make('consignment_reference')

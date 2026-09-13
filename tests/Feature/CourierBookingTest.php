@@ -18,6 +18,7 @@ use App\Support\Couriers\CourierBooker;
 use App\Support\Couriers\CourierNotUsable;
 use App\Support\Couriers\DeliveryArea;
 use App\Support\Couriers\DeliveryAreaNotResolved;
+use App\Support\Couriers\OrderAlreadyDelivered;
 use App\Support\Couriers\OrderAlreadyShipping;
 use App\Support\Couriers\ParcelDetails;
 use App\Support\Money;
@@ -415,6 +416,147 @@ it('counts an attempt a courier refused as no attempt at all', function (Courier
 
     /** Nothing was recorded for the refusal, so the reference it would have taken is still free. */
     expect(Shipment::sole()->invoice_reference)->toBe($order->order_number.'-1');
+})->with('courier scripts');
+
+it('sends an order again at once when a courier would not take the parcel it was offered', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    /** The shape only a batch leaves behind: written down, never dispatched, and refused in the Courier's own words (ADR-0020). */
+    $refused = Shipment::factory()->for($order)->refused()->create(['courier' => $script->courier()]);
+
+    expect($order->refresh()->isShipping())->toBeFalse();
+
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script)->assertNotified();
+
+    $second = $order->refresh()->shipments()->get()->last();
+
+    /** The refused row stays exactly as it was, and the attempt that went carries its own reference. */
+    expect($order->shipments()->count())->toBe(2)
+        ->and($refused->refresh()->refused_at)->not->toBeNull()
+        ->and($refused->consignment_reference)->toBeNull()
+        ->and($second->consignment_reference)->not->toBeNull()
+        ->and($second->invoice_reference)->toBe($order->order_number.'-2');
+})->with('courier scripts');
+
+/*
+|--------------------------------------------------------------------------
+| Writing a parcel off, and what may never be sent again
+|--------------------------------------------------------------------------
+*/
+
+it('will not send another parcel once one has reached the door', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    Shipment::factory()->for($order)->delivered()->create(['courier' => $script->courier()]);
+
+    /** Gone from both of the Order's screens and from the row, where a returned Order keeps it. */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertActionHidden('bookWithCourier');
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->assertActionHidden('bookWithCourier');
+
+    Livewire::test(ListOrders::class)
+        ->assertTableActionHidden('bookWithCourier', $order);
+
+    /** And refused against a fresh read under the lock, because a screen is only as fresh as the moment it was drawn. */
+    app(CourierBooker::class)->book($order, $script->courier());
+})->with('courier scripts')->throws(OrderAlreadyDelivered::class);
+
+it('offers the abandon action only while a parcel is out, and never beside the send action', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    /** Nothing out: there is nothing to write off, and sending is what is offered instead. */
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertActionHidden('abandonShipment')
+        ->assertActionVisible('bookWithCourier');
+
+    $script->fakeBooked();
+    sendWithCourier($order, $script);
+
+    Livewire::test(ViewOrder::class, ['record' => $order->refresh()->getKey()])
+        ->assertActionVisible('abandonShipment')
+        ->assertActionHidden('bookWithCourier');
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->assertActionVisible('abandonShipment');
+})->with('courier scripts');
+
+it('records who wrote a parcel off and when, and leaves the courier\'s last word standing', function (CourierScript $script) {
+    [$movingStatus, $movingWord] = stillMoving($script);
+
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+    sendWithCourier($order, $script);
+
+    $parcel = Shipment::sole();
+
+    /** The Courier said this much and then went quiet, which is the case abandoning exists for. */
+    $parcel->update(['status' => $movingStatus, 'raw_status' => $movingWord]);
+    $parcel->recordEvent($movingStatus, $movingWord);
+
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->callAction('abandonShipment')
+        ->assertNotified();
+
+    $parcel->refresh();
+
+    expect($parcel->abandoned_at)->not->toBeNull()
+        ->and($parcel->abandoned_by)->toBe(auth()->id())
+
+        /** A time and a name and never a status: the Courier's own account of the parcel survives the decision (ADR-0018). */
+        ->and($parcel->status)->toBe($movingStatus)
+        ->and($parcel->raw_status)->toBe($movingWord)
+        ->and($parcel->events()->count())->toBe(2)
+
+        /** What it loses is its Active-ness, which is the whole of what frees the Order. */
+        ->and($parcel->isActive())->toBeFalse()
+        ->and($order->refresh()->isShipping())->toBeFalse();
+})->with('courier scripts');
+
+it('sends an order again once a user has written its parcel off', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+    sendWithCourier($order, $script);
+
+    $abandoned = Shipment::sole();
+
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->callAction('abandonShipment');
+
+    answeringAfresh();
+    $script->fakeBooked();
+
+    sendWithCourier($order->refresh(), $script)->assertNotified();
+
+    $second = $order->refresh()->shipments()->get()->last();
+
+    expect($order->shipments()->count())->toBe(2)
+        ->and($second->getKey())->not->toBe($abandoned->getKey())
+        ->and($second->invoice_reference)->toBe($order->order_number.'-2')
+        ->and($second->isActive())->toBeTrue()
+
+        /** The dead parcel is still on the record, with what it cost and what the Courier last said. */
+        ->and($abandoned->refresh()->abandoned_at)->not->toBeNull();
+})->with('courier scripts');
+
+it('takes both actions away once the parcel has arrived: there is nothing left to write off or to send', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+    sendWithCourier($order, $script);
+
+    /** The sweep heard it was delivered while the User was reading the screen. */
+    Shipment::sole()->update(['status' => ShipmentStatus::Delivered, 'raw_status' => $script->rawStatusesFor(ShipmentStatus::Delivered)[0]]);
+
+    Livewire::test(ViewOrder::class, ['record' => $order->refresh()->getKey()])
+        ->assertActionHidden('abandonShipment')
+        ->assertActionHidden('bookWithCourier');
+
+    expect(Shipment::sole()->abandoned_at)->toBeNull();
 })->with('courier scripts');
 
 /*

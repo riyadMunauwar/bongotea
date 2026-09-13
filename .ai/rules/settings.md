@@ -70,3 +70,8 @@ Visit days are compared as `Y-m-d` strings against `$window->localStart()/localE
 Every courier carries the same five defaults (`CourierSettings::DEFAULTS`: pickup store, delivery type, item type, parcel weight, declared value). Weight and declared value are not decoration — RedEx refuses a parcel without both and no Checkout asks a Customer how heavy their order is, so these are the only answer there is. Which of the five a courier actually sends is its driver's business.
 
 Pathao's OAuth access token is deliberately not a property here: it is derived state a machine issues and expires, and a settings group holds values a human owns. It is cached by the driver that obtained it.
+
+## Needs Attention's parcel conditions restate no rule of their own
+`ReportingQuery::needsAttention()` has six conditions now; the two parcel ones borrow their rules rather than re-deriving them. "A parcel came back and nobody decided" is `Order::notYetSent()` (the delivery queue's own scope) plus "not Cancelled", dated by the returned row's `updated_at` — a terminal attempt is never polled again, so that is when it came back. "Nobody has heard about it in a week" is the `stuck_at` `CourierSweep` writes; never re-measure `CourierSweep::STUCK_AFTER_SECONDS` here, or the list and the sweep disagree the day the horizon moves.
+
+Both are Active-aware, so abandoning or re-sending clears the row by itself, and the two can never list the same Order at once.

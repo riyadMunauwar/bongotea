@@ -36,8 +36,11 @@ use Illuminate\Support\Str;
  * What the batch will do is said before it commits and what it did is said
  * after. An Order already holding an Active Shipment is never in it, which is
  * the invariant that stops a Merchant paying for two parcels; an Order whose
- * delivery area a Courier insists on and nothing could match is named back as
- * needing one rather than sent to a guessed depot.
+ * parcel already arrived is never in it either, because a User ticking a week
+ * of the queue ticks delivered Orders and a second parcel for one is a parcel
+ * nobody ordered; an Order whose delivery area a Courier insists on and
+ * nothing could match is named back as needing one rather than sent to a
+ * guessed depot.
  */
 class BookBatchWithCourierAction
 {
@@ -96,7 +99,8 @@ class BookBatchWithCourierAction
     /**
      * What this batch will do, in front of the User before they commit to it:
      * how many parcels go, and how many of the Orders they ticked are passed
-     * over because one is already out for them.
+     * over because one is already out for them or one of theirs already
+     * arrived.
      *
      * Said here rather than discovered afterwards, because the set dispatched
      * has to be the set they were looking at. The count is honest about only
@@ -104,23 +108,29 @@ class BookBatchWithCourierAction
      * area could not be matched depends on which Courier is chosen, and is
      * named back by the batch itself.
      *
+     * The Orders that will actually go are counted in one query, through the
+     * scope that is the one reading of "still to be handed to a Courier":
+     * asking each ticked Order in turn would be two questions per row on a
+     * screen where a User may have ticked a fortnight.
+     *
      * @param  Collection<int, Order>  $records
      */
     private static function whatWillBeSent(Collection $records): string
     {
-        $shipping = $records->filter(fn (Order $order): bool => $order->isShipping())->count();
-        $sending = $records->count() - $shipping;
+        $sending = Order::query()->whereKey($records->modelKeys())->notYetSent()->count();
+        $skipped = $records->count() - $sending;
 
         $sentence = $sending === 0
             ? 'None of these orders can be sent.'
             : "{$sending} ".Str::plural('parcel', $sending).' will be booked, one for each order.';
 
-        if ($shipping === 0) {
+        if ($skipped === 0) {
             return $sentence;
         }
 
-        return $sentence." {$shipping} ".Str::plural('order', $shipping)
-            .' will be skipped: a parcel is already out for '.($shipping === 1 ? 'it' : 'them').'.';
+        return $sentence." {$skipped} ".Str::plural('order', $skipped)
+            .' will be skipped: a parcel is already out for '.($skipped === 1 ? 'it' : 'them')
+            .', or one has already been delivered.';
     }
 
     /**
@@ -159,6 +169,11 @@ class BookBatchWithCourierAction
 
         if (($shipping = count($batch->alreadyShipping)) > 0) {
             $sentences[] = "{$shipping} ".Str::plural('order', $shipping).' skipped: a parcel is already out for '.($shipping === 1 ? 'it' : 'them').'.';
+        }
+
+        /** Named rather than counted, like the Orders needing an area: this is the skip a User will want to check, because it says a parcel they thought was due has already arrived. */
+        if ($batch->alreadyDelivered !== []) {
+            $sentences[] = 'Already delivered, so not sent again: '.self::naming($batch->alreadyDelivered).'.';
         }
 
         if ($batch->needingAnArea !== []) {
