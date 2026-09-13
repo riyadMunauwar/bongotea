@@ -143,3 +143,12 @@ Every caller must handle both: `BookWithCourierAction` catches `OrderAlreadyDeli
 It refuses a row that is still `isAwaitingDispatch()`, and that is what makes the missing lock sound rather than a shortcut. Abandoning otherwise only removes a parcel from Active and cannot produce two parcels for one Order; a row the sweep is inside `bookAll()` for is the exception — written off mid-call it would come back holding a real Consignment and be out of Active all the same, and the Order would be offered a second parcel. The refused state is exactly the state `CourierDispatcher::place()` writes, so there is no window between them. Do not "allow cancelling a batch row" here: that is a different capability and Abandoned is said of a parcel a Courier never *collected*.
 
 Reached from the Order (`AbandonShipmentAction` on ViewOrder and EditOrder) and never from `ShipmentResource`, which stays read-only. Screens that draw a written-off parcel must show the Courier's last word beside "Abandoned", never instead of it (`ShipmentInfolist` callout, `ShipmentsTable` status description).
+
+## Courier money lists a Courier that is usable or carrying, and the parcels decide
+`CourierMoney::rows()` draws a Courier that `isUsable()`, **or** that appears in `codInFlight()` — one switched off with parcels still out is listed, with the reason there is no balance beside money that is entirely real. A Courier nobody has set up and that is carrying nothing is left out; it used to be listed, and an installation on one Courier read two permanently empty rows forever.
+
+Carrying is tested first on purpose, so Settings can never take money off the table. Test membership with `array_key_exists`, never `> 0`: the grouped query answers only for couriers that have Active Shipments, and a parcel for an Order already Paid online collects nothing at the door and is still a parcel that Courier is carrying.
+
+The invariant this must keep: a Courier holding money is never absent, because an absent row reads as a Courier holding nothing. Widen the rule, never narrow it.
+
+`CourierBalances::of()` still reads `supportsBalance()` before `refusal()`, so a switched-off Courier that publishes no balance says "publishes no balance" and its `error` is null — a test asserting the refusal must ask the script `supportsBalance()` rather than expect it of every Courier.

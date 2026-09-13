@@ -12,9 +12,15 @@ use Filament\Widgets\TableWidget;
 use Illuminate\Support\Collection;
 
 /**
- * Courier money, full width above Needs Attention: one row per Courier with
+ * Courier money, full width above Needs Attention: a row per Courier with
  * what that Courier says it is holding beside what its parcels are still out
  * collecting.
+ *
+ * Which couriers are drawn is `CourierMoney`'s answer and not a question this
+ * asks — one that can be used, and one still carrying parcels whether it can
+ * be used or not. So an installation that uses a single Courier reads a
+ * single row, and a Courier switched off with money still out goes on being
+ * listed until it is in.
  *
  * Two columns and never a total. **Balance** is the Courier's own word about
  * its account and only one of the three publishes one at all — the other two
@@ -52,8 +58,8 @@ class CourierMoneyTable extends TableWidget
             ->description('What each Courier says it is holding, beside what its parcels are still out collecting. As things stand now, whatever the Reporting Window above says.')
 
             /**
-             * One row per Courier and the registry holds three, so there is
-             * no second page to reach and a paginator under three rows is
+             * A row per Courier and the registry holds three, so there is no
+             * second page to reach and a paginator under three rows is
              * furniture. Every other collection-backed widget table returns a
              * paginator because its rows are counted from Orders and can run
              * on; these are counted from the enum.
@@ -75,7 +81,15 @@ class CourierMoneyTable extends TableWidget
                     ->label('COD in Flight')
                     ->formatStateUsing(fn (int $state): string => Money::format($state))
                     ->alignEnd(),
-            ]);
+            ])
+
+            /**
+             * Nobody has set a Courier up and none is carrying anything, which
+             * is a Merchant who has not started rather than one whose money has
+             * gone: the heading says so and points at the screen that fixes it.
+             */
+            ->emptyStateHeading('No Couriers set up')
+            ->emptyStateDescription('Switch a Courier on in Settings → Couriers and what it is holding appears here. One switched off with parcels still out stays listed until they are in.');
     }
 
     /**

@@ -21,32 +21,56 @@ use App\Models\Shipment;
  * be a figure a Merchant could not check against anything. Shown side by side
  * they are what a Merchant chases a Courier with.
  *
- * One row for every Courier, including one nobody has set up: a Courier
- * missing from the table reads as a Courier holding nothing, and the reason
- * there is no figure — switched off, no credentials, unreachable — is the
- * thing worth saying.
+ * A row is drawn for a Courier that can be used, and for one that still has
+ * parcels out whether it can be used or not. What decides is the parcels and
+ * never the Settings alone: a Courier switched off this morning with ten
+ * parcels still with its riders is money the Merchant is owed, so it is drawn
+ * with the reason there is no balance beside a figure that is entirely real.
+ *
+ * A Courier nobody has set up and that is carrying nothing is left out. It
+ * holds nothing and can hold nothing, so a row for it says only that the
+ * enum has three cases — and a Merchant who uses one Courier would read two
+ * permanently empty rows for the life of the installation. The guarantee that
+ * matters is the other way round, and this keeps it: a Courier holding money
+ * is never absent, because an absent row reads as a Courier holding nothing.
  */
 class CourierMoney
 {
     public function __construct(private readonly CourierBalances $balances) {}
 
     /**
-     * Every Courier's two figures, in the order the registry names them.
+     * The two figures of every Courier that has either of them to answer for,
+     * in the order the registry names them.
+     *
+     * Carrying is asked before usable, and that order is the point: a Courier
+     * with a parcel out is drawn without its Settings deciding anything, so
+     * switching one off can never take money off this table. A Courier absent
+     * from `codInFlight()` has no Active Shipment at all — the grouped query
+     * answers only for couriers that have them — which is a stronger question
+     * than "is the figure zero", and the right one: a parcel out for an Order
+     * already Paid online collects nothing at the door and is still a parcel
+     * that Courier is carrying.
      *
      * @return list<CourierMoneyRow>
      */
     public function rows(): array
     {
         $inFlight = self::codInFlight();
+        $rows = [];
 
-        return array_map(
-            fn (Courier $courier): CourierMoneyRow => new CourierMoneyRow(
+        foreach (Courier::cases() as $courier) {
+            if (! array_key_exists($courier->value, $inFlight) && ! $courier->isUsable()) {
+                continue;
+            }
+
+            $rows[] = new CourierMoneyRow(
                 courier: $courier,
                 balance: $this->balances->of($courier),
                 codInFlight: $inFlight[$courier->value] ?? 0,
-            ),
-            Courier::cases(),
-        );
+            );
+        }
+
+        return $rows;
     }
 
     /**

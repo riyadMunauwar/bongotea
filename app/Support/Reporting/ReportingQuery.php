@@ -2,6 +2,7 @@
 
 namespace App\Support\Reporting;
 
+use App\Enums\Courier;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
@@ -9,6 +10,7 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Product;
+use App\Models\Shipment;
 use App\Models\VisitCount;
 use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
@@ -38,13 +40,18 @@ use Illuminate\Support\Collection;
  * Merchant is not counting, which is how a screen knows to say the feature is
  * off instead of drawing a silent nought.
  *
+ * Shipments are read the same way and cut on their own instant: a parcel
+ * belongs to the window the Courier accepted it in, not the one its Order was
+ * captured in, because what a Courier is being judged on is the mornings it
+ * was handed parcels.
+ *
  * The overview, the Sales over time series, the Page leaderboard, the
  * status breakdown, the Payment Method mix, the Product ranking, the
- * Delivery mix and the Needs Attention list are here. A later result is
- * another method returning another result class, built on `ordersIn()` or
- * `notCancelledIn()`, and no widget changes for it. Needs Attention is the
- * one result that takes no window: it is a to-do list over the whole
- * installation.
+ * Delivery mix, the courier performance and the Needs Attention list are
+ * here. A later result is another method returning another result class,
+ * built on `ordersIn()`, `notCancelledIn()` or `parcelsSentIn()`, and no
+ * widget changes for it. Needs Attention is the one result that takes no
+ * window: it is a to-do list over the whole installation.
  */
 final class ReportingQuery
 {
@@ -67,6 +74,12 @@ final class ReportingQuery
      * not a longer footnote.
      */
     private const int DISTRICTS_LISTED = 5;
+
+    /**
+     * What a duration read off two stored instants is divided by to become
+     * the days a Merchant judges a Courier's speed in.
+     */
+    private const int SECONDS_A_DAY = 86_400;
 
     /**
      * How long a New Order may wait for its confirmation call before it
@@ -358,6 +371,74 @@ final class ReportingQuery
     }
 
     /**
+     * How each Courier actually performed over a window: one row per Courier
+     * and, deliberately, no row that is all of them (ADR-0018).
+     *
+     * Two queries over the parcels the couriers accepted inside the window.
+     * The first counts, in SQL, everything that is a count — parcels sent,
+     * the ones that arrived, the ones that came back, and what the Courier
+     * has said the carriage cost. The second is the one thing in this module
+     * read row by row rather than aggregated, because arithmetic over two
+     * instants is not spelled the same way on every driver this runs on, and
+     * the bucket trick every other figure leans on cannot stand in for it: a
+     * duration is not a boundary to fall one side of. What it loads is the
+     * window's arrived parcels and two columns of each.
+     *
+     * Neither query restates a rule that lives elsewhere. **Sent** is a
+     * `booked_at` inside the window, which is the one instant a Courier
+     * accepted the parcel. **Arrived** is `Shipment::arrived()`, the same
+     * scope that stops a delivered Order reading as one nobody ever sent.
+     * And **when a parcel arrived** is the row's `updated_at`, on the reading
+     * `needsAttention()` already takes of a returned one: a terminal attempt
+     * is never polled again, so the last write to the row is the outcome
+     * being written.
+     */
+    public function courierPerformance(ReportingWindow $window): CourierPerformance
+    {
+        $arrivals = ShipmentStatus::arrivalValues();
+        $arrived = implode(', ', array_fill(0, count($arrivals), '?'));
+
+        /** The Courier column is read under another name so the model's enum cast does not touch it, exactly as `paymentMix()` reads its method: the rows are keyed by the stored value. */
+        $counts = $this->parcelsSentIn($window)
+            ->selectRaw(
+                'courier as carrier, count(*) as sent, '
+                ."sum(case when status in ({$arrived}) then 1 else 0 end) as delivered, "
+                .'sum(case when status = ? then 1 else 0 end) as came_back, '
+
+                /**
+                 * The charge, and beside it how many parcels carry one at
+                 * all: a Courier that has named none is owed a null rather
+                 * than the nought this sum comes to, because a zero in a
+                 * money column reads as carriage that cost nothing.
+                 */
+                .'sum(case when courier_charge is null then 0 else courier_charge end) as charges, '
+                .'sum(case when courier_charge is null then 0 else 1 end) as charges_named',
+                [...$arrivals, ShipmentStatus::Returned->value],
+            )
+            ->groupBy('courier')
+            ->get()
+            ->keyBy('carrier');
+
+        $days = $this->daysToDeliveryIn($window);
+
+        return new CourierPerformance($window, array_map(
+            function (Courier $courier) use ($counts, $days): CourierPerformanceRow {
+                $row = $counts->get($courier->value);
+
+                return new CourierPerformanceRow(
+                    courier: $courier,
+                    sent: (int) ($row->sent ?? 0),
+                    delivered: (int) ($row->delivered ?? 0),
+                    returned: (int) ($row->came_back ?? 0),
+                    charges: ((int) ($row->charges_named ?? 0)) === 0 ? null : (int) $row->charges,
+                    averageDaysToDelivery: $days[$courier->value] ?? null,
+                );
+            },
+            Courier::cases(),
+        ));
+    }
+
+    /**
      * The Orders an operator must act on as of one instant, whatever any
      * Reporting Window says: New Orders older than a day, Payments Pending
      * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
@@ -621,6 +702,81 @@ final class ReportingQuery
         return VisitCount::query()
             ->where('visited_on', '>=', $window->localStart()->toDateString())
             ->where('visited_on', '<', $window->localEnd()->toDateString());
+    }
+
+    /**
+     * The parcels a Courier accepted inside a window.
+     *
+     * Cut on `booked_at`, which is written at the one moment a Courier says
+     * it has the parcel and at no other — so a row a bulk booking wrote and
+     * the sweep has not offered yet, and a row a Courier refused when it was
+     * offered, are both absent rather than counted as parcels that went out.
+     * Neither is excluded by hand: a row that was never accepted holds no
+     * `booked_at`, and SQL leaves a null out of a range.
+     *
+     * A parcel a User later wrote off stays. It was sent and it cost money,
+     * and abandoning it is the Merchant's decision rather than the Courier's
+     * outcome (ADR-0018) — which is why it counts towards neither the
+     * Delivery Rate nor the Return Rate and towards the parcels underneath
+     * both.
+     *
+     * @return Builder<Shipment>
+     */
+    private function parcelsSentIn(ReportingWindow $window): Builder
+    {
+        return Shipment::query()
+            ->where('booked_at', '>=', $window->start->toDateTimeString())
+            ->where('booked_at', '<', $window->end->toDateTimeString());
+    }
+
+    /**
+     * How long each Courier took over the parcels of a window that arrived,
+     * in days, keyed by the name the Courier is stored under — and absent for
+     * a Courier none of whose parcels arrived, which the caller reads as
+     * nothing rather than as nought.
+     *
+     * The one figure here counted in PHP, for the reason
+     * `courierPerformance()` gives. Both instants are read as they are
+     * stored, which is UTC on either side of the subtraction, so no timezone
+     * enters it: what the Merchant's own days decide is which parcels are in
+     * front of us, and the window has already decided that.
+     *
+     * @return array<string, float>
+     */
+    private function daysToDeliveryIn(ReportingWindow $window): array
+    {
+        $carried = [];
+        $parcels = [];
+
+        foreach ($this->parcelsSentIn($window)->arrived()->toBase()->get(['courier', 'booked_at', 'updated_at']) as $parcel) {
+            $courier = (string) $parcel->courier;
+
+            $carried[$courier] = ($carried[$courier] ?? 0) + max(0, self::instant($parcel->updated_at) - self::instant($parcel->booked_at));
+            $parcels[$courier] = ($parcels[$courier] ?? 0) + 1;
+        }
+
+        $days = [];
+
+        foreach ($carried as $courier => $seconds) {
+            $days[$courier] = $seconds / $parcels[$courier] / self::SECONDS_A_DAY;
+        }
+
+        return $days;
+    }
+
+    /**
+     * A stored timestamp as seconds, read the way it was written.
+     *
+     * The zone is stated rather than left to the process, which reads a naked
+     * timestamp in whatever `app.timezone` says. That is UTC here and the two
+     * instants either side of a subtraction would cancel it anyway — but a
+     * zone with daylight saving would silently make one parcel an hour
+     * quicker than it was, twice a year, which is the kind of thing nobody
+     * ever traces back to this line.
+     */
+    private static function instant(mixed $stored): int
+    {
+        return (int) strtotime((string) $stored.' UTC');
     }
 
     /**

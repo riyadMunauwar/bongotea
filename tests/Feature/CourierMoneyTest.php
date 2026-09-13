@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Couriers\CourierMoney;
 use App\Support\Couriers\CourierMoneyRow;
 use App\Support\Money;
+use App\Support\Settings\CourierSettings;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
 
@@ -144,17 +145,57 @@ it('does not show one account\'s money under another account\'s credentials', fu
         ->assertDontSee(Money::format((int) $script->balanceReported()));
 })->with('balance-reporting couriers');
 
-it('says why there is no figure for a courier this installation cannot speak to', function (CourierScript $script) {
-    $row = balanceRowFor($script);
+it('leaves out a courier nobody has set up and that is carrying nothing', function (CourierScript $script) {
+    expect(app(CourierMoney::class)->rows())->toBe([]);
 
-    expect($row->balance->isReported())->toBeFalse()
-        ->and($row->balance->error)->toBe($script->courier()->refusal());
-
-    Livewire::test(CourierMoneyTable::class)->assertSee($script->courier()->getLabel());
+    Livewire::test(CourierMoneyTable::class)
+        ->assertDontSee($script->courier()->getLabel())
+        /** Not a Merchant whose money has gone — one who has not started. */
+        ->assertSee('No Couriers set up');
 
     /** Nothing is asked of a Courier that has not been supplied, whatever it reports. */
     $script->assertBalanceAsked(0);
-})->with('balance-reporting couriers');
+})->with('courier scripts');
+
+it('goes on listing a courier switched off while its parcels are still out, and says why there is no figure', function (CourierScript $script) {
+    /** Set up, handed a parcel, and switched off afterwards — the credentials are left exactly where they were. */
+    parcelInFlight($script, ['collect_amount' => 105000]);
+
+    switchOff($script);
+
+    $row = balanceRowFor($script);
+
+    expect($row->balance->isReported())->toBeFalse()
+        /** The money is the Merchant's own Orders and is entirely real, whatever Settings now says. */
+        ->and($row->codInFlight)->toBe(105000)
+
+        /**
+         * Why there is no figure is this Courier's own asymmetry. One that
+         * publishes a balance says it cannot be asked for it; one that
+         * publishes none says nothing about Settings at all, because the
+         * capability is read first and a Courier with no such endpoint is
+         * never put this installation's question.
+         */
+        ->and($row->balance->error)->toBe($script->supportsBalance() ? $script->courier()->refusal() : null);
+
+    Livewire::test(CourierMoneyTable::class)
+        ->assertSee($script->courier()->getLabel())
+        ->assertSee(Money::format(105000));
+
+    /** Still nothing asked of a Courier this installation cannot speak to. */
+    $script->assertBalanceAsked(0);
+})->with('courier scripts');
+
+it('draws a courier that is set up and carrying nothing, because a zero in flight is the truth', function (CourierScript $script) {
+    $script->makeUsable();
+    $script->fakeBalance();
+
+    expect(balanceRowFor($script)->codInFlight)->toBe(0);
+
+    Livewire::test(CourierMoneyTable::class)
+        ->assertSee($script->courier()->getLabel())
+        ->assertDontSee('No Couriers set up');
+})->with('courier scripts');
 
 /*
 |--------------------------------------------------------------------------
@@ -219,6 +260,22 @@ it('sits full width on the dashboard, above the Needs Attention list', function 
         ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true))
         ->and(app(CourierMoneyTable::class)->getColumnSpan())->toBe('full');
 });
+
+/**
+ * Stop using this Courier, leaving everything pasted about it where it is —
+ * which is what a Merchant actually does, and is why being switched off can
+ * never be read as having no parcels out.
+ *
+ * The property is asked of the group rather than spelled here: its name is
+ * the Courier's own in camel case plus `Enabled`, and a second spelling of
+ * that rule in a test is a test that goes on passing after the rule moves.
+ */
+function switchOff(CourierScript $script): void
+{
+    $enabled = CourierSettings::property($script->courier(), 'Enabled');
+
+    app(CourierSettings::class)->with([$enabled => false])->save();
+}
 
 /**
  * This Courier's own row of the module the widget draws, so a test can assert

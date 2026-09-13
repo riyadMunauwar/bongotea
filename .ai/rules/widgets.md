@@ -34,3 +34,10 @@ Do not reinstate the slot to pin something: the override takes the first-sorted 
 Filament hands a resource page's record to every widget it draws under the key `record` (`InteractsWithRecord::getWidgetData()`, spread by `Page::getWidgetsSchemaComponents()`), whether or not the widget wants it — Livewire's `separateParamsAndAttributes()` is what quietly demotes an unclaimed key to an HTML attribute. So a Dashboard widget is reused on the Page Report by adding `use ScopedToPage;` (which declares `public ?Page $record = null`, claiming the key) and passing `$this->record` to the `ReportingQuery` method — every one of them already takes an optional Page. Do not copy a widget to scope it. All six the Page Report draws are the Dashboard's own classes.
 
 A trashed Page still reports: Livewire restores a model property through `Model::newQueryForRestoration()`, which drops the soft-delete scope.
+
+## A windowed report widget kept out of app/Filament/Widgets is what keeps it off the Dashboard
+`discoverWidgets(in: app_path('Filament/Widgets'))` registers every Widget subclass under that folder, and `Filament\Pages\Dashboard::getWidgets()` draws all of them — so a widget put there appears on the Dashboard whether or not any screen names it.
+
+`CourierPerformanceTable` therefore lives under the Shipments resource's `Widgets/` folder, undiscovered, and `App\Filament\Pages\CourierReport::getWidgets()` names it. That is the whole mechanism: the Dashboard carries the courier to-do list, which ignores the Reporting Window, and the Courier Report carries the windowed analytics, which is a split that only holds while the analytics widget stays out of the discovered folder.
+
+An undiscovered widget needs no registration to be drawn or tested: `getWidgetsSchemaComponents()` mounts it by class name, and `Livewire::test(TheWidget::class, ['pageFilters' => [...]])` works. `DeliveryHealthStats` is the older precedent.

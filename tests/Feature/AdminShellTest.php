@@ -57,7 +57,7 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  *
  * The User is granted `manage settings` because `SettingsCluster::canAccess()`
  * otherwise hides the last entry, so this pins Settings as last for someone
- * who can see it as well as pinning the five above it.
+ * who can see it as well as pinning the six above it.
  */
 it('draws the sidebar in the order the panel states', function () {
     $this->actingAs(User::factory()->managingSettings()->create());
@@ -67,7 +67,7 @@ it('draws the sidebar in the order the panel states', function () {
         ->map(fn ($item) => $item->getLabel())
         ->all();
 
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Courier Report', 'Products', 'Pages', 'Settings']);
 });
 
 /**
