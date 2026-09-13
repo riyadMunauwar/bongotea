@@ -73,6 +73,91 @@ abstract class CourierScript
 
     /*
     |--------------------------------------------------------------------------
+    | Being handed a batch
+    |--------------------------------------------------------------------------
+    |
+    | The couriers disagree here as sharply as they do about tracking. One
+    | takes five hundred parcels in a single call and answers with a line per
+    | parcel; two take one parcel per call and answer about that parcel alone.
+    | Every one of those differences is declared and asked, never branched on
+    | by name — `batchLimit()` is the whole of what a caller needs to know, and
+    | a Courier with no bulk endpoint declares 1 rather than declaring "no
+    | bulk" (ADR-0020).
+    |
+    */
+
+    /**
+     * Fake the Courier taking every parcel it is offered, each with its own
+     * Consignment.
+     *
+     * Answered off the request rather than from a fixed body, because the
+     * whole question a batch raises is whether each answer reached the parcel
+     * it was about: a blanket answer would pass however badly the matching
+     * was done.
+     */
+    abstract public function fakeBatchBooked(): void;
+
+    /** Fake the Courier refusing every parcel it is offered, in its own words. */
+    abstract public function fakeBatchRefused(): void;
+
+    /**
+     * Fake the Courier taking the parcels carrying these references of ours
+     * and refusing every other one it is offered, which is what a batch that
+     * partly failed actually looks like.
+     *
+     * @param  list<string>  $accepting  our own invoice references.
+     */
+    abstract public function fakeBatchPartlyBooked(array $accepting): void;
+
+    /**
+     * Fake the Courier taking the parcels carrying these references of ours
+     * and then settling nothing else: the batch is cut off partway with real
+     * parcels already created.
+     *
+     * The failure ADR-0020 is written around, and the reason the rows are
+     * written before anything is dispatched. What it looks like differs by
+     * Courier and that is the script's business — a Courier sent one parcel a
+     * call answers for those and then the line drops; one sent the whole batch
+     * in a single call answers about those and says nothing about the rest.
+     * Either way the same thing is true of the system: what was settled is
+     * written down, and what was not is still waiting.
+     *
+     * @param  list<string>  $accepting  our own invoice references.
+     */
+    abstract public function fakeBatchCutShortAfter(array $accepting): void;
+
+    /**
+     * The Consignment this Courier answers with for the parcel carrying this
+     * reference of ours, under any of the batch fakes above.
+     */
+    abstract public function consignmentFor(string $invoiceReference): string;
+
+    /**
+     * How many parcels each booking call carried, in the order the calls went
+     * out.
+     *
+     * The observable form of `batchLimit()`, and the reason it is asked of the
+     * script: read off the driver, "the limit was honoured" would pass against
+     * any number at all.
+     *
+     * @return list<int>
+     */
+    abstract public function batchSizes(): array;
+
+    /**
+     * How many booking calls it takes this Courier to be handed this many
+     * parcels at once.
+     *
+     * Derived from the limit the script declares rather than declared again:
+     * the sizes are what a test asserts, and this is only the count of them.
+     */
+    public function bookingCallsFor(int $parcels): int
+    {
+        return (int) ceil($parcels / $this->batchLimit());
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Being asked where a parcel is
     |--------------------------------------------------------------------------
     |
@@ -266,7 +351,10 @@ abstract class CourierScript
      *
      * Empty where this Courier never reports that state, which is expected
      * and not a gap: Steadfast never says a parcel is in transit and RedEx
-     * never says Unknown (ADR-0018).
+     * never says Unknown (ADR-0018). Empty for every Courier where the state
+     * is Awaiting dispatch — that one is the system's own word for a row
+     * written and not yet handed over, and no Courier has a word for a parcel
+     * it has never been offered.
      *
      * Deliberately a second transcription of the same documentation the
      * driver's own map is written from, and never read off the driver: two

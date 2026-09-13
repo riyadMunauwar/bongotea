@@ -46,13 +46,33 @@ class ShipmentInfolist
         return $schema
             ->components([
                 /**
+                 * The Courier would not take this parcel when the sweep
+                 * offered it. Only a batch leaves a row like this behind: a
+                 * booking made while a User waits words the refusal back at
+                 * them and records nothing at all (ADR-0020), so a refusal
+                 * nobody was there to hear is one that has to be readable
+                 * here.
+                 *
+                 * Its own callout and not a status, because the row still
+                 * says truthfully that it was written and never dispatched.
+                 * What takes it out of Active is the refusal itself, which is
+                 * what frees the Order to be sent again.
+                 */
+                Callout::make('Refused — the courier would not take this parcel.')
+                    ->description(fn (Shipment $record): string => $record->refusal_reason ?? 'No reason was given.')
+                    ->icon(Heroicon::OutlinedNoSymbol)
+                    ->danger()
+                    ->visible(fn (Shipment $record): bool => $record->refused_at !== null)
+                    ->columnSpanFull(),
+
+                /**
                  * A fact that is neither a status nor an outcome, and so
                  * cannot be read off the State badge: this attempt has gone on
                  * so long that somebody should look at it. Written once by the
                  * sweep and never cleared, which is why it is said as a date
                  * rather than as a flag.
                  *
-                 * Abandonment is the other such fact and is deliberately not
+                 * Abandonment is the third such fact and is deliberately not
                  * drawn yet: nothing writes `abandoned_at` — the action that
                  * will is still to be built — so a callout for it would be a
                  * screen for a state this system cannot reach.

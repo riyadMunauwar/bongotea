@@ -9,9 +9,14 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\LazyCollection;
 
 /**
- * The sweep over the parcels the couriers are carrying: it asks each Courier
- * where its Active Shipments stand and writes what it learned onto their
- * timelines.
+ * The sweep over the parcels the couriers are carrying: it hands each Courier
+ * the parcels a bulk booking wrote down for it, then asks it where its Active
+ * Shipments stand and writes what it learned onto their timelines.
+ *
+ * Two jobs and one run, because they are the same question put to the same
+ * couriers five minutes apart, and because both exist for the same reason:
+ * nobody is waiting on either (ADR-0020). A batch is written while a User
+ * watches and dispatched here with nobody watching at all.
  *
  * For two of the three couriers this is a backstop against a webhook that
  * never arrived. For Steadfast it is the only channel there is — it announces
@@ -39,7 +44,10 @@ use Illuminate\Support\LazyCollection;
  */
 class CourierSweep
 {
-    public function __construct(private readonly CourierPoller $poller) {}
+    public function __construct(
+        private readonly CourierDispatcher $dispatcher,
+        private readonly CourierPoller $poller,
+    ) {}
 
     /**
      * How long an attempt may go unresolved before somebody should look at
@@ -65,17 +73,21 @@ class CourierSweep
     public const GIVE_UP_AFTER_SECONDS = 2592000;
 
     /**
-     * What one sweep did: how many parcels were asked about, how many
+     * What one sweep did: how many written parcels were handed over and how
+     * many of those were refused, how many parcels were asked about, how many
      * timeline entries that actually wrote, how many parcels no Courier would
      * account for, how many were newly flagged as stuck, and why each Courier
      * that was passed over was passed over.
      *
-     * The reasons are keyed by Courier and are already worded for a Merchant
-     * — `CourierSettings::refusal()` names the Courier, and so does a
-     * Courier's silence — so the command prints them rather than restating
-     * the rule.
+     * The reasons are a list and not a map keyed by Courier: one Courier can
+     * go quiet twice in a run and mean two different things by it — it would
+     * not say where its parcels are, and it would not take the ones written
+     * down for it — and a map would have the second silently overwrite the
+     * first. Each is already worded for a Merchant, because
+     * `CourierSettings::refusal()` names the Courier and so does a Courier's
+     * silence, so the command prints them rather than restating the rule.
      *
-     * @return array{asked: int, recorded: int, refused: int, stuck: int, skipped: array<string, string>}
+     * @return array{placed: int, rejected: int, asked: int, recorded: int, refused: int, stuck: int, skipped: list<string>}
      */
     public function run(): array
     {
@@ -84,7 +96,7 @@ class CourierSweep
          * answers: how long a parcel has gone unresolved is the Merchant's
          * clock, not the couriers'.
          */
-        $tally = ['asked' => 0, 'recorded' => 0, 'refused' => 0, 'stuck' => $this->flagStuck(), 'skipped' => []];
+        $tally = ['placed' => 0, 'rejected' => 0, 'asked' => 0, 'recorded' => 0, 'refused' => 0, 'stuck' => $this->flagStuck(), 'skipped' => []];
 
         foreach (Courier::cases() as $courier) {
             $refusal = $courier->refusal();
@@ -93,18 +105,49 @@ class CourierSweep
              * A Courier this installation cannot speak to is passed over
              * whole, before a parcel of its is read: its answers would every
              * one of them be the same missing credential, and an operator
-             * hears the one wording the admin already gives them.
+             * hears the one wording the admin already gives them. Parcels
+             * written down for it simply wait, which is what a written row is
+             * for.
              */
             if ($refusal !== null) {
-                $tally['skipped'][$courier->value] = $refusal;
+                $tally['skipped'][] = $refusal;
 
                 continue;
             }
 
+            /**
+             * Polled before dispatched, in that order on purpose: a parcel
+             * handed over in this run has nothing to say about itself yet, and
+             * asking its Courier where it is moments after being told would be
+             * a call nobody needed on every parcel of every batch.
+             */
             $this->poll($courier, $tally);
+            $this->dispatch($courier, $tally);
         }
 
         return $tally;
+    }
+
+    /**
+     * Offer this Courier every parcel a bulk booking wrote down for it.
+     *
+     * A Courier that went quiet when it was polled is still offered its
+     * written parcels, and one that goes quiet here leaves the rest of them
+     * written: the two are different calls to different endpoints, and one
+     * failing says nothing certain about the other.
+     *
+     * @param  array{placed: int, rejected: int, asked: int, recorded: int, refused: int, stuck: int, skipped: list<string>}  $tally
+     */
+    private function dispatch(Courier $courier, array &$tally): void
+    {
+        ['placed' => $placed, 'refused' => $rejected, 'error' => $error] = $this->dispatcher->dispatch($courier);
+
+        $tally['placed'] += $placed;
+        $tally['rejected'] += $rejected;
+
+        if ($error !== null) {
+            $tally['skipped'][] = $error;
+        }
     }
 
     /**
@@ -139,7 +182,7 @@ class CourierSweep
      * and cost a call to find out. Nothing is recorded against any of them, so
      * the next sweep picks the whole lot up again.
      *
-     * @param  array{asked: int, recorded: int, refused: int, stuck: int, skipped: array<string, string>}  $tally
+     * @param  array{placed: int, rejected: int, asked: int, recorded: int, refused: int, stuck: int, skipped: list<string>}  $tally
      */
     private function poll(Courier $courier, array &$tally): void
     {
@@ -149,7 +192,7 @@ class CourierSweep
             $polled = $this->poller->ask($shipment);
 
             if (! $polled->progress->isFinal) {
-                $tally['skipped'][$courier->value] = (string) $polled->progress->error;
+                $tally['skipped'][] = (string) $polled->progress->error;
 
                 Log::warning('A courier could not be asked where its parcels are, and will be asked again.', [
                     'courier' => $courier->value,
@@ -171,9 +214,10 @@ class CourierSweep
      * longer ago than this driver says is worth leaving.
      *
      * A Shipment with no Consignment on it is not among them — there is
-     * nothing to ask by. One with no `booked_at` is excluded by the horizon
-     * comparison itself, which is the right answer while every Shipment is
-     * written by a booking that has already happened (ADR-0020).
+     * nothing to ask by, which is exactly the state a bulk booking's rows are
+     * in until this same sweep dispatches them. One with no `booked_at` is
+     * excluded by the horizon comparison as well, so a written row is out of
+     * this twice over and for two separate reasons.
      *
      * @return LazyCollection<int, Shipment>
      */

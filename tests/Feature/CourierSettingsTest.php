@@ -171,11 +171,12 @@ it('declares what each Courier can be asked to do, so nothing branches on its na
         /** Nothing arrives on its own, so it is asked far more often than the other two. */
         ->and($steadfast->reAskIntervalSeconds())->toBe(1800);
 
-    expect($pathao->supportsBulk())->toBeTrue()
+    expect($pathao->supportsBulk())->toBeFalse()
         ->and($pathao->supportsWebhook())->toBeTrue()
         ->and($pathao->supportsBalance())->toBeFalse()
         ->and($pathao->needsAreaResolution())->toBeFalse()
-        ->and($pathao->batchLimit())->toBeGreaterThan(1);
+        /** Pathao's bulk endpoint hands back no Consignment per parcel, so it is offered one at a time like RedEx. */
+        ->and($pathao->batchLimit())->toBe(1);
 
     expect($redex->supportsBulk())->toBeFalse()
         ->and($redex->supportsWebhook())->toBeTrue()

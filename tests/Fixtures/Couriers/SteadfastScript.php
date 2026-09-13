@@ -8,6 +8,7 @@ use App\Models\Shipment;
 use App\Support\Money;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -255,6 +256,7 @@ final class SteadfastScript extends CourierScript
     public function rawStatusesFor(ShipmentStatus $status): array
     {
         return match ($status) {
+            ShipmentStatus::Written => [],
             ShipmentStatus::Booked => ['in_review', 'pending'],
             ShipmentStatus::InTransit => [],
             ShipmentStatus::OnHold => ['hold'],
@@ -290,8 +292,118 @@ final class SteadfastScript extends CourierScript
         return 500;
     }
 
+    /**
+     * Steadfast's bulk answer: one line per parcel it was offered, each
+     * naming the invoice it came in under, so a line can be matched back to
+     * the parcel it is about.
+     *
+     * Built from the request rather than fixed, because a batch's whole
+     * question is whether the right Consignment reached the right parcel.
+     * Note what the line does not carry: Steadfast names no delivery status
+     * in a bulk answer, only that it took the parcel.
+     */
+    public function fakeBatchBooked(): void
+    {
+        $this->fakeBatch(fn (string $invoice): array => [
+            'invoice' => $invoice,
+            'consignment_id' => (int) $this->consignmentFor($invoice),
+            'tracking_code' => strtoupper(substr(md5($invoice), 0, 8)),
+            'status' => 'success',
+        ]);
+    }
+
+    public function fakeBatchRefused(): void
+    {
+        $this->fakeBatch(fn (string $invoice): array => [
+            'invoice' => $invoice,
+            'status' => 'error',
+            'message' => self::REFUSAL,
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchPartlyBooked(array $accepting): void
+    {
+        $this->fakeBatch(fn (string $invoice): array => in_array($invoice, $accepting, true)
+            ? [
+                'invoice' => $invoice,
+                'consignment_id' => (int) $this->consignmentFor($invoice),
+                'tracking_code' => strtoupper(substr(md5($invoice), 0, 8)),
+                'status' => 'success',
+            ]
+            : [
+                'invoice' => $invoice,
+                'status' => 'error',
+                'message' => self::REFUSAL,
+            ]);
+    }
+
+    /**
+     * Steadfast answers about the parcels it got to and names none of the
+     * rest — the shape a bulk call cut short takes for a Courier that takes
+     * the whole batch in one request.
+     *
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchCutShortAfter(array $accepting): void
+    {
+        $this->fakeBatch(fn (string $invoice): ?array => in_array($invoice, $accepting, true)
+            ? [
+                'invoice' => $invoice,
+                'consignment_id' => (int) $this->consignmentFor($invoice),
+                'tracking_code' => strtoupper(substr(md5($invoice), 0, 8)),
+                'status' => 'success',
+            ]
+            : null);
+    }
+
+    /** Steadfast spells a Consignment as a number, so one derived for a batch is one too. */
+    public function consignmentFor(string $invoiceReference): string
+    {
+        return (string) (self::CONSIGNMENT_ID + crc32($invoiceReference) % 100000);
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function batchSizes(): array
+    {
+        return Http::recorded(fn (Request $request): bool => $request->url() === $this->bulkBookingUrl())
+            ->map(fn (array $pair): int => count($pair[0]['data'] ?? []))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Answer Steadfast's bulk call with a line for each parcel the body
+     * carried, shaped by what the case is about. A parcel the case answers
+     * null for gets no line at all, which is a batch cut short.
+     *
+     * @param  callable(string): (array<string, mixed>|null)  $line
+     */
+    private function fakeBatch(callable $line): void
+    {
+        Http::fake([$this->bulkBookingUrl() => function (Request $request) use ($line): PromiseInterface {
+            $parcels = is_array($request['data'] ?? null) ? $request['data'] : [];
+
+            $lines = array_values(array_filter(array_map(
+                fn (array $parcel): ?array => $line((string) $parcel['invoice']),
+                $parcels,
+            )));
+
+            return Http::response(['status' => 200, 'data' => $lines]);
+        }]);
+    }
+
     private function bookingUrl(): string
     {
         return 'https://portal.packzy.com/api/v1/create_order';
+    }
+
+    private function bulkBookingUrl(): string
+    {
+        return 'https://portal.packzy.com/api/v1/create_order/bulk-order';
     }
 }

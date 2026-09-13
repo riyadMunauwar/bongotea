@@ -21,6 +21,8 @@ use App\Support\PageCache\StaticPageCache;
 use App\Support\Reporting\ReportingWindow;
 use Carbon\CarbonImmutable;
 use Filament\Forms\Components\Field;
+use Filament\Notifications\Livewire\Notifications;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -288,6 +290,53 @@ function answeringAfresh(): void
 
     Http::clearResolvedInstances();
     Http::preventStrayRequests();
+}
+
+/**
+ * What the User was last told, read the way the panel reads it — out of the
+ * session, which the read empties. Asked once in a test, never beside
+ * `assertNotified()`, which empties it too.
+ *
+ * Here rather than in whichever suite needed it first, for the reason
+ * `answeringAfresh()` is: a helper defined in one file is a fatal error for
+ * anybody running only another.
+ */
+function lastNotification(): ?Notification
+{
+    $notifications = new Notifications;
+    $notifications->mount();
+
+    return $notifications->notifications->last();
+}
+
+/**
+ * An Order as Capture leaves it, with the Courier switched on and supplied:
+ * one line, a Customer to deliver to, and nothing sent yet.
+ *
+ * Here rather than in whichever courier suite needed it first, for the reason
+ * `answeringAfresh()` is: a helper defined in one courier suite is a fatal
+ * error for anybody running only another.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function orderReadyToSend(CourierScript $script, array $attributes = []): Order
+{
+    $script->makeUsable();
+
+    $order = Order::factory()->create(array_merge([
+        'customer_name' => 'Rahim Uddin',
+        'customer_address' => 'House 4, Road 12, Banani',
+        'customer_district' => 'Dhaka',
+        'delivery_charge' => 6000,
+        'payment_method' => PaymentMethod::CashOnDelivery,
+    ], $attributes));
+
+    OrderLine::factory()
+        ->for($order)
+        ->for(Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]))
+        ->create(['product_name' => 'Winter Jacket', 'unit_price' => 99000, 'quantity' => 1]);
+
+    return $order->refresh();
 }
 
 /**

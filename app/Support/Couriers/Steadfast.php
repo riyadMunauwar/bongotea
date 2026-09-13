@@ -13,6 +13,7 @@ use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -34,6 +35,9 @@ class Steadfast implements CourierDriver
     private const HOST = 'https://portal.packzy.com/api/v1';
 
     private const BOOKING_PATH = '/create_order';
+
+    /** Where Steadfast takes a whole batch at once, as its bulk documentation describes it. */
+    private const BULK_BOOKING_PATH = '/create_order/bulk-order';
 
     /**
      * Where Steadfast is asked about a parcel, by its own Consignment id.
@@ -123,20 +127,7 @@ class Steadfast implements CourierDriver
     public function book(Shipment $shipment): ShipmentBooked
     {
         try {
-            $response = $this->client()->post(self::HOST.self::BOOKING_PATH, [
-                'invoice' => $shipment->invoice_reference,
-                'recipient_name' => Str::limit($shipment->recipient_name, 100, ''),
-                'recipient_phone' => PhoneNumber::asDialled($shipment->recipient_phone) ?? $shipment->recipient_phone,
-                'recipient_address' => Str::limit($shipment->recipient_address, 250, ''),
-
-                /** Major units, as Steadfast documents it: "including all charges", which is what the Order's total already is. */
-                'cod_amount' => Money::toMajor($shipment->collect_amount),
-                'note' => $shipment->recipient_note ?? '',
-
-                /** Read off the attempt and never off Settings: what the row says was sent is what was sent. */
-                'item_description' => $shipment->parcelDetail(self::ITEM_TYPE) ?? '',
-                'delivery_type' => $shipment->parcelDetail(self::DELIVERY_TYPE) ?? '',
-            ]);
+            $response = $this->client()->post(self::HOST.self::BOOKING_PATH, $this->parcel($shipment));
         } catch (ConnectionException $exception) {
             throw new CourierUnreachable(
                 "Steadfast could not be reached to book parcel [{$shipment->invoice_reference}].",
@@ -145,6 +136,60 @@ class Steadfast implements CourierDriver
         }
 
         return $this->read($shipment, $response);
+    }
+
+    /**
+     * Steadfast's bulk create-order call: up to five hundred parcels in one
+     * body, and one line of answer per parcel.
+     *
+     * The parcels are described exactly as a single booking describes one, so
+     * a batch cannot send a field a single booking would not — and every line
+     * of the answer is matched back by our own invoice reference, which is
+     * what Steadfast echoes and what names one attempt rather than an Order.
+     *
+     * Steadfast's bulk answer says a parcel was taken and gives the
+     * Consignment, but no delivery status word: a parcel it accepted is
+     * Booked in our own vocabulary with nothing of Steadfast's beside it, and
+     * the first poll fills that in. That is the honest reading — inventing a
+     * raw word Steadfast did not say would put it on the timeline verbatim.
+     *
+     * @param  list<Shipment>  $shipments
+     */
+    public function bookAll(array $shipments): BatchBooked
+    {
+        try {
+            $response = $this->client()->post(self::HOST.self::BULK_BOOKING_PATH, [
+                'data' => array_map(fn (Shipment $shipment): array => $this->parcel($shipment), $shipments),
+            ]);
+        } catch (ConnectionException $exception) {
+            /**
+             * The one place in this system where something may have happened
+             * that nothing can be read about: a line dropped after Steadfast
+             * created the consignments and before the answer arrived leaves
+             * real parcels moving with no Consignment against their rows.
+             * They stay written and are offered again, and Steadfast's own
+             * invoice uniqueness is what stops the Merchant paying twice — it
+             * refuses the second offer, and the row then says so in its words.
+             * Every reference in the chunk is logged so an operator can
+             * reconcile the handful this happens to (ADR-0020).
+             */
+            Log::error('A bulk booking was sent to Steadfast and no answer came back; these parcels may or may not exist.', [
+                'courier' => $this->courier()->value,
+                'invoices' => array_map(fn (Shipment $shipment): string => $shipment->invoice_reference, $shipments),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return BatchBooked::silencedAfter(
+                'Steadfast could not be reached to book '.count($shipments).' parcels: '.$exception->getMessage(),
+            );
+        }
+
+        /** A 5xx or a rejected credential settles nothing about any of them, so none of the rows moves and the run stops. */
+        if (($silence = ShipmentProgress::silenceFrom($response, $this->courier())) !== null) {
+            return BatchBooked::silencedAfter((string) $silence->error);
+        }
+
+        return $this->readBatch($shipments, $response);
     }
 
     /**
@@ -301,6 +346,106 @@ class Steadfast implements CourierDriver
     }
 
     /**
+     * One parcel as Steadfast is told about it, which is the same description
+     * whether it travels alone or in a batch of five hundred.
+     *
+     * The address goes as the Checkout captured it — Steadfast resolves its
+     * own areas and nothing here has to guess one. The phone goes as it is
+     * dialled at home, because Steadfast documents eleven digits and will not
+     * take the stored `+880` form; a number the dialling rules cannot read at
+     * all is sent as it stands, so that Steadfast words the objection rather
+     * than the parcel being held back by a rule of ours.
+     *
+     * @return array<string, mixed>
+     */
+    private function parcel(Shipment $shipment): array
+    {
+        return [
+            'invoice' => $shipment->invoice_reference,
+            'recipient_name' => Str::limit($shipment->recipient_name, 100, ''),
+            'recipient_phone' => PhoneNumber::asDialled($shipment->recipient_phone) ?? $shipment->recipient_phone,
+            'recipient_address' => Str::limit($shipment->recipient_address, 250, ''),
+
+            /** Major units, as Steadfast documents it: "including all charges", which is what the Order's total already is. */
+            'cod_amount' => Money::toMajor($shipment->collect_amount),
+            'note' => $shipment->recipient_note ?? '',
+
+            /** Read off the attempt and never off Settings: what the row says was sent is what was sent. */
+            'item_description' => $shipment->parcelDetail(self::ITEM_TYPE) ?? '',
+            'delivery_type' => $shipment->parcelDetail(self::DELIVERY_TYPE) ?? '',
+        ];
+    }
+
+    /**
+     * Steadfast's bulk answer, read line by line and matched back to the
+     * parcels that were offered.
+     *
+     * A line naming a Consignment took that parcel; a line without one is
+     * Steadfast refusing it in the words it chose, and only that parcel. A
+     * parcel no line names is left exactly as it was — written, undispatched
+     * — and offered again next sweep, because a body we could not find it in
+     * says nothing about whether it was taken.
+     *
+     * An answer holding no readable list at all refuses the whole batch, in
+     * Steadfast's own wording where it gave any: the same reading `read()`
+     * gives a single booking, where anything that does not name a Consignment
+     * is a no. Silence has already been separated out before this is reached.
+     *
+     * @param  list<Shipment>  $shipments
+     */
+    private function readBatch(array $shipments, Response $response): BatchBooked
+    {
+        $answer = is_array($response->json()) ? $response->json() : [];
+        $lines = is_array($answer['data'] ?? null) ? $answer['data'] : null;
+
+        if ($lines === null) {
+            $refused = [];
+
+            foreach ($shipments as $shipment) {
+                $refused[$shipment->invoice_reference] = $this->refusalOf($shipment, $answer, $response);
+            }
+
+            return BatchBooked::of([], $refused);
+        }
+
+        $byInvoice = [];
+
+        foreach ($lines as $line) {
+            if (is_array($line) && filled($line['invoice'] ?? null)) {
+                $byInvoice[(string) $line['invoice']] = $line;
+            }
+        }
+
+        $accepted = [];
+        $refused = [];
+
+        foreach ($shipments as $shipment) {
+            $line = $byInvoice[$shipment->invoice_reference] ?? null;
+
+            if ($line === null) {
+                continue;
+            }
+
+            if (blank($line['consignment_id'] ?? null)) {
+                $refused[$shipment->invoice_reference] = $this->refusalOf($shipment, $line, $response);
+
+                continue;
+            }
+
+            $accepted[$shipment->invoice_reference] = new ShipmentBooked(
+                consignmentReference: (string) $line['consignment_id'],
+                trackingCode: filled($line['tracking_code'] ?? null) ? (string) $line['tracking_code'] : null,
+
+                /** Steadfast names no delivery status in a bulk answer, and a word it did not say is not put on a timeline. */
+                status: ShipmentStatus::Booked,
+                response: $line,
+            );
+        }
+
+        return BatchBooked::of($accepted, $refused);
+    }
+
+    /**
      * Steadfast's answer, read as either a Consignment or a refusal.
      *
      * Only an answer naming a Consignment is taken as a booking. Anything
@@ -332,6 +477,19 @@ class Steadfast implements CourierDriver
             rawStatus: $rawStatus,
             response: $answer,
         );
+    }
+
+    /**
+     * Steadfast refusing one parcel of a batch, worded the way a single
+     * booking's refusal is worded — the one place a batch's refusals are
+     * spelled, whether the whole answer was unreadable or one line of it said
+     * no.
+     *
+     * @param  array<string, mixed>  $answer  the whole body, or the one line about this parcel.
+     */
+    private function refusalOf(Shipment $shipment, array $answer, Response $response): string
+    {
+        return "Steadfast refused parcel [{$shipment->invoice_reference}]: ".$this->reason($answer, $response);
     }
 
     /**

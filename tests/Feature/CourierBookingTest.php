@@ -9,9 +9,7 @@ use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Models\Order;
-use App\Models\OrderLine;
 use App\Models\Payment;
-use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Models\User;
@@ -29,8 +27,6 @@ use App\Support\Settings\CourierSettings;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Livewire\Notifications;
-use Filament\Notifications\Notification;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -51,32 +47,6 @@ use Tests\Fixtures\Couriers\RedExScript;
 beforeEach(function () {
     $this->actingAs(User::factory()->create());
 });
-
-/**
- * An Order as Capture leaves it, with the Courier switched on and supplied:
- * one line, a Customer to deliver to, and nothing sent yet.
- *
- * @param  array<string, mixed>  $attributes
- */
-function orderReadyToSend(CourierScript $script, array $attributes = []): Order
-{
-    $script->makeUsable();
-
-    $order = Order::factory()->create(array_merge([
-        'customer_name' => 'Rahim Uddin',
-        'customer_address' => 'House 4, Road 12, Banani',
-        'customer_district' => 'Dhaka',
-        'delivery_charge' => 6000,
-        'payment_method' => PaymentMethod::CashOnDelivery,
-    ], $attributes));
-
-    OrderLine::factory()
-        ->for($order)
-        ->for(Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]))
-        ->create(['product_name' => 'Winter Jacket', 'unit_price' => 99000, 'quantity' => 1]);
-
-    return $order->refresh();
-}
 
 /**
  * Press "Send with courier" on one of the Order's screens, choosing this
@@ -176,19 +146,6 @@ function makeEveryCourierUsable(): void
     foreach (courierScripts() as $script) {
         $script->fakeAreas();
     }
-}
-
-/**
- * What the User was last told, read the way the panel reads it — out of the
- * session, which the read empties. Asked once in a test, never beside
- * `assertNotified()`, which empties it too.
- */
-function lastNotification(): ?Notification
-{
-    $notifications = new Notifications;
-    $notifications->mount();
-
-    return $notifications->notifications->last();
 }
 
 /*

@@ -47,6 +47,8 @@ use Illuminate\Database\UniqueConstraintViolationException;
     'recipient_note',
     'parcel_details',
     'booked_at',
+    'refused_at',
+    'refusal_reason',
     'polled_at',
     'stuck_at',
     'abandoned_at',
@@ -66,6 +68,7 @@ class Shipment extends Model
             'collect_amount' => 'integer',
             'courier_charge' => 'integer',
             'booked_at' => 'datetime',
+            'refused_at' => 'datetime',
             'polled_at' => 'datetime',
             'stuck_at' => 'datetime',
             'abandoned_at' => 'datetime',
@@ -143,18 +146,24 @@ class Shipment extends Model
 
     /**
      * Whether this attempt is still worth waiting on: the Courier has not
-     * finished with it and nobody has written it off.
+     * finished with it, it was not refused when it was offered, and nobody
+     * has written it off.
      *
      * An Order has at most one, which is what stops a parcel being booked
-     * twice, and an Order with none is an Order that may be sent. The arm
-     * this cannot express yet is a Shipment a Courier refused at booking:
-     * every booking is made inside the request and records nothing when it is
-     * refused (ADR-0020), so no such row can exist until a bulk booking
-     * writes one before dispatching it.
+     * twice, and an Order with none is an Order that may be sent. A row a
+     * bulk booking wrote and has not dispatched yet counts — it is the one
+     * parcel out for that Order from the moment the batch was accepted, which
+     * is what stops the same Order being put in two batches.
+     *
+     * The refusal arm exists only because of those rows: a booking made while
+     * a User waits records nothing when it is refused (ADR-0020), so the only
+     * refusals that leave a row behind are the ones the sweep collects.
      */
     public function isActive(): bool
     {
-        return ! $this->status->isTerminal() && $this->abandoned_at === null;
+        return ! $this->status->isTerminal()
+            && $this->refused_at === null
+            && $this->abandoned_at === null;
     }
 
     /**
@@ -167,7 +176,27 @@ class Shipment extends Model
     protected function active(Builder $query): void
     {
         $query->whereNotIn('status', ShipmentStatus::terminalValues())
+            ->whereNull('refused_at')
             ->whereNull('abandoned_at');
+    }
+
+    /**
+     * The attempts a bulk booking wrote down and nobody has handed to a
+     * Courier yet — what `couriers:sweep` dispatches.
+     *
+     * Written and unconsigned, both: the status is what an operator reads and
+     * the missing Consignment is what says the Courier has never seen this
+     * parcel, and a row that has one is one to ask about rather than one to
+     * send (ADR-0020).
+     *
+     * @param  Builder<Shipment>  $query
+     */
+    #[Scope]
+    protected function awaitingDispatch(Builder $query): void
+    {
+        $query->active()
+            ->where('status', ShipmentStatus::Written)
+            ->whereNull('consignment_reference');
     }
 
     /**

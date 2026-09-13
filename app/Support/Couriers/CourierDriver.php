@@ -51,6 +51,33 @@ interface CourierDriver
     public function book(Shipment $shipment): ShipmentBooked;
 
     /**
+     * Hand this Courier a batch of parcels at once and answer with what it
+     * said about each of them.
+     *
+     * The batch half of `book()`, called by the sweep from rows a bulk
+     * booking already wrote down, with nobody waiting on it (ADR-0020). Never
+     * larger than `batchLimit()`, which is why the same loop serves every
+     * Courier: one with a bulk endpoint is handed hundreds and makes one
+     * call, one without is handed a single parcel and makes one call, and the
+     * caller does not ask which it is.
+     *
+     * Answers rather than throws, unlike `book()` and exactly like `track()`.
+     * A batch has an outcome per parcel and can be cut off halfway, and a
+     * Courier that took forty parcels before the line dropped must say both
+     * things — the forty are real and must be written down, and the silence
+     * must stop the run. A parcel the answer names neither way is left as it
+     * was and offered again next sweep.
+     *
+     * The Shipments carry what to send and are already saved, unlike the
+     * unsaved attempt `book()` takes: the rows were written before anything
+     * was dispatched, which is the whole of what makes a batch interrupted
+     * halfway recoverable.
+     *
+     * @param  list<Shipment>  $shipments  no more than `batchLimit()` of them.
+     */
+    public function bookAll(array $shipments): BatchBooked;
+
+    /**
      * Ask this Courier where a parcel it took stands, and answer with what it
      * said.
      *

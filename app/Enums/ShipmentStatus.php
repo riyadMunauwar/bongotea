@@ -29,6 +29,20 @@ use Filament\Support\Contracts\HasLabel;
  */
 enum ShipmentStatus: string implements HasColor, HasLabel
 {
+    /**
+     * Written down and not handed to anybody yet: where a bulk booking
+     * leaves a parcel between the row being written and the sweep
+     * dispatching it (ADR-0020).
+     *
+     * The one state here that no Courier ever reports and that no driver's
+     * status table may translate a word into. It exists because a batch
+     * writes every row before anything is sent — which is what makes a batch
+     * interrupted halfway leave a record of each parcel it booked and a retry
+     * create no duplicates — and a row waiting to go is emphatically not a
+     * row a Courier has accepted.
+     */
+    case Written = 'written';
+
     case Booked = 'booked';
     case InTransit = 'in_transit';
     case OnHold = 'on_hold';
@@ -40,6 +54,7 @@ enum ShipmentStatus: string implements HasColor, HasLabel
     public function getLabel(): string
     {
         return match ($this) {
+            self::Written => 'Awaiting dispatch',
             self::Booked => 'Booked',
             self::InTransit => 'In transit',
             self::OnHold => 'On hold',
@@ -53,8 +68,8 @@ enum ShipmentStatus: string implements HasColor, HasLabel
     /**
      * Delivered is the outcome the Merchant is paid for; Returned is the one
      * that costs them and demands a decision. On Hold and Unknown are both
-     * "somebody has to look at this", and the two states where a parcel is
-     * simply moving share the quiet colour.
+     * "somebody has to look at this", and the states where a parcel is simply
+     * on its way — waiting to go among them — share the quiet colour.
      */
     public function getColor(): string
     {
@@ -63,7 +78,7 @@ enum ShipmentStatus: string implements HasColor, HasLabel
             self::PartlyDelivered => 'info',
             self::Returned => 'danger',
             self::OnHold, self::Unknown => 'warning',
-            self::Booked, self::InTransit => 'gray',
+            self::Written, self::Booked, self::InTransit => 'gray',
         };
     }
 
@@ -80,7 +95,7 @@ enum ShipmentStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Delivered, self::PartlyDelivered, self::Returned => true,
-            self::Booked, self::InTransit, self::OnHold, self::Unknown => false,
+            self::Written, self::Booked, self::InTransit, self::OnHold, self::Unknown => false,
         };
     }
 
@@ -108,7 +123,7 @@ enum ShipmentStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Delivered, self::PartlyDelivered => true,
-            self::Booked, self::InTransit, self::OnHold, self::Returned, self::Unknown => false,
+            self::Written, self::Booked, self::InTransit, self::OnHold, self::Returned, self::Unknown => false,
         };
     }
 

@@ -58,3 +58,28 @@ function courierScriptsAnnouncing(bool $announcing): array
 dataset('announcing couriers', courierScriptsAnnouncing(true));
 
 dataset('silent couriers', courierScriptsAnnouncing(false));
+
+/**
+ * The couriers that will not read an address in free text and insist on
+ * naming the delivery area out of a list of their own, and the ones that
+ * resolve the destination themselves.
+ *
+ * Split by what the script declares, exactly as the announcing pair is: a
+ * batch booked with nobody in front of it has to guess an area for the first
+ * kind and has nothing to guess for the second, and neither test may name the
+ * one Courier that happens to be in either list.
+ *
+ * @param  bool  $resolving  whether to take the couriers that name their own areas, or the ones that do not.
+ * @return array<string, array{CourierScript}>
+ */
+function courierScriptsResolvingAreas(bool $resolving): array
+{
+    return array_map(
+        fn (CourierScript $script): array => [$script],
+        array_filter(courierScripts(), fn (CourierScript $script): bool => $script->needsAreaResolution() === $resolving),
+    );
+}
+
+dataset('area-naming couriers', courierScriptsResolvingAreas(true));
+
+dataset('free-text couriers', courierScriptsResolvingAreas(false));

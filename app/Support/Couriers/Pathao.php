@@ -16,8 +16,8 @@ use Illuminate\Support\Str;
 
 /**
  * Pathao: an OAuth password grant issuing an access token that expires, a
- * store a parcel leaves from, many parcels to a booking, and both a status
- * and a message announced back.
+ * store a parcel leaves from, one parcel to a booking, and both a status and
+ * a message announced back.
  *
  * The credentials here are the four the token grant takes. The access token
  * itself is not among them and never becomes a Setting: it is derived state
@@ -90,14 +90,17 @@ class Pathao implements CourierDriver
     ];
 
     /**
-     * Parcels one booking call may carry.
+     * Parcels one booking call may carry: one.
      *
-     * Pathao documents a bulk endpoint and no ceiling for it, so this is a
-     * deliberate conservative cut rather than a limit anybody published: a
-     * refused oversized batch would cost a whole sweep's parcels, and the
-     * sweep is the retry either way.
+     * Pathao documents a bulk endpoint and this driver does not use it. That
+     * call answers that the batch was accepted and no more — no Consignment
+     * against any parcel in it — and a Shipment with no Consignment is a
+     * parcel that can never be asked about again, because the tracking call
+     * takes the Consignment and nothing else. So Pathao is offered one parcel
+     * per call like RedEx, and `supportsBulk()` says so rather than the
+     * declaration claiming a capability the booking does not use.
      */
-    private const BATCH_LIMIT = 100;
+    private const BATCH_LIMIT = 1;
 
     /**
      * How long a Shipment is left alone before Pathao is asked about it
@@ -196,6 +199,27 @@ class Pathao implements CourierDriver
         }
 
         return $this->read($shipment, PathaoAnswer::of($response));
+    }
+
+    /**
+     * A batch offered to Pathao one parcel at a time, which is what its
+     * `batchLimit()` of 1 says and why the sweep hands it a single parcel per
+     * call.
+     *
+     * Pathao does publish a bulk endpoint and it is deliberately not used:
+     * it answers that the batch was accepted and nothing else, with no
+     * Consignment against any parcel in it. A Shipment with no Consignment is
+     * a parcel nothing can ever be asked about — the tracking call takes the
+     * Consignment and nothing else — so a batch booked that way would be a
+     * batch of real parcels this system had permanently lost sight of.
+     * Sending them one at a time costs a call each and keeps every one of
+     * them answerable.
+     *
+     * @param  list<Shipment>  $shipments
+     */
+    public function bookAll(array $shipments): BatchBooked
+    {
+        return ParcelsOneAtATime::handedTo($this, $shipments);
     }
 
     /**
@@ -365,9 +389,15 @@ class Pathao implements CourierDriver
         return ['pathaoClientId', 'pathaoClientSecret', 'pathaoUsername', 'pathaoPassword'];
     }
 
+    /**
+     * False, and not because Pathao lacks an endpoint: it has one, and it
+     * hands back no Consignment per parcel, which would leave a batch of real
+     * parcels nothing could ever ask about. What this declares is how many
+     * parcels one booking call carries here, and that is one.
+     */
     public function supportsBulk(): bool
     {
-        return true;
+        return false;
     }
 
     public function supportsWebhook(): bool

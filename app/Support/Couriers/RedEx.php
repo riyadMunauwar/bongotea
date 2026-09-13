@@ -186,6 +186,19 @@ class RedEx implements CourierDriver
     }
 
     /**
+     * RedEx has no bulk endpoint at all, so a batch is offered to it one
+     * parcel at a time — which is exactly what a `batchLimit()` of 1 means,
+     * and why the sweep hands it a single parcel per call without ever asking
+     * whether it has an endpoint.
+     *
+     * @param  list<Shipment>  $shipments
+     */
+    public function bookAll(array $shipments): BatchBooked
+    {
+        return ParcelsOneAtATime::handedTo($this, $shipments);
+    }
+
+    /**
      * RedEx's tracking call: one id, and the parcel's whole history back —
      * every state it has passed through, in RedEx's own words and at RedEx's
      * own times, oldest first.

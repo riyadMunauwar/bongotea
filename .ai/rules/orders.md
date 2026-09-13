@@ -24,3 +24,12 @@ Testing: `Livewire::test(ListOrders::class)` now starts on the New tab, so any t
 "Not yet sent to a courier" (`not_yet_sent` → `Order::notYetSent()`) is a toggle listed in `CROSS_STATUS_FILTERS`, which is all it takes to compose with the tabs and narrow their empty-state labels. Do not make it a fourth tab: the tabs own the `OrderStatus` axis alone.
 
 `notYetSent()` is **not** "no Active Shipment" — every delivered Order satisfies that, and a week-old installation would answer the filter with its whole archive. It is "no Shipment that is Active **or** arrived": `whereDoesntHave('shipments', active OR arrived)`. `ShipmentStatus::isTerminal()` says only that the Courier has stopped and splits two ways here — `isArrival()` (Delivered, PartlyDelivered) finishes an Order, where Returned and Abandoned put it back on the list to send again. Read terminal-ness through those two and never off the status list at a call site.
+
+## Bulk booking is the selection and nothing else — no second status or date control
+`BookBatchWithCourierAction` is a `BulkAction` in `OrdersTable::toolbarActions()`, above the delete/restore group. It has one field, the Courier chooser, and deliberately **no status or date pickers of its own**: the tabs and the captured-between filter already express that axis in the Merchant's timezone, and a second control for the same axis could dispatch a set of real parcels that is not the set the User was looking at. The ticked rows are the set.
+
+`modalDescription()` says how many parcels will be booked and how many are skipped for already holding an Active Shipment, before the User commits. The result notification names — never merely counts — the Orders needing a delivery area and the Orders that turned out to be deleted, because a bare number is a search a User cannot make.
+
+A trashed Order can be ticked (`OrderResource::getEloquentQuery()` drops the soft-delete scope), and `CourierBooker::write()` reads the Order back through the scope still on the model, so `BatchBooker` catches `ModelNotFoundException` and reports it rather than letting one deleted row unwind two hundred.
+
+Testing: `Livewire::test(ListOrders::class)->set('activeTab', 'all')->selectTableRecords($ids)->callAction(TestAction::make('bookBatchWithCourier')->table()->bulk(), data: [...])`. `Http::fake()` clears what has been recorded so far, so lay a second fake deliberately when a count is meant to be "since then".

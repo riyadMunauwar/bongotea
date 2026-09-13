@@ -34,6 +34,12 @@ whole design exists to avoid.
   was looking at.
 - Batch size is the driver's own property: Steadfast takes five hundred per call, Pathao takes an
   array, RedEx takes one and is therefore looped. The sweep asks the driver rather than knowing.
+  **Amended when bulk booking was built (#135):** Pathao's bulk endpoint answers only that the
+  batch was accepted, with no Consignment against any parcel in it — and a Shipment with no
+  Consignment is a parcel nothing can ever be asked about, because Pathao's tracking call takes the
+  Consignment and nothing else. So Pathao declares a batch limit of one and is looped like RedEx,
+  and Steadfast is the only one of the three sent a batch in a single call. The decision itself is
+  unchanged: the sweep asks the driver rather than knowing.
 - `couriers:sweep` does two jobs — dispatching Shipments a bulk booking wrote, and polling Active
   Shipments for status — and runs every five minutes beside the payment and tracking sweeps, with
   overlap protection. Every interval and give-up horizon is a constant on the sweep class, never a

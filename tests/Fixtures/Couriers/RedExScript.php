@@ -11,6 +11,7 @@ use App\Support\Money;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
 use Carbon\CarbonImmutable;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -416,6 +417,7 @@ final class RedExScript extends CourierScript
     public function rawStatusesFor(ShipmentStatus $status): array
     {
         return match ($status) {
+            ShipmentStatus::Written => [],
             ShipmentStatus::Booked => ['pickup-pending', 'pickup-assigned'],
             ShipmentStatus::InTransit => ['picked-up', 'received-warehouse', 'in-transit', 'ready-for-delivery', 'agent-assigned', 'delivery-in-progress'],
             ShipmentStatus::OnHold => ['hold', 'pickup-failed', 'delivery-failed'],
@@ -543,6 +545,112 @@ final class RedExScript extends CourierScript
     private function trackingUrl(): string
     {
         return self::HOST.'/parcel/track/*';
+    }
+
+    /**
+     * RedEx is offered one parcel per call — it has no bulk endpoint at all —
+     * so a batch is answered one call at a time, each answer built from the
+     * reference that call carried.
+     */
+    public function fakeBatchBooked(): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => [[
+            'tracking_id' => $this->consignmentFor($invoice),
+            'status' => 'pickup-pending',
+            'message' => 'Parcel created successfully',
+        ], 200]);
+    }
+
+    public function fakeBatchRefused(): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => $this->refusedInBatch());
+    }
+
+    /**
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchPartlyBooked(array $accepting): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => in_array($invoice, $accepting, true)
+            ? [[
+                'tracking_id' => $this->consignmentFor($invoice),
+                'status' => 'pickup-pending',
+                'message' => 'Parcel created successfully',
+            ], 200]
+            : $this->refusedInBatch());
+    }
+
+    /**
+     * RedEx takes the parcels it is named and then the line drops — the shape
+     * a batch cut short takes for a Courier sent one parcel a call.
+     *
+     * The stub is keyed to the booking address, so the area list beside it
+     * still answers: what is being scripted is RedEx going quiet about
+     * parcels, not an installation that has no idea where it delivers.
+     *
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchCutShortAfter(array $accepting): void
+    {
+        $this->fake([$this->bookingUrl() => function (Request $request) use ($accepting): PromiseInterface {
+            $invoice = (string) ($request['merchant_invoice_id'] ?? '');
+
+            if (! in_array($invoice, $accepting, true)) {
+                throw new ConnectionException(
+                    "cURL error 28: Connection timed out after 5000 milliseconds for {$request->url()}"
+                );
+            }
+
+            return Http::response([
+                'tracking_id' => $this->consignmentFor($invoice),
+                'status' => 'pickup-pending',
+                'message' => 'Parcel created successfully',
+            ]);
+        }]);
+    }
+
+    /** RedEx spells a parcel's id as a code of its own, so one derived for a batch is one too. */
+    public function consignmentFor(string $invoiceReference): string
+    {
+        return self::TRACKING_ID.strtoupper(substr(md5($invoiceReference), 0, 4));
+    }
+
+    /**
+     * One parcel to a call, which for RedEx is not a choice: it publishes no
+     * bulk endpoint.
+     *
+     * @return list<int>
+     */
+    public function batchSizes(): array
+    {
+        return array_fill(
+            0,
+            Http::recorded(fn (Request $request): bool => $request->url() === $this->bookingUrl())->count(),
+            1,
+        );
+    }
+
+    /**
+     * Answer each booking call with what this case says about the parcel that
+     * call named.
+     *
+     * @param  callable(string): array{array<string, mixed>, int}  $answer
+     */
+    private function fakeEachParcel(callable $answer): void
+    {
+        $this->fake([$this->bookingUrl() => function (Request $request) use ($answer): PromiseInterface {
+            [$body, $status] = $answer((string) ($request['merchant_invoice_id'] ?? ''));
+
+            return Http::response($body, $status);
+        }]);
+    }
+
+    /**
+     * @return array{array<string, mixed>, int}
+     */
+    private function refusedInBatch(): array
+    {
+        return [['message' => self::REFUSAL, 'statusCode' => 400], 400];
     }
 
     private function bookingUrl(): string

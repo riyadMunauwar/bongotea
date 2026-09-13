@@ -187,7 +187,7 @@ A delivery company a parcel is handed to, known to the system by name — Steadf
 _Avoid_: carrier, delivery partner, logistics provider, shipping method, vendor
 
 **Shipment**:
-One attempt to get one Order to a door through one Courier. An Order holds as many as it took — a parcel that came back and was sent again is two, each with its own Consignment, its own charge and its own account of what happened, because the first attempt cost money whatever the second one does. A Shipment records the recipient details it was actually sent with, which need not be what the Order says today.
+One attempt to get one Order to a door through one Courier. An Order holds as many as it took — a parcel that came back and was sent again is two, each with its own Consignment, its own charge and its own account of what happened, because the first attempt cost money whatever the second one does. A Shipment records the recipient details it was actually sent with, which need not be what the Order says today. It exists from the moment the attempt is committed rather than from the moment a Courier accepts it: a batch writes every row before anything is dispatched, so a Shipment may be Awaiting Dispatch, and a parcel a Courier then refuses leaves the row behind saying so.
 _Avoid_: delivery, parcel, booking, dispatch, consignment
 
 **Consignment**:
@@ -213,6 +213,14 @@ _Avoid_: callback, push, tracking update, status update
 **Active**:
 Said of a Shipment still worth waiting on: not Delivered, not partly delivered, not Returned, not refused at booking, and not Abandoned. An Order has at most one, which is what stops a parcel being booked twice and what the Orders list draws. An Order with none is an Order that may be sent.
 _Avoid_: open, live, in progress, pending, current
+
+**Awaiting Dispatch**:
+Said of a Shipment written down and not yet handed to anybody. Only a batch leaves one: a single parcel is booked while a User waits on the Consignment, where a batch of two hundred is written first and worked through by the sweep, because nobody is watching it and no Courier can be asked two hundred questions inside one request. The row is the whole point — a batch interrupted halfway has a record of every parcel it booked, and a parcel is offered exactly once because it is offered from its own row. It is Active from the moment it is written, so the Order it belongs to cannot go into a second batch.
+_Avoid_: queued, pending, scheduled, draft, unsent
+
+**Refused at Booking**:
+Said of a Shipment a Courier would not take when it was offered. A time and the Courier's own words, never a status, exactly as Abandoned is — the row goes on saying truthfully that it was written and never dispatched, and the refusal is what takes it out of Active so the Order is one to send again. Only a batch produces one: a booking made while a User waits words the refusal back at them and records nothing at all.
+_Avoid_: rejected, failed, cancelled, error, bounced
 
 **Returned**:
 Said of a Shipment whose parcel came back undelivered. It is the Courier's outcome and not the Merchant's decision, and it is emphatically not Cancelled: a returned parcel is a question — ring the Customer, correct the address, send it again, or give up — and the answer is a User's. Two of the three couriers say "cancelled" in their own words for exactly this, which is precisely why the system does not.

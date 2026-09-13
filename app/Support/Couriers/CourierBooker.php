@@ -3,6 +3,7 @@
 namespace App\Support\Couriers;
 
 use App\Enums\Courier;
+use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Support\Settings\CourierSettings;
@@ -78,17 +79,7 @@ class CourierBooker
         $this->correct($order, $details);
 
         return DB::transaction(function () use ($order, $courier, $details): Shipment {
-            /** Read fresh under the lock: the screen the User pressed the button on may be minutes old. */
-            $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
-
-            if ($locked->isShipping()) {
-                throw new OrderAlreadyShipping($locked);
-            }
-
-            /** Asked here and not only by the screen: a Merchant may have switched a Courier off since the button was drawn. */
-            if (($refusal = $courier->refusal()) !== null) {
-                throw new CourierNotUsable($refusal);
-            }
+            $locked = $this->readyToSend($order, $courier);
 
             $shipment = $this->attempt($locked, $courier, $details);
 
@@ -119,6 +110,70 @@ class CourierBooker
 
             return $shipment->refresh();
         });
+    }
+
+    /**
+     * Write an attempt down to be dispatched later, without asking the
+     * Courier anything at all.
+     *
+     * How a batch is booked (ADR-0020): nobody is watching two hundred
+     * parcels and no web request could survive making two hundred calls, so
+     * every row is written first and `couriers:sweep` hands them over. The row
+     * is the record that makes a batch interrupted halfway recoverable — the
+     * parcels it already dispatched are on it, and the ones it did not are
+     * still waiting rather than lost.
+     *
+     * Everything the booking would have refused, this refuses now, under the
+     * same lock and in the same words: an Order already shipping, a Courier
+     * this installation cannot speak to, and a parcel whose delivery area the
+     * Courier insists on and nobody could name. Nothing is written for any of
+     * them, so a batch skips that Order and says why rather than committing a
+     * parcel it knows will not go.
+     *
+     * @throws OrderAlreadyShipping when a parcel is already out for this Order.
+     * @throws CourierNotUsable when this installation cannot speak to the Courier at all.
+     * @throws DeliveryAreaNotResolved when the Courier names its own areas and none was resolved.
+     */
+    public function write(Order $order, Courier $courier, ?ParcelDetails $details = null): Shipment
+    {
+        $details ??= ParcelDetails::none();
+
+        return DB::transaction(function () use ($order, $courier, $details): Shipment {
+            $shipment = $this->attempt($this->readyToSend($order, $courier), $courier, $details);
+
+            /** The Courier has not seen it, so it holds no Consignment, no word of its own and no `booked_at`. */
+            $shipment->status = ShipmentStatus::Written;
+            $shipment->save();
+
+            return $shipment;
+        });
+    }
+
+    /**
+     * This Order, read fresh under its own lock, with both of the things that
+     * stop a parcel going asked again.
+     *
+     * Asked here and not only by the screen: the screen a User pressed the
+     * button on may be minutes old, a Merchant may have switched a Courier off
+     * since it was drawn, and a batch may have written a row for this Order
+     * between the list being counted and this Order being reached.
+     *
+     * @throws OrderAlreadyShipping
+     * @throws CourierNotUsable
+     */
+    private function readyToSend(Order $order, Courier $courier): Order
+    {
+        $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
+
+        if ($locked->isShipping()) {
+            throw new OrderAlreadyShipping($locked);
+        }
+
+        if (($refusal = $courier->refusal()) !== null) {
+            throw new CourierNotUsable($refusal);
+        }
+
+        return $locked;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Filament\Resources\Orders\Actions\BookBatchWithCourierAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Models\Order;
 use App\Support\Money;
@@ -259,6 +260,15 @@ class OrdersTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                /**
+                 * A morning's Orders out in one action, off the same list and
+                 * the same selection the User is looking at. Its own button
+                 * rather than a line in the group below: it is the reason a
+                 * User ticks rows on this screen at all, where deleting and
+                 * restoring are the housekeeping every resource has.
+                 */
+                BookBatchWithCourierAction::make(),
+
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

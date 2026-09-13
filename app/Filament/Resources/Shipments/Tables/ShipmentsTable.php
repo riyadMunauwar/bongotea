@@ -63,8 +63,16 @@ class ShipmentsTable
                      * The Courier's own word under our own, on every row: a
                      * list narrowed to On Hold still has to say which of four
                      * different things a given Courier means by it.
+                     *
+                     * A parcel the Courier refused when the sweep offered it
+                     * says so here instead. It is still Awaiting dispatch and
+                     * always will be — the refusal is a time and a reason,
+                     * shaped like Abandoned — so a row saying only that would
+                     * read as one still waiting to go.
                      */
-                    ->description(fn (Shipment $record): ?string => $record->raw_status),
+                    ->description(fn (Shipment $record): ?string => $record->refused_at === null
+                        ? $record->raw_status
+                        : 'Refused: '.$record->refusal_reason),
 
                 /** What a courier's support team will quote back down the phone, and what a webhook arrives carrying. */
                 TextColumn::make('consignment_reference')

@@ -52,7 +52,34 @@ final class ParcelDetails
     /** Nothing was confirmed, because nobody was asked. The Order goes as it stands. */
     public static function none(): self
     {
-        return new self(null, null, null, null, [], wasAsked: false);
+        return self::unasked();
+    }
+
+    /**
+     * Nobody was asked, and the system worked out for itself the one thing a
+     * Courier will not take a parcel without.
+     *
+     * A batch is booked with nobody in front of it, so a Courier that insists
+     * on naming the delivery area itself is answered from the address rather
+     * than from a User (`DeliveryAreaMatcher`) — and a guess it cannot make is
+     * a parcel that waits, never one sent to whichever depot an empty answer
+     * resolves to. Everything else about the parcel is still the Merchant's
+     * standing default, and the note is still the Customer's own, exactly as
+     * for a booking nobody was asked about at all.
+     *
+     * @param  array<string, mixed>  $courierFields
+     */
+    public static function guessed(array $courierFields): self
+    {
+        return self::unasked($courierFields);
+    }
+
+    /**
+     * @param  array<string, mixed>  $courierFields
+     */
+    private static function unasked(array $courierFields = []): self
+    {
+        return new self(null, null, null, null, $courierFields, wasAsked: false);
     }
 
     /**

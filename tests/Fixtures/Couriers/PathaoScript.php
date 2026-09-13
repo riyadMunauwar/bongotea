@@ -9,6 +9,8 @@ use App\Support\Couriers\ParcelField;
 use App\Support\Money;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -400,6 +402,7 @@ final class PathaoScript extends CourierScript
     public function rawStatusesFor(ShipmentStatus $status): array
     {
         return match ($status) {
+            ShipmentStatus::Written => [],
             ShipmentStatus::Booked => ['Pending', 'Pickup_Requested', 'Assigned_for_Pickup'],
             ShipmentStatus::InTransit => ['Picked', 'At_the_Sorting_HUB', 'In_Transit', 'Received_at_Last_Mile_HUB', 'Assigned_for_Delivery'],
             ShipmentStatus::OnHold => ['On_Hold', 'Pickup_Failed', 'Pickup_Cancelled', 'Delivery_Failed'],
@@ -410,9 +413,15 @@ final class PathaoScript extends CourierScript
         };
     }
 
+    /**
+     * False, and not because Pathao publishes no bulk endpoint: it does, and
+     * that call answers only that the batch was accepted, with no Consignment
+     * against any parcel in it — which would be a batch of real parcels
+     * nothing could ever ask about. So Pathao is offered one parcel per call.
+     */
     public function supportsBulk(): bool
     {
-        return true;
+        return false;
     }
 
     public function supportsWebhook(): bool
@@ -432,7 +441,7 @@ final class PathaoScript extends CourierScript
 
     public function batchLimit(): int
     {
-        return 100;
+        return 1;
     }
 
     /*
@@ -553,6 +562,124 @@ final class PathaoScript extends CourierScript
             'expires_in' => $expiresIn,
             'token_type' => 'Bearer',
         ];
+    }
+
+    /**
+     * Pathao is offered one parcel per call, so a batch is answered one call
+     * at a time — each answer built from the reference that call carried, so
+     * every parcel gets its own Consignment.
+     */
+    public function fakeBatchBooked(): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => $this->bookedInBatch($invoice));
+    }
+
+    public function fakeBatchRefused(): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => $this->refusedInBatch());
+    }
+
+    /**
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchPartlyBooked(array $accepting): void
+    {
+        $this->fakeEachParcel(fn (string $invoice): array => in_array($invoice, $accepting, true)
+            ? $this->bookedInBatch($invoice)
+            : $this->refusedInBatch());
+    }
+
+    /**
+     * Pathao takes the parcels it is named and then the line drops — the
+     * shape a batch cut short takes for a Courier sent one parcel a call.
+     *
+     * The stub is keyed to the booking address, so the token grant beside it
+     * still answers: what is being scripted is Pathao going quiet about
+     * parcels, not an installation that cannot sign a request.
+     *
+     * @param  list<string>  $accepting
+     */
+    public function fakeBatchCutShortAfter(array $accepting): void
+    {
+        $this->fake([$this->bookingUrl() => function (Request $request) use ($accepting): PromiseInterface {
+            $invoice = (string) ($request['merchant_order_id'] ?? '');
+
+            if (! in_array($invoice, $accepting, true)) {
+                throw new ConnectionException(
+                    "cURL error 28: Connection timed out after 5000 milliseconds for {$request->url()}"
+                );
+            }
+
+            [$body, $status] = $this->bookedInBatch($invoice);
+
+            return Http::response($body, $status);
+        }]);
+    }
+
+    /** Pathao spells a Consignment as a code of its own, so one derived for a batch is one too. */
+    public function consignmentFor(string $invoiceReference): string
+    {
+        return self::CONSIGNMENT_ID.strtoupper(substr(md5($invoiceReference), 0, 4));
+    }
+
+    /**
+     * One parcel to a call, so every call carried exactly one.
+     *
+     * @return list<int>
+     */
+    public function batchSizes(): array
+    {
+        return array_fill(
+            0,
+            Http::recorded(fn (Request $request): bool => $request->url() === $this->bookingUrl())->count(),
+            1,
+        );
+    }
+
+    /**
+     * Answer each booking call with what this case says about the parcel that
+     * call named.
+     *
+     * @param  callable(string): array{array<string, mixed>, int}  $answer
+     */
+    private function fakeEachParcel(callable $answer): void
+    {
+        $this->fake([$this->bookingUrl() => function (Request $request) use ($answer): PromiseInterface {
+            [$body, $status] = $answer((string) ($request['merchant_order_id'] ?? ''));
+
+            return Http::response($body, $status);
+        }]);
+    }
+
+    /**
+     * @return array{array<string, mixed>, int}
+     */
+    private function bookedInBatch(string $invoiceReference): array
+    {
+        return [[
+            'message' => 'Order Created Successfully',
+            'type' => 'success',
+            'code' => 200,
+            'data' => [
+                'consignment_id' => $this->consignmentFor($invoiceReference),
+                'merchant_order_id' => $invoiceReference,
+                'order_status' => 'Pending',
+                'delivery_fee' => self::DELIVERY_FEE,
+            ],
+        ], 200];
+    }
+
+    /**
+     * @return array{array<string, mixed>, int}
+     */
+    private function refusedInBatch(): array
+    {
+        return [[
+            'message' => self::REFUSAL,
+            'type' => 'error',
+            'code' => 422,
+            'errors' => ['recipient_phone' => [self::REFUSAL]],
+        ], 422];
     }
 
     private function bookingUrl(): string
