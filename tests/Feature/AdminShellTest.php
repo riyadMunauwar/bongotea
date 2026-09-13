@@ -56,8 +56,8 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * and jumps above the Dashboard — is caught here rather than by a Merchant.
  *
  * The User is granted `manage settings` because `SettingsCluster::canAccess()`
- * otherwise hides the fifth entry, so this pins Settings as last for someone
- * who can see it as well as pinning the four above it.
+ * otherwise hides the last entry, so this pins Settings as last for someone
+ * who can see it as well as pinning the five above it.
  */
 it('draws the sidebar in the order the panel states', function () {
     $this->actingAs(User::factory()->managingSettings()->create());
@@ -67,7 +67,7 @@ it('draws the sidebar in the order the panel states', function () {
         ->map(fn ($item) => $item->getLabel())
         ->all();
 
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Products', 'Pages', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Settings']);
 });
 
 /**

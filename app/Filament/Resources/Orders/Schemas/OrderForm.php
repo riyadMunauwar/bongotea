@@ -168,6 +168,8 @@ class OrderForm
 
                 ...OrderDocument::payments(),
 
+                ...OrderDocument::shipments(),
+
                 Section::make('Items')
                     ->columnSpanFull()
                     ->schema([

@@ -54,7 +54,8 @@ class Dashboard extends BaseDashboard
 
     /**
      * First, and every top-level entry says where it sits the same way: the
-     * sidebar reads Dashboard, Orders, Products, Pages, then Settings at 100.
+     * sidebar reads Dashboard, Orders, Shipments, Products, Pages, then
+     * Settings at 100.
      * Filament reads an undeclared sort as `-1`, so a resource that leaves
      * this off does not land at the end — it lands above this line.
      */

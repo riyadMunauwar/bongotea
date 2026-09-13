@@ -28,8 +28,8 @@ class PageResource extends Resource
      */
     protected static string|BackedEnum|null $navigationIcon = 'giopages-funnel';
 
-    /** Fourth, above Settings. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 3;
+    /** Fifth, above Settings. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {

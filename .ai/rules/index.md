@@ -18,6 +18,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/Resources/Pages/Schemas/OrderComplete/** | .ai/rules/schemas-order-complete.md |
 | app/Filament/Resources/Pages/Schemas/Tracking/** | .ai/rules/schemas-tracking.md |
 | app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/**, app/Providers/Filament/AdminPanelProvider.php, app/Support/Reporting/** | .ai/rules/settings.md |
+| app/Filament/Resources/Shipments/** | .ai/rules/shipments.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Support/OrderComplete/** | .ai/rules/support-order-complete.md |
 | tests/** | .ai/rules/tests.md |

@@ -3,8 +3,11 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Shipments\Schemas\ShipmentTimeline;
+use App\Filament\Resources\Shipments\ShipmentResource;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Shipment;
 use App\Support\Money;
 use App\Support\Orders\CapturedAnswer;
 use Closure;
@@ -207,6 +210,75 @@ class OrderDocument
                                 ->size(TextSize::ExtraSmall)
                                 ->state(self::asJson('verification_response'))
                                 ->placeholder('Not asked yet'),
+                        ]),
+                ]),
+        ];
+    }
+
+    /**
+     * Every attempt to get this Order to a door, each with its own history
+     * under it.
+     *
+     * One card per Shipment and never one merged list, because an Order's
+     * delivery history is a history of attempts: a parcel that went out with
+     * Steadfast, came back, and was re-sent with Pathao is two attempts that
+     * cost money separately and failed for different reasons, and a single
+     * run of dates would read as one confused journey. Each card names its
+     * Courier for the same reason — "on hold" means four different things
+     * across the three vocabularies (ADR-0018).
+     *
+     * Absent for an Order that has never been sent, which is every Order
+     * until somebody presses the button. An empty "delivery attempts" heading
+     * is a section a fulfiller learns to skip.
+     *
+     * Handed the Shipments themselves as records rather than as form data,
+     * for the reason `payments()` gives: the edit screen hydrates whatever a
+     * repeatable holds, and a Shipment is written by a booking and by the
+     * sweep alone.
+     *
+     * @return array<int, Section>
+     */
+    public static function shipments(): array
+    {
+        return [
+            Section::make('Delivery attempts')
+                ->columnSpanFull()
+                ->visible(fn (?Order $record): bool => $record?->shipments->isNotEmpty() ?? false)
+                ->schema([
+                    RepeatableEntry::make('shipments')
+                        ->hiddenLabel()
+                        /** Every attempt's history in one query rather than one per attempt: the timeline under each card reads `events`. */
+                        ->state(fn (?Order $record): array => $record?->shipments->loadMissing('events')->all() ?? [])
+                        ->columns(4)
+                        ->schema([
+                            TextEntry::make('courier')
+                                ->label('Courier')
+                                ->weight('bold')
+                                ->size(TextSize::Large),
+
+                            TextEntry::make('status')
+                                ->label('State')
+                                ->badge(),
+
+                            /**
+                             * The reference, and the way through to the
+                             * attempt on its own screen: everything this card
+                             * leaves out — what was sent, what the Courier
+                             * answered, what it charged — is one click away
+                             * rather than crowded in beside the next attempt.
+                             */
+                            TextEntry::make('invoice_reference')
+                                ->label('Our reference')
+                                ->copyable()
+                                ->url(fn (Shipment $record): string => ShipmentResource::getUrl('view', ['record' => $record])),
+
+                            TextEntry::make('consignment_reference')
+                                ->label('Consignment')
+                                ->copyable()
+                                ->placeholder('None yet'),
+
+                            ShipmentTimeline::entries()
+                                ->columnSpanFull(),
                         ]),
                 ]),
         ];
