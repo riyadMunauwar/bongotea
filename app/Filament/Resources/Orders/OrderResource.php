@@ -79,6 +79,54 @@ class OrderResource extends Resource
         return static::getModel()::query()->where('status', OrderStatus::New)->count();
     }
 
+    /**
+     * How many Orders are still waiting to be handed to a Courier, and the
+     * address of the queue holding exactly those.
+     *
+     * Counted in one place because it is drawn in one and clicked into
+     * another: the Dashboard tile and the queue it opens are the same
+     * question asked twice, and a count that disagrees with the list it leads
+     * to is worse than no count at all. The rule itself is neither restated
+     * here nor there — `Order::notYetSent()` is the scope the filter runs, so
+     * both ends answer it by asking the model.
+     *
+     * Soft-deleted Orders are out of both: the scope is on the model and the
+     * queue only lifts it when a User asks for the trash.
+     *
+     * It costs more than `newOrderCount()` does and cannot be made to cost
+     * less: the scope is a `whereDoesntHave`, so the Orders are walked and
+     * each one asks the Shipments index whether anything of its own is out or
+     * arrived. That is one correlated subquery per Dashboard render, not per
+     * row drawn anywhere, and the widget is lazy — but a figure counted this
+     * way does not belong on a screen that draws it per record.
+     */
+    public static function notYetSentCount(): int
+    {
+        return static::getModel()::query()->notYetSent()->count();
+    }
+
+    /**
+     * The queue with the not-yet-sent filter already on and the tab set to
+     * All, which is the whole of what makes the count one click to act on.
+     *
+     * Both halves are load-bearing. `ListOrders` opens on New
+     * (`getDefaultActiveTab()`), so an address that named only the filter
+     * would land a User on the New tab and show them a subset of what they
+     * clicked — an unsent Order somebody confirmed yesterday would be missing
+     * with nothing on screen saying so. And the toggle is written as the
+     * string `'true'` rather than a boolean, because Laravel renders `true`
+     * into the query string as `1`: Filament reads `'true'` back as a boolean
+     * (`normalizeTableFilterValuesFromQueryString()`) and leaves `'1'` alone,
+     * which fills the Toggle with something that is not a boolean.
+     */
+    public static function notYetSentUrl(): string
+    {
+        return static::getUrl('index', [
+            'tab' => 'all',
+            'filters' => [OrdersTable::NOT_YET_SENT_FILTER => ['isActive' => 'true']],
+        ]);
+    }
+
     public static function getNavigationBadge(): ?string
     {
         $waiting = static::newOrderCount();

@@ -32,10 +32,13 @@ use Filament\Support\Icons\Heroicon;
  *
  * Every widget is drawn under that filter, in sort order, with no header
  * slot. Needs Attention was pinned above it for a while, being the one
- * widget that ignores the window — but it is full width, and both full-width
- * tables now sit together at the foot of the screen so the tiles and charts
- * are read without scrolling past them. What the position used to say, that
- * widget now says in its own subheading. Promoting a widget into the header
+ * widget that ignored the window — but it is full width, and the widgets
+ * that ignore it now sit together at the foot of the screen so the tiles and
+ * charts are read without scrolling past them. There are three of them, the
+ * courier to-do list: the backlog of Orders nobody has sent, Courier money,
+ * and Needs Attention. What the position used to say, each of them now says
+ * in its own subheading, which is the whole of that signal once a figure is
+ * drawn under a control it does not obey. Promoting a widget into the header
  * again would hand the slot to whichever widget happened to sort first,
  * which is how a widget that reads the filter ends up drawn above it.
  */

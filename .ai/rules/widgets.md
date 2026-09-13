@@ -41,3 +41,12 @@ A trashed Page still reports: Livewire restores a model property through `Model:
 `CourierPerformanceTable` therefore lives under the Shipments resource's `Widgets/` folder, undiscovered, and `App\Filament\Pages\CourierReport::getWidgets()` names it. That is the whole mechanism: the Dashboard carries the courier to-do list, which ignores the Reporting Window, and the Courier Report carries the windowed analytics, which is a split that only holds while the analytics widget stays out of the discovered folder.
 
 An undiscovered widget needs no registration to be drawn or tested: `getWidgetsSchemaComponents()` mounts it by class name, and `Livewire::test(TheWidget::class, ['pageFilters' => [...]])` works. `DeliveryHealthStats` is the older precedent.
+
+## A widget linking into a filtered resource list owes the tab as well as the filter
+`UnsentOrdersStat` links its count into the Orders queue with the filter already on. Three details make that address work, and none of them is visible from the link:
+
+- The query-string key is `filters`, not `tableFilters` — `ListRecords` declares `#[Url(as: 'filters')] public ?array $tableFilters`.
+- A `Filter::make()->toggle()` holds its state under `isActive`, and it must be written as the **string** `'true'`: Laravel renders a real `true` into a query string as `1`, and Filament's `normalizeTableFilterValuesFromQueryString()` converts only `'true'`/`'false'`/`'null'` back to their scalars. `'1'` reaches the Toggle unconverted.
+- `ListOrders` opens on New (`getDefaultActiveTab()`), so `tab=all` is as load-bearing as the filter — without it the queue shows a subset of what the tile counted, with nothing on screen saying so.
+
+Build such an address once, beside the filter it turns on (`OrderResource::notYetSentUrl()` reads `OrdersTable::NOT_YET_SENT_FILTER`), and count it with the same scope the filter runs. A filter name Filament does not recognise is ignored silently: the User lands on an unfiltered list rather than an error. Test it by parsing the URL back into `Livewire::withQueryParams()`, which is the only way to prove the tab and the filter both arrived.

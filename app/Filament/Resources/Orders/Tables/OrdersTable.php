@@ -26,6 +26,20 @@ use Illuminate\Database\Eloquent\Builder;
 
 class OrdersTable
 {
+    /**
+     * The name of the "not yet sent to a courier" filter, which is also the
+     * key a link into this screen writes into the query string —
+     * `?filters[not_yet_sent][isActive]=true`.
+     *
+     * Named rather than typed twice, because the Dashboard links straight at
+     * it: `OrderResource::notYetSentUrl()` builds that address out of this
+     * constant, so a renamed filter moves the link with it. A stale copy of
+     * the string would not fail — Filament ignores a filter it does not
+     * know — it would land a User on an unfiltered queue holding every Order,
+     * quietly disagreeing with the count they clicked.
+     */
+    public const NOT_YET_SENT_FILTER = 'not_yet_sent';
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -168,7 +182,7 @@ class OrdersTable
                  * every tab, which is why it is a filter rather than a fourth
                  * tab.
                  */
-                Filter::make('not_yet_sent')
+                Filter::make(self::NOT_YET_SENT_FILTER)
                     ->label('Not yet sent to a courier')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => $query->notYetSent()),
@@ -291,7 +305,7 @@ class OrdersTable
      *
      * @var list<string>
      */
-    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', 'not_yet_sent'];
+    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', self::NOT_YET_SENT_FILTER];
 
     private static function isNarrowedAcrossStatuses(Table $table): bool
     {
