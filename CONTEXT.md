@@ -242,6 +242,44 @@ _Avoid_: courier balance, wallet, float, due, payable
 What the couriers are between them holding of the Merchant's money: what every Active Shipment was sent out to collect. Counted from the Merchant's own Orders rather than from anything a Courier says, so every Courier has the figure alike — and never added to a Courier's reported balance, because one is what we believe and the other is what we were told.
 _Avoid_: outstanding, receivable, pending COD, courier balance, float
 
+### Stock
+
+**Supply**:
+Goods arriving from a Supplier, recorded as one document: who they came from, the day they came and the reference they can be found under, with a line per Product saying how many arrived and what each one cost — an Order and its Order Lines, read from the buying side. Recording one raises stock there and then; there is no separate receiving step to forget. Never a purchase: **Purchase** is the tracking Moment reported to ad platforms, worth an Order's total, and the word is not available for goods coming in — no label, no report and no figure about stock may use it.
+_Avoid_: purchase, purchase order, goods receipt, restock, intake
+
+**Supplier**:
+Somebody the Merchant buys from, known by a name, a phone number and a note rather than by however somebody spelled it on the day, so that everything ever bought from one of them reads as one buying history. A Supplier is never a Customer: one is where goods come from and the other is where they go, and the two never overlap.
+_Avoid_: vendor, seller, source, manufacturer, merchant
+
+**Stock Movement**:
+One thing that happened to a quantity of a Product: a signed number of units, the reason it moved, the unit cost in force when it moved, the person, the time, and what caused it — a Supply's line, a Shipment, a Stock Count. A movement is something that happened to a box, so one is written only where units really arrived or really left. Nothing is ever edited or deleted: a mistake is answered by another movement, and the mistake and its correction both stay on the record.
+_Avoid_: stock entry, ledger line, transaction, stock change, quantity update
+
+**On Hand**:
+How many units of a Product are held: the sum of that Product's Stock Movements, never a figure anybody types and never one held apart from them. A Product nobody has counted reads as nothing rather than as zero — the same distinction a Courier's Balance and its Delivery Rate already draw — because a zero is an instruction to reorder, and a Product nobody has looked at is not a Product that has run out. It is allowed to go below nothing and drawn loudly when it does, since a negative figure is an unrecorded Supply announcing itself.
+_Avoid_: quantity, stock level, inventory count, available, in stock, QOH
+
+**Committed**:
+How many units of a Product are already spoken for: what is on Confirmed Orders with no Active Shipment. It is a fact about Orders and never a Stock Movement, because nothing has happened to a box — so it is drawn beside On Hand and never taken off it, and it moves when an operator confirms an Order or a parcel is booked rather than when anything leaves a shelf.
+_Avoid_: reserved, allocated, on hold, pending stock, available to promise
+
+**Stock Count**:
+What a User physically counted of one Product, recorded as the number they are holding in their head at the shelf and never as a difference; how far the ledger was out is worked out rather than typed, and written down as an Adjustment. A Count is immutable and carries the name of whoever counted: a wrong one is answered by counting again, which is what somebody would physically do anyway. A Product joins the ledger at its first Stock Count and not before, so adopting stock is nothing more than counting the Products that matter this afternoon.
+_Avoid_: stocktake, cycle count, audit, recount, inventory check
+
+**Adjustment**:
+The Stock Movement that squares the ledger with a Stock Count, carrying a cause chosen from a fixed list — damaged, lost, found, miscount, opening count — the person who counted, and a note where they have something to add. The cause is compulsory and picked rather than typed, because "what am I losing to damage" is a question a Merchant asks of a year of them at once.
+_Avoid_: correction, write-off, shrinkage, manual entry, fix
+
+**Days of Cover**:
+How long a Product's On Hand lasts at the rate it is going out: units held against units shipped per day. The rate is read over a fixed trailing span of its own and never over the screen's Reporting Window, because a Merchant narrowing a window to Today would otherwise change every velocity in the catalogue by moving a control about something else. Thin cover is a to-do rather than a report, so it ignores the window like every other one, and one Setting says what thin means for the whole catalogue. A Product nobody has counted has none, and neither has one nothing has gone out of: no cover, never zero and never for ever, because a dormant Product must not present itself as safe.
+_Avoid_: reorder point, stock days, runway, coverage, low stock threshold
+
+**Void**:
+What is done to a Supply recorded wrongly: one action that writes the exact reversing movements, marks the original voided with a time and a name, and leaves the pair in the history to be read together. It is not Cancelled — a Cancelled Order genuinely happened and will not be fulfilled, where a Voided Supply is one that should never have been written down at all.
+_Avoid_: cancel, delete, reverse, undo, amend
+
 ### Reporting
 
 **Reporting Window**:
