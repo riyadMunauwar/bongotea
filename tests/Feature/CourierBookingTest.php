@@ -51,26 +51,6 @@ beforeEach(function () {
 });
 
 /**
- * Press "Send with courier" on one of the Order's screens, choosing this
- * Courier, the way a User on the call does.
- *
- * The queue reaches the same action by the row rather than by the header, so
- * a User working down a day's Orders sends each parcel without opening any of
- * them. One action, three screens, one dialog.
- */
-function sendWithCourier(Order $order, CourierScript $script, string $page = ViewOrder::class, array $confirming = []): Testable
-{
-    $answers = array_merge(['courier' => $script->courier()->value], $confirming);
-
-    if ($page === ListOrders::class) {
-        return Livewire::test(ListOrders::class)->callTableAction('bookWithCourier', $order, $answers);
-    }
-
-    return Livewire::test($page, ['record' => $order->getKey()])
-        ->callAction('bookWithCourier', $answers);
-}
-
-/**
  * Open the send dialog on this Courier without sending anything, the way a
  * User reading back what is about to go out does.
  */

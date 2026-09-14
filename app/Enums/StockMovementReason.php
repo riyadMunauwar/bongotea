@@ -14,10 +14,11 @@ use Filament\Support\Contracts\HasLabel;
  * that is Committed, which is a fact about Orders and never a movement
  * (ADR-0021).
  *
- * Three cases today, and that is the whole of what this system can currently
- * do to a box: a delivery arrives, a User counts what is on the shelf, and a
- * delivery that should never have been recorded is taken back out.
- * Shipment, Return and Loss join them as the tickets that can actually cause
+ * Four cases today, and that is the whole of what this system can currently
+ * do to a box: a delivery arrives, a User counts what is on the shelf, a
+ * delivery that should never have been recorded is taken back out, and a
+ * Courier takes a parcel away.
+ * Return and Loss join them as the tickets that can actually cause
  * them land — each one a case here, a driver of it in `StockLedger`, and no
  * migration, because the column is a string cast to this enum rather than a
  * native MySQL enum.
@@ -58,12 +59,26 @@ enum StockMovementReason: string implements HasColor, HasLabel
      */
     case Void = 'void';
 
+    /**
+     * A Courier taking a parcel away: one movement per Product on the Order,
+     * written when the Shipment carrying it reaches Booked and never when the
+     * Order was captured or confirmed (ADR-0021).
+     *
+     * Named for what the Merchant sold rather than for the parcel that
+     * carried it, because that is what the units leaving were. A parcel that
+     * comes back is answered by a Return and a parcel written off by a Loss,
+     * each its own row against the same Shipment — the ledger keeps both the
+     * going and the coming back, exactly as it keeps a Supply and its Void.
+     */
+    case Sale = 'sale';
+
     public function getLabel(): string
     {
         return match ($this) {
             self::Adjustment => 'Adjustment',
             self::Supply => 'Supply',
             self::Void => 'Void',
+            self::Sale => 'Sale',
         };
     }
 
@@ -72,6 +87,9 @@ enum StockMovementReason: string implements HasColor, HasLabel
         return match ($this) {
             self::Adjustment => 'warning',
             self::Supply => 'success',
+
+            /** Quiet on purpose: stock leaving on a parcel somebody bought is the ordinary day, not something to look at. */
+            self::Sale => 'gray',
 
             /** Loud on purpose: a void is a correction somebody should notice while reading past it. */
             self::Void => 'danger',

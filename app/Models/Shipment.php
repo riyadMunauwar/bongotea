@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
+use App\Observers\ShipmentObserver;
 use Database\Factories\ShipmentFactory;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,6 +32,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * said at the time is kept whole on the row, because a dispute months later
  * needs what was actually said rather than what was made of it.
  */
+#[ObservedBy(ShipmentObserver::class)]
 #[Fillable([
     'order_id',
     'courier',
@@ -224,7 +227,27 @@ class Shipment extends Model
     {
         return $this->isActive()
             && $this->status === ShipmentStatus::Written
-            && $this->consignment_reference === null;
+            && ! $this->wasHandedOver();
+    }
+
+    /**
+     * Whether a Courier has actually taken this parcel away.
+     *
+     * The Consignment and nothing else, because the Consignment *is* the
+     * Courier's acceptance: a row that has one has been offered and taken,
+     * whatever else it says (ADR-0020). A Shipment Awaiting Dispatch has none
+     * because nobody has been handed anything, and one Refused at Booking has
+     * none because the Courier would not take it — which is exactly why
+     * neither of them moves a unit of stock (ADR-0021).
+     *
+     * Deliberately not "the status is Booked". The status a parcel is in now
+     * is where it has got to since, and a parcel already In Transit or
+     * Delivered has certainly left the building; what this asks is whether it
+     * ever left at all, which is asked once and answered for good.
+     */
+    public function wasHandedOver(): bool
+    {
+        return $this->consignment_reference !== null;
     }
 
     /**

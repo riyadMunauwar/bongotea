@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AdjustmentCause;
+use App\Enums\OrderStatus;
 use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\ListStockCounts;
@@ -8,10 +9,14 @@ use App\Filament\Clusters\Inventory\Resources\StockCounts\StockCountResource;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\Pages\ProductStockHistory;
 use App\Filament\Resources\Products\ProductResource;
+use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\Product;
+use App\Models\Shipment;
 use App\Models\StockCount;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Forms\Components\Select;
@@ -177,6 +182,22 @@ it('offers no way to edit or delete a count', function () {
 |--------------------------------------------------------------------------
 */
 
+/**
+ * An Order for this many of one Product, at whatever point of the capture
+ * lifecycle it has reached.
+ */
+function orderFor(Product $product, int $quantity, OrderStatus $status): Order
+{
+    $order = Order::factory()->create(['status' => $status]);
+
+    OrderLine::factory()
+        ->for($order)
+        ->for($product)
+        ->create(['product_name' => $product->name, 'unit_price' => $product->price, 'quantity' => $quantity]);
+
+    return $order->refresh();
+}
+
 it('shows what each product holds on the products list', function () {
     $counted = Product::factory()->create(['name' => 'Winter Jacket']);
     $uncounted = Product::factory()->create(['name' => 'Clay mug']);
@@ -193,6 +214,66 @@ it('shows what each product holds on the products list', function () {
             fn (TextColumn $column): bool => $column->getPlaceholder() === '—',
             $uncounted,
         );
+});
+
+it('shows what is already spoken for beside what is held', function () {
+    $wanted = Product::factory()->create(['name' => 'Winter Jacket']);
+    $quiet = Product::factory()->create(['name' => 'Clay mug']);
+
+    $this->ledger->recordCount($wanted, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    orderFor($wanted, 4, OrderStatus::Confirmed);
+    orderFor($wanted, 7, OrderStatus::Confirmed);
+
+    /** Neither of these is spoken for: nobody has phoned the first back, and the second is not happening at all. */
+    orderFor($wanted, 5, OrderStatus::New);
+    orderFor($wanted, 9, OrderStatus::Cancelled);
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(StockLedger::ON_HAND, 30, $wanted)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 11, $wanted)
+
+        /**
+         * Nothing spoken for reads as nothing spoken for, where On Hand beside
+         * it would read as unknown: this is counted off the Orders themselves
+         * and is never a figure nobody has established.
+         */
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 0, $quiet);
+});
+
+it('stops counting an order as spoken for once a courier is carrying it', function () {
+    $product = Product::factory()->create();
+
+    $order = orderFor($product, 4, OrderStatus::Confirmed);
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4, $product);
+
+    /** The units are in a van rather than on a shelf, and the ledger has them as gone (ADR-0021). */
+    Shipment::factory()->for($order)->create();
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 0, $product);
+});
+
+it('never counts an order whose parcel already reached the door', function () {
+    $product = Product::factory()->create();
+
+    /** A delivered Order has no Active Shipment either, and counting it would leave the figure climbing for ever. */
+    Shipment::factory()->for(orderFor($product, 4, OrderStatus::Confirmed))->delivered()->create();
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 0, $product);
+});
+
+it('counts an order as spoken for again when its parcel comes back', function () {
+    $product = Product::factory()->create();
+
+    Shipment::factory()->for(orderFor($product, 4, OrderStatus::Confirmed))->returned()->create();
+
+    /** A parcel that came back is an Order to send again, which is the same answer the queue gives about it (ADR-0018). */
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4, $product);
 });
 
 it('sorts the catalogue by what is held, though the figure is in no column', function () {

@@ -3,6 +3,8 @@
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
+use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Resources\Pages\Pages\EditPage;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -20,6 +22,7 @@ use App\Support\Checkout\PricingFingerprint;
 use App\Support\PageCache\StaticPageCache;
 use App\Support\Reporting\ReportingWindow;
 use Carbon\CarbonImmutable;
+use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
 use Filament\Notifications\Livewire\Notifications;
 use Filament\Notifications\Notification;
@@ -34,6 +37,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Pest\Expectation;
 use Tests\Fixtures\Couriers\CourierScript;
@@ -337,6 +341,56 @@ function orderReadyToSend(CourierScript $script, array $attributes = []): Order
         ->create(['product_name' => 'Winter Jacket', 'unit_price' => 99000, 'quantity' => 1]);
 
     return $order->refresh();
+}
+
+/**
+ * Press "Send with courier" on one of the Order's screens, choosing this
+ * Courier, the way a User on the call does.
+ *
+ * The queue reaches the same action by the row rather than by the header, so
+ * a User working down a day's Orders sends each parcel without opening any of
+ * them. One action, three screens, one dialog.
+ *
+ * Here rather than in the booking suite that needed it first, for the reason
+ * `answeringAfresh()` is: what a booking does to the stock ledger is proved
+ * in its own file, and a helper defined in another is a fatal error for
+ * anybody running only one of them.
+ *
+ * @param  array<string, string>  $confirming
+ */
+function sendWithCourier(Order $order, CourierScript $script, string $page = ViewOrder::class, array $confirming = []): Testable
+{
+    $answers = array_merge(['courier' => $script->courier()->value], $confirming);
+
+    if ($page === ListOrders::class) {
+        return Livewire::test(ListOrders::class)->callTableAction('bookWithCourier', $order, $answers);
+    }
+
+    return Livewire::test($page, ['record' => $order->getKey()])
+        ->callAction('bookWithCourier', $answers);
+}
+
+/**
+ * Tick these Orders on the queue and press "Send with courier", choosing this
+ * Courier once for the lot — which is the only way this feature is ever
+ * reached: the selection is the set, and the selection is what the screen
+ * shows.
+ *
+ * Here rather than in the batch suite that needed it first, for the reason
+ * `sendWithCourier()` is: what a batch does to the stock ledger is proved in
+ * its own file.
+ *
+ * @param  list<Order>  $orders
+ */
+function sendBatchWithCourier(array $orders, CourierScript $script, ?string $courier = null): Testable
+{
+    return Livewire::test(ListOrders::class)
+        ->set('activeTab', 'all')
+        ->selectTableRecords(array_map(fn (Order $order): int => $order->getKey(), $orders))
+        ->callAction(
+            TestAction::make('bookBatchWithCourier')->table()->bulk(),
+            data: ['courier' => $courier ?? $script->courier()->value],
+        );
 }
 
 /**

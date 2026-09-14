@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Support\Settings\CourierSettings;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Facades\DB;
-use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
 
@@ -43,25 +42,6 @@ beforeEach(function () {
 function ordersReadyToSend(CourierScript $script, int $count): array
 {
     return array_map(fn (int $each): Order => orderReadyToSend($script), range(1, $count));
-}
-
-/**
- * Tick these Orders on the queue and press "Send with courier", choosing this
- * Courier once for the lot — which is the only way this feature is ever
- * reached: the selection is the set, and the selection is what the screen
- * shows.
- *
- * @param  list<Order>  $orders
- */
-function sendBatchWithCourier(array $orders, CourierScript $script, ?string $courier = null): Testable
-{
-    return Livewire::test(ListOrders::class)
-        ->set('activeTab', 'all')
-        ->selectTableRecords(array_map(fn (Order $order): int => $order->getKey(), $orders))
-        ->callAction(
-            TestAction::make('bookBatchWithCourier')->table()->bulk(),
-            data: ['courier' => $courier ?? $script->courier()->value],
-        );
 }
 
 /**

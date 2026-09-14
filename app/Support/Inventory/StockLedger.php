@@ -5,6 +5,7 @@ namespace App\Support\Inventory;
 use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
 use App\Models\Product;
+use App\Models\Shipment;
 use App\Models\StockCount;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -13,6 +14,7 @@ use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -29,11 +31,12 @@ use InvalidArgumentException;
  * It is deliberately narrow today. A delivery arrives and raises what is
  * held; a User counts, and the difference is squared away as an Adjustment;
  * a delivery that should never have been recorded is Voided, and every unit
- * of it comes back out at what it came in at. Shipment, Return and Loss each
- * arrive as another method here and nowhere
- * else — in particular a `ShipmentObserver` will call this rather than write
- * rows of its own, because status alone is written from four places in the
- * courier layer and that is four places the next Courier path could forget.
+ * of it comes back out at what it came in at; a Courier takes a parcel, and
+ * the units in it leave. Return and Loss each arrive as another arm of
+ * `reconcile()` and nowhere else — `ShipmentObserver` asks this rather than
+ * writing rows of its own, because status alone is written from four places
+ * in the courier layer and that is four places the next Courier path could
+ * forget.
  *
  * It also answers what a unit is worth. Cost enters at a Supply and is
  * stamped onto every movement as it happens (ADR-0022): the average is read
@@ -320,6 +323,111 @@ class StockLedger
     }
 
     /**
+     * Square the ledger with what has become of one parcel.
+     *
+     * The one way a Shipment ever moves stock, and the reason it is a
+     * question rather than an instruction: `ShipmentObserver` asks this
+     * whenever a parcel's status or its abandonment changes, and this decides
+     * what — if anything — that leaves the ledger owing (ADR-0021). Status
+     * alone is written from four places in the courier layer, and telling
+     * each of them what to move would be four places the next Courier path
+     * can forget.
+     *
+     * Stock leaves when the parcel leaves and at no other moment. A Courier
+     * answering with a Consignment is what "it left" means, so a Shipment
+     * Awaiting Dispatch moves nothing — nobody has been handed anything —
+     * and one Refused at Booking moves nothing, because it never went.
+     *
+     * Asked again as often as anybody likes. A poll and a webhook reporting
+     * the same transition at once is ordinary traffic rather than an edge
+     * case (ADR-0019), so this is idempotent per cause the way a Shipment
+     * Event is: the movements are written against the Shipment, and the
+     * ledger's one-cause-one-movement key is what refuses the second telling
+     * — at the database, not at a call site.
+     */
+    public function reconcile(Shipment $shipment): void
+    {
+        if (! $shipment->wasHandedOver()) {
+            return;
+        }
+
+        $contents = $this->parcelContents($shipment);
+
+        if ($contents === []) {
+            return;
+        }
+
+        /**
+         * The parcel's Products and what each of them holds, in one query:
+         * this runs inside the lock a booking keeps over the Order while a
+         * Courier is being waited on, so what it costs is worth counting.
+         *
+         * Trashed ones too — a Product withdrawn from the catalogue is still
+         * in the box somebody just posted.
+         */
+        $products = $this->withOnHand(Product::withTrashed()->whereKey(array_keys($contents)))->get();
+
+        foreach ($products as $product) {
+            /**
+             * A Product nobody has counted stays out of the ledger, which is
+             * what makes adoption five Products at a time rather than a
+             * migration: it holds an unknown rather than a zero, and a parcel
+             * of it must not turn that unknown into a figure below nothing
+             * that nothing on the shelf agrees with (ADR-0021).
+             */
+            if ($product->{self::ON_HAND} === null) {
+                continue;
+            }
+
+            $this->writeOnce(
+                product: $product,
+
+                /** Out: the units are in a Courier's van. */
+                quantity: -$contents[$product->getKey()],
+
+                reason: StockMovementReason::Sale,
+                source: $shipment,
+            );
+        }
+    }
+
+    /**
+     * How many units of each Product this parcel carries, keyed by Product,
+     * read off the Order the attempt was written for.
+     *
+     * Summed per Product rather than taken a line at a time, because the
+     * cause of the movement is the parcel: the ledger's key is one cause, one
+     * Product, one direction, and an Order naming the same Product on two
+     * lines is still one Product leaving in one box. The Order's shape is
+     * fixed at Capture with a line per Product, so this is the same figure
+     * either way — it is written this way so that it stays the same figure if
+     * that ever stops being true.
+     *
+     * Read with the Order trashed or not: a box that left is a box that left,
+     * and somebody tidying the Order away afterwards does not put it back on
+     * the shelf.
+     *
+     * @return array<int, int>
+     */
+    private function parcelContents(Shipment $shipment): array
+    {
+        $order = $shipment->order()->withTrashed()->first();
+
+        if ($order === null) {
+            return [];
+        }
+
+        return $order->lines()
+            ->whereNotNull('product_id')
+            ->toBase()
+            ->selectRaw('product_id, sum(quantity) as units')
+            ->groupBy('product_id')
+            ->pluck('units', 'product_id')
+            ->map(fn (mixed $units): int => (int) $units)
+            ->all();
+    }
+
+    /**
      * Record what a User counted, and square the ledger with it.
      *
      * The count and its Adjustment are written together or not at all: a
@@ -366,6 +474,42 @@ class StockLedger
 
             return $count;
         });
+    }
+
+    /**
+     * Put one row in the ledger, or leave the one already there alone.
+     *
+     * For the causes that are told to us more than once. The insert is made
+     * and the one-cause-one-movement key is let to refuse it, rather than
+     * asked about first — the same choice `Shipment::recordEvent()` makes
+     * against the same traffic (ADR-0019): a poll and a webhook arrive
+     * together, and a question asked before an insert answers for a moment
+     * that has passed by the time the insert lands.
+     */
+    private function writeOnce(
+        Product $product,
+        int $quantity,
+        StockMovementReason $reason,
+        Model $source,
+    ): void {
+        try {
+            $this->write(
+                product: $product,
+                quantity: $quantity,
+                reason: $reason,
+                source: $source,
+
+                /**
+                 * Nobody's hand. A User may have pressed a button somewhere,
+                 * but what moved these units was a Courier — and the same
+                 * movement is written by a sweep at four in the morning with
+                 * nobody signed in at all.
+                 */
+                user: null,
+            );
+        } catch (UniqueConstraintViolationException) {
+            /** Somebody told us the same thing twice, which is what the key is there to make harmless. */
+        }
     }
 
     /**

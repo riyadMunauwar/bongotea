@@ -74,6 +74,22 @@ class Product extends Model implements HasMedia
         return $this->hasMany(StockMovement::class);
     }
 
+    /**
+     * Every Order Line ever written for this Product.
+     *
+     * A reference and never a figure: what was sold, at what price, is the
+     * line's own snapshot (`OrderLine`), and nothing here reads back through
+     * it to price anything. It exists so that Committed — what is on
+     * Confirmed Orders nobody has sent yet — can be summed into the one query
+     * a list of Products already runs (`CommittedStock`).
+     *
+     * @return HasMany<OrderLine, $this>
+     */
+    public function orderLines(): HasMany
+    {
+        return $this->hasMany(OrderLine::class);
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection(self::IMAGE_COLLECTION)

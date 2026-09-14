@@ -273,7 +273,7 @@ How many units of a Product are held: the sum of that Product's Stock Movements,
 _Avoid_: quantity, stock level, inventory count, available, in stock, QOH
 
 **Committed**:
-How many units of a Product are already spoken for: what is on Confirmed Orders with no Active Shipment. It is a fact about Orders and never a Stock Movement, because nothing has happened to a box — so it is drawn beside On Hand and never taken off it, and it moves when an operator confirms an Order or a parcel is booked rather than when anything leaves a shelf.
+How many units of a Product are already spoken for: what is on the Confirmed Orders nobody has sent — no Active Shipment, and nothing of theirs that ever reached a door. Both halves, and for the reason the Orders queue reads them together: a delivered Order has no Active Shipment either, and counting it would leave the figure climbing for ever with units that left months ago, where a parcel that came back is genuinely spoken for again. It is a fact about Orders and never a Stock Movement, because nothing has happened to a box — so it is drawn beside On Hand and never taken off it, and it moves when an operator confirms an Order or a parcel is booked rather than when anything leaves a shelf. Nothing spoken for reads as nothing rather than as unknown, unlike every other figure here: this one is counted off the Orders themselves, so there is no shelf nobody has looked at.
 _Avoid_: reserved, allocated, on hold, pending stock, available to promise
 
 **Stock Count**:

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\Product;
+use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Actions\BulkActionGroup;
@@ -22,11 +23,13 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            /** Both stock figures are summed into the query the list already runs, so a catalogue of any size costs one of them. */
+            /** Every stock figure is summed into the query the list already runs, so a catalogue of any size costs one of them. */
             ->modifyQueryUsing(function (Builder $query): Builder {
                 $ledger = app(StockLedger::class);
 
-                return $ledger->withValueAtCost($ledger->withOnHand($query));
+                return app(CommittedStock::class)->withCommitted(
+                    $ledger->withValueAtCost($ledger->withOnHand($query)),
+                );
             })
             ->columns([
                 SpatieMediaLibraryImageColumn::make('image')
@@ -64,6 +67,28 @@ class ProductsTable
                     ->placeholder('—')
                     ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
                     ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
+
+                /**
+                 * What is already spoken for, beside what is held: the units
+                 * on Confirmed Orders nobody has sent yet.
+                 *
+                 * A fact about Orders and never a Stock Movement (ADR-0021).
+                 * Nothing has happened to a box, so it is drawn next to On
+                 * Hand and never taken off it — a Merchant reads the pair and
+                 * sees what is on the shelf and how much of it is already
+                 * promised.
+                 *
+                 * Zero rather than nothing where nothing is waiting, which is
+                 * the one place this column parts company with On Hand beside
+                 * it: this is read off the Orders themselves and so is never
+                 * unknown, and a blank drawn for a figure we do know would be
+                 * the mirror of the mistake the `—` above exists to avoid.
+                 */
+                TextColumn::make(CommittedStock::COMMITTED)
+                    ->label('Committed')
+                    ->numeric()
+                    ->sortable()
+                    ->default(0),
 
                 /**
                  * What the units held are worth at what they cost, beside
