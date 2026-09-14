@@ -15,5 +15,7 @@ Unit cost is typed in whole currency and dehydrated through `Money::toMinorUnits
 
 Pages are index/create/view only. `canEdit()`, `canDelete()` and `canDeleteAny()` all answer false even though no edit route exists, because Filament asks those before drawing an action — and `Supply`/`SupplyLine` refuse `updating`/`deleting` at the model too. A wrong Supply is Voided.
 
+`VoidSupplyAction` is a header action on `ViewSupply` and deliberately not a row action on the list: the lines it is about to take back out have to be on the screen the button is on, or a User voids the wrong row of eight deliveries from the same Supplier. It hands the record to `StockLedger::voidSupply()` and writes nothing itself, hides on an already-voided Supply, and catches the ledger's `LogicException` into a warning for the second desk that presses it. The reversal arithmetic is in the Inventory rules.
+
 ## A Supplier is the one editable record in Inventory, and is never force-deleted
 Everything else here is immutable because it is something that happened; a Supplier is a reference a Supply points at, so a misspelled name or a changed number is corrected in place. Deletion is soft, and `SuppliersTable`/`EditSupplier` deliberately offer no `ForceDeleteAction` — `supplies.supplier_id` is `restrictOnDelete()`, so erasing one who ever delivered anything either fails at the database or takes the buying history with it. The Supply's own `supplier()` relation is `withTrashed()` so a past delivery still reads under their name.

@@ -6,6 +6,7 @@ use App\Support\Money;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -14,8 +15,13 @@ use Illuminate\Support\Facades\DB;
  * Everything that has been bought, newest delivery first.
  *
  * No edit, no delete and no bulk action: a delivery recorded is a delivery
- * that happened, and what a User does about a wrong one is Void it. What they
- * do from here is open one, or record another.
+ * that happened, and what a User does about a wrong one is Void it — from the
+ * document itself, where the lines it is about to take back out are on the
+ * screen, rather than from a row of this list. What they do from here is open
+ * one, or record another.
+ *
+ * A voided delivery stays on the list and says so, because the User who comes
+ * looking for the mistake comes looking here.
  */
 class SuppliesTable
 {
@@ -69,6 +75,20 @@ class SuppliesTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                /**
+                 * A struck-out delivery stays on the list and says so. It is
+                 * not hidden and not crossed out: what it cost is still what
+                 * the invoice said, and the reason to keep reading it is that
+                 * somebody is looking for what went wrong.
+                 */
+                TextColumn::make('voided_at')
+                    ->label('Voided')
+                    ->badge()
+                    ->color('danger')
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('supplier')
@@ -76,6 +96,18 @@ class SuppliesTable
                     ->relationship('supplier', 'name')
                     ->searchable()
                     ->preload(),
+
+                /** How a buyer reads what they actually bought: the deliveries that stand. */
+                TernaryFilter::make('voided')
+                    ->label('Voided')
+                    ->placeholder('All deliveries')
+                    ->trueLabel('Voided only')
+                    ->falseLabel('Standing only')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->voided(),
+                        false: fn (Builder $query): Builder => $query->notVoided(),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
             ->recordActions([
                 ViewAction::make(),

@@ -29,6 +29,32 @@ class SupplyInfolist
     {
         return $schema
             ->components([
+                /**
+                 * Struck out, said before anything it says is read. The
+                 * figures below are exactly what was recorded and are
+                 * deliberately not crossed through — what is not true is that
+                 * this delivery counts, and the ledger has already taken
+                 * every unit of it back out.
+                 */
+                Section::make('This delivery was voided')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->visible(fn (Supply $record): bool => $record->isVoided())
+                    ->schema([
+                        TextEntry::make('voided_at')
+                            ->label('Voided')
+                            ->dateTime(),
+
+                        TextEntry::make('voidedBy.name')
+                            ->label('Voided by')
+                            ->placeholder('—'),
+
+                        TextEntry::make('what_voiding_did')
+                            ->hiddenLabel()
+                            ->columnSpanFull()
+                            ->state('Every unit on it came back out at what it came in at. Nothing here was changed — the delivery reads as it was recorded, and both sets of movements are in each Product\'s history.'),
+                    ]),
+
                 Section::make('The delivery')
                     ->columnSpanFull()
                     ->columns(3)

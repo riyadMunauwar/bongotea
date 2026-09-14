@@ -32,3 +32,12 @@ Both halves span **every** movement, including rows with `unit_cost` null (anyth
 Two more edge rules: where the units come to nothing or less the figure is the last stamped cost, not a division by zero; and `valueAtCost()` is the summed rows themselves rather than On Hand × average — the same number, arrived at from rows a User can be shown, and below nothing only where On Hand is.
 
 Read a list's money figure with `withValueAtCost()` (alias `StockLedger::VALUE_AT_COST`) beside `withOnHand()`, both summed into the one query the list already runs.
+
+## A Supply is voided by exact reversal, stamped at what it paid
+`StockLedger::voidSupply()` is the only escape hatch in the ledger, and the only thing that may write to a Supply after it is recorded. It writes one movement per **SupplyLine** — reason `Void`, quantity negated, source the line — then marks the document with `voided_at`/`voided_by`.
+
+The reversal is stamped with **that line's own `unit_cost`**, never the average in force (ADR-0022). Every other movement takes its share of the blend because units really left; these units never arrived, so exactly the money that went in comes back out and On Hand *and* Value at Cost return to precisely their pre-Supply figures. Stamp a void at the rolled average instead and a second Supply at a different price leaves the blend permanently wrong.
+
+A reason of its own rather than a negative `Supply` movement: `stock_movements`' unique key is `(source_type, source_id, product_id, reason)`, so a reversal sharing the reason would collide with the row it undoes — and that same key is what makes a second void of one Supply impossible at the database, behind the `lockForUpdate()` re-read and the `LogicException` in front of it.
+
+`Supply::updating` lets **only** `Supply::VOIDING` through and still throws on everything else. Voiding is offered from `ViewSupply` and never from a row of the list, and any buying figure reads `Supply::notVoided()` — `SuppliersTable`'s Deliveries count is the one that exists today.

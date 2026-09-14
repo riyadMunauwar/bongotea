@@ -14,8 +14,9 @@ use Filament\Support\Contracts\HasLabel;
  * that is Committed, which is a fact about Orders and never a movement
  * (ADR-0021).
  *
- * Two cases today, and that is the whole of what this system can currently do
- * to a box: a delivery arrives, and a User counts what is on the shelf.
+ * Three cases today, and that is the whole of what this system can currently
+ * do to a box: a delivery arrives, a User counts what is on the shelf, and a
+ * delivery that should never have been recorded is taken back out.
  * Shipment, Return and Loss join them as the tickets that can actually cause
  * them land — each one a case here, a driver of it in `StockLedger`, and no
  * migration, because the column is a string cast to this enum rather than a
@@ -41,11 +42,28 @@ enum StockMovementReason: string implements HasColor, HasLabel
      */
     case Supply = 'supply';
 
+    /**
+     * A Supply being taken back out because it should never have been
+     * recorded: one movement per line of it, the exact opposite of the one
+     * that line wrote, stamped with the same cost.
+     *
+     * Its own reason rather than a second Supply movement with a negative
+     * quantity, for two reasons that point the same way. The ledger's
+     * one-cause-one-movement key is `(source, product, reason)`, so a
+     * reversal pointing at the line it undoes could not share the reason
+     * without colliding — which is also what makes voiding the same Supply
+     * twice impossible at the database. And a Merchant reading a Product's
+     * history is owed the word for what happened: a delivery that was struck
+     * out is not a delivery of minus forty.
+     */
+    case Void = 'void';
+
     public function getLabel(): string
     {
         return match ($this) {
             self::Adjustment => 'Adjustment',
             self::Supply => 'Supply',
+            self::Void => 'Void',
         };
     }
 
@@ -54,6 +72,9 @@ enum StockMovementReason: string implements HasColor, HasLabel
         return match ($this) {
             self::Adjustment => 'warning',
             self::Supply => 'success',
+
+            /** Loud on purpose: a void is a correction somebody should notice while reading past it. */
+            self::Void => 'danger',
         };
     }
 }

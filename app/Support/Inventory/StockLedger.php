@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * The one thing in the system that writes a Stock Movement, and the one thing
@@ -27,7 +28,9 @@ use InvalidArgumentException;
  * places allowed to write one. This is that number.
  *
  * It is deliberately narrow today. A delivery arrives and raises what is
- * held; a User counts, and the difference is squared away as an Adjustment.
+ * held; a User counts, and the difference is squared away as an Adjustment;
+ * a delivery that should never have been recorded is Voided, and every unit
+ * of it comes back out at what it came in at.
  * Shipment, Return and Loss each arrive as another method here and nowhere
  * else — in particular a `ShipmentObserver` will call this rather than write
  * rows of its own, because status alone is written from four places in the
@@ -245,6 +248,67 @@ class StockLedger
             }
 
             return $supply;
+        });
+    }
+
+    /**
+     * Strike out a delivery that should never have been recorded, and take
+     * every unit of it back out.
+     *
+     * The escape hatch that keeps the ledger honest, and the only one there
+     * is. Somebody will type 500 where they meant 50, and the answer is
+     * neither an edit nor a deletion: the document stays exactly as it was
+     * typed, a time and a name are written against it, and one movement per
+     * line says the opposite of what that line said. The mistake and its
+     * correction are both on the record, which is the whole difference
+     * between a ledger and a spreadsheet.
+     *
+     * The reversal is stamped with **what that line paid**, not with the
+     * average in force (ADR-0022). Every other movement takes its share of
+     * the blend because units really left; these units never arrived, so what
+     * comes back out is exactly the money that went in — and On Hand and
+     * Value at Cost both return to precisely what they were before the
+     * Supply, rather than to something near it. Stamp a void at the rolled
+     * average instead and a second Supply at a different price leaves the
+     * blend permanently wrong.
+     *
+     * One movement per line and caused by the line, for the same reason the
+     * Supply's own movements are: a delivery naming one Product twice is two
+     * arrivals, so it is two reversals. Their reason is `Void` rather than
+     * `Supply`, which is what lets them point at the same line without
+     * colliding on the ledger's one-cause-one-movement key — and what makes
+     * the key refuse a second void of the same Supply at the database, under
+     * the lock below and after it.
+     */
+    public function voidSupply(Supply $supply, ?User $voidedBy = null): Supply
+    {
+        return DB::transaction(function () use ($supply, $voidedBy): Supply {
+            /** Read back under the row's own lock: a screen is only as fresh as the moment it was drawn. */
+            $locked = Supply::query()->lockForUpdate()->findOrFail($supply->getKey());
+
+            if ($locked->isVoided()) {
+                throw new LogicException('A Supply is voided once. It has already been voided.');
+            }
+
+            foreach ($locked->lines()->with('product')->get() as $line) {
+                $this->write(
+                    product: $line->product,
+                    quantity: -$line->quantity,
+                    reason: StockMovementReason::Void,
+                    source: $line,
+                    user: $voidedBy,
+
+                    /** What that line paid, so exactly the money it put in comes back out (ADR-0022). */
+                    unitCost: $line->unit_cost,
+                );
+            }
+
+            $locked->fill([
+                'voided_at' => now(),
+                'voided_by' => $voidedBy?->getKey(),
+            ])->save();
+
+            return $locked;
         });
     }
 

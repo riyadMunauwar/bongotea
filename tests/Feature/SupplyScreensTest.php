@@ -248,6 +248,118 @@ it('offers no way to edit or delete a delivery', function () {
 
 /*
 |--------------------------------------------------------------------------
+| Striking one out
+|--------------------------------------------------------------------------
+*/
+
+it('voids a wrong delivery from the document it was recorded on, and puts the shelf back', function () {
+    $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
+
+    $this->ledger->recordCount($jacket, 12, AdjustmentCause::OpeningCount, null, $this->buyer);
+
+    /** 500 where somebody meant 50. */
+    $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $jacket->getKey(), 'quantity' => 500, 'unit_cost' => 90000],
+    ], 'INV-2291', $this->buyer);
+
+    $document = Livewire::test(ViewSupply::class, ['record' => $mistake->getKey()])
+        ->assertActionExists('voidSupply')
+        ->mountAction('voidSupply');
+
+    /** What is about to move is named in units of the Merchant's own Product, not as "reverse". */
+    expect($document->instance()->getMountedAction()->getModalDescription())
+        ->toContain('500 × Winter Jacket');
+
+    $document->callMountedAction()->assertHasNoActionErrors();
+
+    $mistake->refresh();
+
+    expect($mistake->isVoided())->toBeTrue()
+        ->and($mistake->voidedBy->name)->toBe('Nasrin Akter')
+        ->and($this->ledger->onHand($jacket))->toBe(12);
+});
+
+it('offers no way to void a delivery a second time', function () {
+    $product = Product::factory()->create();
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+    ], null, $this->buyer);
+
+    $this->ledger->voidSupply($supply, $this->buyer);
+
+    Livewire::test(ViewSupply::class, ['record' => $supply->getKey()])
+        ->assertActionHidden('voidSupply')
+        /** And still readable, which is the point of not deleting it. */
+        ->assertSeeText('This delivery was voided')
+        ->assertSeeText('Nasrin Akter');
+
+    expect(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(1);
+});
+
+it('keeps a voided delivery on the list, and lets a buyer read past it', function () {
+    $product = Product::factory()->create();
+
+    $standing = $this->ledger->recordSupply($this->supplier, '2026-09-01', [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+    ], 'INV-1', $this->buyer);
+
+    $struck = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 20000],
+    ], 'INV-2', $this->buyer);
+
+    $this->ledger->voidSupply($struck, $this->buyer);
+
+    Livewire::test(ListSupplies::class)
+        /** Nothing disappears: the User who comes looking for the mistake comes looking here. */
+        ->assertCanSeeTableRecords([$struck, $standing])
+        ->filterTable('voided', false)
+        ->assertCanSeeTableRecords([$standing])
+        ->assertCanNotSeeTableRecords([$struck])
+        ->filterTable('voided', true)
+        ->assertCanSeeTableRecords([$struck])
+        ->assertCanNotSeeTableRecords([$standing]);
+});
+
+it('leaves a voided delivery out of what a supplier has delivered', function () {
+    $product = Product::factory()->create();
+
+    $this->ledger->recordSupply($this->supplier, '2026-09-01', [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+    ], 'INV-1', $this->buyer);
+
+    $struck = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 20000],
+    ], 'INV-2', $this->buyer);
+
+    $this->ledger->voidSupply($struck, $this->buyer);
+
+    /** One delivery stands, so one is what they have delivered. */
+    Livewire::test(ListSuppliers::class)
+        ->assertTableColumnStateSet('supplies_count', 1, $this->supplier);
+});
+
+it('reads both the delivery and its reversal in the product\'s own history', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+    ], null, $this->buyer);
+
+    $this->ledger->voidSupply($supply, $this->buyer);
+
+    Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
+        ->assertCanSeeTableRecords(StockMovement::query()->get())
+        ->assertSeeText('Supply')
+        ->assertSeeText('Void')
+        ->assertSeeText('+40')
+        ->assertSeeText('-40')
+        /** Both stamped at what was paid, so the pair comes to nothing. */
+        ->assertSeeText(Money::format(90000));
+});
+
+/*
+|--------------------------------------------------------------------------
 | What the catalogue is worth
 |--------------------------------------------------------------------------
 */

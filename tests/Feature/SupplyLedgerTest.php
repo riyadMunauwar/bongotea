@@ -274,6 +274,152 @@ it('reads what a whole list of products is worth in one query', function () {
 
 /*
 |--------------------------------------------------------------------------
+| Striking one out
+|--------------------------------------------------------------------------
+*/
+
+it('puts a product back exactly where it stood before a supply it should never have had', function () {
+    $product = Product::factory()->create();
+
+    /** The shelf as it stood: counted, and bought for once at a price of its own. */
+    $this->ledger->recordCount($product, 12, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 20, 10000), 'INV-1', $this->buyer);
+
+    $onHandBefore = $this->ledger->onHand($product);
+    $valueBefore = $this->ledger->valueAtCost($product);
+    $averageBefore = $this->ledger->averageCost($product);
+
+    /** And then somebody types 500 where they meant 50. */
+    $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 500, 20000), 'INV-2', $this->buyer);
+
+    expect($this->ledger->onHand($product))->toBe(532);
+
+    $this->ledger->voidSupply($mistake, $this->buyer);
+
+    /** Precisely where it stood, not near it: the reversal took back what that line paid. */
+    expect($this->ledger->onHand($product))->toBe($onHandBefore)
+        ->and($this->ledger->valueAtCost($product))->toBe($valueBefore)
+        ->and($this->ledger->averageCost($product))->toBe($averageBefore);
+
+    /** And both sets of rows are still there to be read together. */
+    expect(StockMovement::query()->orderBy('id')->get()->map(fn (StockMovement $movement): array => [
+        $movement->reason->value, $movement->quantity, $movement->unit_cost,
+    ])->all())->toBe([
+        ['adjustment', 12, null],
+        ['supply', 20, 10000],
+        ['supply', 500, 20000],
+        ['void', -500, 20000],
+    ]);
+});
+
+it('marks the struck-out delivery with a time and a name, and leaves it readable', function () {
+    $product = Product::factory()->create();
+    $auditor = User::factory()->create(['name' => 'Farhana Islam']);
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 40, 90000), 'INV-2291', $this->buyer);
+
+    $voided = $this->ledger->voidSupply($supply, $auditor);
+
+    expect($voided->isVoided())->toBeTrue()
+        ->and($voided->voided_at)->not->toBeNull()
+        ->and($voided->voidedBy->name)->toBe('Farhana Islam')
+        /** A second name beside the first: what it is for is that the two are rarely the same person. */
+        ->and($voided->user->name)->toBe('Nasrin Akter')
+        /** Nothing disappears and nothing is corrected — the document still says what was typed. */
+        ->and(Supply::count())->toBe(1)
+        ->and($voided->reference)->toBe('INV-2291')
+        ->and($voided->lines->sole()->quantity)->toBe(40);
+});
+
+it('reverses every line of a delivery, including the same product listed twice', function () {
+    $jacket = Product::factory()->create();
+    $mug = Product::factory()->create();
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $jacket->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $mug->getKey(), 'quantity' => 12, 'unit_cost' => 15000],
+        ['product_id' => $mug->getKey(), 'quantity' => 5, 'unit_cost' => 18000],
+    ], 'INV-2291', $this->buyer);
+
+    $this->ledger->voidSupply($supply, $this->buyer);
+
+    /** One reversal per line, caused by the line it undoes, at the price that line paid. */
+    expect(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(3)
+        ->and($this->ledger->onHand($jacket))->toBe(0)
+        ->and($this->ledger->onHand($mug))->toBe(0)
+        ->and($this->ledger->valueAtCost($jacket))->toBe(0)
+        ->and(SupplyLine::query()->get()->every(
+            fn (SupplyLine $line): bool => $line->stockMovements()->count() === 2,
+        ))->toBeTrue();
+});
+
+it('takes back what the voided delivery paid rather than a blended average', function () {
+    $product = Product::factory()->create();
+
+    $cheap = $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10, 10000), 'INV-1', $this->buyer);
+    $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 10, 20000), 'INV-2', $this->buyer);
+
+    /** Blended while both stand: (10 × 100.00 + 10 × 200.00) ÷ 20. */
+    expect($this->ledger->averageCost($product))->toBe(15000);
+
+    $this->ledger->voidSupply($cheap, $this->buyer);
+
+    /**
+     * What is left is the delivery that really happened, at its own price.
+     * Reversing at the average in force would have left 150.00 standing over
+     * ten units nobody ever bought for that.
+     */
+    expect($this->ledger->onHand($product))->toBe(10)
+        ->and($this->ledger->averageCost($product))->toBe(20000)
+        ->and($this->ledger->valueAtCost($product))->toBe(200000);
+});
+
+it('refuses to void the same delivery twice', function () {
+    $product = Product::factory()->create();
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 40, 90000), null, $this->buyer);
+
+    $this->ledger->voidSupply($supply, $this->buyer);
+
+    expect(fn () => $this->ledger->voidSupply($supply->fresh(), $this->buyer))->toThrow(LogicException::class)
+        /** Nothing to reverse a second time, and nothing written trying. */
+        ->and(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(1)
+        ->and($this->ledger->onHand($product))->toBe(0);
+});
+
+it('writes the reversal and the mark together or writes neither', function () {
+    $product = Product::factory()->create();
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 40, 90000), null, $this->buyer);
+
+    /** The half that takes the units back out fails, which is the half a void cannot survive without. */
+    StockMovement::creating(function (StockMovement $movement): void {
+        if ($movement->reason === StockMovementReason::Void) {
+            throw new RuntimeException('The ledger could not be written to.');
+        }
+    });
+
+    expect(fn () => $this->ledger->voidSupply($supply, $this->buyer))->toThrow(RuntimeException::class);
+
+    expect($supply->fresh()->isVoided())->toBeFalse()
+        ->and($this->ledger->onHand($product))->toBe(40);
+});
+
+it('reads voided and standing deliveries apart, so a buying figure can leave one out', function () {
+    $product = Product::factory()->create();
+
+    $standing = $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10, 10000), 'INV-1', $this->buyer);
+    $struck = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 10, 20000), 'INV-2', $this->buyer);
+
+    $this->ledger->voidSupply($struck, $this->buyer);
+
+    expect(Supply::query()->notVoided()->pluck('reference')->all())->toBe(['INV-1'])
+        ->and(Supply::query()->voided()->pluck('reference')->all())->toBe(['INV-2'])
+        ->and($standing->fresh()->isVoided())->toBeFalse();
+});
+
+/*
+|--------------------------------------------------------------------------
 | History never rewrites itself
 |--------------------------------------------------------------------------
 */

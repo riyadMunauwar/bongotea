@@ -9,6 +9,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Everybody the Merchant buys from, with how much has come from each.
@@ -35,9 +36,16 @@ class SuppliersTable
                     ->searchable()
                     ->placeholder('—'),
 
+                /**
+                 * The deliveries that stand. A voided one is a delivery that
+                 * should never have been written down, so counting it here
+                 * would tell a Merchant they buy from somebody more often
+                 * than they do — the same reason the ledger takes its units
+                 * back out.
+                 */
                 TextColumn::make('supplies_count')
                     ->label('Deliveries')
-                    ->counts('supplies')
+                    ->counts(['supplies' => fn (Builder $query): Builder => $query->notVoided()])
                     ->sortable(),
 
                 TextColumn::make('note')

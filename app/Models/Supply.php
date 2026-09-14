@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Database\Factories\SupplyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,27 +32,56 @@ use LogicException;
     'supplied_on',
     'reference',
     'user_id',
+    'voided_at',
+    'voided_by',
 ])]
 class Supply extends Model
 {
     /** @use HasFactory<SupplyFactory> */
     use HasFactory;
 
+    /**
+     * The only thing that may ever be written to a Supply after it is
+     * recorded: that it was voided, when, and by whom.
+     *
+     * Named here so the guard below reads as the rule rather than as a list
+     * of columns somebody has to keep in step with it.
+     *
+     * @var list<string>
+     */
+    public const VOIDING = ['voided_at', 'voided_by'];
+
     protected function casts(): array
     {
         return [
             'supplied_on' => 'date',
+            'voided_at' => 'datetime',
         ];
     }
 
     /**
      * What was delivered is what was delivered. The panel offers no edit and
      * no delete route, and this is what holds that everywhere else.
+     *
+     * The one exception is voiding, and it is an exception in the narrowest
+     * possible sense: the document is not corrected, it is struck out. What
+     * it said stays exactly as it was typed, and the two columns that may
+     * change say only that it does not count — which is why they are allowed
+     * through here and every other attribute is not.
      */
     protected static function booted(): void
     {
-        static::updating(function (): never {
-            throw new LogicException('A Supply is never edited. Void it and record it again instead.');
+        static::updating(function (Supply $supply): void {
+            $changing = array_diff(array_keys($supply->getDirty()), [...self::VOIDING, $supply->getUpdatedAtColumn()]);
+
+            if ($changing !== []) {
+                throw new LogicException('A Supply is never edited. Void it and record it again instead.');
+            }
+
+            /** Voided once, whatever the screen that asked was showing: the second one has nothing left to reverse. */
+            if ($supply->getOriginal('voided_at') !== null) {
+                throw new LogicException('A Supply is voided once. It has already been voided.');
+            }
         });
 
         static::deleting(function (): never {
@@ -89,6 +120,53 @@ class Supply extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Who struck it out, where somebody has. A second name beside the one
+     * that recorded it, which is most of what a void is for.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
+    }
+
+    /**
+     * Whether this delivery has been struck out.
+     *
+     * A voided Supply is still a Supply and still on every list. What it is
+     * not is a delivery that counts: the ledger has already taken every unit
+     * of it back out, and no buying figure may add it up.
+     */
+    public function isVoided(): bool
+    {
+        return $this->voided_at !== null;
+    }
+
+    /**
+     * The deliveries that stand — what "how much have we bought" means
+     * wherever anything counts or sums Supplies.
+     *
+     * @param  Builder<Supply>  $query
+     */
+    #[Scope]
+    protected function notVoided(Builder $query): void
+    {
+        $query->whereNull('voided_at');
+    }
+
+    /**
+     * The deliveries that were struck out. Read on their own only by somebody
+     * asking what went wrong, which is exactly why they are still here.
+     *
+     * @param  Builder<Supply>  $query
+     */
+    #[Scope]
+    protected function voided(Builder $query): void
+    {
+        $query->whereNotNull('voided_at');
     }
 
     /**
