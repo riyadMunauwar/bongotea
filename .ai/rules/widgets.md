@@ -2,6 +2,7 @@
 paths:
   - 'app/Filament/Widgets/**'
   - 'app/Filament/Resources/**/Widgets/**'
+  - 'app/Filament/Clusters/Reports/**'
 ---
 
 # Widgets
@@ -38,7 +39,9 @@ A trashed Page still reports: Livewire restores a model property through `Model:
 ## A windowed report widget kept out of app/Filament/Widgets is what keeps it off the Dashboard
 `discoverWidgets(in: app_path('Filament/Widgets'))` registers every Widget subclass under that folder, and `Filament\Pages\Dashboard::getWidgets()` draws all of them — so a widget put there appears on the Dashboard whether or not any screen names it.
 
-`CourierPerformanceTable` therefore lives under the Shipments resource's `Widgets/` folder, undiscovered, and `App\Filament\Pages\CourierReport::getWidgets()` names it. That is the whole mechanism: the Dashboard carries the courier to-do list, which ignores the Reporting Window, and the Courier Report carries the windowed analytics, which is a split that only holds while the analytics widget stays out of the discovered folder.
+**Every report widget therefore lives in `app/Filament/Clusters/Reports/Widgets/`**, undiscovered, and the report page that draws it names it in `getWidgets()`. `CourierPerformanceTable` is the one there today, named by `Clusters\Reports\Pages\CourierReport`. That is the whole mechanism: the Dashboard carries the courier to-do list, which ignores the Reporting Window, and the Reports cluster carries the windowed analytics — a split that only holds while the analytics widgets stay out of the discovered folder.
+
+Report widgets go in that folder rather than beside the resource they report on, even when a resource exists (this one reports on Shipments and does not live under `Resources/Shipments/`). A report page's subject need not have a resource behind it at all — inventory is the case that proves it — so resource-adjacency is a convention that breaks on the page that needs it most, and the "not under `app/Filament/Widgets`" guarantee is easier to keep in one folder than in five.
 
 An undiscovered widget needs no registration to be drawn or tested: `getWidgetsSchemaComponents()` mounts it by class name, and `Livewire::test(TheWidget::class, ['pageFilters' => [...]])` works. `DeliveryHealthStats` is the older precedent.
 

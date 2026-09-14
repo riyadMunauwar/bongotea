@@ -2,9 +2,12 @@
 
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
-use App\Filament\Pages\CourierReport;
+use App\Filament\Clusters\Reports\Pages\CourierReport;
+use App\Filament\Clusters\Reports\ReportsCluster;
+use App\Filament\Clusters\Reports\Widgets\CourierPerformanceTable;
+use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Filament\Pages\Dashboard;
-use App\Filament\Resources\Shipments\Widgets\CourierPerformanceTable;
+use App\Filament\Resources\Pages\PageResource;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\User;
@@ -19,12 +22,16 @@ beforeEach(function (): void {
 /*
 | The counting is proved against the query module in
 | ReportingCourierPerformanceTest. What is asserted here is the screen a
-| Merchant opens: that it is reachable at an address of its own with the
-| Reporting Window across the top, that the window it is set to is the window
-| the figures obey, that an absent figure reads as a sentence rather than as a
-| nought, that nothing on it is added up across couriers, and that none of it
-| has leaked onto the Dashboard — which carries the courier to-do list and no
-| windowed analytics at all.
+| Merchant opens: that it is reachable at an address of its own inside the
+| Reports cluster with the Reporting Window across the top, that the window it
+| is set to is the window the figures obey, that an absent figure reads as a
+| sentence rather than as a nought, that nothing on it is added up across
+| couriers, and that none of it has leaked onto the Dashboard — which carries
+| the courier to-do list and no windowed analytics at all.
+|
+| It carries the cluster's own assertions too, because the cluster holds one
+| page today: where it sits, that it is ungated, and that it and not its pages
+| is what the sidebar draws.
 */
 
 /**
@@ -81,7 +88,7 @@ function aWeekOfParcels(): void
 }
 
 it('opens the Courier Report at an address of its own, with the Reporting Window above the figures', function () {
-    expect(CourierReport::getUrl())->toEndWith('/admin/courier-report');
+    expect(CourierReport::getUrl())->toEndWith('/admin/reports/courier-report');
 
     /** Nothing is posted to reach it, so the address is worth bookmarking. */
     $this->get(CourierReport::getUrl())
@@ -96,8 +103,34 @@ it('opens the Courier Report at an address of its own, with the Reporting Window
     expect(CourierPerformanceTable::isLazy())->toBeTrue();
 });
 
-it('declares where it sits in the sidebar, under Shipments and above Products', function () {
-    expect(CourierReport::getNavigationSort())->toBe(3);
+it('is the first page of the Reports cluster, which is what the sidebar draws', function () {
+    expect(CourierReport::getCluster())->toBe(ReportsCluster::class)
+        ->and(CourierReport::getNavigationSort())->toBe(0);
+
+    /**
+     * The cluster carries the glyph and the pages inside it carry none, so a
+     * second report page costs no icon decision — and the collapsed rail
+     * never draws the truck twice.
+     */
+    expect(CourierReport::getNavigationIcon())->toBeNull()
+        ->and(ReportsCluster::getNavigationIcon())->not->toBeNull();
+});
+
+/**
+ * Ungated on purpose: the Dashboard already draws Sales, Average Order Value
+ * and courier money to every User, so a gate here would stop nobody reading
+ * the same class of figure one click away. The permission is owed the day the
+ * Dashboard's own figures are gated with it.
+ */
+it('opens for any User of the panel, holding no permission of its own', function () {
+    expect(ReportsCluster::canAccess())->toBeTrue()
+        ->and(CourierReport::canAccess())->toBeTrue();
+});
+
+it('sits between the work and the settings, in the gap the Settings cluster left', function () {
+    expect(ReportsCluster::getNavigationSort())->toBe(50)
+        ->and(SettingsCluster::getNavigationSort())->toBe(100)
+        ->and(PageResource::getNavigationSort())->toBe(4);
 });
 
 it('opens on the last seven days and reveals the two pickers once Custom is chosen', function () {

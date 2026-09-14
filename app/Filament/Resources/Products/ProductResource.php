@@ -28,8 +28,8 @@ class ProductResource extends Resource
      */
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
-    /** Fifth, under the Courier Report. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 4;
+    /** Fourth, under Shipments. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

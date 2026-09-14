@@ -248,6 +248,10 @@ _Avoid_: outstanding, receivable, pending COD, courier balance, float
 The span of days every report figure is counted over, chosen once for a whole screen and obeyed by everything on it: Today, Yesterday, Last 7 days, Last 30 days, This month, or two dates. A day begins and ends in the Merchant's timezone, never the server's, because a Merchant judges a day's spend against a day's Orders and both happen in the same place. Every window has a comparison window of the same length immediately before it, which is what a change is measured against.
 _Avoid_: date range, period, filter, timeframe
 
+**Report**:
+Figures counted over a Reporting Window and obeying it. Every figure on a report answers for the same span of days, which is what makes two of them worth reading side by side. A report is asked either of the whole installation — what the couriers did, what the Products sold — or of one record, which is what a Page Report is; what never varies is that the window governs it. A to-do list is not a report: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
+_Avoid_: analytics, insights, metrics, stats, BI
+
 **Page Report**:
 Everything one Page's own figures say over a Reporting Window — its Orders, Sales, Cancellation Rate and Average Order Value, what became of its Orders, which of its Products carried it, and how it was paid and delivered — on a screen of its own. One Page's answer to the questions the Dashboard asks of every Page at once, which is why it is drawn by the Dashboard's own widgets counting that Page alone. A Page that never took an Order has one, reading as zeros; a retired Page keeps one, because what it earned before it was taken down is still worth reading.
 _Avoid_: analytics, stats, insights, page metrics

@@ -52,9 +52,11 @@ Note this is unrelated to whether the attribute is displayed: an infolist entry 
 `OrderForm` never holds `payment_method`: it is written by the Retry Page and by the "Switch to Cash on Delivery" header action, and shown as read-only text on both screens (`OrderDocument::paymentMethod()`). Both payment actions (`Orders/Actions/`) sit in the header of `ViewOrder` *and* `EditOrder` so a save after either cannot write a stale method back over it, and so an operator need not open the editor to resolve a Payment. "Check with gateway" goes through `PaymentVerifier` like every other Verification and decides nothing itself; every check logs `payment_checked` (with the resulting state) on the Order's trail, because a still-Pending answer is the case the action exists for and the Verification leaves nothing behind for it — so a settled check leaves two entries, the outcome and the check.
 
 ## A new resource must declare $navigationSort or it lands above the Dashboard
-Filament reads an undeclared `$navigationSort` as `-1`, not as "last". Every top-level entry in this panel therefore states its own — Dashboard 0, Orders 1, Shipments 2, CourierReport 3, Products 4, Pages 5, SettingsCluster 100 — and a resource added without one jumps to the top of the sidebar silently. `AdminShellTest` asserts the full order, so this fails in CI rather than in front of a Merchant; update it when you add an entry.
+Filament reads an undeclared `$navigationSort` as `-1`, not as "last". Every top-level entry in this panel therefore states its own — Dashboard 0, Orders 1, Shipments 2, Products 3, Pages 4, ReportsCluster 50, SettingsCluster 100 — and a resource added without one jumps to the top of the sidebar silently. `AdminShellTest` asserts the full order, so this fails in CI rather than in front of a Merchant; update it when you add an entry.
 
-Resources inside the Settings cluster are numbered separately (General 0, Payment Methods 1, Destinations 2, Tracking 3) and are not part of the top-level order.
+The two clusters sit in the tens and hundreds rather than at 5 and 6 so that a category arriving later has somewhere to go without renumbering the five resources above them. A *resource* still takes the next integer.
+
+Pages inside a cluster are numbered separately and are not part of the top-level order — Settings holds General 0, Payment Methods 1, Destinations 2, Tracking 3, Couriers 4; Reports holds Courier Report 0. A cluster contributes one entry to the sidebar under its own label, so its pages never appear in the `AdminShellTest` list.
 
 The full reasoning, including why Pages uses the custom `giopages-funnel` icon rather than `Heroicon::OutlinedFunnel`, is in the AdminPanelProvider rules.
 

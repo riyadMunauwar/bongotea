@@ -1,21 +1,20 @@
 <?php
 
-namespace App\Filament\Pages;
+namespace App\Filament\Clusters\Reports\Pages;
 
+use App\Filament\Clusters\Reports\ReportsCluster;
+use App\Filament\Clusters\Reports\Widgets\CourierPerformanceTable;
 use App\Filament\Concerns\HasReportingWindow;
-use App\Filament\Resources\Shipments\Widgets\CourierPerformanceTable;
-use BackedEnum;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\Widget;
 use Filament\Widgets\WidgetConfiguration;
 
 /**
- * Which Courier actually delivers, on a screen of its own.
+ * Which Courier actually delivers, on a screen of its own inside Reports.
  *
  * It answers of the couriers what the Page Report answers of one Page, and is
  * built the same way: the Reporting Window across the top as a filter form,
@@ -43,22 +42,19 @@ class CourierReport extends Page
     use HasReportingWindow;
 
     /**
-     * A chart, because this screen is figures about something rather than a
-     * list of it. The truck belongs to Shipments, which is the list, and two
-     * entries a line apart drawn with one glyph are two entries a Merchant
-     * cannot tell apart in the collapsed rail.
+     * Reports carries the sidebar entry and the glyph; this page carries
+     * neither. `ReportsCluster` holds the reasoning, and the practical effect
+     * is that the Product and Order reports after this one cost no icon
+     * decision at all.
      */
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
+    protected static ?string $cluster = ReportsCluster::class;
 
     /**
-     * Under Shipments, which is what it reports on — the sidebar reads
-     * Dashboard, Orders, Shipments, Courier Report, Products, Pages, then
-     * Settings at 100. Every top-level entry states its own sort, so
-     * inserting one here renumbers the two below it on purpose; Filament
-     * reads an undeclared sort as `-1`, which is above the Dashboard rather
-     * than at the end.
+     * First inside the cluster, which numbers separately from the top-level
+     * sidebar — the same way the Settings pages do. The cluster's own sort is
+     * what places Reports among the entries a Merchant reads.
      */
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 0;
 
     /**
      * The Reporting Window across the top, then the report under it.

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Shipments\Widgets;
+namespace App\Filament\Clusters\Reports\Widgets;
 
 use App\Support\Money;
 use App\Support\Reporting\CourierPerformanceRow;
@@ -30,11 +30,17 @@ use Illuminate\Support\Collection;
  * is a count of zero, but a rate with no parcels under it is unknown, and a
  * carriage charge a Courier has never named is unknown rather than free.
  *
- * It lives here, among the Shipments resource's own classes, rather than in
+ * It lives beside the cluster that draws it rather than in
  * `App\Filament\Widgets` — which the panel discovers, and everything the
  * panel discovers is drawn on the Dashboard. The Dashboard carries the
- * courier to-do list and no windowed courier analytics; those are this
- * screen's, and this is where the screen's one widget keeps them.
+ * courier to-do list, which ignores the Reporting Window; a windowed courier
+ * figure kept in the discovered folder would land there whether or not any
+ * screen named it.
+ *
+ * Every report widget belongs in this folder for that reason, and not beside
+ * the resource it reports on: a report page's subject need not have a
+ * resource behind it at all, which is the shape inventory reporting will
+ * arrive in.
  *
  * The counting is `ReportingQuery::courierPerformance()`'s and nothing here
  * counts. Lazy, like every report widget, so the shell renders before the
