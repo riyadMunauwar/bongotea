@@ -156,6 +156,21 @@ final class RedExScript extends CourierScript
         return self::REFUSAL;
     }
 
+    /** One parcel a call, so a batch it settles nothing about is a bad gateway on the first one. */
+    public function fakeBatchUnreadable(): void
+    {
+        $this->fakeBookingSilenced(502);
+    }
+
+    /** Still answering with its areas, as every RedEx fake must, and settling nothing about the parcel. */
+    public function fakeBookingSilenced(int $status): void
+    {
+        $this->fake([$this->bookingUrl() => Http::response([
+            'message' => 'Service temporarily unavailable.',
+            'statusCode' => $status,
+        ], $status)]);
+    }
+
     /**
      * RedEx unreachable for the parcel, and still answering with its areas.
      *

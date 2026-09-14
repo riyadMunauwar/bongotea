@@ -415,6 +415,18 @@ class RedEx implements CourierDriver
      */
     private function read(Shipment $shipment, Response $response): ShipmentBooked
     {
+        /**
+         * An answer that settles nothing is not RedEx refusing the parcel.
+         * Read the other way round — which is how this was written until a
+         * sweep of two hundred parcels one at a time met a rate limit — every
+         * parcel after the first failure is written off as refused by a
+         * Courier that never saw it, and `refused_at` takes it out of Active
+         * for good.
+         */
+        if (($silence = CourierSilence::in($response, $this->courier())) !== null) {
+            throw $silence->bookingNotMade(['invoice' => $shipment->invoice_reference]);
+        }
+
         $body = $response->json();
         $body = is_array($body) ? $body : [];
         $tracking = $body['tracking_id'] ?? null;

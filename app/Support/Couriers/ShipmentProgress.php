@@ -91,20 +91,17 @@ final class ShipmentProgress
      * Courier was answering about the parcel and its driver must read what it
      * said.
      *
-     * The one reading of "settles nothing", shared because it is one rule and
-     * not three: a 5xx is a Courier having a bad morning, and a rejected
-     * credential is a Merchant's Settings rather than anything about this
-     * parcel. Writing either onto a parcel's timeline would put the whole
-     * installation's trouble on every Shipment it holds (ADR-0019).
+     * The reading itself is `CourierSilence`'s, because a booking must make
+     * the same one — a 5xx, a rate limit or a rejected credential is no more
+     * the Courier refusing a parcel than it is the Courier reporting one.
+     * This is the poll's half of it: nothing is concluded and nothing at all
+     * is written, so the whole installation's trouble never lands on the
+     * timeline of every Shipment it holds (ADR-0019).
      */
     public static function silenceFrom(Response $response, Courier $courier): ?self
     {
-        $label = $courier->getLabel();
+        $silence = CourierSilence::in($response, $courier);
 
-        return match (true) {
-            $response->serverError() => self::unreachable("{$label} answered {$response->status()} and said nothing about the parcel."),
-            $response->unauthorized() || $response->forbidden() => self::unreachable("{$label} would not accept this installation's credentials (HTTP {$response->status()})."),
-            default => null,
-        };
+        return $silence === null ? null : self::unreachable($silence->reason);
     }
 }

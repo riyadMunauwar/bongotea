@@ -490,6 +490,17 @@ class Pathao implements CourierDriver
                 );
             }
 
+            /**
+             * Nor is a 5xx, a rate limit or a rejected key a refused parcel.
+             * Pathao takes a batch one parcel at a time (`batchLimit()` is 1),
+             * so a sweep is a run of single bookings down this very path —
+             * and read as refusals they would each stamp `refused_at` on a
+             * real parcel Pathao never looked at.
+             */
+            if (($silence = CourierSilence::inStatus($answer->status(), $this->courier())) !== null) {
+                throw $silence->bookingNotMade($answer->body());
+            }
+
             throw new CourierRefusedBooking(
                 "Pathao refused parcel [{$shipment->invoice_reference}]: ".$answer->reason(),
                 $answer->body(),

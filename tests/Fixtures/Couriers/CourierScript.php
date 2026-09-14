@@ -74,8 +74,32 @@ abstract class CourierScript
     /** Fake the Courier answering and refusing the parcel. */
     abstract public function fakeBookingRefused(): void;
 
+    /**
+     * Fake the Courier answering a whole batch with something that settles
+     * nothing about any parcel in it.
+     *
+     * What that looks like is the Courier's own business, which is why it is
+     * asked of the script: Steadfast takes five hundred a call and can answer
+     * one malformed body for the lot, where a Courier taking one parcel a call
+     * can only answer this parcel and stop the run. Either way not one row may
+     * be written off, because not one parcel was looked at.
+     */
+    abstract public function fakeBatchUnreadable(): void;
+
     /** What the Courier says when it refuses, so a test can prove the operator is told it verbatim. */
     abstract public function refusalWording(): string;
+
+    /**
+     * Fake the Courier answering with a status that settles nothing about the
+     * parcel — a 5xx, a rate limit, a rejected credential.
+     *
+     * Not a refusal, however much the body looks like one: the parcel was
+     * never looked at, so a booking must come back as silence and leave the
+     * Order exactly as it was. Every Courier is asked to fake it because every
+     * Courier's driver has to read it the same way, which is the whole of what
+     * `CourierSilence` is for.
+     */
+    abstract public function fakeBookingSilenced(int $status): void;
 
     /**
      * Fake the Courier being unreachable for every call.

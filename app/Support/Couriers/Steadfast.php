@@ -437,14 +437,29 @@ class Steadfast implements CourierDriver
         $answer = is_array($response->json()) ? $response->json() : [];
         $lines = is_array($answer['data'] ?? null) ? $answer['data'] : null;
 
+        /**
+         * An answer with no readable list of lines settles nothing about any
+         * parcel in the chunk, so not one of them is written off: they stay
+         * written and undispatched and are offered again, which is what
+         * `BatchBooked` says an answer that could not be read should cost.
+         *
+         * This used to refuse the whole chunk, and the cost of that was paid
+         * by parcels Steadfast never objected to. One bad recipient phone in a
+         * chunk of five hundred comes back as a 422 naming that one row, and
+         * the answer holds no `data` list at all — so all five hundred were
+         * stamped `refused_at`, out of Active for good and never swept again,
+         * on the strength of one that was genuinely wrong.
+         *
+         * The price is that a chunk Steadfast will always reject is offered
+         * every sweep rather than once. That is the right way round: the sweep
+         * stops on this Courier for the run, `CourierSweep::STUCK_AFTER_SECONDS`
+         * flags the parcels within the week and an operator can see them,
+         * where a written-off parcel is gone silently.
+         */
         if ($lines === null) {
-            $refused = [];
-
-            foreach ($shipments as $shipment) {
-                $refused[$shipment->invoice_reference] = $this->refusalOf($shipment, $answer, $response);
-            }
-
-            return BatchBooked::of([], $refused);
+            return BatchBooked::silencedAfter(
+                'Steadfast answered '.count($shipments).' parcels with nothing that could be read as a result: '.$this->reason($answer, $response),
+            );
         }
 
         $byInvoice = [];
@@ -496,6 +511,11 @@ class Steadfast implements CourierDriver
      */
     private function read(Shipment $shipment, Response $response): ShipmentBooked
     {
+        /** An answer that settles nothing is not Steadfast refusing the parcel; `bookAll()` has read it this way all along. */
+        if (($silence = CourierSilence::in($response, $this->courier())) !== null) {
+            throw $silence->bookingNotMade(['invoice' => $shipment->invoice_reference]);
+        }
+
         $answer = is_array($response->json()) ? $response->json() : [];
 
         $consignment = $answer['consignment'] ?? null;

@@ -323,6 +323,52 @@ it('leaves the order exactly as it was when the courier cannot be reached', func
         ->and($order->refresh()->isShipping())->toBeFalse();
 })->with('courier scripts');
 
+/**
+ * The failure that costs real parcels, and the reason it is worth a test per
+ * Courier: a driver that reads "no Consignment in the body" as "the Courier
+ * refused this parcel" cannot tell a rejection from a bad gateway. A sweep
+ * hands a Courier two hundred parcels one at a time, and a Courier that starts
+ * answering 502 or 429 partway would have every parcel after that written off
+ * as refused — `refused_at`, out of Active for good, never offered again —
+ * having never been looked at.
+ *
+ * 503 and 429 rather than 401: a rejected credential is the installation's and
+ * is worded differently on purpose, which the case below this one covers.
+ */
+it('reads an answer that settles nothing as silence, never as the courier refusing the parcel', function (CourierScript $script, int $status) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBookingSilenced($status);
+
+    sendWithCourier($order, $script)
+        ->assertNotified($script->courier()->getLabel().' could not be reached');
+
+    /** Nothing recorded, so the Order is sendable again the moment the Courier is back (ADR-0020). */
+    expect(Shipment::count())->toBe(0)
+        ->and($order->refresh()->isShipping())->toBeFalse()
+        ->and($order->notYetSent()->exists())->toBeTrue();
+})->with('courier scripts')->with([
+    'a bad gateway' => [502],
+    'an outage' => [503],
+    'a rate limit' => [429],
+]);
+
+/**
+ * A rejected credential is this installation's Settings and never this
+ * parcel's fault either — but pressing the button again will not help, so it
+ * is the other silence and gets the other sentence.
+ */
+it('words a rejected credential as a courier it cannot speak to rather than a refused parcel', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBookingSilenced(403);
+
+    sendWithCourier($order, $script);
+
+    expect(lastNotification()?->getBody())->not->toContain('refused')
+        ->and(Shipment::count())->toBe(0);
+})->with('courier scripts');
+
 it('offers no courier at all until one is switched on and supplied', function (CourierScript $script) {
     $order = Order::factory()->create();
 
@@ -784,6 +830,42 @@ it('sends a correction to the courier and saves it onto the order as well', func
     expect($order->refresh()->customer_name)->toBe('Rahim Uddin Ahmed')
         ->and($order->customer_address)->toBe('House 9, Road 3, Uttara')
         ->and($order->customer_district)->toBe('Gazipur');
+})->with('courier scripts');
+
+/**
+ * The correction is committed to the Order, and Edit Order holds all three of
+ * the fields it writes.
+ *
+ * Livewire filled `$data` when the page opened and knows nothing of a write
+ * made under it, so without `refreshFormData()` the form still holds the typo
+ * an operator has just fixed in the send dialog — and Save, the very next
+ * thing they are likely to press, writes it straight back over the correction.
+ * The parcel has already gone with the right address, so the two disagree
+ * silently, and the re-send after a return uses the wrong one.
+ *
+ * Proved by saving rather than by reading the form state, because saving is
+ * what a User does and is what the stale state would corrupt.
+ */
+it('does not let a save on edit order write a corrected address back to what it was', function (CourierScript $script) {
+    $order = orderReadyToSend($script);
+
+    $script->fakeBooked();
+
+    $screen = sendWithCourier($order, $script, EditOrder::class, [
+        'recipientName' => 'Rahim Uddin Ahmed',
+        'recipientAddress' => 'House 9, Road 3, Uttara',
+    ])->assertNotified();
+
+    expect($order->refresh()->customer_address)->toBe('House 9, Road 3, Uttara');
+
+    /** The operator now saves the form they were already on. */
+    $screen->call('save')->assertHasNoFormErrors();
+
+    expect($order->refresh()->customer_address)->toBe('House 9, Road 3, Uttara')
+        ->and($order->customer_name)->toBe('Rahim Uddin Ahmed')
+
+        /** And what actually went to the Courier still agrees with the Order. */
+        ->and(Shipment::sole()->recipient_address)->toBe('House 9, Road 3, Uttara');
 })->with('courier scripts');
 
 it('leaves a detail the checkout never captured alone rather than reading a blank box as an erasure', function (CourierScript $script) {

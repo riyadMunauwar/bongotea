@@ -157,6 +157,26 @@ final class PathaoScript extends CourierScript
         return self::REFUSAL;
     }
 
+    /** One parcel a call, so a batch it settles nothing about is a bad gateway on the first one. */
+    public function fakeBatchUnreadable(): void
+    {
+        $this->fakeBookingSilenced(502);
+    }
+
+    /**
+     * The token grant still answers — this is Pathao's own trouble with the
+     * parcel call and not a Merchant's credentials, which is the case the 401
+     * branch above already owns.
+     */
+    public function fakeBookingSilenced(int $status): void
+    {
+        $this->fake([$this->bookingUrl() => Http::response([
+            'message' => 'Service temporarily unavailable.',
+            'type' => 'error',
+            'code' => $status,
+        ], $status)]);
+    }
+
     /**
      * Every field Pathao documents as required, filled: the store, the
      * merchant's own reference for the parcel, the recipient's name, an

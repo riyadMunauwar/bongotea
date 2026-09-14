@@ -114,6 +114,29 @@ final class SteadfastScript extends CourierScript
         ], 422)]);
     }
 
+    /**
+     * Steadfast's validation answer: it names the one row it objected to, by
+     * its index in the array that was sent, and carries no `data` list at all.
+     * One bad recipient phone in a chunk of five hundred looks exactly like
+     * this, and nothing in it is an answer about the other four hundred and
+     * ninety-nine.
+     */
+    public function fakeBatchUnreadable(): void
+    {
+        Http::fake([$this->bulkBookingUrl() => Http::response([
+            'status' => 422,
+            'errors' => ['data.0.recipient_phone' => [self::REFUSAL]],
+        ], 422)]);
+    }
+
+    public function fakeBookingSilenced(int $status): void
+    {
+        Http::fake([$this->bookingUrl() => Http::response([
+            'status' => $status,
+            'message' => 'Service temporarily unavailable.',
+        ], $status)]);
+    }
+
     public function refusalWording(): string
     {
         return self::REFUSAL;

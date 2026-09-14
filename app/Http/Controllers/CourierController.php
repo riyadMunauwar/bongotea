@@ -62,6 +62,34 @@ class CourierController extends Controller
             return $this->ignored("A {$courier} announcement named [{$announcement->invoiceReference}], which is no parcel under it.", $announcing, $announcement);
         }
 
+        /**
+         * A parcel this Courier has never been handed cannot be announced
+         * about, whatever the announcement says.
+         *
+         * A batch writes its rows before the sweep dispatches them (ADR-0020),
+         * and until it does they hold no Consignment — so there is nothing to
+         * ask the Courier about, and asking anyway is how one of these rows is
+         * lost. The invoice reference is `{order number}-{n}` and therefore
+         * guessable, and `CourierPoller::ask()` would put the question with an
+         * empty Consignment, read the answer as a Courier refusing to account
+         * for the parcel and write Unknown and `polled_at` onto the row.
+         * Unknown is not terminal, so the row stays Active and out of
+         * `awaitingDispatch()` — which the dispatcher selects on — while
+         * `CourierSweep` only asks about rows that have a Consignment. Nothing
+         * would ever touch it again.
+         *
+         * The same state `Shipment::abandon()` refuses on, and refused here
+         * for the same reason: a parcel nobody has handed over is not a parcel
+         * anybody has anything to say about yet.
+         */
+        if ($shipment->isAwaitingDispatch()) {
+            return $this->ignored(
+                "A {$courier} announcement named [{$announcement->invoiceReference}], a parcel it has not been handed yet.",
+                $announcing,
+                $announcement,
+            );
+        }
+
         if ($announcement->claimsAStatusChange()) {
             /**
              * The claim has done its whole job by naming the parcel. What it

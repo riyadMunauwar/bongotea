@@ -391,6 +391,53 @@ it('frees every order to be sent again when the courier refuses the whole batch'
     }
 })->with('courier scripts');
 
+/**
+ * The failure that loses whole chunks of real parcels.
+ *
+ * Steadfast takes five hundred a call and answers one body for the lot, so a
+ * single bad recipient phone comes back as a 422 naming that one row — with no
+ * `data` list in it, and therefore no answer whatsoever about the other four
+ * hundred and ninety-nine. Read as a refusal, every one of them is stamped
+ * `refused_at`: out of Active for good, and never offered again. The couriers
+ * taking one parcel a call reach the same cliff from the other side, where a
+ * gateway error partway through a run would write off every parcel after it.
+ *
+ * Neither may refuse anything. A parcel named in neither list is a parcel
+ * nothing is known about, and `BatchBooked` says its row stays as it was.
+ */
+it('refuses nothing when the courier answers a batch with something it cannot read', function (CourierScript $script) {
+    $orders = ordersReadyToSend($script, 2);
+
+    sendBatchWithCourier($orders, $script);
+
+    answeringAfresh();
+    $script->fakeBatchUnreadable();
+
+    $this->artisan('couriers:sweep')
+        ->expectsOutputToContain('Handed over 0 parcels')
+        ->assertSuccessful();
+
+    foreach ($orders as $order) {
+        $parcel = parcelFor($order)->refresh();
+
+        expect($parcel->refusal_reason)->toBeNull()
+            ->and($parcel->refused_at)->toBeNull()
+
+            /** Still written, unconsigned and Active — which is exactly what the next sweep dispatches. */
+            ->and($parcel->isAwaitingDispatch())->toBeTrue();
+    }
+
+    /** And the proof it costs nothing but a delay: the next sweep hands them over. */
+    answeringAfresh();
+    $script->fakeBatchBooked();
+
+    $this->artisan('couriers:sweep')->assertSuccessful();
+
+    foreach ($orders as $order) {
+        expect(parcelFor($order)->refresh()->consignment_reference)->not->toBeNull();
+    }
+})->with('courier scripts');
+
 it('never offers a parcel the courier has already settled, however often the sweep runs', function (CourierScript $script) {
     $orders = ordersReadyToSend($script, 2);
 

@@ -134,6 +134,53 @@ it('ignores and logs a webhook naming no parcel it holds, and answers 200', func
         ->and($shipment->events()->count())->toBe(0);
 })->with('announcing couriers');
 
+/**
+ * The announcement that could strand a parcel rather than merely be believed.
+ *
+ * A batch writes its rows before the sweep dispatches them (ADR-0020), so
+ * between the two a row is Written with no Consignment. The invoice reference
+ * is `{order number}-{n}` and guessable, and asking the Courier about a parcel
+ * it has never been handed puts the question with an empty Consignment: the
+ * answer is not silence, so it is written down as Unknown with `polled_at`
+ * stamped. Unknown is not terminal, so the row stays Active — but it is out of
+ * `awaitingDispatch()`, which is what the dispatcher selects on, and it holds
+ * no Consignment, which is what `CourierSweep` requires to poll. Nothing would
+ * ever touch it again.
+ */
+it('refuses to ask about a parcel the courier has not been handed yet, and leaves the row dispatchable', function (CourierScript $script) {
+    $script->makeUsable();
+
+    $written = Shipment::factory()->create([
+        'courier' => $script->courier(),
+        'status' => ShipmentStatus::Written,
+        'consignment_reference' => null,
+        'booked_at' => null,
+    ]);
+
+    Http::fake();
+    Log::spy();
+
+    $this->post(announcementUrl($script), $script->statusAnnouncement($written->invoice_reference, $script->returnedWording()))->assertOk();
+
+    /** The whole point: no outbound call, so there is no answer to write anything down from. */
+    Http::assertNothingSent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $message, array $fields): bool => str_contains($message, 'has not been handed yet'),
+    );
+
+    $written->refresh();
+
+    expect($written->status)->toBe(ShipmentStatus::Written)
+        ->and($written->consignment_reference)->toBeNull()
+        ->and($written->polled_at)->toBeNull()
+        ->and($written->events()->count())->toBe(0)
+
+        /** Still exactly what the sweep dispatches, which is what being stranded would have cost it. */
+        ->and($written->isAwaitingDispatch())->toBeTrue()
+        ->and(Shipment::query()->awaitingDispatch()->whereKey($written->getKey())->exists())->toBeTrue();
+})->with('announcing couriers');
+
 it('ignores a webhook naming a parcel another courier is carrying, and answers 200', function (CourierScript $script) {
     $shipment = parcelInFlight($script);
 

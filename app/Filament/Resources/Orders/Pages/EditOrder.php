@@ -26,8 +26,23 @@ class EditOrder extends EditRecord
              * the form: the form holds neither `payment_method` nor anything
              * of a Shipment's, so a save after any of these actions cannot
              * write stale data back over what they wrote.
+             *
+             * Booking is the one exception, and the `after()` is what pays for
+             * it. The send dialog may carry a correction — `ParcelDetails::corrections()`
+             * commits `customer_name`, `customer_address` and `customer_district`
+             * to the **Order** before the parcel goes, and all three are fields
+             * on `OrderForm`. Livewire's `$data` was filled when the page
+             * opened and knows nothing of a write made under it, so without
+             * this an operator who fixes a mistyped address in the dialog and
+             * then presses Save puts the typo straight back — and the next
+             * re-send after a return uses it.
+             *
+             * Only here: the action is one class on three screens, and the
+             * other two hold no form to go stale. `ViewOrder` draws an
+             * infolist, and the queue is a table.
              */
-            BookWithCourierAction::make(),
+            BookWithCourierAction::make()
+                ->after(fn () => $this->refreshFormData(['customer_name', 'customer_address', 'customer_district'])),
             AbandonShipmentAction::make(),
             CheckWithGatewayAction::make(),
             SwitchToCashOnDeliveryAction::make(),
