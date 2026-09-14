@@ -186,3 +186,25 @@ it('logs nothing for a secret saved blank, since nothing changed', function () {
 
     expect(Activity::count())->toBe(0);
 });
+
+/**
+ * Every field's key must name the schema it is in, because the browser calls
+ * back with that key and `getSchemaComponent()` reads the schema name off the
+ * front of it. The base page walks the fields to make the secrets write-only,
+ * and reading a component's key freezes it — so if the schema is not named
+ * first, every field is frozen under the state path instead and every callback
+ * the browser makes answers null. Nothing on the screen says so: a Select with
+ * closure options simply opens empty.
+ */
+it('gives every field a key the browser can call back with', function () {
+    $page = Livewire::test(SecretSettingsPage::class)->instance();
+
+    $fields = $page->getSchema('form')->getFlatFields(withHidden: true);
+
+    expect($fields)->not->toBeEmpty();
+
+    foreach ($fields as $field) {
+        expect($field->getKey())->toStartWith('form.')
+            ->and($page->getSchemaComponent($field->getKey()))->not->toBeNull();
+    }
+});

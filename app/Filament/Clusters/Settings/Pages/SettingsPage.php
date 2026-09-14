@@ -97,7 +97,22 @@ abstract class SettingsPage extends Page
      */
     public function form(Schema $schema): Schema
     {
+        /**
+         * Named here, before anything asks for the name. Filament keys this
+         * schema in `cacheSchema()`, which runs *after* this method returns,
+         * and a component's key is frozen the first time it is read — so the
+         * walk below would otherwise freeze every field's key as
+         * `data.<property>`, taken from the state path, instead of
+         * `form.<property>`.
+         *
+         * Those keys are what the browser is handed and calls back with, and
+         * `getSchemaComponent()` resolves a key by the schema name in front of
+         * the dot. A `data.` key names no schema, so the call answers null —
+         * and a `Select` whose options are a closure asks for its options over
+         * exactly that call when the dropdown opens, so it opens empty.
+         */
         $schema
+            ->key('form')
             ->components($this->formComponents())
             ->columns(1)
             ->statePath('data');

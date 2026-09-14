@@ -95,3 +95,10 @@ Filament's `Select` adds an implicit `in:` rule from its options (`Select::getIn
 A form value a component reshapes on hydration — a Repeater keys its rows — must be set in `SettingsPage::formValues()`, which `mount()` fills from. Writing it into `$this->data` after `mount()` (as `Tracking` does for plain nested toggles) is too late for those.
 
 In tests, `fillForm()` merges into a Repeater's uuid-keyed state rather than replacing it, so a deleted row is `->set('data.<property>', [...])` — which is also what the browser sends.
+
+## Name the schema before reading anything off it, or every dynamic dropdown opens empty
+Filament keys a page's schema in `cacheSchema()`, *after* `form()` returns, and a component's key is frozen the first time it is read. `SettingsPage::form()` walks `getFlatFields()` to make secrets write-only, which reads the container's key — so without an explicit `$schema->key('form')` first, every field freezes as `data.<property>` (the state path) instead of `form.<property>`.
+
+Those keys are what the browser calls back with, and `getSchemaComponent()` resolves a key by the schema name in front of the dot: a `data.` key names no schema, so `callSchemaComponentMethod()` answers null. A `Select` whose `options()` is a closure asks for its options over exactly that call when the dropdown opens, so it silently opens empty while the server-side options and the implicit `in:` rule are both fine — the page still saves, and tests that only `fillForm()` stay green.
+
+`SecretSettingsTest` locks it: every field's key starts with `form.` and resolves back. Any schema method that reads its own schema (flat fields, keys, components) must name the schema first.
