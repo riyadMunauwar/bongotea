@@ -13,6 +13,7 @@ use App\Models\Shipment;
 use App\Models\User;
 use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -125,6 +126,22 @@ it('is the first page of the Reports cluster, which is what the sidebar draws', 
 it('opens for any User of the panel, holding no permission of its own', function () {
     expect(ReportsCluster::canAccess())->toBeTrue()
         ->and(CourierReport::canAccess())->toBeTrue();
+});
+
+/**
+ * A report is a wide thing, and Filament's default would spend a second
+ * vertical strip inside the page on wayfinding — beside the panel's own 14rem
+ * sidebar. The position is declared on the cluster and read off the page, which
+ * is what proves a report page added later inherits it without declaring it.
+ */
+it('draws the cluster pages as tabs above the report, never as a second sidebar', function () {
+    expect(ReportsCluster::getSubNavigationPosition())->toBe(SubNavigationPosition::Top)
+        ->and(CourierReport::getSubNavigationPosition())->toBe(SubNavigationPosition::Top);
+
+    $this->get(CourierReport::getUrl())
+        ->assertOk()
+        ->assertSee('fi-page-has-sub-navigation-top')
+        ->assertDontSee('fi-page-has-sub-navigation-start');
 });
 
 it('sits between the work and the settings, in the gap the Settings cluster left', function () {

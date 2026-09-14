@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Reports;
 
 use BackedEnum;
 use Filament\Clusters\Cluster;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Support\Icons\Heroicon;
 
 /**
@@ -63,4 +64,33 @@ class ReportsCluster extends Cluster
      * last kind of category that could want a line here.
      */
     protected static ?int $navigationSort = 50;
+
+    /**
+     * Tabs across the top of the page, not a second column down its side.
+     *
+     * Filament's default is `Start`, which draws the cluster's pages as a
+     * vertical strip *inside* the page — stacked on top of the panel's own
+     * 14rem sidebar, so two columns of navigation stand between the screen
+     * edge and the first figure. A report is a wide thing: the courier table
+     * alone is eight columns, and every report after it is a table or a chart
+     * that would rather have the width than the wayfinding.
+     *
+     * `HasSubNavigation::getSubNavigationPosition()` reads the page first, then
+     * the cluster, then the panel — so this one property is inherited by every
+     * report page added later, and none of them declares it.
+     *
+     * This is not the topbar ADR-0003 switched off. That is the panel's 4rem
+     * shell strip; these tabs are drawn by the page, which is exactly what that
+     * ADR anticipated would have to happen for anything wanting to live at the
+     * top of a page.
+     *
+     * The alternative — `$shouldRegisterSubNavigation = false` — is a trap
+     * rather than a tidier version of this. The sidebar carries one entry for
+     * the whole cluster and `/admin/reports` only redirects to the first page,
+     * so with the sub-navigation gone a second report would be reachable by
+     * typing its URL and no other way. (`Cluster::getSubNavigation()` overrides
+     * the trait and ignores the flag, which is why the redirect would go on
+     * working and hide the problem.)
+     */
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 }
