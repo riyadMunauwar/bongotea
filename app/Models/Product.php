@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -53,6 +54,24 @@ class Product extends Model implements HasMedia
     public function pages(): BelongsToMany
     {
         return $this->belongsToMany(Page::class);
+    }
+
+    /**
+     * Everything that ever happened to this Product's stock.
+     *
+     * The Product carries no quantity column and never will: On Hand is the
+     * sum of these rows and is asked for through `StockLedger` (ADR-0021).
+     *
+     * Unordered on purpose. The screen that draws these sorts them itself,
+     * and an `orderBy` baked in here would ride into the aggregate
+     * `withOnHand()` builds — an `ORDER BY` inside a summing subquery, which
+     * SQLite tolerates and MySQL under `ONLY_FULL_GROUP_BY` does not.
+     *
+     * @return HasMany<StockMovement, $this>
+     */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
     }
 
     public function registerMediaCollections(): void

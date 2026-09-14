@@ -57,12 +57,13 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  *
  * The User is granted `manage settings` because `SettingsCluster::canAccess()`
  * otherwise hides the last entry, so this pins Settings as last for someone
- * who can see it as well as pinning the six above it. Reports is ungated and
- * is drawn for anybody.
+ * who can see it as well as pinning the seven above it. Reports and Inventory
+ * are ungated and are drawn for anybody.
  *
- * A cluster contributes one entry under its own label and never its pages, so
- * Courier Report is not in this list; `CourierReportScreenTest` is what holds
- * the cluster to what it draws.
+ * A cluster contributes one entry under its own label and never the pages or
+ * resources inside it, so neither Courier Report nor Stock Counts is in this
+ * list; `CourierReportScreenTest` and `StockScreensTest` are what hold those
+ * clusters to what they draw.
  */
 it('draws the sidebar in the order the panel states', function () {
     $this->actingAs(User::factory()->managingSettings()->create());
@@ -72,7 +73,7 @@ it('draws the sidebar in the order the panel states', function () {
         ->map(fn ($item) => $item->getLabel())
         ->all();
 
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Reports', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Inventory', 'Reports', 'Settings']);
 });
 
 /**

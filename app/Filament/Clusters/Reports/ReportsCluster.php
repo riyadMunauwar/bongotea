@@ -56,9 +56,10 @@ class ReportsCluster extends Cluster
      * Between the work and the settings, in the gap `SettingsCluster` left
      * open on purpose — its own doc comment reserved 100 "so that anything
      * which later belongs between the work and the settings has somewhere to
-     * go without renumbering". This is that thing. The sidebar reads Dashboard
-     * 0, Orders 1, Shipments 2, Products 3, Pages 4, Reports 50, Settings 100:
-     * the work, then the reading, then the configuring.
+     * go without renumbering". This is that thing, and `InventoryCluster` at
+     * 10 is the second of them. The sidebar reads Dashboard 0, Orders 1,
+     * Shipments 2, Products 3, Pages 4, Inventory 10, Reports 50, Settings
+     * 100: the work, then the reading, then the configuring.
      *
      * 50 rather than 5 for the same reason 100 was chosen: a report is not the
      * last kind of category that could want a line here.
