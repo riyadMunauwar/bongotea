@@ -326,6 +326,14 @@ _Avoid_: CVR, conversion, close rate, win rate
 Everything the couriers' figures say over a Reporting Window — parcels sent, delivered and returned, how often each Courier delivers, how long it takes, and what it charged — on a screen of its own, broken down by Courier and never blended into one total. A figure a Courier never reports reads as nothing for that Courier rather than as zero for the trade, because the couriers do not answer the same questions and a single blended figure would present one courier's silence as everybody's.
 _Avoid_: delivery analytics, logistics report, shipping stats, courier dashboard
 
+**Delivery Rate**:
+The parcels one Courier got to a door as a share of the parcels it was handed in a Reporting Window. Counted over everything that Courier was given rather than over the attempts it has finished with, so it is a share of the Merchant's own traffic and a parcel still moving is neither a success nor a failure yet. Said of one Courier and never of the trade. Unknown, not zero, where a Courier was handed nothing: a Courier nobody tried is not a Courier that fails.
+_Avoid_: success rate, fulfilment rate, delivery percentage, SLA
+
+**Return Rate**:
+The parcels one Courier brought back as a share of the parcels it was handed in the same Reporting Window, read exactly as the Delivery Rate is. The two need not add up to one: what is left over is out for delivery, held, or Abandoned. It is a Courier's outcome and has nothing to do with the Cancellation Rate, which is a figure about what a User decided.
+_Avoid_: RTO rate, failure rate, cancellation rate, bounce rate
+
 ### Tracking
 
 **Moment**:
