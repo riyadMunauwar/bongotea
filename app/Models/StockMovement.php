@@ -5,10 +5,13 @@ namespace App\Models;
 use App\Enums\StockMovementReason;
 use Database\Factories\StockMovementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use LogicException;
 
 /**
@@ -67,6 +70,36 @@ class StockMovement extends Model
         static::deleting(function (): never {
             throw new LogicException('A Stock Movement is never deleted. Write the movement that reverses it instead.');
         });
+    }
+
+    /**
+     * The rows that still stand: everything except a Void and the movement
+     * it reversed.
+     *
+     * Both halves, because they are one thing that did not happen. A void and
+     * the row it undoes share a cause and a Product and differ only in their
+     * reason, which is what lets one clause find the pair — and what the
+     * ledger's own unique key already indexes.
+     *
+     * Nothing is hidden from what is *held*: the pair sums to nothing, so On
+     * Hand and Value at Cost come to the same figure either way. What it
+     * changes is whether anything was ever bought at all. A Product whose
+     * only costed rows were a delivery that never happened has no known cost
+     * rather than the price on it — reporting that price would be quoting a
+     * delivery the Merchant has just struck out (ADR-0022).
+     *
+     * @param  Builder<StockMovement>  $query
+     */
+    #[Scope]
+    protected function standing(Builder $query): void
+    {
+        $query->whereNotExists(fn (QueryBuilder $voids): QueryBuilder => $voids
+            ->selectRaw('1')
+            ->from('stock_movements as voids')
+            ->where('voids.reason', StockMovementReason::Void)
+            ->whereColumn('voids.source_type', 'stock_movements.source_type')
+            ->whereColumn('voids.source_id', 'stock_movements.source_id')
+            ->whereColumn('voids.product_id', 'stock_movements.product_id'));
     }
 
     /**

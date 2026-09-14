@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use LogicException;
 
 /**
  * The one thing in the system that writes a Stock Movement, and the one thing
@@ -30,8 +29,8 @@ use LogicException;
  * It is deliberately narrow today. A delivery arrives and raises what is
  * held; a User counts, and the difference is squared away as an Adjustment;
  * a delivery that should never have been recorded is Voided, and every unit
- * of it comes back out at what it came in at.
- * Shipment, Return and Loss each arrive as another method here and nowhere
+ * of it comes back out at what it came in at. Shipment, Return and Loss each
+ * arrive as another method here and nowhere
  * else — in particular a `ShipmentObserver` will call this rather than write
  * rows of its own, because status alone is written from four places in the
  * courier layer and that is four places the next Courier path could forget.
@@ -127,6 +126,13 @@ class StockLedger
      * below nothing — the figure is the last cost stamped rather than a
      * division by zero. What a unit was worth does not become unknown because
      * the shelf ran out.
+     *
+     * What is read over is the **standing** rows: a Voided Supply and the
+     * reversal that struck it out are both left out, because between them
+     * they are a delivery that did not happen. They come to nothing either
+     * way, so no figure moves — except on a Product whose only purchase was
+     * the voided one, which goes back to having no known cost at all rather
+     * than quoting the price on a delivery the Merchant has just struck out.
      */
     public function averageCost(Product $product): ?int
     {
@@ -179,7 +185,8 @@ class StockLedger
     public function withValueAtCost(Builder $products): Builder
     {
         return $products->withSum(
-            'stockMovements as '.self::VALUE_AT_COST,
+            /** The standing rows, so this reads the same unknown `valueAtCost()` does on a Product whose only delivery was voided. */
+            ['stockMovements as '.self::VALUE_AT_COST => fn (Builder $query): Builder => $query->standing()],
             DB::raw('quantity * unit_cost'),
         );
     }
@@ -287,7 +294,7 @@ class StockLedger
             $locked = Supply::query()->lockForUpdate()->findOrFail($supply->getKey());
 
             if ($locked->isVoided()) {
-                throw new LogicException('A Supply is voided once. It has already been voided.');
+                throw new SupplyAlreadyVoided($locked);
             }
 
             foreach ($locked->lines()->with('product')->get() as $line) {
@@ -421,8 +428,19 @@ class StockLedger
      */
     private function totals(Product $product): object
     {
-        /** `count(unit_cost)` counts the rows carrying one; the sums span every row, and a null cost adds nothing to the money. */
+        /**
+         * Over the rows that still stand. A Void and the movement it
+         * reversed come to nothing between them, so leaving both out moves
+         * neither sum by a taka — what it moves is the count, and with it
+         * the answer to whether anything was ever bought at all. A Product
+         * whose only costed rows were a delivery that never happened has no
+         * known cost, exactly as it had none before that delivery was typed.
+         *
+         * `count(unit_cost)` counts the rows carrying one; the sums span
+         * every standing row, and a null cost adds nothing to the money.
+         */
         return $product->stockMovements()
+            ->standing()
             ->toBase()
             ->selectRaw('count(unit_cost) as costed, coalesce(sum(quantity), 0) as units, coalesce(sum(quantity * unit_cost), 0) as value')
             ->first() ?? (object) ['costed' => 0, 'units' => 0, 'value' => 0];
@@ -440,6 +458,7 @@ class StockLedger
     private function lastStampedCost(Product $product): ?int
     {
         return $product->stockMovements()
+            ->standing()
             ->whereNotNull('unit_cost')
             ->latest('id')
             ->value('unit_cost');

@@ -5,11 +5,11 @@ namespace App\Filament\Clusters\Inventory\Resources\Supplies\Actions;
 use App\Models\Supply;
 use App\Models\SupplyLine;
 use App\Support\Inventory\StockLedger;
+use App\Support\Inventory\SupplyAlreadyVoided;
 use App\Support\Money;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use LogicException;
 
 /**
  * "Void this delivery": the one thing a User may do to a Supply after it is
@@ -49,13 +49,13 @@ class VoidSupplyAction
             ->action(function (Supply $record, StockLedger $ledger): void {
                 try {
                     /**
-                     * Read fresh, as every action on these screens reads:
-                     * somebody at another desk may have voided this between
-                     * the page being drawn and the button being pressed, and
-                     * the ledger refuses the second one under its own lock.
+                     * The ledger re-reads this under the Supply's own lock, so
+                     * the screen being a minute old is its problem rather than
+                     * ours: a colleague who voided it in between is answered
+                     * there, and told about here.
                      */
-                    $ledger->voidSupply($record->refresh(), auth()->user());
-                } catch (LogicException) {
+                    $ledger->voidSupply($record, auth()->user());
+                } catch (SupplyAlreadyVoided) {
                     Notification::make()
                         ->title('Already voided')
                         ->body('This delivery was voided while this page was open. Nothing was written twice.')

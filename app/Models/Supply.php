@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Inventory\SupplyAlreadyVoided;
 use Database\Factories\SupplyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -78,9 +79,9 @@ class Supply extends Model
                 throw new LogicException('A Supply is never edited. Void it and record it again instead.');
             }
 
-            /** Voided once, whatever the screen that asked was showing: the second one has nothing left to reverse. */
+            /** Voided once, whatever the screen that asked was showing: the second one has nothing left to take back out. */
             if ($supply->getOriginal('voided_at') !== null) {
-                throw new LogicException('A Supply is voided once. It has already been voided.');
+                throw new SupplyAlreadyVoided($supply);
             }
         });
 

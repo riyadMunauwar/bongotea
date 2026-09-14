@@ -9,6 +9,10 @@ use App\Models\Supply;
 use App\Models\SupplyLine;
 use App\Models\User;
 use App\Support\Inventory\StockLedger;
+use App\Support\Inventory\SupplyAlreadyVoided;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Symfony\Component\Finder\SplFileInfo;
 
 /**
  * Buying: what recording a Supply does to what is held, and what it does to
@@ -347,7 +351,8 @@ it('reverses every line of a delivery, including the same product listed twice',
     expect(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(3)
         ->and($this->ledger->onHand($jacket))->toBe(0)
         ->and($this->ledger->onHand($mug))->toBe(0)
-        ->and($this->ledger->valueAtCost($jacket))->toBe(0)
+        /** Nothing was ever bought for it after all, so its worth is unknown rather than nothing. */
+        ->and($this->ledger->valueAtCost($jacket))->toBeNull()
         ->and(SupplyLine::query()->get()->every(
             fn (SupplyLine $line): bool => $line->stockMovements()->count() === 2,
         ))->toBeTrue();
@@ -374,6 +379,47 @@ it('takes back what the voided delivery paid rather than a blended average', fun
         ->and($this->ledger->valueAtCost($product))->toBe(200000);
 });
 
+it('leaves a product with no known cost where the only delivery of it was voided', function () {
+    $product = Product::factory()->create();
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 40, 90000), 'INV-2291', $this->buyer);
+
+    $this->ledger->voidSupply($supply, $this->buyer);
+
+    /**
+     * Back to knowing nothing about what it costs, which is where it stood
+     * before the delivery was typed. Quoting 900.00 would be quoting a
+     * delivery the Merchant has just struck out, and reading nothing would
+     * make a Product that was never bought look free (ADR-0022).
+     */
+    expect($this->ledger->averageCost($product))->toBeNull()
+        ->and($this->ledger->valueAtCost($product))->toBeNull()
+        /** The rows are still there, and still sum to what is on the shelf. */
+        ->and($this->ledger->onHand($product))->toBe(0)
+        ->and(StockMovement::count())->toBe(2);
+
+    /** And the list reads the same unknown the single figure does. */
+    $listed = $this->ledger->withValueAtCost(Product::query())->findOrFail($product->getKey());
+
+    expect($listed->{StockLedger::VALUE_AT_COST})->toBeNull();
+});
+
+it('keeps quoting the last price that was really paid, not the one on a voided delivery', function () {
+    $product = Product::factory()->create();
+
+    /** Bought once at 100.00 and all of it gone again, so the shelf is empty but the price is known. */
+    $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10, 10000), 'INV-1', $this->buyer);
+    $this->ledger->recordCount($product, 0, AdjustmentCause::Damaged, null, $this->buyer);
+
+    $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 5, 20000), 'INV-2', $this->buyer);
+
+    $this->ledger->voidSupply($mistake, $this->buyer);
+
+    /** An empty shelf falls back to the last cost stamped, and 200.00 was never paid for anything. */
+    expect($this->ledger->onHand($product))->toBe(0)
+        ->and($this->ledger->averageCost($product))->toBe(10000);
+});
+
 it('refuses to void the same delivery twice', function () {
     $product = Product::factory()->create();
 
@@ -381,7 +427,7 @@ it('refuses to void the same delivery twice', function () {
 
     $this->ledger->voidSupply($supply, $this->buyer);
 
-    expect(fn () => $this->ledger->voidSupply($supply->fresh(), $this->buyer))->toThrow(LogicException::class)
+    expect(fn () => $this->ledger->voidSupply($supply->fresh(), $this->buyer))->toThrow(SupplyAlreadyVoided::class)
         /** Nothing to reverse a second time, and nothing written trying. */
         ->and(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(1)
         ->and($this->ledger->onHand($product))->toBe(0);
@@ -423,6 +469,28 @@ it('reads voided and standing deliveries apart, so a buying figure can leave one
 | History never rewrites itself
 |--------------------------------------------------------------------------
 */
+
+it('is the only thing in the application that strikes a supply out', function () {
+    /**
+     * The mark and the movements that answer for it are one transaction; a
+     * second hand writing the mark alone would be a struck-out delivery with
+     * stock still on the shelf from it.
+     *
+     * Anything assigned into either column, which the lookahead separates
+     * from `Supply`'s own `'voided_at' => 'datetime'` cast. The whitespace is
+     * matched possessively so the lookahead cannot simply back up onto the
+     * space and pass.
+     */
+    $marking = "/'voided_(?:at|by)'\s*+=>\s*+(?!')/";
+
+    $writers = collect(File::allFiles(app_path()))
+        ->filter(fn (SplFileInfo $file): bool => preg_match($marking, $file->getContents()) === 1)
+        ->map(fn (SplFileInfo $file): string => str_replace('\\', '/', Str::after($file->getPathname(), app_path().DIRECTORY_SEPARATOR)))
+        ->values()
+        ->all();
+
+    expect($writers)->toBe(['Support/Inventory/StockLedger.php']);
+});
 
 it('refuses to edit or delete a supply or one of its lines', function () {
     $product = Product::factory()->create();

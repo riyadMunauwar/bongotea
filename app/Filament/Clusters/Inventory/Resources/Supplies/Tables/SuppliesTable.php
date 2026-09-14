@@ -106,7 +106,6 @@ class SuppliesTable
                     ->queries(
                         true: fn (Builder $query): Builder => $query->voided(),
                         false: fn (Builder $query): Builder => $query->notVoided(),
-                        blank: fn (Builder $query): Builder => $query,
                     ),
             ])
             ->recordActions([
