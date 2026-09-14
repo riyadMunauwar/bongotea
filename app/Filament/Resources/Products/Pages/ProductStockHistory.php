@@ -41,18 +41,24 @@ class ProductStockHistory extends ManageRelatedRecords
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
     /**
-     * What this Product holds, above the movements it is the sum of.
+     * What this Product holds and what it is worth, above the movements both
+     * figures are the sum of.
      *
-     * Nothing where nobody has counted it, never `0`: a zero is an
-     * instruction to reorder, and a Product nobody has looked at is not a
-     * Product that has run out.
+     * Nothing where nobody has counted it and nothing where nobody has bought
+     * it, never `0`: a zero is an instruction to reorder, and a Product
+     * nobody has looked at is not a Product that has run out — nor is one
+     * nobody has supplied a Product that was free (ADR-0022).
      */
     public function getSubheading(): string
     {
         /** @var Product $product */
         $product = $this->getRecord();
 
-        return 'On hand: '.(app(StockLedger::class)->onHand($product) ?? '—');
+        $ledger = app(StockLedger::class);
+        $value = $ledger->valueAtCost($product);
+
+        return 'On hand: '.($ledger->onHand($product) ?? '—')
+            .' · Value at cost: '.($value === null ? '—' : Money::format($value));
     }
 
     public function table(Table $table): Table
@@ -60,7 +66,7 @@ class ProductStockHistory extends ManageRelatedRecords
         return $table
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Nothing has moved yet')
-            ->emptyStateDescription('A Product enters the ledger at its first Stock Count, and not before.')
+            ->emptyStateDescription('A Product enters the ledger when it is first counted or first supplied, and not before.')
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')

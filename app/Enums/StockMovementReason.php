@@ -14,9 +14,9 @@ use Filament\Support\Contracts\HasLabel;
  * that is Committed, which is a fact about Orders and never a movement
  * (ADR-0021).
  *
- * One case today, and that is the whole of what this system can currently do
- * to a box: a User counts, and the difference is squared away. Supply,
- * Shipment, Return and Loss join it as the tickets that can actually cause
+ * Two cases today, and that is the whole of what this system can currently do
+ * to a box: a delivery arrives, and a User counts what is on the shelf.
+ * Shipment, Return and Loss join them as the tickets that can actually cause
  * them land — each one a case here, a driver of it in `StockLedger`, and no
  * migration, because the column is a string cast to this enum rather than a
  * native MySQL enum.
@@ -31,10 +31,21 @@ enum StockMovementReason: string implements HasColor, HasLabel
      */
     case Adjustment = 'adjustment';
 
+    /**
+     * Goods arriving from a Supplier: one movement per line of the Supply
+     * that caused it, always raising what is held.
+     *
+     * The only movement that carries a cost somebody actually paid rather
+     * than the average in force, which is exactly what makes the average roll
+     * forward at all (ADR-0022).
+     */
+    case Supply = 'supply';
+
     public function getLabel(): string
     {
         return match ($this) {
             self::Adjustment => 'Adjustment',
+            self::Supply => 'Supply',
         };
     }
 
@@ -42,6 +53,7 @@ enum StockMovementReason: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Adjustment => 'warning',
+            self::Supply => 'success',
         };
     }
 }

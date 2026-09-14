@@ -22,8 +22,12 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            /** On Hand is summed in the query the list already runs, so a catalogue of any size costs one of them. */
-            ->modifyQueryUsing(fn (Builder $query): Builder => app(StockLedger::class)->withOnHand($query))
+            /** Both stock figures are summed into the query the list already runs, so a catalogue of any size costs one of them. */
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                $ledger = app(StockLedger::class);
+
+                return $ledger->withValueAtCost($ledger->withOnHand($query));
+            })
             ->columns([
                 SpatieMediaLibraryImageColumn::make('image')
                     ->collection(Product::IMAGE_COLLECTION)
@@ -58,6 +62,27 @@ class ProductsTable
                     ->numeric()
                     ->sortable()
                     ->placeholder('—')
+                    ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
+                    ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
+
+                /**
+                 * What the units held are worth at what they cost, beside
+                 * how many there are: how much capital is sitting on the
+                 * shelf, which is the question On Hand alone cannot answer.
+                 *
+                 * Every movement at the cost stamped on it, summed — the
+                 * ledger's own figure, traceable to rows rather than On Hand
+                 * multiplied by an average (ADR-0022). Nothing where nothing
+                 * bought has ever been recorded: a Product nobody has
+                 * supplied has an unknown value, not a free one, which is the
+                 * same choice On Hand makes against `0`.
+                 */
+                TextColumn::make(StockLedger::VALUE_AT_COST)
+                    ->label('Value at cost')
+                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::format($state))
+                    ->sortable()
+                    ->placeholder('—')
+                    /** Below nothing for the same reason On Hand is, and said as loudly: money has left that nothing recorded arriving. */
                     ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
                     ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
 

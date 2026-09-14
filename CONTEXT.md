@@ -16,6 +16,18 @@ _Avoid_: post, article, template, funnel step
 The flat path a Page is served at, and its permanent public identity. A slug is claimed for good once used, because it may be baked into ad creatives that outlive the Page itself.
 _Avoid_: permalink, path, URL
 
+**Site Root**:
+The bare domain — the address a visitor reaches by typing the Merchant's domain and nothing else. It is not a Slug: nothing is authored at it, nothing claims it, and it never appears in an ad creative. What it serves is a Merchant's choice rather than a Page's identity, which is why it can be repointed and a Slug cannot.
+_Avoid_: home, index, empty slug, root slug
+
+**Front Page**:
+The one Page a Merchant has designated to answer the Site Root. A role a Page plays and never a kind of Page: a Front Page is an ordinary Page that keeps its Slug, its Checkout Config and its Products, and stays reachable at its Slug as it always was. Designating one is a decision about the installation, not about the Page, so a Page knows nothing about being one. Only a published Page answers there; a Front Page pulled back to draft or deleted is remembered, and the Site Root serves the Placeholder until it returns or another is chosen.
+_Avoid_: homepage, default page, index, landing root
+
+**Placeholder**:
+What the Site Root serves when no Front Page is designated: a document shipped with the system that says what GioPages is and that nothing has been chosen yet. A Placeholder is not a Page. It has no Slug, no Checkout, no Products and no Pixel; no Merchant authors it, edits it or takes an Order on it, and it is reachable at no address but the Site Root. It is the same document for everyone who sees it, and it asks not to be indexed — the same bytes stand on every installation that has not chosen yet, and the Merchant's domain would wear the cost of that.
+_Avoid_: default page, holding page, welcome page, landing page, coming soon
+
 **Went live**:
 The moment a Page first became reachable at its slug. A Page can be pulled back to draft and published again, but it went live only once — the date is what a Merchant matches a Page against ad spend, so it is the first one, never the most recent.
 _Avoid_: launched, activated, last published
@@ -271,6 +283,10 @@ _Avoid_: stocktake, cycle count, audit, recount, inventory check
 **Adjustment**:
 The Stock Movement that squares the ledger with a Stock Count, carrying a cause chosen from a fixed list — damaged, lost, found, miscount, opening count — the person who counted, and a note where they have something to add. The cause is compulsory and picked rather than typed, because "what am I losing to damage" is a question a Merchant asks of a year of them at once.
 _Avoid_: correction, write-off, shrinkage, manual entry, fix
+
+**Value at Cost**:
+What the units held of a Product are worth at what they cost: every Stock Movement at the unit cost stamped on it, added up. It is how much capital is sitting on the shelf, and it is the ledger's own figure rather than On Hand multiplied by an average — the two come to the same thing, because every movement was stamped with the average in force as it happened, and this one traces to rows a User can read. A Product nothing has ever been bought for reads as nothing, never as zero, like every other unknown figure here; one holding units nobody recorded buying reads what the ledger can account for, which is lower than what was really paid and is raised by recording the Supply that was missed. It goes below nothing only where On Hand has, and means the same thing when it does.
+_Avoid_: stock value, inventory value, valuation, worth, capital tied up
 
 **Days of Cover**:
 How long a Product's On Hand lasts at the rate it is going out: units held against units shipped per day. The rate is read over a fixed trailing span of its own and never over the screen's Reporting Window, because a Merchant narrowing a window to Today would otherwise change every velocity in the catalogue by moving a control about something else. Thin cover is a to-do rather than a report, so it ignores the window like every other one, and one Setting says what thin means for the whole catalogue. A Product nobody has counted has none, and neither has one nothing has gone out of: no cover, never zero and never for ever, because a dormant Product must not present itself as safe.
