@@ -222,3 +222,62 @@ it('is consulted before the framework is loaded', function () {
         ->and(strpos($frontController, 'FallbackPageCacheReader.php'))->toBeLessThan($autoloader)
         ->and(strpos($frontController, '->serve($_SERVER)'))->toBeLessThan($autoloader);
 });
+
+it('answers the site root from the front entry', function () {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    /**
+     * `/` has no Slug to be keyed on, so the reader resolves it to the one
+     * constant the writer and every webserver configuration also spell
+     * (ADR-0023). This is what reaches a Merchant whose webserver was never
+     * configured — the population the second reader exists for — and without
+     * it their single most valuable address would be the only one on the site
+     * paying a full framework boot.
+     */
+    $hit = $this->reader->resolve('/', 'GET');
+
+    expect($hit)->not->toBeNull()
+        ->and(file_get_contents($hit['path']))->toBe('<h1>Front</h1>')
+        ->and($hit['headers'])->toContain('X-GioPages-Cache: fallback');
+});
+
+it('answers the site root with a query string attached', function () {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    /**
+     * Every ad click arrives with a tracking parameter, and the root is no
+     * different from a Slug in that respect.
+     */
+    expect($this->reader->resolve('/?fbclid=abc123', 'GET'))->not->toBeNull();
+});
+
+it('lets the framework boot at the site root when no front entry was written', function () {
+    /**
+     * Absence is the whole signal. No file means no Front Page has been
+     * rendered yet, so the request goes through to the application, which
+     * decides between the Front Page and the Placeholder and caches whichever
+     * it drew.
+     */
+    expect($this->reader->resolve('/', 'GET'))->toBeNull();
+});
+
+it('serves the front entry pre-compressed to a client that accepts gzip', function () {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    $hit = $this->reader->resolve('/', 'GET', 'gzip, deflate');
+
+    expect(gzdecode(file_get_contents($hit['path'])))->toBe('<h1>Front</h1>')
+        ->and($hit['headers'])->toContain('Content-Encoding: gzip');
+});
+
+it('refuses to answer the site root for a method a static file cannot honour', function () {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    expect($this->reader->resolve('/', 'POST'))->toBeNull();
+});
+
+it('sends no body for a HEAD of the site root', function () {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    expect($this->reader->resolve('/', 'HEAD')['sendsBody'])->toBeFalse();
+});

@@ -13,23 +13,27 @@ use Filament\Support\Icons\Heroicon;
  * One sidebar entry holding a page per subject. The pages are the registry:
  * Filament discovers every class in `Pages/` that names this cluster, so a new
  * report is a page class and nothing else — no list here, in a provider or in
- * config to keep in step. It holds the Courier Report today; Products and
- * Orders are the ones expected next.
+ * config to keep in step. It holds the Courier Report, the Stock report, the
+ * Buying report and the Margin report.
  *
  * It exists so that the reports after the first do not each cost a top-level
  * sidebar line. The Courier Report was one for a while, which is what made the
  * question worth asking: a screen carrying a single table had the same standing
  * in the sidebar as the whole Orders queue.
  *
- * **A Report obeys the Reporting Window.** That is the distinction the word
- * carries in `CONTEXT.md`, and it is what separates a page in here from the
- * courier to-do list on the Dashboard, which ignores the window because a
+ * **A report page draws the Reporting Window only if a figure on it obeys the
+ * window.** That rule was written here before there was anything to apply it
+ * to, and `StockReport` is the page it was written for: every figure on it is
+ * a stock level as things stand, so it draws no window control whatsoever
+ * rather than a dead one. A Merchant who moved a control that changed nothing
+ * would read the same figures as the answer to a different question, which is
+ * worse than having no control to move.
+ *
+ * Everything else in here obeys the window, which is the distinction the word
+ * *report* carries in `CONTEXT.md` and what separates these pages from the
+ * courier to-do list on the Dashboard — that ignores the window because a
  * backlog drawn under a window a Merchant has narrowed is a backlog that
- * quietly shrinks. A figure that has no span behind it — a stock level as
- * things stand — is not yet a thing this cluster knows how to draw; when
- * inventory arrives, the answer owed is that a report page draws the Reporting
- * Window only if a figure on it obeys the window, so an all-current page has no
- * control rather than a dead one.
+ * quietly shrinks.
  *
  * Ungated, unlike `SettingsCluster`, and deliberately: the Dashboard already
  * draws Sales, Average Order Value and courier money to every User of the

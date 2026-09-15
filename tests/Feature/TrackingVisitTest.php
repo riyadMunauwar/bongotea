@@ -153,7 +153,15 @@ describe('what a served page tells the browser to report', function () {
 
         $html = $this->get('/promo')->assertOk()->getContent();
 
-        expect($html)->toBe($page->body)
+        /**
+         * "Nothing" means nothing of *tracking's*. Since ADR-0023 every Page
+         * also carries a canonical naming its own Slug, because a Front Page
+         * answers at two addresses and its bytes may not know which one they
+         * are being served at. That link is unconditional and this one is not,
+         * which is the distinction these assertions are here to keep: no
+         * script, no consent hook, and no request to anyone.
+         */
+        expect($html)->toBe(asServed($page))
             ->and($html)->not->toContain('<script')
             ->and($html)->not->toContain(TrackingSnippet::CONSENT_HOOK);
     });
@@ -163,7 +171,7 @@ describe('what a served page tells the browser to report', function () {
 
         $page = Page::factory()->published()->create(['slug' => 'promo']);
 
-        expect($this->get('/promo')->assertOk()->getContent())->toBe($page->body);
+        expect($this->get('/promo')->assertOk()->getContent())->toBe(asServed($page));
     })->with('tracking providers');
 
     /**

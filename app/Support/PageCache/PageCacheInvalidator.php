@@ -4,6 +4,7 @@ namespace App\Support\PageCache;
 
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\Pages\FrontPage;
 
 /**
  * The one place that knows which URLs a change kills.
@@ -15,7 +16,10 @@ use App\Models\Product;
  */
 class PageCacheInvalidator
 {
-    public function __construct(private readonly StaticPageCache $cache) {}
+    public function __construct(
+        private readonly StaticPageCache $cache,
+        private readonly FrontPage $frontPage,
+    ) {}
 
     public function forgetPage(Page $page): void
     {
@@ -29,6 +33,24 @@ class PageCacheInvalidator
          */
         if ($page->wasChanged('slug') && is_string($original = $page->getOriginal('slug'))) {
             $this->cache->forget($original);
+        }
+
+        /**
+         * The Site Root holds a copy of the Front Page's bytes, so it has to be
+         * forgotten alongside them. This is the sharpest bug this feature has
+         * if it is missed, and it fails silently: the Merchant unpublishes,
+         * `/summer-sale` correctly goes away, and `/` goes on serving the
+         * unpublished Page to everyone for as long as it stands, with the admin
+         * showing it as a draft.
+         *
+         * Asked through `isDesignated()` rather than `designated()` on purpose.
+         * The moments that matter here — unpublished, binned, force-deleted —
+         * are exactly the moments the Page has stopped being servable, so a
+         * check that only recognised a *published* Front Page would skip every
+         * one of them.
+         */
+        if ($this->frontPage->isDesignated($page)) {
+            $this->cache->forgetFront();
         }
     }
 

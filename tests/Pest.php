@@ -25,6 +25,7 @@ use App\Support\Checkout\PricingFingerprint;
 use App\Support\Inventory\StockLedger;
 use App\Support\PageCache\StaticPageCache;
 use App\Support\Reporting\ReportingWindow;
+use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Field;
@@ -168,6 +169,42 @@ expect()->extend('toBeServedFromTheDocumentRoot', function (): Expectation {
 | Functions
 |--------------------------------------------------------------------------
 */
+
+/**
+ * Designate a Page as the Front Page, or none at all.
+ *
+ * Saved through the group rather than written to the row, because saving is
+ * what forgets every cached Page — which is the half a test about the Site Root
+ * most often depends on.
+ */
+function makeFrontPage(?Page $page): void
+{
+    app(GeneralSettings::class)->with(['frontPageId' => $page?->getKey() ?? 0])->save();
+}
+
+/**
+ * The Merchant's document with the canonical in it and nothing else — what a
+ * served Page is expected to be, byte for byte.
+ *
+ * A served Page carries exactly two injections. The Pixel is conditional and
+ * goes in only where the Merchant configured a Destination (ADR-0017); the
+ * canonical is unconditional, because a Front Page answers at two addresses and
+ * the bytes may not know which one they are being served at (ADR-0023). So a
+ * test proving that *nothing* was injected is really proving that nothing but
+ * this was, and it says so by comparing against this rather than against the
+ * stored body.
+ *
+ * Spelled out here rather than borrowed from `CanonicalLink`, which would make
+ * every one of those assertions agree with whatever that class happens to emit.
+ */
+function asServed(Page $page): string
+{
+    return str_replace(
+        '</head>',
+        '<link rel="canonical" href="'.route('landing.show', $page->slug).'">'."\n".'</head>',
+        $page->body,
+    );
+}
 
 /**
  * A published Page selling whatever Products it is handed, the way a Customer

@@ -78,6 +78,14 @@ class FallbackPageCacheReader
 
     public const MISS_MARKER = 'miss';
 
+    /**
+     * The Site Root's entry, spelled here as well as in `StaticPageCache`,
+     * `public/.htaccess` and both deploy configurations — the same knowing
+     * duplication as `<slug>.html` and its `.gz` sibling, and for the same
+     * reason: this class may reference nothing, so it cannot borrow the name.
+     */
+    private const FRONT_ENTRY = '_front';
+
     public function __construct(private readonly string $directory) {}
 
     /**
@@ -146,17 +154,30 @@ class FallbackPageCacheReader
          */
         $path = rtrim(explode('?', $requestUri, 2)[0], '/');
 
-        if ($path === '') {
-            return null;
-        }
-
         $directory = realpath($this->directory);
 
         if ($directory === false) {
             return null;
         }
 
-        $file = realpath($directory.DIRECTORY_SEPARATOR.ltrim($path, '/').'.html');
+        /**
+         * The Site Root resolves to a constant, because it has no Slug to be
+         * keyed on and this reader cannot ask which Page a Merchant
+         * designated — it may reference nothing, and the webserver
+         * configurations that do the same lookup could not read a database
+         * even if they wanted to (ADR-0023).
+         *
+         * This is a constant and not a translation: nothing off the wire is
+         * transformed into it, and the answer is still existence — the file is
+         * there because the application wrote the Front Page or the
+         * Placeholder to it, or it is not there and the framework boots. That
+         * is what keeps issue #23 removed.
+         */
+        $entry = $path === ''
+            ? self::FRONT_ENTRY
+            : ltrim($path, '/');
+
+        $file = realpath($directory.DIRECTORY_SEPARATOR.$entry.'.html');
 
         /**
          * `realpath` answers both questions at once: it returns false for a

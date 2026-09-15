@@ -2,6 +2,7 @@
 
 use App\Filament\Clusters\Settings\Pages\General;
 use App\Filament\Clusters\Settings\SettingsCluster;
+use App\Models\Page;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\User;
@@ -251,4 +252,114 @@ it('logs nothing when a save changes nothing', function () {
 
     expect(Setting::count())->toBe(1)
         ->and(Activity::count())->toBe(0);
+});
+
+it('offers every page that is not in the bin, drafts included', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    $published = Page::factory()->published()->create(['title' => 'Winter Promo']);
+    $draft = Page::factory()->create(['title' => 'Spring Draft']);
+    $binned = Page::factory()->create(['title' => 'Retired']);
+    $binned->delete();
+
+    /**
+     * Drafts are offered so a Merchant can line one up before launch — the
+     * Site Root shows the Placeholder until it is published — and, more
+     * importantly, so unpublishing the Front Page never removes it from the
+     * option set. A Select derives an implicit `in:` rule from its options, so
+     * a vanished option makes the *whole* General page unsaveable.
+     */
+    Livewire::test(General::class)
+        ->fillForm(['frontPageId' => $published->getKey()])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    Livewire::test(General::class)
+        ->fillForm(['frontPageId' => $draft->getKey()])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** A Page in the bin is not offered, and the Select's own rule refuses it. */
+    Livewire::test(General::class)
+        ->fillForm(['frontPageId' => $binned->getKey()])
+        ->call('save')
+        ->assertHasFormErrors(['frontPageId']);
+});
+
+/**
+ * The dropdown is not drawn from the rendered HTML. `options()` is a closure,
+ * so Filament marks the field as having dynamic options and the browser asks
+ * for them over `callSchemaComponentMethod(<the field's key>, …)` as the
+ * dropdown opens, replacing whatever it was holding with the answer. An answer
+ * of null is a dropdown with nothing in it, whatever the page shipped.
+ */
+it('answers the browser with every page when the dropdown opens', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Page::factory()->published()->create(['title' => 'Kettle Landing']);
+
+    $page = Livewire::test(General::class)->instance();
+
+    $key = $page->getSchema('form')->getFlatFields(withHidden: true)['frontPageId']->getKey();
+
+    $options = $page->callSchemaComponentMethod($key, 'getOptionsForJs');
+
+    expect($options)->toBeArray()
+        ->and(collect($options)->pluck('label')->implode("\n"))->toContain('Kettle Landing');
+});
+
+it('saves the chosen front page', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    $page = Page::factory()->published()->create();
+
+    Livewire::test(General::class)
+        ->fillForm(['frontPageId' => $page->getKey()])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(app(GeneralSettings::class)->frontPageId)->toBe($page->getKey());
+});
+
+it('reads a cleared front page as the placeholder', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    $page = Page::factory()->published()->create();
+
+    app(GeneralSettings::class)->with(['frontPageId' => $page->getKey()])->save();
+
+    Livewire::test(General::class)
+        ->fillForm(['frontPageId' => null])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /**
+     * A non-nullable int property reads a stored null as zero, which is the
+     * group's own wording for "no Front Page".
+     */
+    expect(app(GeneralSettings::class)->frontPageId)->toBe(0);
+});
+
+it('stays saveable when the designated page has been binned', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    $page = Page::factory()->published()->create(['title' => 'Retired']);
+
+    app(GeneralSettings::class)->with(['frontPageId' => $page->getKey()])->save();
+
+    $page->delete();
+
+    /**
+     * The stored value is forced into the options whatever state it is in.
+     * Without that guard, binning the Front Page would leave currency, timezone
+     * and phone rules unsaveable — an error on a field the Merchant never
+     * touched, raised by something they did on another screen entirely. The
+     * group's own guard cannot cover it: validation runs before `with()` does.
+     */
+    Livewire::test(General::class)
+        ->fillForm(['currencySymbol' => '৳৳'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(app(GeneralSettings::class)->currencySymbol)->toBe('৳৳');
 });

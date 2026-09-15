@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Models\Order;
+use App\Models\Page;
 use App\Models\Product;
 use App\Support\Settings\GeneralSettings;
 use Filament\Forms\Components\Select;
@@ -88,6 +89,36 @@ class General extends SettingsPage
                         ->helperText('Bangladesh is Asia/Dhaka.'),
                 ]),
 
+            Section::make('Front page')
+                ->description('Which page answers your bare domain. It keeps its own address as well, so nothing you have advertised stops working.')
+                ->columns(3)
+                ->schema([
+                    /**
+                     * Every Page that is not in the bin, drafts included.
+                     *
+                     * Drafts are offered for two reasons. A Merchant can line
+                     * one up before launch — the Site Root shows the
+                     * Placeholder until it is published — and, more
+                     * importantly, unpublishing the Front Page then never
+                     * removes it from the option set. A `Select` derives an
+                     * implicit `in:` rule from its options, so an option that
+                     * vanishes makes *this whole page* unsaveable: currency,
+                     * timezone and phone rules all refused because of
+                     * something the Merchant did on another screen entirely.
+                     *
+                     * The stored value is forced back in whatever state it is
+                     * in, which closes the same trap for a Page that was
+                     * binned or deleted outright. The group's own guard cannot
+                     * stand in for this: validation runs before `with()` does.
+                     */
+                    Select::make('frontPageId')
+                        ->label('Front page')
+                        ->searchable()
+                        ->placeholder('The GioPages placeholder')
+                        ->options(fn (): array => self::pageOptions())
+                        ->helperText('Leave this empty and your domain shows a GioPages placeholder instead.'),
+                ]),
+
             Section::make('Phone numbers')
                 ->description('A customer is their phone number, so every number is normalised by these rules before it is stored.')
                 ->columns(2)
@@ -161,6 +192,82 @@ class General extends SettingsPage
                         ->helperText('Mobile carriers put thousands of real buyers behind one address, so keep this generous.'),
                 ]),
         ];
+    }
+
+    /**
+     * "No Front Page" is zero to the group and blank to the form.
+     *
+     * A `Select` refuses a state that is not one of its options, and zero never
+     * is — so a fresh installation, whose group holds the config default of
+     * zero, would open on a field that refuses to save and take currency,
+     * timezone and phone rules down with it. Blank is what the Select's own
+     * placeholder means, and `coerce()` reads the null that comes back as zero
+     * again on the way into the row.
+     *
+     * Done here rather than after `mount()` because this is when a component
+     * gets to reshape its own state; a value written afterwards has missed it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function formValues(): array
+    {
+        $values = parent::formValues();
+
+        $values['frontPageId'] = ($values['frontPageId'] ?? 0) > 0 ? $values['frontPageId'] : null;
+
+        return $values;
+    }
+
+    /**
+     * The Pages a Merchant may designate, keyed by id.
+     *
+     * An id and not a Slug: a Slug can be changed, and a rename would silently
+     * orphan the pointer and drop the Site Root back to the Placeholder with
+     * nothing to explain why.
+     *
+     * A Page whose designation no longer qualifies is added back at the end and
+     * labelled, so the field can always render and save what is stored. Without
+     * it, binning the Front Page would raise a validation error on a field
+     * nobody touched and lock the rest of this page with it.
+     *
+     * @return array<int, string>
+     */
+    private static function pageOptions(): array
+    {
+        $options = Page::query()
+            ->orderBy('title')
+            ->get(['id', 'title', 'slug', 'status'])
+            ->mapWithKeys(fn (Page $page): array => [
+                $page->getKey() => self::pageLabel($page),
+            ])
+            ->all();
+
+        $stored = app(GeneralSettings::class)->frontPageId;
+
+        if ($stored > 0 && ! array_key_exists($stored, $options)) {
+            $gone = Page::withTrashed()->find($stored);
+
+            $options[$stored] = $gone === null
+                ? 'A page that has been deleted'
+                : self::pageLabel($gone);
+        }
+
+        return $options;
+    }
+
+    /**
+     * How a Page reads in the dropdown: its title, the address it answers at,
+     * and why it is not serving where that is the case.
+     */
+    private static function pageLabel(Page $page): string
+    {
+        $state = match (true) {
+            $page->trashed() => ' (in the bin)',
+            ! $page->isPublished() => ' (draft)',
+            default => '',
+        };
+
+        return $page->title.' — /'.$page->slug.$state;
     }
 
     /**

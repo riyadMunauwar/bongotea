@@ -64,20 +64,27 @@ it('marks a full render as the path that did not come from the cache', function 
     expect($this->get('/promo')->headers->get('X-GioPages-Cache'))->toBe('miss');
 });
 
-it('serves the stored document byte for byte', function () {
+it('serves the stored document byte for byte but for the canonical', function () {
     $page = Page::factory()->published()->create(['slug' => 'promo']);
 
     /**
      * The merchant owns the whole document. Anything we wrap around it looks
-     * to them like the product broke their page.
+     * to them like the product broke their page — so what is injected is
+     * counted, and this assertion is where the count is kept.
      *
-     * Exactly one thing is injected into it, and only where the merchant has
-     * asked for it: the tracking snippet, into a Page that reports to a
-     * Destination (ADR-0017). This installation has none, which is every
-     * installation until a Merchant configures one, so the document here is
-     * the document they stored.
+     * It used to be exactly one thing, and only where the merchant asked for
+     * it: the tracking snippet, into a Page that reports to a Destination
+     * (ADR-0017). It is now two, and the second is unconditional. The canonical
+     * goes into every Page because a Front Page answers at two addresses and
+     * the bytes may not know which one they are being served at (ADR-0023) —
+     * so a link that only the Front Page needed is drawn on all of them, and a
+     * Merchant who wanted a bare document no longer gets one.
+     *
+     * Two things hold it down, and both are pinned in `CanonicalLinkTest`: it
+     * goes in only where there is a head to put it in, and it stands down
+     * entirely for a Merchant who wrote a canonical of their own.
      */
-    expect($this->get('/promo')->getContent())->toBe($page->body);
+    expect($this->get('/promo')->getContent())->toBe(asServed($page));
 });
 
 it('serves the stored document byte for byte with a component already rendered', function () {
@@ -95,7 +102,7 @@ it('serves the stored document byte for byte with a component already rendered',
      */
     SupportAutoInjectedAssets::$hasRenderedAComponentThisRequest = true;
 
-    expect($this->get('/promo')->getContent())->toBe($page->body);
+    expect($this->get('/promo')->getContent())->toBe(asServed($page));
 });
 
 it('sets no cookie on the landing route', function () {
@@ -1455,7 +1462,10 @@ it('reads a page stored under the retired form-only layout as stacked with its p
     $retiredHtml = $this->get('/retired')->assertOk()->getContent();
     $switchedHtml = $this->get('/switched')->assertOk()->getContent();
 
-    expect(str_replace(['value="retired"', 'data-page-slug="retired"'], ['value="switched"', 'data-page-slug="switched"'], $retiredHtml))->toBe($switchedHtml)
+    $slugAppearsIn = [route('landing.show', 'retired'), 'value="retired"', 'data-page-slug="retired"'];
+    $andReadsAs = [route('landing.show', 'switched'), 'value="switched"', 'data-page-slug="switched"'];
+
+    expect(str_replace($slugAppearsIn, $andReadsAs, $retiredHtml))->toBe($switchedHtml)
         ->and($retiredHtml)->not->toContain('Winter Jacket')
         ->and($retiredHtml)->toContain('gio-checkout-stacked')
         ->and($retiredHtml)->toContain('name="quantities['.$product->getKey().']" value="1"');

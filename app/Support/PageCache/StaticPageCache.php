@@ -40,6 +40,24 @@ class StaticPageCache
      */
     private const SLUG_PATTERN = '/^[a-z0-9]+(?:-[a-z0-9]+)*$/';
 
+    /**
+     * The Site Root's entry, held apart from every Slug.
+     *
+     * `/` has no Slug to be keyed on and the webserver that resolves it cannot
+     * read a Merchant's Settings, so the root answers to a constant instead
+     * (ADR-0023). The underscore is the whole point of the name: it cannot
+     * appear in a Slug, so no Merchant can ever own a Page whose entry this
+     * would overwrite. `index` was rejected for exactly that — it is a legal
+     * Slug — and an uppercase name for colliding with the legal Slug `front`
+     * on a case-insensitive filesystem, which includes the one this project is
+     * developed on.
+     *
+     * This is a second named thing the writer knows about rather than a Slug
+     * that cheats: SLUG_PATTERN stays absolute, because it is what makes
+     * traversal impossible by construction.
+     */
+    public const FRONT_ENTRY = '_front';
+
     public function __construct(
         private readonly Filesystem $files,
         private readonly string $directory,
@@ -52,10 +70,26 @@ class StaticPageCache
     {
         $this->assertValidSlug($slug);
 
-        $this->files->ensureDirectoryExists($this->directory);
+        $this->write($this->htmlPath($slug), $this->gzipPath($slug), $html);
+    }
 
-        $htmlPath = $this->htmlPath($slug);
-        $gzipPath = $this->gzipPath($slug);
+    /**
+     * Write the Site Root's entry, replacing any existing one.
+     *
+     * Held apart from `put()` rather than reached through it with a reserved
+     * slug, so the slug rule never grows an exception. What lands here is
+     * either the Front Page — the same string its own entry is written from,
+     * in the same call, so the two cannot drift — or the Placeholder, when no
+     * Front Page is designated.
+     */
+    public function putFront(string $html): void
+    {
+        $this->write($this->frontHtmlPath(), $this->frontGzipPath(), $html);
+    }
+
+    private function write(string $htmlPath, string $gzipPath, string $html): void
+    {
+        $this->files->ensureDirectoryExists($this->directory);
 
         /**
          * Written to a sibling temp file and renamed so a concurrent request
@@ -85,6 +119,23 @@ class StaticPageCache
     {
         $this->assertValidSlug($slug);
 
+        $this->remove($this->htmlPath($slug), $this->gzipPath($slug));
+    }
+
+    /**
+     * Remove the Site Root's entry, both representations.
+     *
+     * Silent when it is absent, like `forget()`: this fires whenever the Front
+     * Page is saved, unpublished or deleted, and most installations have no
+     * Front Page at all.
+     */
+    public function forgetFront(): void
+    {
+        $this->remove($this->frontHtmlPath(), $this->frontGzipPath());
+    }
+
+    private function remove(string $htmlPath, string $gzipPath): void
+    {
         /**
          * Filtered to what exists rather than deleting blind: invalidation
          * fires on every save, and most saves are of pages nothing ever
@@ -92,7 +143,7 @@ class StaticPageCache
          * not raise a warning.
          */
         $present = array_filter(
-            [$this->htmlPath($slug), $this->gzipPath($slug)],
+            [$htmlPath, $gzipPath],
             fn (string $path): bool => $this->files->exists($path),
         );
 
@@ -150,7 +201,13 @@ class StaticPageCache
                 continue;
             }
 
-            if (str_ends_with($entry, '.html')) {
+            /**
+             * The root entry is deliberately not counted. An operator reads
+             * this figure as "Pages removed", and `_front.html` is a copy of a
+             * Page — or the Placeholder, which is not a Page at all — so
+             * counting it would report two where one Page was cached.
+             */
+            if (str_ends_with($entry, '.html') && $entry !== $this->frontHtmlPath()) {
                 $removed++;
             }
         }
@@ -186,6 +243,27 @@ class StaticPageCache
     public function gzipPath(string $slug): string
     {
         return $this->htmlPath($slug).'.gz';
+    }
+
+    public function hasFront(): bool
+    {
+        return $this->files->exists($this->frontHtmlPath());
+    }
+
+    /**
+     * Absolute path of the Site Root's cached HTML. Every reader spells this
+     * name for itself — `public/.htaccess`, the two deploy configurations and
+     * `FallbackPageCacheReader`, which may reference no class at all — so a
+     * change here is a change in five places. The suite pins the PHP halves.
+     */
+    public function frontHtmlPath(): string
+    {
+        return $this->directory.DIRECTORY_SEPARATOR.self::FRONT_ENTRY.'.html';
+    }
+
+    public function frontGzipPath(): string
+    {
+        return $this->frontHtmlPath().'.gz';
     }
 
     /**

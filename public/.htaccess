@@ -74,10 +74,29 @@
     RewriteCond %{REQUEST_URI} ^/+page-cache(/|$) [NC]
     RewriteRule ^ - [F,L]
 
+    # The Site Root.
+    #
+    # THIS MUST STAY ABOVE THE -d RULE BELOW. "/" resolves to the document
+    # root, which is a directory, so the -d rule matches it and stops rewriting
+    # — that is exactly why the root used to fall through to index.php. Move
+    # this below it and the front page silently stops being served from the
+    # cache, on a correctly configured host, with every test still green.
+    #
+    # The root has no slug to be keyed on, and Apache cannot read a merchant's
+    # settings to learn which page was designated, so it answers to a constant
+    # instead (ADR-0023). The underscore is what makes _front unspellable as a
+    # slug, so no page can ever own this entry. Still existence-based: no file,
+    # no front page, and the request goes through to the application, which
+    # decides between the front page and the placeholder and caches whichever
+    # it drew.
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{DOCUMENT_ROOT}/page-cache/_front.html -f
+    RewriteRule ^$ page-cache/_front.html [L]
+
     # A real file — an asset, or the front controller itself — is served as it
     # is and never reaches the cache lookup. A directory stops here too, which
-    # is how the site root falls through to index.php: it has no slug to be
-    # keyed on and is never cached.
+    # is how the site root falls through to index.php when nothing has been
+    # cached for it above.
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]

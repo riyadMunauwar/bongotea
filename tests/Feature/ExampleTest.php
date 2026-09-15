@@ -1,12 +1,16 @@
 <?php
 
-test('the site root serves the welcome view', function () {
-    $response = $this->get('/');
-
+test('the site root is answered by the application and not by the framework skeleton', function () {
     /**
-     * The root is a plain web route with no Slug and no cache entry of its
-     * own, so there is no file for any reader to find and the request reaches
-     * PHP whichever serving path is in front of it.
+     * The root used to be a plain `web` route returning an empty view, with no
+     * cache entry of its own and a comment in every webserver configuration
+     * saying it had no Slug to be keyed on. It now answers from the cache like
+     * any other address (ADR-0023).
+     *
+     * What is left here is the shallowest possible check, in the file that came
+     * with the framework: that `/` resolves at all. Everything about *what* it
+     * serves, and when, is `SiteRootTest`'s — this deliberately asserts nothing
+     * that file already covers.
      */
-    $response->assertOk()->assertViewIs('welcome');
+    $this->get('/')->assertOk();
 });

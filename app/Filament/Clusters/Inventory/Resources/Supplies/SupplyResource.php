@@ -9,6 +9,7 @@ use App\Filament\Clusters\Inventory\Resources\Supplies\Pages\ViewSupply;
 use App\Filament\Clusters\Inventory\Resources\Supplies\Schemas\SupplyForm;
 use App\Filament\Clusters\Inventory\Resources\Supplies\Schemas\SupplyInfolist;
 use App\Filament\Clusters\Inventory\Resources\Supplies\Tables\SuppliesTable;
+use App\Models\Supplier;
 use App\Models\Supply;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -66,6 +67,41 @@ class SupplyResource extends Resource
             'create' => CreateSupply::route('/create'),
             'view' => ViewSupply::route('/{record}'),
         ];
+    }
+
+    /**
+     * One Supplier's own buying history: this list with their filter already
+     * on.
+     *
+     * Built here, beside the filter it turns on, rather than spelled out at
+     * each of the two screens that link to it — the Suppliers list and the
+     * Buying report. A filter name Filament does not recognise is ignored
+     * silently, so a hand-written address would land a User on the whole list
+     * with nothing on screen saying the scope was lost.
+     *
+     * The query-string key is `filters`, which is what `ListRecords` declares
+     * its table filters under, and both a `SelectFilter` and a `TernaryFilter`
+     * hold their state under `value` — the ternary as the string `'false'`,
+     * which is what Filament converts back to the scalar.
+     *
+     * **Two filters, because both figures that link here count two.** Every
+     * figure a Merchant follows to this list is over the deliveries that
+     * stand — the Suppliers list counts `notVoided()` and the Buying report
+     * excludes a Voided delivery from everything — so opening a list that
+     * included them would show four rows under a count of three, with nothing
+     * on the screen saying why. Turn the Voided filter on with the Supplier
+     * one, and the list a figure opens is the rows that figure was counted
+     * from. Somebody looking for what went wrong flips it themselves, on the
+     * screen, where they can see they have.
+     */
+    public static function deliveriesFromUrl(Supplier $supplier): string
+    {
+        return static::getUrl('index', [
+            'filters' => [
+                SuppliesTable::SUPPLIER_FILTER => ['value' => $supplier->getKey()],
+                SuppliesTable::VOIDED_FILTER => ['value' => 'false'],
+            ],
+        ]);
     }
 
     /**

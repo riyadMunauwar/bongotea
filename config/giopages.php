@@ -90,6 +90,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Front Page
+    |--------------------------------------------------------------------------
+    |
+    | Which Page answers the Site Root, by id. Zero means none, and the Site
+    | Root serves the Placeholder instead (ADR-0023).
+    |
+    | A default here rather than in the Settings group alone, because every
+    | property of a group is set from config in its constructor and the row is
+    | only ever the override (ADR-0012). A Merchant chooses this from a
+    | dropdown; the environment variable is here for an installation that
+    | provisions itself.
+    |
+    */
+
+    'front_page_id' => (int) env('GIOPAGES_FRONT_PAGE_ID', 0),
+
+    /*
+    |--------------------------------------------------------------------------
     | Districts
     |--------------------------------------------------------------------------
     |

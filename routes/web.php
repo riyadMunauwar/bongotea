@@ -14,10 +14,6 @@ use Illuminate\Support\Facades\Route;
 | boots the framework by design, and nothing here is ever cached.
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
 Route::get('/pages/{page}/preview', [LandingPageController::class, 'preview'])
     ->middleware('auth')
     ->name('pages.preview');

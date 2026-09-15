@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\Pages\Tables;
 
 use App\Enums\PageStatus;
+use App\Filament\Resources\Pages\FrontPageNotice;
 use App\Models\Page;
+use App\Support\Pages\FrontPage;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -16,6 +18,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class PagesTable
@@ -90,6 +93,32 @@ class PagesTable
                         : null)
                     ->placeholder(''),
 
+                /**
+                 * Which Page answers the bare domain, marked where a Merchant
+                 * is most likely to act on it: this is the screen they unpublish
+                 * or bin a Page from, and doing that to the Front Page drops the
+                 * Site Root back to the GioPages Placeholder. They are told
+                 * afterwards either way, but a mark they can see beforehand is
+                 * worth more than a notice they read after the fact.
+                 *
+                 * No header, and no query: the same reasoning as the badge
+                 * above, and `FrontPage` reads one Settings row that the
+                 * container has already resolved once for this request, so
+                 * asking per row costs nothing.
+                 */
+                TextColumn::make('front_page')
+                    ->label('')
+                    ->badge()
+                    ->color('info')
+                    ->icon(Heroicon::OutlinedHome)
+                    ->state(fn (Page $record): ?string => app(FrontPage::class)->isDesignated($record)
+                        ? 'Front page'
+                        : null)
+                    ->tooltip(fn (Page $record): ?string => app(FrontPage::class)->isDesignated($record)
+                        ? 'This page also answers your bare domain. Change that under Settings → General.'
+                        : null)
+                    ->placeholder(''),
+
                 TextColumn::make('published_at')
                     ->dateTime()
                     ->sortable()
@@ -121,8 +150,15 @@ class PagesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    /**
+                     * A bulk bin is the third way to unseat the Front Page, and
+                     * the quietest — a Merchant selecting rows is not looking at
+                     * any one of them.
+                     */
+                    DeleteBulkAction::make()
+                        ->after(fn (Collection $records) => $records->each(FrontPageNotice::sendIfUnseated(...))),
+                    ForceDeleteBulkAction::make()
+                        ->after(fn (Collection $records) => $records->each(FrontPageNotice::sendIfUnseated(...))),
                     RestoreBulkAction::make(),
                 ]),
             ]);

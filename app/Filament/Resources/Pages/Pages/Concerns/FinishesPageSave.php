@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Pages\Pages\Concerns;
 
+use App\Filament\Resources\Pages\FrontPageNotice;
 use App\Models\Page;
 use App\Shortcodes\PageBodyValidator;
 use App\Support\PageCache\PageCacheInvalidator;
@@ -23,6 +24,13 @@ trait FinishesPageSave
         $page = $this->record;
 
         app(PageCacheInvalidator::class)->forgetPage($page);
+
+        /**
+         * Pulling the Front Page back to draft takes the bare domain down to
+         * the Placeholder. That is the right outcome and a silent one, so it is
+         * said here rather than left for a customer to find.
+         */
+        FrontPageNotice::sendIfUnseated($page);
 
         /**
          * Likely typos are surfaced, never enforced: the renderer matches

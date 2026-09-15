@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Pages\Pages;
 
+use App\Filament\Resources\Pages\FrontPageNotice;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Pages\Pages\Concerns\FinishesPageSave;
 use App\Models\Page;
@@ -41,8 +42,14 @@ class EditPage extends EditRecord
                 ->icon('heroicon-o-eye')
                 ->url(fn (Page $record): string => route('pages.preview', $record))
                 ->openUrlInNewTab(),
-            DeleteAction::make(),
-            ForceDeleteAction::make(),
+            /**
+             * Binning a Page is the other way to unseat the Front Page, and it
+             * does not pass through `afterSave()`. Same notice, same reason.
+             */
+            DeleteAction::make()
+                ->after(fn (Page $record) => FrontPageNotice::sendIfUnseated($record)),
+            ForceDeleteAction::make()
+                ->after(fn (Page $record) => FrontPageNotice::sendIfUnseated($record)),
             RestoreAction::make(),
         ];
     }

@@ -218,3 +218,60 @@ it('reports a clean flush over an entry a request cached while it ran', function
     expect($cache->flush())->toBe(1)
         ->and($this->cache->has('promo'))->toBeTrue();
 });
+
+it('writes the front entry under a name no slug can spell', function () {
+    $this->cache->putFront('<h1>Winter</h1>');
+
+    $html = $this->cacheDirectory.DIRECTORY_SEPARATOR.'_front.html';
+
+    /**
+     * `index` is a legal slug and a Merchant may already own /index, so the
+     * root entry cannot be called that. The underscore is what makes this name
+     * unspellable — as a Slug it is refused by SLUG_PATTERN, and unlike an
+     * uppercase name it stays unspellable on a case-insensitive filesystem.
+     */
+    expect($html)->toBeFile()
+        ->and($html.'.gz')->toBeFile()
+        ->and(file_get_contents($html))->toBe('<h1>Winter</h1>')
+        ->and(gzdecode(file_get_contents($html.'.gz')))->toBe('<h1>Winter</h1>')
+        ->and(filemtime($html.'.gz'))->toBe(filemtime($html))
+        ->and($this->cache->hasFront())->toBeTrue();
+});
+
+it('forgets the front entry and its sibling together', function () {
+    $this->cache->putFront('<h1>Winter</h1>');
+
+    $this->cache->forgetFront();
+
+    expect($this->cacheDirectory.DIRECTORY_SEPARATOR.'_front.html')->not->toBeFile()
+        ->and($this->cacheDirectory.DIRECTORY_SEPARATOR.'_front.html.gz')->not->toBeFile()
+        ->and($this->cache->hasFront())->toBeFalse();
+});
+
+it('forgets a front entry that was never written', function () {
+    expect(fn () => $this->cache->forgetFront())->not->toThrow(Exception::class);
+});
+
+it('keeps the slug rule absolute rather than carving out the front entry', function () {
+    /**
+     * The root entry is a second named thing the writer knows about, not a
+     * slug that cheats. SLUG_PATTERN is what makes traversal impossible by
+     * construction, so nothing may be admitted through it.
+     */
+    expect(fn () => $this->cache->put('_front', '<h1>Winter</h1>'))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+it('removes the front entry in a flush without counting it as a page', function () {
+    $this->cache->put('promo', '<h1>Winter</h1>');
+    $this->cache->putFront('<h1>Winter</h1>');
+
+    /**
+     * An operator reads the returned figure as "Pages removed". The root entry
+     * is a copy of a Page rather than a Page, so counting it would report two
+     * where one was cached.
+     */
+    expect($this->cache->flush())->toBe(1)
+        ->and($this->cache->hasFront())->toBeFalse()
+        ->and($this->cache->has('promo'))->toBeFalse();
+});

@@ -225,6 +225,25 @@ never contacted. `fallback` means the rewrite rules are not reaching the cache;
 `miss` on every request means nothing is being cached at all. The panel shows
 the same three states, from the browser, for a merchant with no shell access.
 
+Check the bare domain separately, once a front page has been chosen under
+Settings → General:
+
+```bash
+curl -sSI https://your-site.example/ | grep -i x-giopages-cache
+```
+
+Again, no output is the answer you want. The site root is served from its own
+cache entry now (ADR-0023), and its rewrite rule arrived later than the rest of
+this file — so an installation whose `public/.htaccess` was hand-edited, or
+replaced by a control panel, can answer `fallback` here while every slug on the
+site answers correctly. Nothing is broken if it does: the fallback reader is
+serving the front page from PHP, which is far cheaper than a framework boot and
+slower than the webserver reading the file. Re-copy `public/.htaccess`, or paste
+the site-root rule above the `-d` rule, to get the fast path back.
+
+The panel's cache indicator asks about a published slug rather than the root, so
+it cannot tell you this one. Run the curl.
+
 Then confirm the lock — the cache must not be reachable at a second address, or
 a search engine will index it and split the ranking of the URL your ad creatives
 point at:

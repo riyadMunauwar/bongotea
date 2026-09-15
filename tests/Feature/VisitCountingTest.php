@@ -76,7 +76,8 @@ describe('the switch', function () {
 
         $html = $this->get('/promo')->assertOk()->getContent();
 
-        expect($html)->toBe($page->body)
+        /** The canonical every Page carries is not tracking's; nothing of tracking's is here. */
+        expect($html)->toBe(asServed($page))
             ->and($html)->not->toContain(TrackingSnippet::CONSENT_HOOK);
 
         /** And a beacon posted by hand anyway counts nothing: the switch is the rule, not the snippet. */

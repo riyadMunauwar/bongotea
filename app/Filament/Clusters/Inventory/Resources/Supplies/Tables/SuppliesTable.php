@@ -28,6 +28,20 @@ class SuppliesTable
     /** What the summed line costs are loaded under, named once so the column and its sort agree. */
     public const TOTAL_COST = 'total_cost';
 
+    /**
+     * What the Supplier filter is called, named once because an address that
+     * turns it on is built elsewhere — `SupplyResource::deliveriesFromUrl()` —
+     * and a filter name Filament does not recognise is ignored in silence.
+     */
+    public const SUPPLIER_FILTER = 'supplier';
+
+    /**
+     * What the Voided filter is called, named for the same reason the one
+     * above is: an address built elsewhere turns it on so that the list it
+     * opens counts what the figure that linked to it counted.
+     */
+    public const VOIDED_FILTER = 'voided';
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -91,14 +105,14 @@ class SuppliesTable
                     ->sortable(),
             ])
             ->filters([
-                SelectFilter::make('supplier')
+                SelectFilter::make(self::SUPPLIER_FILTER)
                     ->label('Supplier')
                     ->relationship('supplier', 'name')
                     ->searchable()
                     ->preload(),
 
                 /** How a buyer reads what they actually bought: the deliveries that stand. */
-                TernaryFilter::make('voided')
+                TernaryFilter::make(self::VOIDED_FILTER)
                     ->label('Voided')
                     ->placeholder('All deliveries')
                     ->trueLabel('Voided only')

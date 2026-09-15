@@ -11,7 +11,11 @@ use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Shipment;
+use App\Models\Supplier;
+use App\Models\Supply;
+use App\Models\SupplyLine;
 use App\Models\VisitCount;
+use App\Support\Inventory\StockLedger;
 use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,13 +49,22 @@ use Illuminate\Support\Collection;
  * captured in, because what a Courier is being judged on is the mornings it
  * was handed parcels.
  *
+ * Deliveries are read the same way and cut on the day the goods came:
+ * `supplies.supplied_on` is a date keyed by the Merchant's own calendar, so it
+ * is compared as whole days like the Visit aggregate and never as the UTC
+ * instants an Order is cut on.
+ *
  * The overview, the Sales over time series, the Page leaderboard, the
  * status breakdown, the Payment Method mix, the Product ranking, the
- * Delivery mix, the courier performance and the Needs Attention list are
- * here. A later result is another method returning another result class,
- * built on `ordersIn()`, `notCancelledIn()` or `parcelsSentIn()`, and no
- * widget changes for it. Needs Attention is the one result that takes no
- * window: it is a to-do list over the whole installation.
+ * Delivery mix, the courier performance, the buying figures, the stock held
+ * and the Needs Attention list are here. A later result is another method
+ * returning another result class, built on `ordersIn()`, `notCancelledIn()`,
+ * `parcelsSentIn()` or `deliveriesIn()`, and no widget changes for it.
+ *
+ * Two results take no window, and each says why in its own class. Needs
+ * Attention is a to-do list over the whole installation; the stock held is
+ * what is on the shelf as things stand, which has no span of days behind it
+ * at all.
  */
 final class ReportingQuery
 {
@@ -324,6 +337,217 @@ final class ReportingQuery
             ->all();
 
         return new ProductRanking($window, $ranking);
+    }
+
+    /**
+     * What a window earned rather than what it turned over: revenue, stamped
+     * cost and what is left, per Product and across them all.
+     *
+     * Two queries over the very same Orders — the ones `notCancelledIn()`
+     * hands back — and one lookup of the Products named. The first reads the
+     * Orders' own money, and it is the one that makes revenue **`Sales`**:
+     * the totals of the Orders not Cancelled is what the glossary means by
+     * the word and what `SALES` sums a bucket at a time, so counting it here
+     * off the same scope cannot drift from the Dashboard's figure. The
+     * Delivery Charge inside it comes back beside it, because it belongs to
+     * an Order rather than to any Product on it and so can appear on no row.
+     *
+     * The second reads the Lines, grouped exactly as the Top Products ranking
+     * groups them, with the cost stamped at Capture summed alongside the
+     * revenue. An **uncosted** Line adds nothing to the cost and its units are
+     * counted apart, which is what lets a row and the window say that a margin
+     * is missing part of its cost rather than quietly drawing one that is too
+     * high (ADR-0022).
+     */
+    public function margin(ReportingWindow $window, ?Page $page = null): Margin
+    {
+        $money = $this->notCancelledIn($window, $page)
+            ->selectRaw('sum(total) as sales, sum(delivery_charge) as delivery_charge')
+            ->first();
+
+        $rows = OrderLine::query()
+            ->joinSub($this->notCancelledIn($window, $page)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
+            ->selectRaw(
+                'product_id, min(product_name) as product_name, '
+                .'sum(quantity) as units, '
+                .'sum(line_total) as revenue, '
+                .'sum(case when unit_cost is null then 0 else quantity * unit_cost end) as cost, '
+                .'sum(case when unit_cost is null then 0 else quantity end) as costed_units',
+            )
+            ->groupByRaw("product_id, (case when product_id is null then product_name else '' end)")
+            ->get();
+
+        $products = Product::withTrashed()
+            ->findMany($rows->pluck('product_id')->filter())
+            ->keyBy(fn (Product $product): int => $product->getKey());
+
+        $margins = $rows
+            ->map(fn (object $row): MarginRow => new MarginRow(
+                product: $row->product_id === null ? null : $products->get((int) $row->product_id),
+                recordedName: (string) $row->product_name,
+                units: (int) $row->units,
+                revenue: (int) $row->revenue,
+
+                /** Unknown where not one unit of it was stamped, rather than the nought the sum came to. */
+                cost: (int) $row->costed_units === 0 ? null : (int) $row->cost,
+                costedUnits: (int) $row->costed_units,
+            ))
+            ->sortBy([
+                /** A Product nobody has priced has not made nothing, so it sorts below every Product that has made something. */
+                fn (MarginRow $a, MarginRow $b): int => ($a->margin() === null) <=> ($b->margin() === null),
+                fn (MarginRow $a, MarginRow $b): int => ($b->margin() ?? 0) <=> ($a->margin() ?? 0),
+                fn (MarginRow $a, MarginRow $b): int => $b->revenue <=> $a->revenue,
+                fn (MarginRow $a, MarginRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values()
+            ->all();
+
+        return Margin::of(
+            window: $window,
+            rows: $margins,
+            revenue: (int) ($money?->sales ?? 0),
+            deliveryCharge: (int) ($money?->delivery_charge ?? 0),
+        );
+    }
+
+    /**
+     * What every Product holds right now and what it is worth, and the money
+     * held altogether.
+     *
+     * **The one result here that takes no Reporting Window.** It answers what
+     * is on the shelf as things stand, and there is no span of days behind
+     * that — which is why the screen drawing it offers no window control
+     * rather than a dead one.
+     *
+     * Nothing is counted here. Both figures are the ledger's own, summed into
+     * the one query this runs through `withOnHand()` and `withValueAtCost()`,
+     * because On Hand is the sum of a Product's movements and is stored in no
+     * column (ADR-0021). A null from either is the unknown the ledger means by
+     * it and is carried through untouched: a Product nobody has counted is not
+     * a Product holding nothing.
+     *
+     * Every Product on the catalogue is a row. A Product withdrawn from it
+     * joins them while it still holds something — units on a shelf are capital
+     * whether or not anybody is still selling them, and the total held would
+     * understate what the Merchant owns without them — and drops off once it
+     * holds nothing, so a retired line does not sit on the report for ever.
+     */
+    public function stockHoldings(): StockHoldings
+    {
+        $ledger = app(StockLedger::class);
+
+        $rows = $ledger->withValueAtCost($ledger->withOnHand(Product::withTrashed()))
+            ->get()
+            ->map(fn (Product $product): StockHoldingRow => new StockHoldingRow(
+                product: $product,
+                onHand: self::intOrUnknown($product->getAttribute(StockLedger::ON_HAND)),
+                valueAtCost: self::intOrUnknown($product->getAttribute(StockLedger::VALUE_AT_COST)),
+            ))
+            ->filter(fn (StockHoldingRow $row): bool => ! $row->isDeleted() || $row->holdsSomething())
+            ->sortBy([
+                /** A shelf nobody has priced is not a shelf worth nothing, so it sorts below every one that is. */
+                fn (StockHoldingRow $a, StockHoldingRow $b): int => ($a->valueAtCost === null) <=> ($b->valueAtCost === null),
+                fn (StockHoldingRow $a, StockHoldingRow $b): int => ($b->valueAtCost ?? 0) <=> ($a->valueAtCost ?? 0),
+                fn (StockHoldingRow $a, StockHoldingRow $b): int => ($b->onHand ?? 0) <=> ($a->onHand ?? 0),
+                fn (StockHoldingRow $a, StockHoldingRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values()
+            ->all();
+
+        /** The money held is the rows' own business and is worked out there, so it cannot disagree with them. */
+        return StockHoldings::of($rows);
+    }
+
+    /**
+     * What was bought inside a window, read by Supplier and by Product, with
+     * what it all came to.
+     *
+     * Two grouped queries over the lines of the deliveries that count, which
+     * is the same set of lines counted along two axes — so the two lists
+     * always add up to the same totals, and the totals are read off one of
+     * them rather than counted a third time. A Voided delivery is in neither:
+     * `deliveriesIn()` is what says so, once.
+     *
+     * Deliveries per Supplier is a count of Supplies and never of lines. One
+     * invoice is one delivery however many Products it named, which is what
+     * makes it the figure a Merchant means by "they deliver to me twice a
+     * month".
+     *
+     * Neither Supplier nor Product can be missing: both foreign keys are
+     * restricted rather than cascading, so nobody who ever delivered anything
+     * and nothing that was ever bought can be erased out from under its own
+     * history. Both are loaded trashed and all, so a row says it has been
+     * retired rather than disappearing.
+     */
+    public function buying(ReportingWindow $window): Buying
+    {
+        $perSupplier = SupplyLine::query()
+            ->joinSub($this->deliveriesIn($window)->select('id', 'supplier_id'), 'bought', 'bought.id', '=', 'supply_lines.supply_id')
+            ->selectRaw(
+                'bought.supplier_id as supplier_id, '
+                .'count(distinct supply_lines.supply_id) as deliveries, '
+                .'sum(quantity) as units, '
+                .'sum(quantity * unit_cost) as cost',
+            )
+            ->groupBy('bought.supplier_id')
+            ->get();
+
+        $perProduct = SupplyLine::query()
+            ->joinSub($this->deliveriesIn($window)->select('id'), 'bought', 'bought.id', '=', 'supply_lines.supply_id')
+            ->selectRaw('product_id, sum(quantity) as units, sum(quantity * unit_cost) as cost')
+            ->groupBy('product_id')
+            ->get();
+
+        $suppliers = Supplier::withTrashed()
+            ->findMany($perSupplier->pluck('supplier_id'))
+            ->keyBy(fn (Supplier $supplier): int => $supplier->getKey());
+
+        $products = Product::withTrashed()
+            ->findMany($perProduct->pluck('product_id'))
+            ->keyBy(fn (Product $product): int => $product->getKey());
+
+        $bySupplier = $perSupplier
+            ->map(fn (object $row): BuyingSupplierRow => new BuyingSupplierRow(
+                supplier: $suppliers->get((int) $row->supplier_id),
+                deliveries: (int) $row->deliveries,
+                units: (int) $row->units,
+                cost: (int) $row->cost,
+            ))
+            ->sortBy([
+                fn (BuyingSupplierRow $a, BuyingSupplierRow $b): int => $b->cost <=> $a->cost,
+                fn (BuyingSupplierRow $a, BuyingSupplierRow $b): int => $b->units <=> $a->units,
+                fn (BuyingSupplierRow $a, BuyingSupplierRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values();
+
+        $byProduct = $perProduct
+            ->map(fn (object $row): BuyingProductRow => new BuyingProductRow(
+                product: $products->get((int) $row->product_id),
+                units: (int) $row->units,
+                cost: (int) $row->cost,
+            ))
+            ->sortBy([
+                fn (BuyingProductRow $a, BuyingProductRow $b): int => $b->cost <=> $a->cost,
+                fn (BuyingProductRow $a, BuyingProductRow $b): int => $b->units <=> $a->units,
+                fn (BuyingProductRow $a, BuyingProductRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values();
+
+        return new Buying(
+            window: $window,
+            bySupplier: $bySupplier->all(),
+            byProduct: $byProduct->all(),
+
+            /**
+             * Added up off the Supplier rows rather than counted again, so
+             * every figure on the screen agrees with the rows above it — a
+             * total counted separately is a total that can disagree with what
+             * it is meant to be the sum of.
+             */
+            deliveries: (int) $bySupplier->sum(fn (BuyingSupplierRow $row): int => $row->deliveries),
+            units: (int) $bySupplier->sum(fn (BuyingSupplierRow $row): int => $row->units),
+            cost: (int) $bySupplier->sum(fn (BuyingSupplierRow $row): int => $row->cost),
+        );
     }
 
     /**
@@ -807,6 +1031,46 @@ final class ReportingQuery
     private static function instant(mixed $stored): int
     {
         return (int) strtotime((string) $stored.' UTC');
+    }
+
+    /**
+     * The deliveries a window covers: the Supplies that stand, dated by the
+     * day the goods came.
+     *
+     * Compared as whole days in the Merchant's own timezone, which is what
+     * `supplies.supplied_on` is keyed by — a date rather than an instant,
+     * because nobody knows the hour a van arrived. That is the Visit
+     * aggregate's reading and never the UTC instants an Order is cut on. The
+     * window ends at the midnight after its last day, so its local end date is
+     * the first day outside it.
+     *
+     * Voided ones are gone through the model's own scope, which is the whole
+     * of "a delivery that counts" and is not restated at a call site: the
+     * ledger has already taken every unit of a voided delivery back out, and a
+     * buying figure counting it would say the Merchant spends more than they
+     * do.
+     *
+     * A fresh builder each time it is asked for, because two grouped queries
+     * join it and an Eloquent builder is mutable.
+     *
+     * @return Builder<Supply>
+     */
+    private function deliveriesIn(ReportingWindow $window): Builder
+    {
+        return Supply::query()
+            ->notVoided()
+            ->where('supplied_on', '>=', $window->localStart()->toDateString())
+            ->where('supplied_on', '<', $window->localEnd()->toDateString());
+    }
+
+    /**
+     * A figure a ledger sum loaded into a query, as an int — and null left as
+     * null, because that is the ledger's word for unknown and not a missing
+     * value to be filled in with a nought.
+     */
+    private static function intOrUnknown(mixed $loaded): ?int
+    {
+        return $loaded === null ? null : (int) $loaded;
     }
 
     /**

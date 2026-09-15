@@ -323,7 +323,7 @@ The span of days every report figure is counted over, chosen once for a whole sc
 _Avoid_: date range, period, filter, timeframe
 
 **Report**:
-Figures counted over a Reporting Window and obeying it. Every figure on a report answers for the same span of days, which is what makes two of them worth reading side by side. A report is asked either of the whole installation — what the couriers did, what the Products sold — or of one record, which is what a Page Report is; what never varies is that the window governs it. A to-do list is not a report: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
+Figures a Merchant reads at length, on a screen of their own. A report is asked either of the whole installation — what the couriers did, what the Products sold, what is on the shelf — or of one record, which is what a Page Report is. Nearly every one is counted over a Reporting Window and obeys it, and every figure on such a report answers for the same span of days, which is what makes two of them worth reading side by side. The exception is a report whose question has no span behind it at all: what is held right now is a fact about this moment, so the Stock Report is drawn with no window control rather than one that changes nothing — a dead control is worse than none, because a Merchant who moves it reads the same figures as the answer to a different question. A to-do list is not a report either way: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
 _Avoid_: analytics, insights, metrics, stats, BI
 
 **Page Report**:
@@ -369,6 +369,18 @@ _Avoid_: success rate, fulfilment rate, delivery percentage, SLA
 **Return Rate**:
 The parcels one Courier brought back as a share of the parcels it was handed in the same Reporting Window, read exactly as the Delivery Rate is. The two need not add up to one: what is left over is out for delivery, held, or Abandoned. It is a Courier's outcome and has nothing to do with the Cancellation Rate, which is a figure about what a User decided.
 _Avoid_: RTO rate, failure rate, cancellation rate, bounce rate
+
+**Stock Report**:
+What every Product holds and what those units are worth, on a screen of its own, with the capital on the shelf added up across it. The one report drawn with **no Reporting Window control at all**: a stock level is a fact about this moment and has no span of days behind it, so there is nothing for a window to govern and a control that changed nothing would be worse than none. A Product nobody has counted reads as nothing on it, never as zero, and is left out of the total held rather than added in as a nought — which is why the screen also says how many of the Products behind the figure are in the ledger at all. A Product withdrawn from the catalogue stays on it while it still holds units, because units on a shelf are capital whether or not anybody is still selling them.
+_Avoid_: inventory report, stock on hand report, valuation report, stock list
+
+**Buying Report**:
+What was bought over a Reporting Window — from which Supplier, how many units, at what cost — read once by Supplier and once by Product, with what a unit averaged and what the window cost altogether. It obeys the window exactly as the Courier Report does, and is meant to be read beside `Sales` over the same days: money out and money in are only comparable over the same span. A delivery belongs to the window by the day the goods came rather than the day somebody typed it in, because that is the day a buyer looks for. A Voided Supply is in none of it. The average a unit cost here is what these days paid and is not the Product's own cost, which is blended over everything ever bought and read as Value at Cost.
+_Avoid_: purchase report, procurement report, spend analysis, purchases
+
+**Margin Report**:
+What a Reporting Window earned rather than what it turned over: revenue, the cost stamped on what sold and what is left, read per Product and added up across them. Its revenue **is `Sales` over the same window, to the minor unit** — both halves are counted at Capture, over the Orders `Sales` counts, so two screens can never give a Merchant two revenue figures for one span of days — and the Delivery Charge is inside it because `Sales` has always included it. The charge belongs to an Order rather than to any Product on it, so it appears on no row and the screen says where it is counted. A Cancelled Order leaves both sides together. A Product nothing has been recorded buying reads unknown, never zero, and sorts below every Product whose margin is known: nobody knows what it made, and a nought would present it as infinitely profitable. Where only some of what sold carries a stamped cost the report says how much, because a margin drawn over part of its cost is a ceiling rather than a figure. It is read beside `Top Products`, which ranks by turnover and cannot tell the Product carrying the most money from the Product carrying the most profit.
+_Avoid_: profit report, P&L, gross profit, contribution
 
 ### Tracking
 

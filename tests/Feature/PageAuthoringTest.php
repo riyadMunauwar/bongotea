@@ -22,6 +22,7 @@ use App\Support\Checkout\StyleToken;
 use App\Support\Checkout\StyleTokenKind;
 use App\Support\Checkout\WordSlot;
 use App\Support\OrderComplete\OrderCompleteLayout;
+use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\PaymentSettings;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\ColorPicker;
@@ -3262,4 +3263,58 @@ it('shows the chosen layout\'s own button wording in the box while the merchant 
                 ->not->toBe('অর্ডার কনফার্ম করুন / Place order', $layout->value);
         }
     }
+});
+
+it('warns the merchant when they pull their front page back to draft', function () {
+    $page = Page::factory()->published()->create();
+
+    app(GeneralSettings::class)->with(['frontPageId' => $page->getKey()])->save();
+
+    /**
+     * Unpublishing is allowed — refusing it would make a Settings screen hold
+     * the Page hostage — so the whole protection is that the Merchant finds out
+     * now rather than from a customer.
+     */
+    Livewire::test(EditPage::class, ['record' => $page->getRouteKey()])
+        ->fillForm(['status' => PageStatus::Draft])
+        ->call('save')
+        ->assertNotified('Your front page is no longer being served');
+});
+
+it('says nothing when an ordinary edit to the front page leaves it serving', function () {
+    $page = Page::factory()->published()->create();
+
+    app(GeneralSettings::class)->with(['frontPageId' => $page->getKey()])->save();
+
+    Livewire::test(EditPage::class, ['record' => $page->getRouteKey()])
+        ->fillForm(['title' => 'Renamed'])
+        ->call('save')
+        ->assertNotNotified('Your front page is no longer being served');
+});
+
+it('says nothing when another page is unpublished', function () {
+    $frontPage = Page::factory()->published()->create();
+    $other = Page::factory()->published()->create();
+
+    app(GeneralSettings::class)->with(['frontPageId' => $frontPage->getKey()])->save();
+
+    Livewire::test(EditPage::class, ['record' => $other->getRouteKey()])
+        ->fillForm(['status' => PageStatus::Draft])
+        ->call('save')
+        ->assertNotNotified('Your front page is no longer being served');
+});
+
+it('marks the front page in the pages list', function () {
+    $frontPage = Page::factory()->published()->create(['title' => 'Winter Promo']);
+    Page::factory()->published()->create(['title' => 'Spring Promo']);
+
+    app(GeneralSettings::class)->with(['frontPageId' => $frontPage->getKey()])->save();
+
+    /**
+     * Marked where a Merchant is most likely to unpublish or bin it, so the
+     * mark is in front of them before the notice has to be.
+     */
+    Livewire::test(ListPages::class)
+        ->assertTableColumnStateSet('front_page', 'Front page', $frontPage)
+        ->assertTableColumnStateSet('front_page', null, Page::where('title', 'Spring Promo')->sole());
 });
