@@ -423,12 +423,28 @@ _Avoid_: pixel settings, tracking options, event config
 ### People
 
 **User**:
-Someone who signs into the admin to author Pages and work Orders. A User is never a Customer; the two never overlap.
+Someone who signs into the admin to do some part of the work — authoring Pages, working Orders, counting shelves — and which part is their Roles' to say. A User is never a Customer; the two never overlap. There is only one kind of them: what tells two Users apart is the Roles they hold and nothing else, which is why there is no such thing as a staff account.
 _Avoid_: admin, operator, staff
 
 **Merchant**:
 The business running an installation of GioPages. Relevant because the system is self-hosted by many merchants, so anything a merchant would reasonably differ on — currency, the list of Districts — belongs in configuration rather than baked into the system.
 _Avoid_: tenant, client, store owner
+
+**Permission**:
+One thing a User may do: a working area of the admin, or a single act that cannot be undone. The system knows every Permission by name and a Merchant never invents one — they arrive as features are built, and a Merchant's part is deciding which Roles carry them. A Permission is held through a Role and no other way, so what somebody may do has exactly one explanation.
+_Avoid_: ability, right, privilege, access, scope, capability
+
+**Role**:
+A named bundle of Permissions a Merchant composes and gives to Users. A User may hold several, and what they may do is everything their Roles allow between them. A Role is deleted only once nobody holds it, because revoking several people's access at once is never something to do by accident.
+_Avoid_: group, profile, access level, user type, permission set
+
+**Owner**:
+The User who may do everything, and the only one who decides what anyone else may do. Not a Role that happens to hold every Permission but one standing outside them: a Permission invented tomorrow is already theirs, which is what keeps an installation workable as it grows. An installation always has at least one and cannot be left without one.
+_Avoid_: super admin, administrator, root, superuser
+
+**Suspended**:
+Said of a User holding no Roles. They cannot sign in, and everything they did keeps their name on it. It is not leaving: a suspended User is still listed and comes back the moment a Role is given, where one who has left is filed away. Deliberately the same state as never having been given a Role at all, because "has no job here" and "has no job here yet" are the same fact about today.
+_Avoid_: disabled, deactivated, blocked, banned, inactive
 
 ### The installation
 

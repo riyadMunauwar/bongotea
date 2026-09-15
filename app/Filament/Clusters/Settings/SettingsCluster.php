@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Settings;
 
+use App\Enums\Permission;
 use BackedEnum;
 use Filament\Clusters\Cluster;
 use Filament\Support\Icons\Heroicon;
@@ -15,21 +16,14 @@ use Filament\Support\Icons\Heroicon;
  * and a page class and nothing else — no list here, in a provider or in
  * config to keep in step.
  *
- * Gated by one permission for the whole cluster rather than one per page,
+ * Gated by one Permission for the whole category rather than one per page,
  * because what the gate protects is the category — a User who works Orders
  * should not be one click from a payment key — and not any page in
- * particular. The permission is granted directly to Users today and will be
- * carried by roles when roles arrive, with nothing here changing.
+ * particular. `Permission::ManageSettings` is the floor for everything in
+ * here, held through a Role like every other Permission (ADR-0025).
  */
 class SettingsCluster extends Cluster
 {
-    /**
-     * The permission a User needs to see, open or save anything in here.
-     * `database/migrations/2026_09_08_061359_create_manage_settings_permission.php`
-     * creates it and must agree with this literal.
-     */
-    public const PERMISSION = 'manage settings';
-
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     /**
@@ -44,11 +38,11 @@ class SettingsCluster extends Cluster
     /**
      * Filament already hides the cluster when no page in it is accessible,
      * which the pages' own gate arranges. This closes the cluster's own URL
-     * too, so a User without the permission gets a forbidden response there
+     * too, so a User without the Permission gets a forbidden response there
      * rather than a redirect to nowhere.
      */
     public static function canAccess(): bool
     {
-        return auth()->user()?->can(self::PERMISSION) ?? false;
+        return auth()->user()?->can(Permission::ManageSettings) ?? false;
     }
 }

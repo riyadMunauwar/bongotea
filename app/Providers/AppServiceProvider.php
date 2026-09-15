@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use App\Shortcodes\Definitions\CheckoutShortcode;
 use App\Shortcodes\ShortcodeRegistry;
 use App\Support\PageCache\StaticPageCache;
@@ -12,6 +13,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -65,6 +67,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /**
+         * The Owner may do everything, and does it by standing outside the
+         * Permissions rather than holding every one of them (ADR-0024).
+         *
+         * Answering before the Permission map is consulted is what makes
+         * "everything" true in advance: a Permission shipped in a future
+         * release is already theirs, so an upgrade can never hide a new screen
+         * from the one person who could grant it. Null rather than false for
+         * anyone else, which is how a `before` hook declines to decide and
+         * lets the map answer.
+         *
+         * Total on purpose, including over policies written years from now: an
+         * Owner who could be refused something is not an Owner, and a second
+         * place deciding what they may do is the drift this exists to prevent.
+         */
+        Gate::before(fn (User $user): ?bool => $user->isOwner() ? true : null);
+
         /**
          * The Capture endpoint is the one unauthenticated write in the system,
          * and it sits on paid traffic.

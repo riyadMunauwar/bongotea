@@ -4,6 +4,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 
 | Applies to | Rule file |
 | --- | --- |
+| app/Enums/Permission.php, app/Models/Role.php, app/Models/User.php, app/Support/Access/**, app/Http/Middleware/AuthenticateAdmin.php, app/Console/Commands/SyncPermissionsCommand.php, app/Console/Commands/GrantOwnerCommand.php, database/factories/UserFactory.php | .ai/rules/access.md |
 | resources/css/filament/admin/** | .ai/rules/admin.md |
 | app/Support/Checkout/**, resources/views/shortcodes/checkout.blade.php, app/Filament/Resources/Pages/Schemas/** | .ai/rules/checkout.md |
 | app/Filament/Forms/Components/** | .ai/rules/components.md |

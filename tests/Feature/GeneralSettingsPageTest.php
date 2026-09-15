@@ -187,19 +187,23 @@ it('hides Settings from a User without the permission and forbids the page URL',
     $this->get(SettingsCluster::getUrl())->assertForbidden();
 });
 
-it('grants the permission to every User who existed when the migration ran', function () {
+/**
+ * The migration that brought this permission in hands it straight to every
+ * User who was already there, which was right when roles did not exist. It
+ * stays in place as history of what ran and now grants nothing that matters:
+ * authority comes through a Role and no other way (ADR-0025), so replaying
+ * the upgrade over a User who holds no Role opens nothing.
+ */
+it('opens nothing for the direct grant the migration hands out', function () {
     $existing = User::factory()->create();
 
     Artisan::call('migrate:rollback', ['--path' => MANAGE_SETTINGS_MIGRATION, '--force' => true]);
-
-    expect($existing->fresh()->can(SettingsCluster::PERMISSION))->toBeFalse();
-
     Artisan::call('migrate', ['--path' => MANAGE_SETTINGS_MIGRATION, '--force' => true]);
 
-    $later = User::factory()->create();
+    $this->actingAs($existing->fresh())->get(General::getUrl())->assertForbidden();
 
-    $this->actingAs($existing->fresh())->get(General::getUrl())->assertOk();
-    $this->actingAs($later)->get(General::getUrl())->assertForbidden();
+    /** A Role is what opens it, and the only thing that does. */
+    $this->actingAs(User::factory()->managingSettings()->create())->get(General::getUrl())->assertOk();
 });
 
 it('logs one activity entry naming the User, the group, and each changed value old and new', function () {

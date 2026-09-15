@@ -173,6 +173,36 @@ chmod -R u=rwX,go=rX storage/app/private
 Then flush the cache below — every page cached before the link was fixed has
 the broken URL frozen into it.
 
+## The first Owner
+
+Access to the admin is decided by permissions, which are carried by roles that
+are given to users. The **Owner** stands outside them and may do everything,
+including deciding what anyone else may do, and an installation needs one before
+anybody can get in — a user holding no role is refused at the door.
+
+Make one by email address:
+
+```bash
+php artisan giopages:owner someone@your-company.example
+```
+
+The user must already exist. It is safe to run twice, it reports clearly when
+the address matches nobody, and it is the only route into the panel that does
+not go through the panel — which is also the whole of the answer when the only
+Owner has left the company.
+
+Optionally, pre-register the permission list:
+
+```bash
+php artisan permission:sync
+```
+
+Nothing is incorrect without it. The application knows every permission it has
+whether or not there is a row for it, and a permission is written into the
+table when something first grants it — so this is for tidiness, and for
+repairing an installation by hand. It is safe in any release and safe to run
+twice.
+
 ## Releasing
 
 Empty the cache as the last step of any release that changes how a Page

@@ -3,10 +3,10 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
+use App\Http\Middleware\AuthenticateAdmin;
 use App\Support\Settings\GeneralSettings;
 use BladeUI\Icons\Factory as IconFactory;
 use Filament\FontProviders\BunnyFontProvider;
-use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -186,7 +186,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->authMiddleware([
-                Authenticate::class,
+                AuthenticateAdmin::class,
             ]);
     }
 }
