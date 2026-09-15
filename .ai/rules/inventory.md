@@ -80,3 +80,10 @@ That last case is what `outstanding()` exists for. Every arm that puts a parcel'
 
 ## Committed is counted off Orders and is never a movement
 `CommittedStock` is separate from `StockLedger` on purpose: Committed is a fact about Orders and never a movement. It reads Confirmed + `Order::notYetSent()` and never "no Active Shipment" alone — every delivered Order satisfies that too and would leave the figure climbing forever, which is why the glossary names both halves. Its column draws 0 rather than `—`, because unlike On Hand it is never unknown.
+
+## Days of Cover is read over its own trailing span, never a Reporting Window
+`DaysOfCover` sits beside `CommittedStock`: outside `StockLedger`, writing nothing. The rate is the Sale movements of the last `DaysOfCover::SPAN_DAYS` (28 — four whole weeks, so a weekly rhythm falls the same number of times) and never the screen's Reporting Window; wiring it to that filter would change every velocity in the catalogue from a control about something else, and would make the to-do list shrink as the window narrowed.
+
+Sales alone, off the ledger and never off Orders — an Order nobody could reach was never a parcel, and a parcel that came back does not un-ship itself. The arithmetic is `of()` and nowhere else, written as held × span ÷ shipped so no daily rate rounds in the middle; `read()` is the one reader for a row already carrying `StockLedger::ON_HAND` and `DaysOfCover::UNITS_SHIPPED`, so the Products list column and Needs Attention cannot answer two ways.
+
+Unknown is not zero, twice: a Product nobody has counted and a Product nothing has gone out of both read null, never 0 and never for ever. `runningOut()` compares against `InventorySettings::thinCoverDays` (config default 7, floored at 1 in `with()` because a threshold of nothing is the warning silently switched off) and skips trashed Products — nobody buys more of what they have stopped selling. Cover is never a sortable column: both halves are summed subqueries, so an ORDER BY would mean restating the division in raw SQL and dividing by a nought.

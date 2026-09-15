@@ -213,7 +213,7 @@ it('turns a parcel that came back into something a user must decide about, and d
     /** The parcel is over, the Order is exactly what its User left it, and the question is on somebody's list (ADR-0018). */
     expect($shipment->refresh()->status)->toBe(ShipmentStatus::Returned)
         ->and($order->refresh()->status)->toBe(OrderStatus::Confirmed)
-        ->and(array_map(fn (NeedsAttentionRow $row): array => [$row->order->getKey(), $row->reason], $rows))
+        ->and(array_map(fn (NeedsAttentionRow $row): array => [$row->subject->getKey(), $row->reason], $rows))
         ->toBe([[$order->getKey(), AttentionReason::ParcelReturned]]);
 })->with('courier scripts');
 

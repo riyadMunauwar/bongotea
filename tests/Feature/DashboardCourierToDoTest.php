@@ -4,22 +4,27 @@ use App\Enums\OrderStatus;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Widgets\CourierMoneyTable;
 use App\Filament\Widgets\DeliveryMixTable;
 use App\Filament\Widgets\NeedsAttentionTable;
+use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\UnsentOrdersStat;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\User;
 use App\Support\Couriers\CourierSweep;
+use App\Support\Inventory\DaysOfCover;
+use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\ReportingWindow;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 /**
- * The courier to-do list on the Dashboard: what demands somebody act, and
- * nothing that merely reports.
+ * The to-do list on the Dashboard: what demands somebody act, and nothing
+ * that merely reports.
  *
  * Three widgets carry it — the backlog of Orders nobody has sent, Courier
  * money, and Needs Attention — and all three ignore the Reporting Window
@@ -28,11 +33,13 @@ use Livewire\Livewire;
  * and what the money says is `CourierMoneyTest`'s.
  *
  * What is asserted here is what a User meets: a backlog figure that is one
- * click from the list it counted, and the three parcel conditions reaching
- * the screen in the words somebody acts on — the condition, what to do about
- * it, and the Order it opens. When each condition *begins* is
- * `ReportingNeedsAttentionTest`'s, which proves the horizon and the two
- * decisions against the module; neither is measured again here.
+ * click from the list it counted, and the conditions reaching the screen in
+ * the words somebody acts on — the condition, what to do about it, and the
+ * record it opens. The three parcel ones open an Order; the shelf running out
+ * opens a Product, which is the one row here that is not about an Order at
+ * all. When each condition *begins* is `ReportingNeedsAttentionTest`'s, and
+ * what Days of Cover actually says is `InventoryDaysOfCoverTest`'s; neither
+ * is measured again here.
  */
 beforeEach(function (): void {
     $this->actingAs(User::factory()->create());
@@ -204,6 +211,94 @@ it('asks the User which items came back from a parcel that half arrived, and sto
     Livewire::test(NeedsAttentionTable::class)
         ->assertDontSee($halfArrived->order_number)
         ->assertSee('Nothing needs attention');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Shelves running out
+|--------------------------------------------------------------------------
+*/
+
+it('puts a shelf that will not last in front of the User with the days left on it, and opens the Product it is about', function () {
+    $running = shelfOf('Sylhet tea', 30);
+    parcelShippedOn($running, 28, reportingNow()->subDays(10));
+
+    $comfortable = shelfOf('Winter jacket', 280);
+    parcelShippedOn($comfortable, 28, reportingNow()->subDays(10));
+
+    $this->travelTo(reportingNow());
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertSee('Sylhet tea')
+        ->assertSee('Stock running out')
+
+        /** The figure, because five Products all running out is not a list anybody can work in order. */
+        ->assertSee('2.0 days of cover')
+        ->assertSee('Buy more before it runs out')
+
+        /** The row is the way in, as every row here is — onto the movements that are emptying the shelf. */
+        ->assertSee(ProductResource::getUrl('stock', ['record' => $running]))
+
+        /** Two hundred and fifty-two days of cover is nobody's to act on. */
+        ->assertDontSee('Winter jacket');
+});
+
+it('ignores the Reporting Window: the widget is handed one narrowed to a day nothing went out on and draws the same shelf and the same figure', function () {
+    $running = shelfOf('Sylhet tea', 30);
+    parcelShippedOn($running, 28, reportingNow()->subDays(10));
+
+    $this->travelTo(reportingNow());
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertSee('Sylhet tea')
+        ->assertSee('2.0 days of cover');
+
+    /**
+     * The window a windowed widget would obey, handed to this one: narrowed
+     * to today, over which not one unit of this went out, and over which the
+     * whole catalogue would therefore have no velocity at all. The list and
+     * the figure are unmoved, because the rate behind cover is read over a
+     * trailing span of its own — a to-do list that shrank when a Merchant
+     * moved a control about something else would be a to-do list nobody could
+     * trust to be empty.
+     *
+     * Passed as the mount argument rather than set on a throwaway Dashboard,
+     * because a filter set on one component never reaches another: a test
+     * that only set it would pass whatever this widget did with a window.
+     */
+    Livewire::test(NeedsAttentionTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+        ->assertSee('Sylhet tea')
+        ->assertSee('2.0 days of cover');
+
+    /**
+     * And it cannot be wired to one by accident. A widget reads the Dashboard
+     * filter by declaring `pageFilters` through `InteractsWithPageFilters`;
+     * this one declares neither, which is what makes the mount argument above
+     * something Livewire quietly ignores rather than something obeyed.
+     */
+    expect(property_exists(NeedsAttentionTable::class, 'pageFilters'))->toBeFalse()
+        ->and(in_array(InteractsWithPageFilters::class, class_uses_recursive(NeedsAttentionTable::class), true))->toBeFalse()
+
+        /** `OverviewStats` is the control: a widget that does obey the window has both. */
+        ->and(in_array(InteractsWithPageFilters::class, class_uses_recursive(OverviewStats::class), true))->toBeTrue();
+});
+
+it('offers no way to count cover over a window, so nothing can narrow it from a screen', function () {
+    /**
+     * The absence `StockReportScreenTest` pins for its page, pinned here for
+     * the figure: neither the to-do list nor the cover module takes a
+     * `ReportingWindow`, so there is no parameter for a later hand to thread a
+     * screen's filter into (ADR-0018).
+     */
+    $windowed = fn (string $class, string $method): bool => collect((new ReflectionMethod($class, $method))->getParameters())
+        ->contains(fn (ReflectionParameter $parameter): bool => (string) $parameter->getType() === ReportingWindow::class);
+
+    expect($windowed(ReportingQuery::class, 'needsAttention'))->toBeFalse()
+        ->and($windowed(DaysOfCover::class, 'runningOut'))->toBeFalse()
+        ->and($windowed(DaysOfCover::class, 'of'))->toBeFalse()
+
+        /** The control again: a windowed result says so in its own signature. */
+        ->and($windowed(ReportingQuery::class, 'overview'))->toBeTrue();
 });
 
 it('puts a parcel nobody has heard about in front of the User once the sweep has flagged it, and not before', function () {

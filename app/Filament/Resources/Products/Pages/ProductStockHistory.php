@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Products\Pages;
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use BackedEnum;
@@ -42,13 +43,18 @@ class ProductStockHistory extends ManageRelatedRecords
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
     /**
-     * What this Product holds and what it is worth, above the movements both
-     * figures are the sum of.
+     * What this Product holds, what it is worth and how long it will last,
+     * above the movements all three are read from.
      *
      * Nothing where nobody has counted it and nothing where nobody has bought
      * it, never `0`: a zero is an instruction to reorder, and a Product
      * nobody has looked at is not a Product that has run out — nor is one
      * nobody has supplied a Product that was free (ADR-0022).
+     *
+     * Cover is nothing for a third reason as well: a Product nothing has gone
+     * out of in the trailing span has no rate, and no cover rather than an
+     * endless one. This is the screen a shelf running out opens onto from the
+     * Dashboard, so the figure that put it there is drawn where it lands.
      */
     public function getSubheading(): string
     {
@@ -57,9 +63,11 @@ class ProductStockHistory extends ManageRelatedRecords
 
         $ledger = app(StockLedger::class);
         $value = $ledger->valueAtCost($product);
+        $cover = app(DaysOfCover::class)->forProduct($product);
 
         return 'On hand: '.($ledger->onHand($product) ?? '—')
-            .' · Value at cost: '.($value === null ? '—' : Money::format($value));
+            .' · Value at cost: '.($value === null ? '—' : Money::format($value))
+            .' · Days of cover: '.($cover === null ? '—' : number_format($cover, 1));
     }
 
     public function table(Table $table): Table

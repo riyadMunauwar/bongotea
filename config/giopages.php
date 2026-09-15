@@ -273,4 +273,24 @@ return [
         'rate_limit' => (int) env('GIOPAGES_CHECKOUT_RATE_LIMIT', 30),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Inventory
+    |--------------------------------------------------------------------------
+    */
+
+    'inventory' => [
+        /**
+         * Days of Cover under which a Product is something to act on.
+         *
+         * Seven, because a week is roughly what stands between a Merchant
+         * noticing and a delivery arriving, and because one number meaning
+         * the same thing across the whole catalogue is the reason there is no
+         * threshold per Product to set and none to go stale. Nothing else in
+         * the system reads it: it decides what goes on the to-do list and
+         * nothing about what any figure says.
+         */
+        'thin_cover_days' => (int) env('GIOPAGES_INVENTORY_THIN_COVER_DAYS', 7),
+    ],
+
 ];

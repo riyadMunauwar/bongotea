@@ -20,6 +20,7 @@ use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Inventory\CommittedStock;
+use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Forms\Components\Select;
@@ -29,8 +30,8 @@ use Livewire\Livewire;
 
 /**
  * The screens a Merchant meets the ledger on: the count they record, the list
- * of what has been counted, the On Hand figure on their own catalogue, and one
- * Product's history.
+ * of what has been counted, the On Hand and Days of Cover figures on their own
+ * catalogue, and one Product's history.
  *
  * Driven through Livewire against the real admin screens, the way
  * `ShipmentScreensTest` and `OrderFulfilmentTest` are: what is asserted is
@@ -294,6 +295,53 @@ it('sorts the catalogue by what is held, though the figure is in no column', fun
         ->assertCanSeeTableRecords([$many, $few], inOrder: true);
 });
 
+it('shows how long each shelf will last beside how much is on it', function () {
+    $running = shelfOf('Sylhet tea', 30);
+    parcelShippedOn($running, 28, reportingNow()->subDays(10));
+
+    $comfortable = shelfOf('Winter jacket', 280);
+    parcelShippedOn($comfortable, 28, reportingNow()->subDays(10));
+
+    $this->travelTo(reportingNow());
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(DaysOfCover::COVER, 2.0, $running)
+        ->assertTableColumnFormattedStateSet(DaysOfCover::COVER, '2.0', $running)
+        ->assertTableColumnStateSet(DaysOfCover::COVER, 252.0, $comfortable)
+
+        /** Loud under the Merchant's own threshold, which is the line Needs Attention draws too. */
+        ->assertTableColumnExists(
+            DaysOfCover::COVER,
+            fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'danger'
+                && $column->getWeight($column->getState()) === FontWeight::Bold,
+            $running,
+        )
+        ->assertTableColumnExists(
+            DaysOfCover::COVER,
+            fn (TextColumn $column): bool => $column->getColor($column->getState()) === null,
+            $comfortable,
+        );
+});
+
+it('says nothing rather than zero or for ever where there is no cover to report', function () {
+    $uncounted = shelfOf('Clay mug');
+    parcelShippedOn($uncounted, 20, reportingNow()->subDays(10));
+
+    /** Counted, and nothing has gone out of it: a dormant Product is not an infinitely safe one. */
+    $dormant = shelfOf('Winter jacket', 40);
+
+    $this->travelTo(reportingNow());
+
+    Livewire::test(ListProducts::class)
+        ->assertTableColumnStateSet(DaysOfCover::COVER, null, $uncounted)
+        ->assertTableColumnStateSet(DaysOfCover::COVER, null, $dormant)
+        ->assertTableColumnExists(
+            DaysOfCover::COVER,
+            fn (TextColumn $column): bool => $column->getPlaceholder() === '—',
+            $dormant,
+        );
+});
+
 it('draws what is held below nothing loudly, because an unrecorded supply must announce itself', function () {
     $product = Product::factory()->create();
 
@@ -409,7 +457,19 @@ it('says nothing rather than zero for a product nobody has counted', function ()
 
     Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
         ->assertSeeText('On hand: —')
+        ->assertSeeText('Days of cover: —')
         ->assertSeeText('Nothing has moved yet');
+});
+
+it('says how long the shelf will last on the screen a shelf running out opens onto', function () {
+    $product = shelfOf('Sylhet tea', 30);
+    parcelShippedOn($product, 28, reportingNow()->subDays(10));
+
+    $this->travelTo(reportingNow());
+
+    Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
+        ->assertSeeText('On hand: 2')
+        ->assertSeeText('Days of cover: 2.0');
 });
 
 it('keeps a soft-deleted product\'s history readable', function () {

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\Product;
 use App\Support\Inventory\CommittedStock;
+use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Actions\BulkActionGroup;
@@ -22,13 +23,18 @@ class ProductsTable
 {
     public static function configure(Table $table): Table
     {
+        /** Resolved once for the whole table rather than inside the closures a column runs per row. */
+        $cover = app(DaysOfCover::class);
+
         return $table
             /** Every stock figure is summed into the query the list already runs, so a catalogue of any size costs one of them. */
-            ->modifyQueryUsing(function (Builder $query): Builder {
+            ->modifyQueryUsing(function (Builder $query) use ($cover): Builder {
                 $ledger = app(StockLedger::class);
 
-                return app(CommittedStock::class)->withCommitted(
-                    $ledger->withValueAtCost($ledger->withOnHand($query)),
+                return $cover->withUnitsShipped(
+                    app(CommittedStock::class)->withCommitted(
+                        $ledger->withValueAtCost($ledger->withOnHand($query)),
+                    ),
                 );
             })
             ->columns([
@@ -67,6 +73,38 @@ class ProductsTable
                     ->placeholder('—')
                     ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
                     ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
+
+                /**
+                 * How long what is held lasts at the rate it is going out,
+                 * beside how much of it there is: the figure a Merchant acts
+                 * on, because "fourteen left" means nothing without knowing
+                 * that the supplier takes a week.
+                 *
+                 * Nothing where there is no cover to report, and for either of
+                 * two reasons: nobody has counted the shelf, or nothing has
+                 * gone out of it over the span the rate is read across. Never
+                 * `0` and never for ever — a dormant Product presenting itself
+                 * as infinitely safe is the reading this exists to prevent
+                 * (ADR-0021).
+                 *
+                 * Deliberately not sortable. Both halves are summed subqueries
+                 * and the figure is the one divided by the other, so an ORDER
+                 * BY would mean spelling both out again in raw SQL, dividing
+                 * by a nought that is legal on one driver and fatal on
+                 * another, and keeping that arithmetic in step with
+                 * `DaysOfCover::of()` for ever. What the thin shelves are is a
+                 * question Needs Attention answers, in order, on the screen a
+                 * Merchant opens first.
+                 */
+                TextColumn::make(DaysOfCover::COVER)
+                    ->label('Days of cover')
+                    ->numeric()
+                    ->state(fn (Product $record): ?float => $cover->read($record))
+                    ->formatStateUsing(fn (?float $state): ?string => $state === null ? null : number_format($state, 1))
+                    ->placeholder('—')
+                    /** Loud under the Merchant's own threshold, asked of the module rather than compared here, so this and Needs Attention draw one line. */
+                    ->color(fn (?float $state): ?string => $cover->isThin($state) ? 'danger' : null)
+                    ->weight(fn (?float $state): ?FontWeight => $cover->isThin($state) ? FontWeight::Bold : null),
 
                 /**
                  * What is already spoken for, beside what is held: the units

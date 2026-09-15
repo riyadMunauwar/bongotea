@@ -460,6 +460,54 @@ function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordere
 }
 
 /**
+ * A Product with this many units counted onto its shelf, or none counted at
+ * all where no figure is given — which is the unknown a Product nobody has
+ * looked at holds, and not a shelf counted empty (ADR-0021).
+ *
+ * Here rather than in the cover suite that needed it first, for the reason
+ * `parcelOfCountedStock()` is: what Days of Cover says is proved over three
+ * files — the module, the Dashboard and the Products list — and a helper
+ * defined in one of them is a fatal error for anybody running only another.
+ */
+function shelfOf(string $name, ?int $counted = null): Product
+{
+    $product = Product::factory()->create(['name' => $name]);
+
+    if ($counted !== null) {
+        app(StockLedger::class)->recordCount($product, $counted, AdjustmentCause::OpeningCount);
+    }
+
+    return $product;
+}
+
+/**
+ * A parcel of this Product handed to a Courier on that day.
+ *
+ * The only thing that ever takes units off a shelf, and therefore the only
+ * thing a rate can honestly be read from: an Order nobody could reach was
+ * never a parcel (ADR-0021). Time is travelled to rather than a movement
+ * being dated by hand, because what the trailing span has to catch is the day
+ * the box actually left.
+ */
+function parcelShippedOn(Product $product, int $units, CarbonImmutable $when): void
+{
+    test()->travelTo($when);
+
+    $order = Order::factory()->confirmed()->create();
+
+    OrderLine::factory()->for($order)->create([
+        'product_id' => $product->getKey(),
+        'product_name' => $product->name,
+        'unit_price' => $product->price,
+        'quantity' => $units,
+    ]);
+
+    Shipment::factory()->for($order)->create();
+
+    test()->travelBack();
+}
+
+/**
  * What the ledger wrote for the parcels under one reason, and only that: the
  * count that put a Product on the shelf is never one of these.
  *

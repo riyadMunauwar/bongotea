@@ -31,7 +31,7 @@ function needsAttentionAt(?CarbonImmutable $now = null): NeedsAttention
 function attentionRows(NeedsAttention $list): array
 {
     return array_map(
-        fn (NeedsAttentionRow $row): array => [$row->order->order_number, $row->reason],
+        fn (NeedsAttentionRow $row): array => [$row->name(), $row->reason],
         $list->rows,
     );
 }
@@ -242,6 +242,67 @@ it('lists a parcel the sweep has flagged as stuck, and not one still inside the 
         ->and($list->rows[0]->since->equalTo(reportingNow()->subSeconds(CourierSweep::STUCK_AFTER_SECONDS + 60)))->toBeTrue()
         ->and($fresh->shipments()->sole()->stuck_at)->toBeNull()
         ->and($abandoned->shipments()->sole()->stuck_at)->toBeNull();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Shelves running out
+|--------------------------------------------------------------------------
+*/
+
+it('lists a Product whose shelf will not outlast the rate it is going out at, thinnest first, with the figure that put it there', function () {
+    $urgent = shelfOf('Sylhet tea', 30);
+    parcelShippedOn($urgent, 28, reportingNow()->subDays(1));
+
+    $comfortable = shelfOf('Winter jacket', 280);
+    parcelShippedOn($comfortable, 28, reportingNow()->subDays(1));
+
+    $empty = shelfOf('Clay mug', 28);
+    parcelShippedOn($empty, 28, reportingNow()->subDays(1));
+
+    $list = needsAttentionAt();
+
+    /** Two on the shelf at a unit a day and none at all, against two hundred and fifty-two: only the first two are anybody's to act on. */
+    expect(attentionRows($list))->toBe([
+        ['Clay mug', AttentionReason::StockRunningOut],
+        ['Sylhet tea', AttentionReason::StockRunningOut],
+    ])
+        ->and($list->rows[0]->subject->is($empty))->toBeTrue()
+        ->and($list->rows[0]->daysOfCover)->toBe(0.0)
+        ->and($list->rows[1]->daysOfCover)->toBe(2.0)
+        ->and($comfortable->name)->toBe('Winter jacket')
+
+        /**
+         * No day is the day a shelf crossed the line: cover is read fresh from
+         * a rate that moves under it, so a blank is the honest account rather
+         * than a date worked backwards through a velocity nothing stored.
+         */
+        ->and($list->rows[0]->since)->toBeNull();
+});
+
+it('leaves out a Product with no cover to be thin, which is not the same as one with plenty', function () {
+    $uncounted = shelfOf('Clay mug');
+    parcelShippedOn($uncounted, 20, reportingNow()->subDays(1));
+
+    /** A shelf of one is as thin as a shelf gets, and it is still nobody's to act on: nothing is going out of it. */
+    $dormant = shelfOf('Winter jacket', 1);
+
+    expect(attentionRows(needsAttentionAt()))->toBe([])
+        ->and($uncounted->name)->toBe('Clay mug')
+        ->and($dormant->name)->toBe('Winter jacket');
+});
+
+it('draws a shelf running out last, under every Order somebody is waiting on', function () {
+    $uncalled = orderCapturedAt('2026-09-01 10:00');
+
+    $running = shelfOf('Sylhet tea', 2);
+    parcelShippedOn($running, 28, reportingNow()->subDays(1));
+
+    /** A Customer nobody has rung is owed an answer today; a shelf is owed one this week. */
+    expect(attentionRows(needsAttentionAt()))->toBe([
+        [$uncalled->order_number, AttentionReason::NewOrderUncalled],
+        ['Sylhet tea', AttentionReason::StockRunningOut],
+    ]);
 });
 
 it('ignores any window: an Order from months ago is still listed, in condition order and oldest first within each', function () {

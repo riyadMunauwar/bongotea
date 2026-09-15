@@ -15,7 +15,9 @@ use App\Models\Supplier;
 use App\Models\Supply;
 use App\Models\SupplyLine;
 use App\Models\VisitCount;
+use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\StockLedger;
+use App\Support\Inventory\ThinShelf;
 use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -663,18 +665,18 @@ final class ReportingQuery
     }
 
     /**
-     * The Orders an operator must act on as of one instant, whatever any
-     * Reporting Window says: New Orders older than a day, Payments Pending
-     * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
-     * once, Orders whose parcel came back and nobody has decided about,
-     * Orders whose parcel half arrived and nobody has said what came back,
-     * and Orders whose parcel nobody has heard about in a week. Seven
-     * queries, one per condition, each returning whole Orders with the
-     * instant the condition began loaded beside them; the rows come back in
-     * condition order, oldest first within each, and the largest thing looped
-     * over is the list of Orders that need attention. Soft-deleted Orders are
-     * gone through the model's scope, whatever their Payments or Shipments
-     * say.
+     * What an operator must act on as of one instant, whatever any Reporting
+     * Window says: New Orders older than a day, Payments Pending for over an
+     * hour, Orders Paid twice, Orders Paid and Cancelled at once, Orders whose
+     * parcel came back and nobody has decided about, Orders whose parcel half
+     * arrived and nobody has said what came back, Orders whose parcel nobody
+     * has heard about in a week, and Products whose shelf will not outlast the
+     * rate it is going out at. Eight queries, one per condition, each
+     * returning whole records with the instant the condition began loaded
+     * beside them; the rows come back in condition order, oldest first within
+     * each, and the largest thing looped over is the list that needs
+     * attention. Soft-deleted Orders are gone through the model's scope,
+     * whatever their Payments or Shipments say.
      *
      * The three parcel conditions are read off the Shipments and not one of
      * them re-states a rule that lives elsewhere: "nothing has been decided"
@@ -685,6 +687,11 @@ final class ReportingQuery
      * `CourierSweep::STUCK_AFTER_SECONDS` is measured there and never again
      * here, or a horizon changed on the sweep would leave this list quietly
      * disagreeing with it.
+     *
+     * The eighth borrows its rules the same way: what counts as thin cover is
+     * the Merchant's own Setting, and the figure is `DaysOfCover`'s, read over
+     * a trailing span of its own rather than over any window a screen might be
+     * showing.
      */
     public function needsAttention(?CarbonImmutable $now = null): NeedsAttention
     {
@@ -797,7 +804,38 @@ final class ReportingQuery
                     ->whereHas('shipments', $stuck)
                     ->withMin(['shipments as since' => $stuck], 'booked_at'),
             ),
+
+            ...$this->thinCoverRows($now),
         ]);
+    }
+
+    /**
+     * The Products whose shelves will not outlast the rate they are going out
+     * at, thinnest first, each carrying the figure that put it there.
+     *
+     * The one condition here that is not about an Order, and the one with no
+     * `since`: cover is read fresh from a rate that moves under it, so no day
+     * is the day it crossed the line and a blank is the honest account of that
+     * (ADR-0021).
+     *
+     * Nothing about cover is worked out here. What counts as thin is the
+     * Merchant's own Setting and what the figure is is `DaysOfCover`'s, read
+     * over a trailing span of its own — so narrowing the Reporting Window
+     * moves neither, which is what keeps this a to-do list rather than a
+     * report that quietly shrinks.
+     *
+     * @return list<NeedsAttentionRow>
+     */
+    private function thinCoverRows(CarbonImmutable $now): array
+    {
+        return array_map(
+            fn (ThinShelf $shelf): NeedsAttentionRow => new NeedsAttentionRow(
+                subject: $shelf->product,
+                reason: AttentionReason::StockRunningOut,
+                daysOfCover: $shelf->daysOfCover,
+            ),
+            app(DaysOfCover::class)->runningOut($now),
+        );
     }
 
     /**
@@ -814,9 +852,9 @@ final class ReportingQuery
             ->orderBy('since')
             ->get()
             ->map(fn (Order $order): NeedsAttentionRow => new NeedsAttentionRow(
-                $order,
-                $reason,
-                CarbonImmutable::parse((string) $order->getAttribute('since'), 'UTC'),
+                subject: $order,
+                reason: $reason,
+                since: CarbonImmutable::parse((string) $order->getAttribute('since'), 'UTC'),
             ))
             ->values()
             ->all();
