@@ -2,6 +2,7 @@
 
 use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
+use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
@@ -365,6 +366,42 @@ it('reads a written-off parcel as money rather than as a quantity to multiply', 
         /** And the shelf is exactly where the Courier left it: the units left once, at Booked. */
         ->assertSeeText('On hand: 7')
         ->assertSeeText('Value at cost: '.Money::format(280000));
+});
+
+it('names the User who said which items came back, beside what those units were worth', function () {
+    $answering = User::factory()->create(['name' => 'Tanvir Hasan']);
+
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+    $order = Order::factory()->create();
+
+    $line = OrderLine::factory()->for($order)->for($product)->create(['quantity' => 3]);
+
+    $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 40000],
+    ]);
+
+    $parcel = Shipment::factory()->create([
+        'order_id' => $order->getKey(),
+        'consignment_reference' => 'CN-7781',
+        'status' => ShipmentStatus::PartlyDelivered,
+    ]);
+
+    $this->ledger->recordPartialReturn($parcel, [$line->getKey()], $answering);
+
+    Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
+        ->assertSeeText('Partial return')
+
+        /**
+         * A name on a movement, which nothing a Courier causes carries. It is
+         * the whole point of this one: nobody but a person could have said
+         * which items came back, so a surprising figure has somebody to ask
+         * about it.
+         */
+        ->assertSeeText('Tanvir Hasan')
+
+        /** At what those units cost when they left, so the round trip revalued nothing. */
+        ->assertTableColumnStateSet('value', 120000, $product->stockMovements()->where('reason', StockMovementReason::PartialReturn)->sole())
+        ->assertSeeText('On hand: 10');
 });
 
 it('says nothing rather than zero for a product nobody has counted', function () {

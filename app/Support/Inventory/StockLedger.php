@@ -16,6 +16,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -475,10 +476,8 @@ class StockLedger
      * How many units of each Product a User has named, keyed by Product, read
      * off the Order Lines they ticked.
      *
-     * Summed per Product for the reason `parcelContents()` is: the cause of
-     * the movement is the parcel, and the ledger's key is one cause, one
-     * Product, one direction — so an Order naming the same Product on two
-     * lines is still one Product coming back in one box.
+     * Summed per Product by `unitsPerProduct()`, where the reason for summing
+     * is written down.
      *
      * Read with the Order trashed or not, like everything else a parcel is
      * settled from: somebody tidying the Order away does not unsay what a
@@ -495,15 +494,9 @@ class StockLedger
             return [];
         }
 
-        return $order->lines()
-            ->whereKey($orderLineIds)
-            ->whereNotNull('product_id')
-            ->toBase()
-            ->selectRaw('product_id, sum(quantity) as units')
-            ->groupBy('product_id')
-            ->pluck('units', 'product_id')
-            ->map(fn (mixed $units): int => (int) $units)
-            ->all();
+        return $this->unitsPerProduct(
+            $order->lines()->whereKey($orderLineIds)->whereNotNull('product_id')->toBase(),
+        );
     }
 
     /**
@@ -594,7 +587,15 @@ class StockLedger
      */
     private function recordWriteOff(Shipment $shipment): void
     {
-        /** Read before anything is written, so the pair is the same units on both sides of itself. */
+        /**
+         * Read once, before anything is written, and read the same way
+         * `putBack()` reads it below — the pair has to be the same units on
+         * both sides of itself or the write-off moves On Hand, which is the
+         * one thing it must not do. Today that is simply everything the
+         * parcel took, because a half-arrived parcel is terminal and so is
+         * never written off; this is written this way so that it stays a pair
+         * if that ever stops being true.
+         */
         $writtenOff = $this->outstanding($shipment);
 
         $this->putBack($shipment, StockMovementReason::Unsold);
@@ -686,19 +687,48 @@ class StockLedger
      * How many units of each Product a User has already said came back off
      * this parcel, keyed by Product.
      *
-     * Only the Partial Returns, and deliberately: a Return and an Unsold are
-     * each the whole of what was left outstanding, written once and refused
-     * afterwards by the ledger's own key, so counting them here would be
-     * counting the row that is about to be written.
+     * Only the Partial Returns, and deliberately. A Return and an Unsold are
+     * each the whole of what was left outstanding, so counting either here
+     * would leave nothing outstanding at all — and the case that breaks is
+     * the one the Unsold exists for: a parcel written off and *then* brought
+     * back by the Courier owes a Return, and an Unsold counted as units
+     * already home would swallow it and leave the box off the shelf for good.
+     * A User naming lines is the only thing that brings a parcel home in
+     * part, so it is the only thing counted.
      *
      * @return array<int, int>
      */
     private function alreadyBack(Shipment $shipment): array
     {
-        return StockMovement::query()
-            ->whereMorphedTo('source', $shipment)
-            ->where('reason', StockMovementReason::PartialReturn)
-            ->toBase()
+        return $this->unitsPerProduct(
+            StockMovement::query()
+                ->whereMorphedTo('source', $shipment)
+                ->where('reason', StockMovementReason::PartialReturn)
+                ->toBase(),
+        );
+    }
+
+    /**
+     * How many units each Product accounts for across a set of rows, keyed by
+     * Product.
+     *
+     * The one shape three questions share: what an Order's lines carry, what
+     * the lines a User ticked carry, and what a parcel has already put back.
+     * Each of them is "so many of this Product" read off rows carrying a
+     * `product_id` and a `quantity`, and each of them is summed per Product
+     * rather than taken a row at a time — because the ledger's key is one
+     * cause, one Product, one direction, and an Order naming the same Product
+     * twice is still one Product in one box.
+     *
+     * Handed a query already dropped to the base builder, so the caller says
+     * which rows and this says only how they are counted.
+     *
+     * @param  QueryBuilder  $rows  Rows carrying `product_id` and `quantity`.
+     * @return array<int, int>
+     */
+    private function unitsPerProduct(QueryBuilder $rows): array
+    {
+        return $rows
             ->selectRaw('product_id, sum(quantity) as units')
             ->groupBy('product_id')
             ->pluck('units', 'product_id')
@@ -730,13 +760,10 @@ class StockLedger
      * How many units of each Product this parcel carries, keyed by Product,
      * read off the Order the attempt was written for.
      *
-     * Summed per Product rather than taken a line at a time, because the
-     * cause of the movement is the parcel: the ledger's key is one cause, one
-     * Product, one direction, and an Order naming the same Product on two
-     * lines is still one Product leaving in one box. The Order's shape is
-     * fixed at Capture with a line per Product, so this is the same figure
-     * either way — it is written this way so that it stays the same figure if
-     * that ever stops being true.
+     * Summed per Product rather than taken a line at a time, by
+     * `unitsPerProduct()`. The Order's shape is fixed at Capture with a line
+     * per Product, so this is the same figure either way — it is written this
+     * way so that it stays the same figure if that ever stops being true.
      *
      * Read with the Order trashed or not: a box that left is a box that left,
      * and somebody tidying the Order away afterwards does not put it back on
@@ -752,14 +779,7 @@ class StockLedger
             return [];
         }
 
-        return $order->lines()
-            ->whereNotNull('product_id')
-            ->toBase()
-            ->selectRaw('product_id, sum(quantity) as units')
-            ->groupBy('product_id')
-            ->pluck('units', 'product_id')
-            ->map(fn (mixed $units): int => (int) $units)
-            ->all();
+        return $this->unitsPerProduct($order->lines()->whereNotNull('product_id')->toBase());
     }
 
     /**

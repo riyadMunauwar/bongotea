@@ -94,8 +94,12 @@ class AnswerPartlyDeliveredAction
                     return;
                 }
 
-                $record->refresh();
-
+                /**
+                 * Nothing of the Order's own is refreshed afterwards, unlike
+                 * abandoning: what this writes is entirely the parcel's, and
+                 * the question is looked for with a fresh query every time
+                 * the screen asks whether to offer it.
+                 */
                 Notification::make()
                     ->title('Recorded')
                     ->body('What came back is on the shelf again at what it cost when it left, and this order is off Needs Attention.')
