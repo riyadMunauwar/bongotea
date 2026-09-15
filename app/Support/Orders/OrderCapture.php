@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\Inventory\StockLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,9 +20,16 @@ use Illuminate\Support\Facades\DB;
  * name of the delivery arrangement they chose and their own details, and every
  * figure on the resulting Order is derived server-side from the Page's own
  * Products and its own Delivery Options.
+ *
+ * The same rule is why the cost stamp lives here. A line records what the
+ * units cost as well as what they sold for, and the figure comes from the
+ * stock ledger at this instant rather than from anything the browser sent
+ * or anything read back later (ADR-0022).
  */
 class OrderCapture
 {
+    public function __construct(private readonly StockLedger $ledger) {}
+
     /**
      * A detail this Page's Checkout does not ask for arrives null and is stored
      * null, which is why every column but the phone is nullable: an Order taken
@@ -149,7 +157,7 @@ class OrderCapture
      *
      * @param  array<int, int>  $quantities  keyed by Product id, per StoreOrderRequest
      * @param  list<int>|null  $selected  Product ids the Customer ticked, or null where the Page never asked
-     * @return list<array{product_id: int, product_name: string, unit_price: int, quantity: int}>
+     * @return list<array{product_id: int, product_name: string, unit_price: int, unit_cost: int|null, quantity: int}>
      */
     private function lines(Page $page, array $quantities, ?array $selected): array
     {
@@ -178,6 +186,22 @@ class OrderCapture
                 'product_id' => $product->getKey(),
                 'product_name' => $product->name,
                 'unit_price' => $product->price,
+
+                /**
+                 * What the units cost, read off the ledger at this instant
+                 * and fixed from here. It is taken at Capture because `Sales`
+                 * is counted at Capture — a cash-on-delivery Order has no
+                 * other moment — so margin and revenue are always counted
+                 * over the same set of Orders and two screens can never give
+                 * a Merchant two different answers for one span of days
+                 * (ADR-0022).
+                 *
+                 * Null where nothing has ever been recorded as bought, which
+                 * is unknown and not free: a Product nobody has supplied must
+                 * not present itself as infinitely profitable.
+                 */
+                'unit_cost' => $this->ledger->averageCost($product),
+
                 'quantity' => $quantity,
             ];
         })->values()->all();

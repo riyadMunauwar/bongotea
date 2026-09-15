@@ -103,7 +103,7 @@ A Customer's committed request for products, captured on a Page at an agreed pri
 _Avoid_: purchase, transaction, sale, lead
 
 **Order Line**:
-One Product's worth of an Order, recording what was sold, at what unit price, and in what quantity, as agreed at Capture. A Product is a reference from an Order Line, never a source of truth for it.
+One Product's worth of an Order, recording what was sold, at what unit price, in what quantity and at what unit cost, as agreed at Capture. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
 _Avoid_: line item, order item, cart item
 
 **Answer**:

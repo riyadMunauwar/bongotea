@@ -17,9 +17,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `product_name` and `unit_price` are immutable after Capture. A discount, if
  * one is ever wanted, arrives as its own explicit field rather than as a
  * hand-edited figure here — an adjustment should be visible as an adjustment.
+ *
+ * `unit_cost` is the other half of the pair, stamped at Capture from the
+ * weighted average the ledger held at that instant and immutable for the
+ * same reason (ADR-0022): a Supply arriving next month must not rewrite what
+ * this sale earned. Null is unknown rather than free — a Product nothing has
+ * been recorded buying stamps none.
  */
 #[ObservedBy(OrderLineObserver::class)]
-#[Fillable(['product_id', 'product_name', 'unit_price', 'quantity'])]
+#[Fillable(['product_id', 'product_name', 'unit_price', 'unit_cost', 'quantity'])]
 class OrderLine extends Model
 {
     /** @use HasFactory<OrderLineFactory> */
@@ -29,6 +35,7 @@ class OrderLine extends Model
     {
         return [
             'unit_price' => 'integer',
+            'unit_cost' => 'integer',
             'quantity' => 'integer',
             'line_total' => 'integer',
         ];

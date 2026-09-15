@@ -1,11 +1,13 @@
 <?php
 
+use App\Enums\AdjustmentCause;
 use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Page;
 use App\Models\Product;
+use App\Models\Supplier;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutFieldType;
@@ -13,6 +15,7 @@ use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\DeliveryOption;
 use App\Support\Checkout\FieldPattern;
 use App\Support\Checkout\PricingFingerprint;
+use App\Support\Inventory\StockLedger;
 use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\Orders\OrderOwnership;
@@ -89,6 +92,140 @@ it('takes no price from the visitor', function () {
         ->and($order->subtotal)->toBe(99000)
         ->and($order->delivery_charge)->toBe(6000)
         ->and($order->total)->toBe(105000);
+});
+
+/**
+ * A delivery of one Product at one price, through the ledger, so cost enters
+ * the system the way it does in life rather than as a column somebody set.
+ */
+function boughtIntoStock(Product $product, int $quantity, int $unitCost): void
+{
+    app(StockLedger::class)->recordSupply(
+        supplier: Supplier::factory()->create(),
+        suppliedOn: now(),
+        lines: [['product_id' => $product->getKey(), 'quantity' => $quantity, 'unit_cost' => $unitCost]],
+    );
+}
+
+it('stamps what the units cost at capture, beside the price they sold at', function () {
+    $product = Product::factory()->create(['price' => 99000]);
+
+    /** Bought at 400.00 each, which is what gives this Product an average at all. */
+    boughtIntoStock($product, 5, 40000);
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product), [
+        'quantities' => [$product->getKey() => 2],
+    ]))->assertCreated();
+
+    $line = Order::sole()->lines()->sole();
+
+    /**
+     * The weighted average in force at Capture, stamped beside the price
+     * because `Sales` is counted at Capture too — a margin whose two halves
+     * were counted at different moments would swing for reasons that have
+     * nothing to do with the business (ADR-0022).
+     */
+    expect($line->unit_cost)->toBe(40000)
+        ->and($line->unit_price)->toBe(99000)
+
+        /** Read off the ledger, never written to it: stock leaves when the parcel does, not when an Order is captured (ADR-0021). */
+        ->and(app(StockLedger::class)->onHand($product))->toBe(5);
+});
+
+it('stamps the blend of everything bought, not the price of the last delivery', function () {
+    $product = Product::factory()->create();
+
+    boughtIntoStock($product, 3, 40000);
+    boughtIntoStock($product, 1, 60000);
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product)))->assertCreated();
+
+    /** (3 × 400.00 + 1 × 600.00) ÷ 4, read off the ledger rather than from any column. */
+    expect(Order::sole()->lines()->sole()->unit_cost)->toBe(45000);
+});
+
+it('stamps no cost for a product nothing has ever been bought for', function () {
+    $product = Product::factory()->create();
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product)))->assertCreated();
+
+    /**
+     * Unknown is not zero: a Product nobody has recorded buying must not
+     * present itself as infinitely profitable, which is the choice On Hand
+     * makes against 0 and the Courier figures before it.
+     */
+    expect(Order::sole()->lines()->sole()->unit_cost)->toBeNull();
+});
+
+it('holds the cost stamped at capture however the shelf is restocked afterwards', function () {
+    $product = Product::factory()->create();
+
+    boughtIntoStock($product, 5, 40000);
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product)))->assertCreated();
+
+    /** A delivery at three times the price, landing after the sale. */
+    boughtIntoStock($product, 20, 120000);
+
+    /**
+     * A Supply recorded today can change what tomorrow's movements cost and
+     * can never change what last month's margin said (ADR-0022).
+     */
+    expect(Order::sole()->lines()->sole()->unit_cost)->toBe(40000)
+        ->and(app(StockLedger::class)->averageCost($product))->toBe(104000);
+});
+
+it('stamps each line from its own product, and leaves the unknown one unknown', function () {
+    $costed = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
+    $uncosted = Product::factory()->create(['name' => 'Wool Scarf', 'price' => 29000]);
+
+    boughtIntoStock($costed, 5, 40000);
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage([$costed, $uncosted])))->assertCreated();
+
+    $lines = Order::sole()->lines()->get()->keyBy('product_name');
+
+    expect($lines['Winter Jacket']->unit_cost)->toBe(40000)
+        ->and($lines['Wool Scarf']->unit_cost)->toBeNull();
+});
+
+it('stamps what a unit was worth even with the shelf emptied', function () {
+    $product = Product::factory()->create();
+
+    boughtIntoStock($product, 10, 40000);
+
+    /** Counted down to nothing, so the units the average was divided by are gone. */
+    app(StockLedger::class)->recordCount($product, 0, AdjustmentCause::Miscount);
+
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product)))->assertCreated();
+
+    /**
+     * The last cost stamped rather than a division by zero, and never
+     * unknown: what a unit was worth does not stop being known because the
+     * shelf ran out. A COD Order for stock on its way is an ordinary day.
+     */
+    expect(Order::sole()->lines()->sole()->unit_cost)->toBe(40000);
+});
+
+it('stamps a cost below nothing rather than turning the customer away', function () {
+    $product = Product::factory()->create();
+
+    boughtIntoStock($product, 10, 10000);
+
+    /** More went out than was ever counted in, which the ledger allows and draws loudly (ADR-0021). */
+    app(StockLedger::class)->recordCount($product, -5, AdjustmentCause::Miscount);
+
+    boughtIntoStock($product, 10, 100);
+
+    /**
+     * An average below nothing is an unrecorded Supply announcing itself, and
+     * the Checkout is the last place that may answer it: a Merchant whose
+     * paperwork is behind must not lose the sale over it. The figure is
+     * stamped as it stands and the column is signed to hold it.
+     */
+    $this->postJson(route('checkout.store'), capturePayload(sellingPage($product)))->assertCreated();
+
+    expect(Order::sole()->lines()->sole()->unit_cost)->toBe(-9800);
 });
 
 it('rejects incomplete details and captures nothing', function (string $field, string $value, string $message) {

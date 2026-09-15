@@ -8,6 +8,8 @@ paths:
   - app/Models/SupplyLine.php
   - app/Enums/StockMovementReason.php
   - app/Enums/AdjustmentCause.php
+  - app/Support/Orders/OrderCapture.php
+  - app/Models/OrderLine.php
   - 'app/Filament/Clusters/Inventory/**'
 ---
 
@@ -43,6 +45,13 @@ Cost is then read over the **standing** movements (`StockMovement::standing()`):
 A reason of its own rather than a negative `Supply` movement: `stock_movements`' unique key is `(source_type, source_id, product_id, reason)`, so a reversal sharing the reason would collide with the row it undoes — and that same key is what makes a second void of one Supply impossible at the database, behind the `lockForUpdate()` re-read and the `LogicException` in front of it.
 
 `Supply::updating` lets through **only** `Supply::VOIDING` (plus the `updated_at` the save itself touches) and still throws on everything else. A second mark of the same Supply is refused three times over — there, in the ledger under its lock, and by the movements' unique key — and the first two raise `SupplyAlreadyVoided` so a screen can tell that case from the refusal to edit. Voiding is offered from `ViewSupply` and never from a row of the list, and any buying figure reads `Supply::notVoided()`; `SuppliersTable`'s Deliveries count is the one that exists today, and `SupplyLedgerTest` asserts the ledger is the only thing in `app/` that writes `voided_at`.
+
+## The Order Line carries the other stamp, and the two are meant to differ
+`OrderCapture` stamps `order_lines.unit_cost` from `averageCost()` at Capture, beside the `unit_price` the line already snapshots — the second of ADR-0022's two stamps, and the one a margin figure is meant to be read from. It is Capture and not Booked because `Sales` is counted at Capture: a cash-on-delivery Order has no other moment, so revenue and cost are always counted over the same set of Orders and two screens can never give a Merchant two answers for one span of days.
+
+Null is unknown here too, never zero — a Product nothing has been recorded buying stamps none, and a margin read off a zero cost would present it as infinitely profitable. The column is additive: Orders captured before it carry null, nothing is backfilled, and `OrderLineFactory` leaves it unset for the same reason. The ledger is only read at Capture and never written — stock leaves when the parcel does (ADR-0021).
+
+The line's stamp and the Sale movement's stamp at Booked are allowed to disagree, and a Supply landing between the two is why. Neither is to be "fixed", and they are not to be reconciled.
 
 ## A parcel moves stock through reconcile(), and the Consignment is what "it left" means
 `StockLedger::reconcile(Shipment)` is the only way a parcel ever moves stock, and `ShipmentObserver` (created, plus updated when `status`, `consignment_reference` or `abandoned_at` changed) is the only thing that calls it — never the four courier call sites that write a status (ADR-0021).
