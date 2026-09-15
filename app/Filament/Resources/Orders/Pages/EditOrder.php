@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Pages;
 
 use App\Filament\Resources\Orders\Actions\AbandonShipmentAction;
+use App\Filament\Resources\Orders\Actions\AnswerPartlyDeliveredAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
@@ -44,6 +45,7 @@ class EditOrder extends EditRecord
             BookWithCourierAction::make()
                 ->after(fn () => $this->refreshFormData(['customer_name', 'customer_address', 'customer_district'])),
             AbandonShipmentAction::make(),
+            AnswerPartlyDeliveredAction::make(),
             CheckWithGatewayAction::make(),
             SwitchToCashOnDeliveryAction::make(),
 

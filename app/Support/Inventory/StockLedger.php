@@ -36,11 +36,17 @@ use InvalidArgumentException;
  * of it comes back out at what it came in at; a Courier takes a parcel, and
  * the units in it leave; the parcel comes back, and they return at what they
  * left at; a User gives the parcel up as dead, and they are written off at
- * that same figure. Everything a parcel is ever owed is an arm of
- * `reconcile()` and nowhere else — `ShipmentObserver` asks this rather than
- * writing rows of its own, because status alone is written from four places
- * in the courier layer and that is four places the next Courier path could
- * forget.
+ * that same figure. Everything a parcel is ever owed by a Courier's word is
+ * an arm of `reconcile()` and nowhere else — `ShipmentObserver` asks this
+ * rather than writing rows of its own, because status alone is written from
+ * four places in the courier layer and that is four places the next Courier
+ * path could forget.
+ *
+ * `recordPartialReturn()` is the one arm outside it, and has to be. A parcel
+ * that half arrived is the single ending a Courier cannot describe — it
+ * reports a collected amount and never a list of items (ADR-0021) — so
+ * nothing is owed until a User names the lines that came back, and there is
+ * no column for an observer to watch for that.
  *
  * It also answers what a unit is worth. Cost enters at a Supply and is
  * stamped onto every movement as it happens (ADR-0022): the average is read
@@ -382,6 +388,125 @@ class StockLedger
     }
 
     /**
+     * Record which of a half-arrived parcel's items came back, and put those
+     * units — and only those — on the shelf again.
+     *
+     * The one ending the ledger cannot work out for itself, and therefore the
+     * one arm of a parcel's life that is asked for rather than reconciled. A
+     * Courier reports a collected amount and never a list of items (ADR-0021),
+     * so a Shipment reaching Partly Delivered writes nothing at all and waits;
+     * what a User names here is the only account of it there will ever be.
+     *
+     * The answer and its movements are written together or not at all, for
+     * the reason a Supply and its movements are: a parcel marked answered that
+     * put nothing back would be a question closed over a shelf that never
+     * heard about it.
+     *
+     * Named lines rather than typed quantities, because nobody in this system
+     * types a quantity. What goes back is read off the Sale movements this
+     * parcel already wrote and never off the Order — so a Product nobody had
+     * counted has nothing to bring back, a line naming more than left brings
+     * back only what left, and what the units are worth is the figure stamped
+     * on the row being answered rather than whatever the shelf has cost since
+     * (ADR-0022).
+     *
+     * Naming nothing is a real answer and closes the question all the same: a
+     * User who rings the Customer and learns that everything stayed with them
+     * has established exactly that, and the ledger asserting no movement is
+     * the honest record of it. That is also why the answer is a time and a
+     * name on the parcel rather than the movements themselves — an answer of
+     * nothing writes no movement to read it off.
+     *
+     * Answered once. The screen hides a question already answered, this
+     * refuses it under the parcel's own lock against a fresh read, and the
+     * movements' one-cause-one-movement key refuses it at the database.
+     *
+     * @param  list<int|string>  $orderLineIds  The Order Lines a User says came back.
+     */
+    public function recordPartialReturn(Shipment $shipment, array $orderLineIds, ?User $answeredBy = null): Shipment
+    {
+        return DB::transaction(function () use ($shipment, $orderLineIds, $answeredBy): Shipment {
+            /** Read back under the row's own lock: a screen is only as fresh as the moment it was drawn. */
+            $locked = Shipment::query()->lockForUpdate()->findOrFail($shipment->getKey());
+
+            if (! $locked->isAwaitingAnswer()) {
+                throw new ParcelNotAwaitingAnswer($locked);
+            }
+
+            $named = $this->unitsNamed($locked, $orderLineIds);
+
+            foreach ($this->outstanding($locked) as [$departure, $units]) {
+                $cameBack = min($named[$departure->product_id] ?? 0, $units);
+
+                if ($cameBack <= 0) {
+                    continue;
+                }
+
+                $this->writeOnce(
+                    product: $departure->product,
+                    quantity: $cameBack,
+                    reason: StockMovementReason::PartialReturn,
+                    source: $locked,
+
+                    /** What that Sale was stamped with, so exactly the money that went out with these units comes back (ADR-0022). */
+                    unitCost: $departure->unit_cost,
+
+                    /**
+                     * A name, unlike every other movement a parcel writes.
+                     * Those are a Courier's doing and are recorded by a sweep
+                     * with nobody signed in; this one exists because a person
+                     * established something nothing else could, and a
+                     * surprising figure is owed somebody to ask about it.
+                     */
+                    user: $answeredBy,
+                );
+            }
+
+            $locked->fill([
+                'answered_at' => now(),
+                'answered_by' => $answeredBy?->getKey(),
+            ])->save();
+
+            return $locked;
+        });
+    }
+
+    /**
+     * How many units of each Product a User has named, keyed by Product, read
+     * off the Order Lines they ticked.
+     *
+     * Summed per Product for the reason `parcelContents()` is: the cause of
+     * the movement is the parcel, and the ledger's key is one cause, one
+     * Product, one direction — so an Order naming the same Product on two
+     * lines is still one Product coming back in one box.
+     *
+     * Read with the Order trashed or not, like everything else a parcel is
+     * settled from: somebody tidying the Order away does not unsay what a
+     * User established about the box.
+     *
+     * @param  list<int|string>  $orderLineIds
+     * @return array<int, int>
+     */
+    private function unitsNamed(Shipment $shipment, array $orderLineIds): array
+    {
+        $order = $shipment->order()->withTrashed()->first();
+
+        if ($orderLineIds === [] || $order === null) {
+            return [];
+        }
+
+        return $order->lines()
+            ->whereKey($orderLineIds)
+            ->whereNotNull('product_id')
+            ->toBase()
+            ->selectRaw('product_id, sum(quantity) as units')
+            ->groupBy('product_id')
+            ->pluck('units', 'product_id')
+            ->map(fn (mixed $units): int => (int) $units)
+            ->all();
+    }
+
+    /**
      * The units in a parcel leaving, because a Courier has taken it.
      */
     private function recordDeparture(Shipment $shipment): void
@@ -469,14 +594,17 @@ class StockLedger
      */
     private function recordWriteOff(Shipment $shipment): void
     {
+        /** Read before anything is written, so the pair is the same units on both sides of itself. */
+        $writtenOff = $this->outstanding($shipment);
+
         $this->putBack($shipment, StockMovementReason::Unsold);
 
-        foreach ($this->departures($shipment) as $departure) {
+        foreach ($writtenOff as [$departure, $units]) {
             $this->writeOnce(
                 product: $departure->product,
 
                 /** Out again, and this time for nothing: the same units, at the same cost, as a loss. */
-                quantity: $departure->quantity,
+                quantity: -$units,
 
                 reason: StockMovementReason::Loss,
                 source: $shipment,
@@ -498,21 +626,84 @@ class StockLedger
      * that arrived while the parcel was out has moved the average, and these
      * units cost what they cost on the day they left, so the money that went
      * out with them is exactly the money that comes back.
+     *
+     * What left is read as what is still **outstanding** on it, which is the
+     * same number every time except after a half-arrived parcel was answered:
+     * a Courier turning up afterwards with the whole box owes the rest of it,
+     * and putting all of it back would shelve the answered units twice.
      */
     private function putBack(Shipment $shipment, StockMovementReason $reason): void
     {
-        foreach ($this->departures($shipment) as $departure) {
+        foreach ($this->outstanding($shipment) as [$departure, $units]) {
             $this->writeOnce(
                 product: $departure->product,
 
-                /** Back in: the exact opposite of the row it answers, which was written out. */
-                quantity: -$departure->quantity,
+                /** Back in: the opposite of the row it answers, less whatever a User has already said came back. */
+                quantity: $units,
 
                 reason: $reason,
                 source: $shipment,
                 unitCost: $departure->unit_cost,
             );
         }
+    }
+
+    /**
+     * What this parcel took off the shelf and nothing has yet put back: its
+     * Sale movements, each with the units still outstanding on it.
+     *
+     * Ordinarily that is the whole of what left, and every arm reads it as
+     * such. It is less only where a User has already answered a half-arrived
+     * parcel, and then the arithmetic matters: a Courier turning up weeks
+     * later with the box owes a Return for the rest, and a Return for all of
+     * it would put units on the shelf that are on it already.
+     *
+     * A Product whose units have all come back drops out rather than writing
+     * a movement of nothing — there is nothing to say about a box that is
+     * already home.
+     *
+     * @return list<array{StockMovement, int}>
+     */
+    private function outstanding(Shipment $shipment): array
+    {
+        $alreadyBack = $this->alreadyBack($shipment);
+
+        $rows = [];
+
+        foreach ($this->departures($shipment) as $departure) {
+            /** The departure is out and so negative; what is owed back is positive. */
+            $units = -$departure->quantity - ($alreadyBack[$departure->product_id] ?? 0);
+
+            if ($units > 0) {
+                $rows[] = [$departure, $units];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * How many units of each Product a User has already said came back off
+     * this parcel, keyed by Product.
+     *
+     * Only the Partial Returns, and deliberately: a Return and an Unsold are
+     * each the whole of what was left outstanding, written once and refused
+     * afterwards by the ledger's own key, so counting them here would be
+     * counting the row that is about to be written.
+     *
+     * @return array<int, int>
+     */
+    private function alreadyBack(Shipment $shipment): array
+    {
+        return StockMovement::query()
+            ->whereMorphedTo('source', $shipment)
+            ->where('reason', StockMovementReason::PartialReturn)
+            ->toBase()
+            ->selectRaw('product_id, sum(quantity) as units')
+            ->groupBy('product_id')
+            ->pluck('units', 'product_id')
+            ->map(fn (mixed $units): int => (int) $units)
+            ->all();
     }
 
     /**
@@ -639,6 +830,18 @@ class StockLedger
         StockMovementReason $reason,
         Model $source,
         ?int $unitCost,
+
+        /**
+         * Nobody's hand by default. A User may have pressed a button
+         * somewhere, but what moved these units was a Courier — and the same
+         * movement is written by a sweep at four in the morning with nobody
+         * signed in at all.
+         *
+         * A Partial Return is the one exception and the reason this is a
+         * parameter: nothing but a person could have said which items came
+         * back, so the row carries whoever did.
+         */
+        ?User $user = null,
     ): void {
         try {
             $this->write(
@@ -647,14 +850,7 @@ class StockLedger
                 reason: $reason,
                 source: $source,
                 unitCost: $unitCost,
-
-                /**
-                 * Nobody's hand. A User may have pressed a button somewhere,
-                 * but what moved these units was a Courier — and the same
-                 * movement is written by a sweep at four in the morning with
-                 * nobody signed in at all.
-                 */
-                user: null,
+                user: $user,
             );
         } catch (UniqueConstraintViolationException) {
             /** Somebody told us the same thing twice, which is what the key is there to make harmless. */

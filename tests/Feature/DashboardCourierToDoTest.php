@@ -28,9 +28,9 @@ use Livewire\Livewire;
  * and what the money says is `CourierMoneyTest`'s.
  *
  * What is asserted here is what a User meets: a backlog figure that is one
- * click from the list it counted, and the two parcel conditions reaching the
- * screen in the words somebody acts on — the condition, what to do about it,
- * and the Order it opens. When each condition *begins* is
+ * click from the list it counted, and the three parcel conditions reaching
+ * the screen in the words somebody acts on — the condition, what to do about
+ * it, and the Order it opens. When each condition *begins* is
  * `ReportingNeedsAttentionTest`'s, which proves the horizon and the two
  * decisions against the module; neither is measured again here.
  */
@@ -180,6 +180,29 @@ it('puts a parcel that came back in front of the User, and takes it away on eith
     Livewire::test(NeedsAttentionTable::class)
         ->assertDontSee($resent->order_number)
         ->assertDontSee($dropped->order_number)
+        ->assertSee('Nothing needs attention');
+});
+
+it('asks the User which items came back from a parcel that half arrived, and stops asking once they say', function () {
+    $halfArrived = Order::factory()->confirmed()->create();
+    Shipment::factory()->for($halfArrived)->partlyDelivered()->create();
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertSee($halfArrived->order_number)
+        ->assertSee('Parcel half arrived')
+        ->assertSee('Say which items came back')
+        /** The row is the way in: acting on it is opening the Order, where the question is asked. */
+        ->assertSee(OrderResource::getUrl('view', ['record' => $halfArrived]));
+
+    /**
+     * The one thing that settles it. Not cancelling and not sending another
+     * parcel — neither says which items are sitting in a courier's warehouse
+     * (ADR-0021).
+     */
+    $halfArrived->shipments()->sole()->forceFill(['answered_at' => now()])->save();
+
+    Livewire::test(NeedsAttentionTable::class)
+        ->assertDontSee($halfArrived->order_number)
         ->assertSee('Nothing needs attention');
 });
 

@@ -58,6 +58,19 @@ function orderSentAndReturned(OrderStatus $status = OrderStatus::Confirmed): Ord
 }
 
 /**
+ * An Order somebody confirmed, sent, and got half of back two days ago —
+ * with nobody having said yet which half.
+ */
+function orderHalfArrived(OrderStatus $status = OrderStatus::Confirmed, int $daysAgo = 2): Order
+{
+    $order = orderCapturedAt('2026-09-09 09:00', status: $status);
+
+    Shipment::factory()->for($order)->partlyDelivered()->create(['updated_at' => reportingNow()->subDays($daysAgo)->utc()]);
+
+    return $order;
+}
+
+/**
  * An Order with one parcel out, handed to its Courier this long ago and not
  * heard about since.
  */
@@ -134,10 +147,11 @@ it('lists an Order Paid and Cancelled at once, and not a Cancelled Order that wa
 });
 
 /*
-| The parcels. Both conditions are read off the Shipments, and neither
-| re-states a rule that lives elsewhere: what counts as decided is the
-| delivery queue's own scope, and what counts as stuck is the horizon the
-| sweep measures and writes down.
+| The parcels. All three conditions are read off the Shipments, and not one
+| of them re-states a rule that lives elsewhere: what counts as decided is
+| the delivery queue's own scope, what counts as unanswered is the model's
+| own `awaitingAnswer()`, and what counts as stuck is the horizon the sweep
+| measures and writes down.
 */
 
 it('lists an Order whose parcel came back and nobody has decided about it', function () {
@@ -168,6 +182,41 @@ it('lists an Order whose parcel came back and nobody has decided about it', func
         /** And the return moved nothing of the Order's own: both Orders read exactly as their Users left them. */
         ->and($waiting->refresh()->status)->toBe(OrderStatus::Confirmed)
         ->and($cancelled->refresh()->status)->toBe(OrderStatus::Cancelled);
+});
+
+it('lists an Order whose parcel half arrived and nobody has said what came back', function () {
+    $waiting = orderHalfArrived();
+
+    /** Answered: a User has named what came back, which is the only thing that settles this one. */
+    $answered = orderHalfArrived();
+    $answered->shipments()->sole()->forceFill(['answered_at' => reportingNow()->subDay()->utc()])->save();
+
+    /** Whole, either way: a parcel that arrived and one that came back are asking something else or nothing at all. */
+    $arrived = orderCapturedAt('2026-09-09 09:00', status: OrderStatus::Confirmed);
+    Shipment::factory()->for($arrived)->delivered()->create();
+
+    /**
+     * Cancelled by a User, and still listed. Cancelling says what becomes of
+     * the Order and nothing at all about which items are in a courier's
+     * warehouse — unlike a returned parcel, where cancelling *is* one of the
+     * two answers (ADR-0021).
+     */
+    $cancelled = orderHalfArrived(OrderStatus::Cancelled, daysAgo: 1);
+
+    /** Gone for good: an Order that should never have existed is not a question anybody has to answer. */
+    orderHalfArrived()->delete();
+
+    $list = needsAttentionAt();
+
+    expect(attentionRows($list))->toBe([
+        [$waiting->order_number, AttentionReason::ParcelPartlyDelivered],
+        [$cancelled->order_number, AttentionReason::ParcelPartlyDelivered],
+    ])
+        /** Since the Courier said so, which is the last thing written to a row nothing polls any more. */
+        ->and($list->rows[0]->since->equalTo(reportingNow()->subDays(2)))->toBeTrue()
+
+        /** And answering moved nothing of the Order's own: the parcel is settled and the Order reads as its User left it. */
+        ->and($answered->refresh()->status)->toBe(OrderStatus::Confirmed);
 });
 
 it('lists a parcel the sweep has flagged as stuck, and not one still inside the horizon', function () {
@@ -201,10 +250,14 @@ it('ignores any window: an Order from months ago is still listed, in condition o
     $refundable = orderCapturedAt('2026-02-01 10:00', attributes: ['payment_method' => PaymentMethod::Bkash], status: OrderStatus::Cancelled);
     Payment::factory()->for($refundable)->paid()->create(['method' => PaymentMethod::Bkash]);
 
+    /** A parcel that half arrived last winter and nobody has accounted for: a question does not expire with the window. */
+    $halfArrived = orderHalfArrived(daysAgo: 200);
+
     expect(attentionRows(needsAttentionAt()))->toBe([
         [$older->order_number, AttentionReason::NewOrderUncalled],
         [$old->order_number, AttentionReason::NewOrderUncalled],
         [$refundable->order_number, AttentionReason::PaidAndCancelled],
+        [$halfArrived->order_number, AttentionReason::ParcelPartlyDelivered],
     ]);
 });
 

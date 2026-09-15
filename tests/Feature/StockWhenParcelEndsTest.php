@@ -3,13 +3,11 @@
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
-use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Inventory\StockLedger;
-use Illuminate\Database\Eloquent\Builder;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
 
@@ -35,36 +33,6 @@ beforeEach(function (): void {
 
     $this->ledger = app(StockLedger::class);
 });
-
-/**
- * What the ledger wrote for the parcels under one reason, and only that: the
- * count that put the Product on the shelf is never one of these.
- *
- * @return Builder<StockMovement>
- */
-function parcelMovements(StockMovementReason $reason): Builder
-{
-    return StockMovement::query()->where('reason', $reason);
-}
-
-/**
- * Hand this Courier's parcel over and then have the Courier report one of its
- * own words for it, the way the sweep finds out.
- */
-function parcelReportedAs(Order $order, CourierScript $script, string $rawStatus): Shipment
-{
-    $script->fakeBooked();
-
-    sendWithCourier($order, $script);
-
-    answeringAfresh();
-    $script->fakeTracking($rawStatus);
-
-    test()->travel($script->reAskIntervalSeconds() + 1)->seconds();
-    test()->artisan('couriers:sweep')->assertSuccessful();
-
-    return Shipment::sole()->refresh();
-}
 
 /*
 |--------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shipments\Schemas;
 
+use App\Enums\ShipmentStatus;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Shipment;
 use App\Support\Money;
@@ -86,6 +87,35 @@ class ShipmentInfolist
                     ->icon(Heroicon::OutlinedArchiveBoxXMark)
                     ->danger()
                     ->visible(fn (Shipment $record): bool => $record->abandoned_at !== null)
+                    ->columnSpanFull(),
+
+                /**
+                 * Half of this parcel arrived, and the State badge above says
+                 * only that. What it cannot say is the part the ledger is
+                 * waiting on: no Courier reports which items it is holding
+                 * (ADR-0021), so until a User names them the units on this
+                 * parcel are neither back in stock nor written off.
+                 *
+                 * Answered or not, because both are facts about the same
+                 * question and reading one badge is not reading the other.
+                 * The question is asked from the Order, like every decision
+                 * about a parcel, and this says so rather than offering it
+                 * here.
+                 */
+                Callout::make(fn (Shipment $record): string => $record->isAwaitingAnswer()
+                    ? 'Half arrived — nobody has said which items came back.'
+                    : 'Half arrived — what came back has been recorded.')
+                    ->description(fn (Shipment $record): string => $record->isAwaitingAnswer()
+                        ? 'The courier reports an amount and never a list of items, so the stock on this parcel is neither back on the shelf nor written off. Open the order and say what came back.'
+                        : 'Recorded by '
+                            .($record->answeredBy?->name ?? 'someone since deleted')
+                            .' on '.$record->answered_at?->format('M j, Y')
+                            .'. What they named is back on the shelf at what it cost when it left.')
+                    ->icon(Heroicon::OutlinedInboxArrowDown)
+
+                    /** Loud while it is a question and quiet once it is answered: the same fact, and only one of the two is somebody's to act on. */
+                    ->status(fn (Shipment $record): string => $record->isAwaitingAnswer() ? 'warning' : 'info')
+                    ->visible(fn (Shipment $record): bool => $record->status === ShipmentStatus::PartlyDelivered)
                     ->columnSpanFull(),
 
                 /**

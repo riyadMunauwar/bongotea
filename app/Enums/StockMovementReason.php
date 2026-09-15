@@ -14,15 +14,12 @@ use Filament\Support\Contracts\HasLabel;
  * that is Committed, which is a fact about Orders and never a movement
  * (ADR-0021).
  *
- * Seven cases today, and that is the whole of what this system can currently
+ * Eight cases today, and that is the whole of what this system can currently
  * do to a box: a delivery arrives, a User counts what is on the shelf, a
  * delivery that should never have been recorded is taken back out, a Courier
- * takes a parcel away, a parcel comes back, and a parcel is given up as dead
- * — which is two of them, because giving up on a parcel takes it back off the
- * sale before it writes the loss.
- * Partial Return joins them when the ticket that can actually cause one lands
- * — a case here, a driver of it in `StockLedger`, and no migration, because
- * the column is a string cast to this enum rather than a native MySQL enum.
+ * takes a parcel away, a parcel comes back — whole, or in the part a User has
+ * named — and a parcel is given up as dead, which is two of them, because
+ * giving up on a parcel takes it back off the sale before it writes the loss.
  */
 enum StockMovementReason: string implements HasColor, HasLabel
 {
@@ -87,6 +84,24 @@ enum StockMovementReason: string implements HasColor, HasLabel
     case Return = 'return';
 
     /**
+     * Some of a parcel's units coming back, because a User has said which
+     * ones did: at the figure stamped on the Sale they answer, like a Return.
+     *
+     * The only movement in the system a person decides on rather than a
+     * Courier. A Partly Delivered parcel reports a collected amount and never
+     * a list of items (ADR-0021), so it writes nothing at all until somebody
+     * names the lines that came back — which is why this carries the name of
+     * whoever named them, and why the lines they did not name write nothing
+     * rather than a Loss.
+     *
+     * Its own word rather than a Return for the reason `Unsold` is one: the
+     * ledger's key is one cause, one Product, one reason, and a parcel a User
+     * has answered and a Courier then brings back whole owes both rows. What
+     * the Return puts back is then what left and has not already come back.
+     */
+    case PartialReturn = 'partial_return';
+
+    /**
      * A parcel's units taken back off the sale, because the parcel was given
      * up as dead: the exact opposite of the Sale, at the figure that Sale
      * carried.
@@ -128,6 +143,7 @@ enum StockMovementReason: string implements HasColor, HasLabel
             self::Void => 'Void',
             self::Sale => 'Sale',
             self::Return => 'Return',
+            self::PartialReturn => 'Partial return',
             self::Unsold => 'Unsold',
             self::Loss => 'Loss',
         };
@@ -142,8 +158,8 @@ enum StockMovementReason: string implements HasColor, HasLabel
             /** Quiet on purpose: stock leaving on a parcel somebody bought is the ordinary day, not something to look at. */
             self::Sale => 'gray',
 
-            /** A parcel that came back is not a disaster and not good news: it is a fact to read past. */
-            self::Return => 'info',
+            /** A parcel that came back is not a disaster and not good news: it is a fact to read past — and half of one reads the same way. */
+            self::Return, self::PartialReturn => 'info',
 
             /** Quiet like the Sale it undoes: the loud half of a write-off is the Loss underneath it. */
             self::Unsold => 'gray',

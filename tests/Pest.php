@@ -4,6 +4,7 @@ use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
+use App\Enums\StockMovementReason;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Resources\Pages\Pages\EditPage;
@@ -13,6 +14,7 @@ use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Shipment;
+use App\Models\StockMovement;
 use App\Shortcodes\AttributeSchema;
 use App\Shortcodes\Definitions\CheckoutShortcode;
 use App\Shortcodes\Node;
@@ -32,6 +34,7 @@ use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -417,6 +420,41 @@ function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordere
     app(StockLedger::class)->recordCount($product, $held, AdjustmentCause::OpeningCount);
 
     return [$order->refresh(), $product];
+}
+
+/**
+ * What the ledger wrote for the parcels under one reason, and only that: the
+ * count that put a Product on the shelf is never one of these.
+ *
+ * @return Builder<StockMovement>
+ */
+function parcelMovements(StockMovementReason $reason): Builder
+{
+    return StockMovement::query()->where('reason', $reason);
+}
+
+/**
+ * Hand this Courier's parcel over and then have the Courier report one of its
+ * own words for it, the way the sweep finds out.
+ *
+ * Here rather than in the stock suite that needed it first, for the reason
+ * `parcelOfCountedStock()` is: what becomes of a parcel is proved over three
+ * files now, and a helper defined in one of them is a fatal error for anybody
+ * running only another.
+ */
+function parcelReportedAs(Order $order, CourierScript $script, string $rawStatus): Shipment
+{
+    $script->fakeBooked();
+
+    sendWithCourier($order, $script);
+
+    answeringAfresh();
+    $script->fakeTracking($rawStatus);
+
+    test()->travel($script->reAskIntervalSeconds() + 1)->seconds();
+    test()->artisan('couriers:sweep')->assertSuccessful();
+
+    return Shipment::sole()->refresh();
 }
 
 /**

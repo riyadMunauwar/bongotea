@@ -442,21 +442,25 @@ final class ReportingQuery
      * The Orders an operator must act on as of one instant, whatever any
      * Reporting Window says: New Orders older than a day, Payments Pending
      * for over an hour, Orders Paid twice, Orders Paid and Cancelled at
-     * once, Orders whose parcel came back and nobody has decided about, and
-     * Orders whose parcel nobody has heard about in a week. Six queries, one
-     * per condition, each returning whole Orders with the instant the
-     * condition began loaded beside them; the rows come back in condition
-     * order, oldest first within each, and the largest thing looped over is
-     * the list of Orders that need attention. Soft-deleted Orders are gone
-     * through the model's scope, whatever their Payments or Shipments say.
+     * once, Orders whose parcel came back and nobody has decided about,
+     * Orders whose parcel half arrived and nobody has said what came back,
+     * and Orders whose parcel nobody has heard about in a week. Seven
+     * queries, one per condition, each returning whole Orders with the
+     * instant the condition began loaded beside them; the rows come back in
+     * condition order, oldest first within each, and the largest thing looped
+     * over is the list of Orders that need attention. Soft-deleted Orders are
+     * gone through the model's scope, whatever their Payments or Shipments
+     * say.
      *
-     * The two parcel conditions are read off the Shipments and neither of
+     * The three parcel conditions are read off the Shipments and not one of
      * them re-states a rule that lives elsewhere: "nothing has been decided"
-     * is `Order::notYetSent()`, the same scope the delivery queue filters
-     * by, and "nobody has heard about it in a week" is the `stuck_at` the
-     * sweep writes — `CourierSweep::STUCK_AFTER_SECONDS` is measured there
-     * and never again here, or a horizon changed on the sweep would leave
-     * this list quietly disagreeing with it.
+     * is `Order::notYetSent()`, the same scope the delivery queue filters by;
+     * "nobody has said what came back" is `Shipment::awaitingAnswer()`, the
+     * same reading the ledger refuses a second answer on; and "nobody has
+     * heard about it in a week" is the `stuck_at` the sweep writes —
+     * `CourierSweep::STUCK_AFTER_SECONDS` is measured there and never again
+     * here, or a horizon changed on the sweep would leave this list quietly
+     * disagreeing with it.
      */
     public function needsAttention(?CarbonImmutable $now = null): NeedsAttention
     {
@@ -471,8 +475,9 @@ final class ReportingQuery
          */
         $lastPaidAt = new Expression('coalesce(verified_at, created_at)');
 
-        /** The attempt that came back, and the attempt nobody can account for: each asked for twice, once to find the Order and once to date the condition. */
+        /** The attempt that came back, the attempt that half arrived, and the attempt nobody can account for: each asked for twice, once to find the Order and once to date the condition. */
         $returned = fn (Builder $shipments): Builder => $shipments->where('status', ShipmentStatus::Returned->value);
+        $halfArrived = fn (Builder $shipments): Builder => $shipments->awaitingAnswer();
         $stuck = fn (Builder $shipments): Builder => $shipments->active()->whereNotNull('stuck_at');
 
         return new NeedsAttention([
@@ -523,6 +528,31 @@ final class ReportingQuery
                     ->where('status', '!=', OrderStatus::Cancelled->value)
                     ->whereHas('shipments', $returned)
                     ->withMax(['shipments as since' => $returned], 'updated_at'),
+            ),
+
+            /**
+             * A parcel that half arrived and nobody has said which of its
+             * items came back. The one condition here whose answer the stock
+             * ledger itself is waiting on: a Courier reports a collected
+             * amount and never a list, so the units are neither returned nor
+             * lost until a User names the lines (ADR-0021).
+             *
+             * Nothing else takes it off this list, and deliberately nothing
+             * else does. Cancelling the Order does not say what came back,
+             * and neither does sending another parcel — this is a question
+             * about a box, where a returned parcel is a question about what
+             * to do next. `Shipment::awaitingAnswer()` is the whole rule and
+             * it is the model's own.
+             *
+             * Since the Courier said so, which is the last thing written to
+             * that row: a terminal attempt is no longer polled, so nothing
+             * touches it until the answer does.
+             */
+            ...$this->attentionRows(
+                AttentionReason::ParcelPartlyDelivered,
+                Order::query()
+                    ->whereHas('shipments', $halfArrived)
+                    ->withMax(['shipments as since' => $halfArrived], 'updated_at'),
             ),
 
             /**

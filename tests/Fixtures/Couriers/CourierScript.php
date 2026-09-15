@@ -464,6 +464,16 @@ abstract class CourierScript
         return $this->rawStatusesFor(ShipmentStatus::Returned)[0];
     }
 
+    /**
+     * What this Courier calls a parcel that half arrived. All three have a
+     * word for it and not one of them says which items came back, which is
+     * the whole reason the ledger waits on a User (ADR-0021).
+     */
+    public function partlyDeliveredWording(): string
+    {
+        return $this->rawStatusesFor(ShipmentStatus::PartlyDelivered)[0];
+    }
+
     abstract public function supportsBulk(): bool;
 
     abstract public function supportsWebhook(): bool;

@@ -154,6 +154,28 @@ it('says who wrote a parcel off and when, beside what the courier last said abou
         ->assertDontSeeText('Stuck');
 });
 
+it('says a half-arrived parcel is waiting on an answer, and who gave it once somebody has', function () {
+    $user = User::factory()->create(['name' => 'Nusrat Jahan']);
+
+    $halfArrived = Shipment::factory()->partlyDelivered()->create();
+
+    /** The State badge says half of it arrived; nothing but this says the stock on it is still a question (ADR-0021). */
+    Livewire::test(ViewShipment::class, ['record' => $halfArrived->getKey()])
+        ->assertSeeText('nobody has said which items came back')
+        ->assertSeeText('Open the order and say what came back');
+
+    $halfArrived->forceFill(['answered_at' => now(), 'answered_by' => $user->getKey()])->save();
+
+    Livewire::test(ViewShipment::class, ['record' => $halfArrived->refresh()->getKey()])
+        ->assertSeeText('what came back has been recorded')
+        ->assertSeeText('Nusrat Jahan')
+        ->assertDontSeeText('nobody has said which items came back');
+
+    /** A parcel that arrived whole is asking nothing. */
+    Livewire::test(ViewShipment::class, ['record' => Shipment::factory()->delivered()->create()->getKey()])
+        ->assertDontSeeText('Half arrived');
+});
+
 it('says a charge has not been named rather than reading it as free', function () {
     $shipment = Shipment::factory()->create(['courier_charge' => null]);
 

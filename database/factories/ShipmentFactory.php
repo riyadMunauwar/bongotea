@@ -61,6 +61,17 @@ class ShipmentFactory extends Factory
         return $this->state(fn (): array => ['status' => ShipmentStatus::Returned, 'raw_status' => 'cancelled']);
     }
 
+    /**
+     * A parcel that half arrived: the Courier collected some of what it was
+     * sent out for and has said nothing about which items it is holding. The
+     * attempt is over and the question of what came back is open until a User
+     * answers it (ADR-0021).
+     */
+    public function partlyDelivered(): static
+    {
+        return $this->state(fn (): array => ['status' => ShipmentStatus::PartlyDelivered, 'raw_status' => 'partial_delivered']);
+    }
+
     /** A parcel a User wrote off: a time and a name, with the Courier's last word left standing. */
     public function abandoned(): static
     {

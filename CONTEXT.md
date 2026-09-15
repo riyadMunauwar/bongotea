@@ -242,6 +242,10 @@ _Avoid_: rejected, failed, cancelled, error, bounced
 Said of a Shipment whose parcel came back undelivered. It is the Courier's outcome and not the Merchant's decision, and it is emphatically not Cancelled: a returned parcel is a question — ring the Customer, correct the address, send it again, or give up — and the answer is a User's. Two of the three couriers say "cancelled" in their own words for exactly this, which is precisely why the system does not. The units it carried come back on the shelf as they left it — at the cost stamped on them the day the Courier took the box, never at what the shelf has cost since.
 _Avoid_: cancelled, failed, undelivered, refused, RTO
 
+**Partly Delivered**:
+Said of a Shipment the Courier collected only part of the money for: some of the parcel arrived and the rest is coming back. The Courier reports an amount and never a list of items, so the system cannot know which units came back, and it does not guess — the parcel moves no stock at all and the Order joins Needs Attention until a User names the lines that came back. Until they do, those units are neither back in stock nor written off, which is exactly what they are. It is an arrival like Delivered: the attempt is over and the Order is not one to send again.
+_Avoid_: partial, short delivery, split delivery, incomplete
+
 **Abandoned**:
 Said of a Shipment a User has written off — a parcel a Courier never collected, or one held so long there is nothing left to wait for. It is a time and a name and never a status, because the Courier's last word is worth keeping: a Shipment On Hold and then abandoned says both, where a status overwritten would say only that somebody gave up. Abandoning frees the Order to be sent again, and asserts that the first parcel is dead.
 _Avoid_: cancelled, void, closed, written off, expired
@@ -287,6 +291,10 @@ _Avoid_: correction, write-off, shrinkage, manual entry, fix
 **Return**:
 The Stock Movement that puts a parcel's units back on the shelf when a Courier brings the box back: the exact opposite of the one that took them, at the cost stamped on it the day the Courier took it. What comes back is what left rather than what the Order says now, so a Product nobody had counted has nothing to bring back and a Supply that arrived while the parcel was out cannot revalue units on a round trip. Said only of a box that came back through the door — a parcel given up as dead is answered by an **Unsold** and a **Loss**, which is the same arithmetic and a different sentence, and which is what leaves a Return free to be written if the Courier turns up with the parcel after all.
 _Avoid_: restock, refund, reversal, put-back, RTO
+
+**Partial Return**:
+The Stock Movement that puts back the units of a Partly Delivered parcel a User has said came back: the same arithmetic as a Return, at the cost stamped on the Sale it answers, for the lines they named and no others. The only movement in the system a person decides on rather than a Courier, and the only one carrying the name of whoever decided — nothing else could have established which items came back, so a surprising figure has somebody to ask about it. Naming nothing is a real answer and settles the parcel too: what it records is that the Customer kept it all. Its own word rather than a Return, so that a Courier turning up afterwards with the whole box still owes one — and what that Return puts back is what left and has not already come back.
+_Avoid_: partial refund, split return, part return, short return
 
 **Loss**:
 What a parcel given up as dead cost: the units that left on it, at the cost stamped on them when they left, named as money on the Product's own history. Written when a User Abandons a Shipment and never by a Courier's word, because only a person may say a parcel is dead. It is the answer to "what did that actually cost me" — without it, stock that left and was never paid for reads as an ordinary sale and surfaces months later as shrinkage nobody can account for. It takes nothing further off the shelf: the units left once, when the Courier took the box, so an **Unsold** takes them back off the sale at what they left at and the Loss is taken from there. A parcel nobody was ever handed writes none, because nothing left.
@@ -339,7 +347,7 @@ Sales divided by the Orders that count towards Sales in a Reporting Window. Zero
 _Avoid_: AOV, basket size, ticket size
 
 **Needs Attention**:
-The Orders, Payments and parcels an operator must act on regardless of any Reporting Window: a New Order nobody has called in a day, a Payment Pending for over an hour, an Order Paid twice, an Order Paid and Cancelled at once, an Order whose parcel came back and nobody has decided about, and a parcel nobody has heard about in roughly a week. It is a to-do list, not a report, so it ignores the window. A returned parcel is here rather than anywhere else because it changes nothing by itself: what becomes of the Order is a decision a User makes, and until they make it the return is a question nobody has answered.
+The Orders, Payments and parcels an operator must act on regardless of any Reporting Window: a New Order nobody has called in a day, a Payment Pending for over an hour, an Order Paid twice, an Order Paid and Cancelled at once, an Order whose parcel came back and nobody has decided about, an Order whose parcel half arrived and nobody has said which items came back, and a parcel nobody has heard about in roughly a week. It is a to-do list, not a report, so it ignores the window. A returned parcel is here rather than anywhere else because it changes nothing by itself: what becomes of the Order is a decision a User makes, and until they make it the return is a question nobody has answered. A Partly Delivered one is here for a stricter reason still — the ledger itself is waiting on the answer, and only answering takes it off, because neither cancelling the Order nor sending another parcel says anything about which items are sitting in a courier's warehouse.
 _Avoid_: alerts, exceptions, issues, anomalies
 
 **Visit**:

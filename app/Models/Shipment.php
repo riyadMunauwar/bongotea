@@ -56,6 +56,8 @@ use Illuminate\Database\UniqueConstraintViolationException;
     'stuck_at',
     'abandoned_at',
     'abandoned_by',
+    'answered_at',
+    'answered_by',
     'booking_response',
 ])]
 class Shipment extends Model
@@ -75,6 +77,7 @@ class Shipment extends Model
             'polled_at' => 'datetime',
             'stuck_at' => 'datetime',
             'abandoned_at' => 'datetime',
+            'answered_at' => 'datetime',
             'parcel_details' => 'array',
             'booking_response' => 'array',
         ];
@@ -134,6 +137,18 @@ class Shipment extends Model
     public function abandonedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'abandoned_by');
+    }
+
+    /**
+     * Who said which of this parcel's items came back, where somebody has.
+     * Answering is a time and a name for the reason abandoning is: the
+     * Courier's own word about the parcel stays standing over it.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function answeredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'answered_by');
     }
 
     /**
@@ -228,6 +243,35 @@ class Shipment extends Model
         return $this->isActive()
             && $this->status === ShipmentStatus::Written
             && ! $this->wasHandedOver();
+    }
+
+    /**
+     * Whether this parcel is a question nobody has answered: the Courier said
+     * some of it arrived, and nothing has yet said which items came back.
+     *
+     * The one outcome the ledger cannot work out for itself. A Courier reports
+     * a collected amount and never a list of items (ADR-0021), so the units on
+     * a Partly Delivered parcel are neither returned nor lost until a User
+     * names the lines — which is what puts the Order on Needs Attention, and
+     * what the answer then takes it off for.
+     */
+    public function isAwaitingAnswer(): bool
+    {
+        return $this->status === ShipmentStatus::PartlyDelivered
+            && $this->answered_at === null;
+    }
+
+    /**
+     * The parcels still waiting on an answer. The query behind
+     * `isAwaitingAnswer()`, and what Needs Attention asks.
+     *
+     * @param  Builder<Shipment>  $query
+     */
+    #[Scope]
+    protected function awaitingAnswer(Builder $query): void
+    {
+        $query->where('status', ShipmentStatus::PartlyDelivered->value)
+            ->whereNull('answered_at');
     }
 
     /**
