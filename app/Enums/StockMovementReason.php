@@ -14,14 +14,15 @@ use Filament\Support\Contracts\HasLabel;
  * that is Committed, which is a fact about Orders and never a movement
  * (ADR-0021).
  *
- * Four cases today, and that is the whole of what this system can currently
+ * Seven cases today, and that is the whole of what this system can currently
  * do to a box: a delivery arrives, a User counts what is on the shelf, a
- * delivery that should never have been recorded is taken back out, and a
- * Courier takes a parcel away.
- * Return and Loss join them as the tickets that can actually cause
- * them land — each one a case here, a driver of it in `StockLedger`, and no
- * migration, because the column is a string cast to this enum rather than a
- * native MySQL enum.
+ * delivery that should never have been recorded is taken back out, a Courier
+ * takes a parcel away, a parcel comes back, and a parcel is given up as dead
+ * — which is two of them, because giving up on a parcel takes it back off the
+ * sale before it writes the loss.
+ * Partial Return joins them when the ticket that can actually cause one lands
+ * — a case here, a driver of it in `StockLedger`, and no migration, because
+ * the column is a string cast to this enum rather than a native MySQL enum.
  */
 enum StockMovementReason: string implements HasColor, HasLabel
 {
@@ -66,11 +67,58 @@ enum StockMovementReason: string implements HasColor, HasLabel
      *
      * Named for what the Merchant sold rather than for the parcel that
      * carried it, because that is what the units leaving were. A parcel that
-     * comes back is answered by a Return and a parcel written off by a Loss,
-     * each its own row against the same Shipment — the ledger keeps both the
-     * going and the coming back, exactly as it keeps a Supply and its Void.
+     * comes back is answered by a Return, and one written off by an Unsold
+     * and a Loss — each its own row against the same Shipment, because the
+     * ledger keeps both the going and whatever came of it, exactly as it
+     * keeps a Supply and its Void.
      */
     case Sale = 'sale';
+
+    /**
+     * A parcel's units coming back onto the books at the cost they left at —
+     * the exact opposite of the Sale it answers, stamped with the figure that
+     * Sale carried rather than with whatever the average has become since.
+     *
+     * Written when a Courier brings the parcel back, and only then: what it
+     * says is that a box came back through the door. A parcel given up as
+     * dead is answered by an Unsold and a Loss instead, which is the same
+     * arithmetic and a different sentence.
+     */
+    case Return = 'return';
+
+    /**
+     * A parcel's units taken back off the sale, because the parcel was given
+     * up as dead: the exact opposite of the Sale, at the figure that Sale
+     * carried.
+     *
+     * Half of a write-off and never written alone. The units in a parcel left
+     * the shelf once, at Booked, so a Loss that only deducted would take the
+     * same box twice and leave On Hand disagreeing with the shelf for good —
+     * this is what the Loss beside it is taken out of.
+     *
+     * Its own word rather than a Return, for a reason the ledger enforces and
+     * a reason a Merchant reads. The ledger's is the one-cause-one-movement
+     * key: a parcel written off and *then* brought back by the Courier owes
+     * both rows, and two rows sharing a reason against one Shipment cannot
+     * both exist — the second would be swallowed as a duplicate telling, and
+     * the units would never come back. The Merchant's is plainer: nothing
+     * came back through any door, and a history saying it did would be a lie
+     * about a box.
+     */
+    case Unsold = 'unsold';
+
+    /**
+     * A parcel given up as dead: units that left on it are written off at
+     * what they cost when they left.
+     *
+     * The money figure a Merchant is owed for a parcel a Courier never
+     * collected — without it, stock that left and was never paid for reads
+     * as an ordinary Sale, and surfaces months later as shrinkage nobody can
+     * account for. Written against the Shipment beside the Unsold that takes
+     * the units back off the sale, so what the pair does to On Hand is
+     * nothing and what it does to the record is name the loss.
+     */
+    case Loss = 'loss';
 
     public function getLabel(): string
     {
@@ -79,6 +127,9 @@ enum StockMovementReason: string implements HasColor, HasLabel
             self::Supply => 'Supply',
             self::Void => 'Void',
             self::Sale => 'Sale',
+            self::Return => 'Return',
+            self::Unsold => 'Unsold',
+            self::Loss => 'Loss',
         };
     }
 
@@ -91,8 +142,14 @@ enum StockMovementReason: string implements HasColor, HasLabel
             /** Quiet on purpose: stock leaving on a parcel somebody bought is the ordinary day, not something to look at. */
             self::Sale => 'gray',
 
-            /** Loud on purpose: a void is a correction somebody should notice while reading past it. */
-            self::Void => 'danger',
+            /** A parcel that came back is not a disaster and not good news: it is a fact to read past. */
+            self::Return => 'info',
+
+            /** Quiet like the Sale it undoes: the loud half of a write-off is the Loss underneath it. */
+            self::Unsold => 'gray',
+
+            /** Loud on purpose: a void is a correction somebody should notice while reading past it, and a loss is money gone. */
+            self::Void, self::Loss => 'danger',
         };
     }
 }

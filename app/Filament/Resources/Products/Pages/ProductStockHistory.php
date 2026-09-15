@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Pages;
 
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use BackedEnum;
@@ -96,6 +97,34 @@ class ProductStockHistory extends ManageRelatedRecords
                 TextColumn::make('unit_cost')
                     ->label('Unit cost')
                     ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::format($state))
+                    ->placeholder('—'),
+
+                /**
+                 * What the movement was worth altogether: its units at the
+                 * cost stamped on it, signed the way the quantity is.
+                 *
+                 * The column a loss is read off. A parcel given up as dead
+                 * writes a Loss here, and this is where "what did that
+                 * actually cost me" is answered in money rather than left as
+                 * a quantity a Merchant has to multiply — which is the whole
+                 * difference between a written-off parcel and shrinkage
+                 * nobody can account for.
+                 *
+                 * Nothing where no cost was stamped, for the reason the unit
+                 * cost beside it reads nothing: a movement from before
+                 * anything was bought is worth an unknown amount, never zero.
+                 */
+                TextColumn::make('value')
+                    ->label('Value')
+                    ->state(fn (StockMovement $record): ?int => $record->unit_cost === null
+                        ? null
+                        : $record->quantity * $record->unit_cost)
+                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::format($state))
+                    ->color(fn (?int $state): string => match (true) {
+                        $state > 0 => 'success',
+                        $state < 0 => 'danger',
+                        default => 'gray',
+                    })
                     ->placeholder('—'),
 
                 TextColumn::make('user.name')

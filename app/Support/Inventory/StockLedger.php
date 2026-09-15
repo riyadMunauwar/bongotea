@@ -3,6 +3,7 @@
 namespace App\Support\Inventory;
 
 use App\Enums\AdjustmentCause;
+use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Models\Product;
 use App\Models\Shipment;
@@ -13,6 +14,7 @@ use App\Models\Supply;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +34,9 @@ use InvalidArgumentException;
  * held; a User counts, and the difference is squared away as an Adjustment;
  * a delivery that should never have been recorded is Voided, and every unit
  * of it comes back out at what it came in at; a Courier takes a parcel, and
- * the units in it leave. Return and Loss each arrive as another arm of
+ * the units in it leave; the parcel comes back, and they return at what they
+ * left at; a User gives the parcel up as dead, and they are written off at
+ * that same figure. Everything a parcel is ever owed is an arm of
  * `reconcile()` and nowhere else — `ShipmentObserver` asks this rather than
  * writing rows of its own, because status alone is written from four places
  * in the courier layer and that is four places the next Courier path could
@@ -338,6 +342,13 @@ class StockLedger
      * Awaiting Dispatch moves nothing — nobody has been handed anything —
      * and one Refused at Booking moves nothing, because it never went.
      *
+     * Three things can be owed, and a parcel can owe more than one of them in
+     * the course of its life: the units leaving when a Courier takes it, the
+     * units coming back when a Courier brings it back, and the write-off when
+     * a User gives it up as dead. Each arm reads the parcel as it stands now
+     * rather than the transition that woke it, so the order the tellings
+     * arrive in cannot change what the ledger ends up holding.
+     *
      * Asked again as often as anybody likes. A poll and a webhook reporting
      * the same transition at once is ordinary traffic rather than an edge
      * case (ADR-0019), so this is idempotent per cause the way a Shipment
@@ -351,6 +362,30 @@ class StockLedger
             return;
         }
 
+        $this->recordDeparture($shipment);
+
+        if ($shipment->status === ShipmentStatus::Returned) {
+            $this->recordHomecoming($shipment);
+        }
+
+        /**
+         * A parcel the Courier has finished with is not one to write off,
+         * whatever a row says about who pressed what: it was delivered, or it
+         * came back, and either way what became of the units is already on the
+         * record. What is written off is a parcel still out there when a User
+         * gave up on it, which is the only state the screen offers the button
+         * in.
+         */
+        if ($shipment->abandoned_at !== null && ! $shipment->status->isTerminal()) {
+            $this->recordWriteOff($shipment);
+        }
+    }
+
+    /**
+     * The units in a parcel leaving, because a Courier has taken it.
+     */
+    private function recordDeparture(Shipment $shipment): void
+    {
         $contents = $this->parcelContents($shipment);
 
         if ($contents === []) {
@@ -387,8 +422,117 @@ class StockLedger
 
                 reason: StockMovementReason::Sale,
                 source: $shipment,
+
+                /** The average in force as the box goes out of the door, read from the rows already written (ADR-0022). */
+                unitCost: $this->averageCost($product),
             );
         }
+    }
+
+    /**
+     * The units in a parcel coming back, because a Courier brought it back.
+     *
+     * A box came back through the door, so it is a Return — the word for that
+     * and for nothing else. What a parcel given up as dead writes is an
+     * Unsold, which is the same arithmetic and a different sentence.
+     */
+    private function recordHomecoming(Shipment $shipment): void
+    {
+        $this->putBack($shipment, StockMovementReason::Return);
+    }
+
+    /**
+     * A parcel given up as dead, written off at what its units cost when they
+     * left.
+     *
+     * Taken back off the sale and then lost, and both halves are meant. The
+     * units left the shelf once, when the Courier took the box, and a
+     * write-off that only deducted would take the same box a second time —
+     * leaving On Hand below what is on the shelf for good, on a figure whose
+     * whole worth is that it can be settled in an argument. So the parcel is
+     * put back at what it left at and written off from there: what the pair
+     * does to On Hand is nothing, because nothing has happened to a box that
+     * had not already happened, and what it does to the record is name the
+     * loss.
+     *
+     * Naming it is the point. Without the Loss the units read as an ordinary
+     * Sale, indistinguishable from stock somebody paid for, and what a Courier
+     * never collecting a parcel actually cost surfaces months later as
+     * shrinkage nobody can account for.
+     *
+     * The put-back is an Unsold rather than a Return, which is what keeps this
+     * right in the one order it could have gone wrong in: a parcel written off
+     * and *then* brought back by the Courier owes a Return as well, and a
+     * Return already written against this Shipment would swallow it as a
+     * second telling and leave the units off the shelf for good. Two words,
+     * two rows, and the Courier's news lands whenever it lands.
+     */
+    private function recordWriteOff(Shipment $shipment): void
+    {
+        $this->putBack($shipment, StockMovementReason::Unsold);
+
+        foreach ($this->departures($shipment) as $departure) {
+            $this->writeOnce(
+                product: $departure->product,
+
+                /** Out again, and this time for nothing: the same units, at the same cost, as a loss. */
+                quantity: $departure->quantity,
+
+                reason: StockMovementReason::Loss,
+                source: $shipment,
+                unitCost: $departure->unit_cost,
+            );
+        }
+    }
+
+    /**
+     * Put a parcel's units back where they came from, under the word for why.
+     *
+     * Read off the movements this parcel already wrote rather than off the
+     * Order it was for, which is what makes it exact in all three ways that
+     * matter. What goes back is what left, so a Product nobody had counted
+     * when the parcel went out has nothing to put back — the box was never
+     * taken off a shelf it was not on. How many go back is the number that
+     * left, however the Order has been edited since. And what they are worth
+     * is the figure stamped on the row being answered (ADR-0022): a Supply
+     * that arrived while the parcel was out has moved the average, and these
+     * units cost what they cost on the day they left, so the money that went
+     * out with them is exactly the money that comes back.
+     */
+    private function putBack(Shipment $shipment, StockMovementReason $reason): void
+    {
+        foreach ($this->departures($shipment) as $departure) {
+            $this->writeOnce(
+                product: $departure->product,
+
+                /** Back in: the exact opposite of the row it answers, which was written out. */
+                quantity: -$departure->quantity,
+
+                reason: $reason,
+                source: $shipment,
+                unitCost: $departure->unit_cost,
+            );
+        }
+    }
+
+    /**
+     * What this parcel actually took off the shelf: the Sale movements it
+     * wrote, with their Products loaded.
+     *
+     * The ledger's own memory of the box, and the only honest account of it
+     * once a parcel is over. Everything a parcel owes after it leaves is
+     * worked out from these rather than from the Order — which can be edited,
+     * trashed, or hold Products that were never in the ledger at all.
+     *
+     * @return Collection<int, StockMovement>
+     */
+    private function departures(Shipment $shipment): Collection
+    {
+        return StockMovement::query()
+            ->whereMorphedTo('source', $shipment)
+            ->where('reason', StockMovementReason::Sale)
+            ->with('product')
+            ->get();
     }
 
     /**
@@ -470,6 +614,9 @@ class StockLedger
                 reason: StockMovementReason::Adjustment,
                 source: $count,
                 user: $countedBy,
+
+                /** The average in force at this instant: units found or lost are worth what everything else on that shelf is. */
+                unitCost: $this->averageCost($product),
             );
 
             return $count;
@@ -491,6 +638,7 @@ class StockLedger
         int $quantity,
         StockMovementReason $reason,
         Model $source,
+        ?int $unitCost,
     ): void {
         try {
             $this->write(
@@ -498,6 +646,7 @@ class StockLedger
                 quantity: $quantity,
                 reason: $reason,
                 source: $source,
+                unitCost: $unitCost,
 
                 /**
                  * Nobody's hand. A User may have pressed a button somewhere,
@@ -521,6 +670,18 @@ class StockLedger
      * are properties of the writer rather than of the caller — a second
      * writer somewhere else would be a movement missing one of them, found
      * months later as a figure nobody can account for.
+     *
+     * What to stamp is decided by the arm above that knows, and is stamped
+     * here exactly as it is given, null included. Three answers are in use and
+     * each is the only right one for its arm: a Supply says what it paid,
+     * because the average is worked out from rows like it; a parcel leaving
+     * and a count being squared take the average in force at this instant; and
+     * a reversal — a Void, a Return, a Loss — takes the figure off the row it
+     * answers, so exactly the money that went one way comes back the other.
+     * Null is one of those answers rather than a missing one: a movement
+     * written before anything was ever bought carries no cost, and a reversal
+     * of it must carry none either, or money nothing recorded paying would
+     * enter the ledger on the way back.
      */
     private function write(
         Product $product,
@@ -528,7 +689,7 @@ class StockLedger
         StockMovementReason $reason,
         Model $source,
         ?User $user,
-        ?int $unitCost = null,
+        ?int $unitCost,
     ): StockMovement {
         return StockMovement::create([
             'product_id' => $product->getKey(),
@@ -537,22 +698,18 @@ class StockLedger
 
             /**
              * What a unit was worth as it moved, stamped here and never
-             * recomputed (ADR-0022).
+             * recomputed (ADR-0022) — so a Supply recorded tomorrow moves
+             * what tomorrow's movements cost and can never move what this one
+             * says.
              *
-             * A Supply says what it paid, because those units cost that and
-             * the average is worked out from rows like this one. Everything
-             * else is stamped with the average in force at this instant, read
-             * from the rows already written — so a Supply recorded tomorrow
-             * moves what tomorrow's movements cost and can never move what
-             * this one says.
-             *
-             * Null where nothing bought has ever been recorded, which is what
-             * every movement written before the first Supply carries. A
-             * weighted average of nothing bought is not zero; it is no figure
-             * at all, and a Product with no known cost must read as unknown
-             * rather than present itself as infinitely profitable.
+             * Null where nothing bought had ever been recorded when this
+             * moved, which is what every movement written before the first
+             * Supply carries. A weighted average of nothing bought is not
+             * zero; it is no figure at all, and a Product with no known cost
+             * must read as unknown rather than present itself as infinitely
+             * profitable.
              */
-            'unit_cost' => $unitCost ?? $this->averageCost($product),
+            'unit_cost' => $unitCost,
 
             'user_id' => $user?->getKey(),
             'source_type' => $source->getMorphClass(),

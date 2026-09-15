@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Models\Order;
@@ -34,25 +33,6 @@ beforeEach(function (): void {
 
     $this->ledger = app(StockLedger::class);
 });
-
-/**
- * An Order of one Product somebody has counted a shelf of, ready to be sent
- * with this Courier: so many units held, so many of them ordered.
- *
- * @return array{Order, Product}
- */
-function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordered = 3): array
-{
-    $order = orderReadyToSend($script);
-
-    $order->lines()->sole()->update(['quantity' => $ordered]);
-
-    $product = $order->lines()->sole()->product;
-
-    app(StockLedger::class)->recordCount($product, $held, AdjustmentCause::OpeningCount);
-
-    return [$order->refresh(), $product];
-}
 
 /**
  * What the ledger wrote for the parcels, and only that: the count that put

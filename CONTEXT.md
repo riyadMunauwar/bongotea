@@ -239,7 +239,7 @@ Said of a Shipment a Courier would not take when it was offered. A time and the 
 _Avoid_: rejected, failed, cancelled, error, bounced
 
 **Returned**:
-Said of a Shipment whose parcel came back undelivered. It is the Courier's outcome and not the Merchant's decision, and it is emphatically not Cancelled: a returned parcel is a question — ring the Customer, correct the address, send it again, or give up — and the answer is a User's. Two of the three couriers say "cancelled" in their own words for exactly this, which is precisely why the system does not.
+Said of a Shipment whose parcel came back undelivered. It is the Courier's outcome and not the Merchant's decision, and it is emphatically not Cancelled: a returned parcel is a question — ring the Customer, correct the address, send it again, or give up — and the answer is a User's. Two of the three couriers say "cancelled" in their own words for exactly this, which is precisely why the system does not. The units it carried come back on the shelf as they left it — at the cost stamped on them the day the Courier took the box, never at what the shelf has cost since.
 _Avoid_: cancelled, failed, undelivered, refused, RTO
 
 **Abandoned**:
@@ -283,6 +283,18 @@ _Avoid_: stocktake, cycle count, audit, recount, inventory check
 **Adjustment**:
 The Stock Movement that squares the ledger with a Stock Count, carrying a cause chosen from a fixed list — damaged, lost, found, miscount, opening count — the person who counted, and a note where they have something to add. The cause is compulsory and picked rather than typed, because "what am I losing to damage" is a question a Merchant asks of a year of them at once.
 _Avoid_: correction, write-off, shrinkage, manual entry, fix
+
+**Return**:
+The Stock Movement that puts a parcel's units back on the shelf when a Courier brings the box back: the exact opposite of the one that took them, at the cost stamped on it the day the Courier took it. What comes back is what left rather than what the Order says now, so a Product nobody had counted has nothing to bring back and a Supply that arrived while the parcel was out cannot revalue units on a round trip. Said only of a box that came back through the door — a parcel given up as dead is answered by an **Unsold** and a **Loss**, which is the same arithmetic and a different sentence, and which is what leaves a Return free to be written if the Courier turns up with the parcel after all.
+_Avoid_: restock, refund, reversal, put-back, RTO
+
+**Loss**:
+What a parcel given up as dead cost: the units that left on it, at the cost stamped on them when they left, named as money on the Product's own history. Written when a User Abandons a Shipment and never by a Courier's word, because only a person may say a parcel is dead. It is the answer to "what did that actually cost me" — without it, stock that left and was never paid for reads as an ordinary sale and surfaces months later as shrinkage nobody can account for. It takes nothing further off the shelf: the units left once, when the Courier took the box, so an **Unsold** takes them back off the sale at what they left at and the Loss is taken from there. A parcel nobody was ever handed writes none, because nothing left.
+_Avoid_: write-off, shrinkage, wastage, damage, spoilage
+
+**Unsold**:
+The Stock Movement that takes a parcel's units back off the sale, written only beside a Loss and never alone: what it says is that the sale did not happen, not that anything came back through a door. It is what the Loss is taken out of, so that a write-off names what a dead parcel cost without deducting units that left the shelf once already. Its own word rather than a Return for a reason a Merchant reads and a reason the ledger enforces: nothing came back, and a parcel written off and then brought back by the Courier owes a Return as well — one the ledger would refuse if the write-off had already spent that word on the same parcel.
+_Avoid_: reversal, cancellation, unsale, void, adjustment
 
 **Value at Cost**:
 What the units held of a Product are worth at what they cost: every Stock Movement at the unit cost stamped on it, added up. It is how much capital is sitting on the shelf, and it is the ledger's own figure rather than On Hand multiplied by an average — the two come to the same thing, because every movement was stamped with the average in force as it happened, and this one traces to rows a User can read. A Product nothing has ever been bought for reads as nothing, never as zero, like every other unknown figure here; one holding units nobody recorded buying reads what the ledger can account for, which is lower than what was really paid and is raised by recording the Supply that was missed. It goes below nothing only where On Hand has, and means the same thing when it does.

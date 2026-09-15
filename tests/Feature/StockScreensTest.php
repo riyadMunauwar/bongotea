@@ -2,6 +2,7 @@
 
 use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
+use App\Enums\StockMovementReason;
 use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\ListStockCounts;
@@ -15,6 +16,7 @@ use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\StockCount;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\StockLedger;
@@ -334,6 +336,35 @@ it('reads every movement of one product, with its reason, quantity, date and the
         /** Nothing has been supplied, so no average was known to stamp (ADR-0022) — and unknown is never drawn as free. */
         ->assertSeeText('—')
         ->assertDontSeeText(Money::format(0));
+});
+
+it('reads a written-off parcel as money rather than as a quantity to multiply', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+    $order = Order::factory()->create();
+
+    OrderLine::factory()->for($order)->for($product)->create(['quantity' => 3]);
+
+    $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 40000],
+    ]);
+
+    $shipment = Shipment::factory()->create([
+        'order_id' => $order->getKey(),
+        'consignment_reference' => 'CN-7781',
+    ]);
+
+    $shipment->abandon($this->counter);
+
+    Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
+        ->assertSeeText('Loss')
+
+        /** What the parcel actually cost, in money, on the row that names it a loss. */
+        ->assertTableColumnStateSet('value', -120000, $product->stockMovements()->where('reason', StockMovementReason::Loss)->sole())
+        ->assertSeeText(Money::format(-120000))
+
+        /** And the shelf is exactly where the Courier left it: the units left once, at Booked. */
+        ->assertSeeText('On hand: 7')
+        ->assertSeeText('Value at cost: '.Money::format(280000));
 });
 
 it('says nothing rather than zero for a product nobody has counted', function () {

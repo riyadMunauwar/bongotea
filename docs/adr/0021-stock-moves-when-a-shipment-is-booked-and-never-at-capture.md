@@ -45,6 +45,21 @@ also a movement makes On Hand mean two things at once. What a Confirmed Order ac
   `CourierDispatcher` and `CourierPoller` — and with `Shipment::abandon()` that is five explicit
   call sites, which is five places the next Courier path can forget. One module, `StockLedger`
   under `App\Support\Inventory`, is the only thing that writes a movement.
+- **What a parcel owes after it leaves is read off the movements it already wrote**, never off the
+  Order it was for. A Return is the exact opposite of the Sale it answers, at the figure stamped on
+  it (ADR-0022), which is what makes it right in all three ways at once: a Product nobody had
+  counted has nothing to bring back, the number that comes back is the number that left however the
+  Order has been edited since, and a Supply that arrived while the parcel was out cannot revalue
+  units on a round trip. **Abandoning writes an Unsold and a Loss together**, and both are meant: the
+  units left the shelf once, at Booked, so a write-off that only deducted would take the same box
+  twice and leave On Hand below what is on the shelf for good. The pair moves On Hand by nothing —
+  nothing has happened to a box that had not already happened — and what it adds is the name. The
+  put-back is an Unsold rather than a Return for a reason the one-cause-one-movement key enforces: a
+  parcel written off and *then* brought back by the Courier owes a Return as well, and a Return
+  already spent on the write-off would swallow it as a second telling and leave the units off the
+  shelf for good. A parcel the Courier has finished with is not one to write off at all, whatever a
+  column says: it was delivered or it came back, and either way what became of the units is already
+  on the record.
 - **A Partly Delivered parcel raises a Needs Attention item** and holds its units as a question
   until a User names the lines that came back. Treating it as fully delivered was rejected: it
   designs a known defect into the one figure whose entire value is that people believe it, and it

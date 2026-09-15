@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
@@ -19,6 +20,7 @@ use App\Shortcodes\ShortcodeDefinition;
 use App\Shortcodes\ShortcodeRegistry;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\PricingFingerprint;
+use App\Support\Inventory\StockLedger;
 use App\Support\PageCache\StaticPageCache;
 use App\Support\Reporting\ReportingWindow;
 use Carbon\CarbonImmutable;
@@ -391,6 +393,30 @@ function sendBatchWithCourier(array $orders, CourierScript $script, ?string $cou
             TestAction::make('bookBatchWithCourier')->table()->bulk(),
             data: ['courier' => $courier ?? $script->courier()->value],
         );
+}
+
+/**
+ * An Order of one Product somebody has counted a shelf of, ready to be sent
+ * with this Courier: so many units held, so many of them ordered.
+ *
+ * Here rather than in the booking suite that needed it first, for the reason
+ * `answeringAfresh()` is: what a parcel does to the stock ledger is proved
+ * over two files now — the leaving and the coming back — and a helper defined
+ * in one of them is a fatal error for anybody running only the other.
+ *
+ * @return array{Order, Product}
+ */
+function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordered = 3): array
+{
+    $order = orderReadyToSend($script);
+
+    $order->lines()->sole()->update(['quantity' => $ordered]);
+
+    $product = $order->lines()->sole()->product;
+
+    app(StockLedger::class)->recordCount($product, $held, AdjustmentCause::OpeningCount);
+
+    return [$order->refresh(), $product];
 }
 
 /**
