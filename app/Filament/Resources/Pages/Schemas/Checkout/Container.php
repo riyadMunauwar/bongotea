@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
 use App\Filament\Resources\Pages\Schemas\RefusedBy;
+use App\Support\Checkout\CheckoutAlignment;
 use App\Support\Checkout\CheckoutContainer;
 use App\Support\Checkout\CheckoutPadding;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Fieldset;
@@ -86,6 +88,63 @@ class Container
                 self::length('checkout_config.container.card.vertical', 'Top and bottom', CheckoutContainer::defaultCard()->vertical),
                 self::length('checkout_config.container.card.horizontal', 'Left and right', CheckoutContainer::defaultCard()->horizontal),
             ]);
+    }
+
+    /**
+     * How wide the card sits and where it sits, as one row: a free `max-width`
+     * and a left / centre / right placement.
+     *
+     * Both apply whether the ground is drawn or not, unlike the paddings above:
+     * a Merchant flushing the Checkout into their own wrapper still wants to
+     * narrow the card and place it, and a bare card centred at the design's
+     * width is a box floating in the middle of a section they drew.
+     */
+    public static function cardWidthAndAlignment(): Fieldset
+    {
+        return Fieldset::make('Card width and alignment')
+            ->columns(2)
+            ->schema([
+                self::width(),
+                self::alignment(),
+            ]);
+    }
+
+    /**
+     * The card's width: a single bounded length, refused twice against the same
+     * check the paddings use so the two cannot disagree about what a length is.
+     *
+     * Blank is never refused — an empty box is the design's `35rem`, which the
+     * placeholder shows and the read fills in. `100%` fills the parent, which is
+     * what a Merchant flushing the Checkout into their own narrow column reaches
+     * for.
+     */
+    private static function width(): TextInput
+    {
+        return TextInput::make('checkout_config.container.width')
+            ->label('Width')
+            /** What is in force while the box is empty, so it reads without saving to find out — the same as a padding box. */
+            ->placeholder(CheckoutContainer::DEFAULT_WIDTH)
+            ->maxLength(CheckoutPadding::MAX_LENGTH)
+            ->helperText('The most the card grows to: a number and a unit — px, rem, em, % or vw. Use 100% to fill whatever you wrapped [checkout] in.')
+            ->rules([RefusedBy::rule(CheckoutPadding::refusal(...))]);
+    }
+
+    /**
+     * Where the card sits inside its parent: left, centre or right, by an auto
+     * margin on the side with the slack.
+     *
+     * Three fixed choices and no free value, the same trade a field's width
+     * makes: a figure would resolve against a parent whose width nobody here
+     * knows. Centre is the default the card has always been drawn at.
+     */
+    private static function alignment(): Select
+    {
+        return Select::make('checkout_config.container.alignment')
+            ->label('Alignment')
+            ->options(CheckoutAlignment::labels())
+            ->default(CheckoutAlignment::Centre->value)
+            ->selectablePlaceholder(false)
+            ->helperText('Where the card sits when it is narrower than the space around it. At 100% width the three are the same.');
     }
 
     /**

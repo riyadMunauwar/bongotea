@@ -76,9 +76,14 @@ class CheckoutPadding implements Arrayable
 
     /**
      * One stored length, kept where it is one this installation can use and
-     * dropped for the design's figure where it is not.
+     * dropped for the given default where it is not.
+     *
+     * The silent half of "refused twice", shared so anything reading a single
+     * bounded length off a Config — a padding side here, the card's width on the
+     * Container — drops what it cannot use through the one `refusal()` and cannot
+     * disagree with the tab about what a length is.
      */
-    private static function kept(mixed $value, string $default): string
+    public static function kept(mixed $value, string $default): string
     {
         if (! is_scalar($value)) {
             return $default;

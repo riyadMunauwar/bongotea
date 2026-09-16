@@ -58,7 +58,35 @@ class CheckoutContainer implements Arrayable
          * Surface token transparent and the Border token transparent.
          */
         public readonly CheckoutPadding $card,
+
+        /**
+         * How wide the card sits, written straight into its `max-width`: the
+         * design's `35rem` unless the Merchant narrows or widens it. A per-Page
+         * value emitted as a literal figure — the same way the card's padding is
+         * — reverses the retired width token deliberately, sound because the
+         * one figure in the one card rule is no media-query prelude (ADR-0027).
+         *
+         * Refused and read as totally as a padding, and against the same
+         * allowlist, so a length this installation cannot use drops to the
+         * design's figure rather than reaching a Customer as a broken sheet.
+         * `100%` fills the parent, at which point alignment stops mattering.
+         */
+        public readonly string $width,
+
+        /**
+         * Where the card sits inside its parent — left, centred or right — by an
+         * auto margin on the side with the slack. Applies whether the ground is
+         * drawn or not, so a bare Checkout can still be narrowed and placed
+         * inside a Merchant's own wrapper.
+         */
+        public readonly CheckoutAlignment $alignment,
     ) {}
+
+    /**
+     * The card's width on a Page that says nothing about it: the design's
+     * figure, the handoff README's 560px in rem.
+     */
+    public const DEFAULT_WIDTH = '35rem';
 
     /**
      * The ground's padding on a Page that says nothing about it: the design's
@@ -89,6 +117,8 @@ class CheckoutContainer implements Arrayable
             enabled: true,
             ground: self::defaultGround(),
             card: self::defaultCard(),
+            width: self::DEFAULT_WIDTH,
+            alignment: CheckoutAlignment::Centre,
         );
     }
 
@@ -112,6 +142,14 @@ class CheckoutContainer implements Arrayable
             enabled: is_bool($enabled) ? $enabled : true,
             ground: CheckoutPadding::fromArray((array) ($stored['ground'] ?? []), self::defaultGround()),
             card: CheckoutPadding::fromArray((array) ($stored['card'] ?? []), self::defaultCard()),
+            /**
+             * The same keep-or-drop a padding side gets, against the same
+             * refusal, so the card's width and its padding cannot disagree about
+             * what a length is: refused twice, dropped silently here and worded
+             * on the tab, and absent or blank is the design's `35rem`.
+             */
+            width: CheckoutPadding::kept($stored['width'] ?? null, self::DEFAULT_WIDTH),
+            alignment: CheckoutAlignment::fromStored($stored['alignment'] ?? null),
         );
     }
 
@@ -141,7 +179,7 @@ class CheckoutContainer implements Arrayable
     }
 
     /**
-     * @return array{enabled: bool, ground: array{vertical: string, horizontal: string}, card: array{vertical: string, horizontal: string}}
+     * @return array{enabled: bool, ground: array{vertical: string, horizontal: string}, card: array{vertical: string, horizontal: string}, width: string, alignment: string}
      */
     public function toArray(): array
     {
@@ -149,6 +187,8 @@ class CheckoutContainer implements Arrayable
             'enabled' => $this->enabled,
             'ground' => $this->ground->toArray(),
             'card' => $this->card->toArray(),
+            'width' => $this->width,
+            'alignment' => $this->alignment->value,
         ];
     }
 }

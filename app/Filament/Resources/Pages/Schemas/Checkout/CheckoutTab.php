@@ -169,6 +169,15 @@ class CheckoutTab
                                 Container::groundPadding(),
 
                                 Container::cardPadding(),
+
+                                /**
+                                 * Last, and applying whether the ground is
+                                 * drawn or not: how wide the card sits and
+                                 * where, so a Merchant flushing the Checkout
+                                 * into their own wrapper can still size and
+                                 * place it.
+                                 */
+                                Container::cardWidthAndAlignment(),
                             ]),
                     ]),
             ]);

@@ -220,7 +220,20 @@
             property; do not move the read onto one that is not.
         --}}
         .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; {!! $ground !!} font-family: var(--gio-font); font-size: .875rem; line-height: 1.4; color: var(--gio-text); accent-color: var(--gio-accent); }
-        .gio-checkout-card { box-sizing: border-box; max-width: 35rem; margin: 0 auto; padding: {{ $container->card->css() }}; border: 1px solid var(--gio-border); background: var(--gio-surface); }
+        {{--
+            The card's width and where it sits: the design's `35rem` and
+            `margin: 0 auto`, unless the Merchant has narrowed the card or placed
+            it against one side of their own wrapper. Both apply whether the
+            ground is drawn or not, so a bare Checkout can still be sized and
+            placed inside a merchant's section. A default Config emits exactly the
+            bytes it always did (ADR-0027).
+
+            The width is a per-page figure written into `max-width`, the same
+            literal emission the card's padding uses; the alignment is an auto
+            margin on the side with the slack, which at `100%` width has none, so
+            left, centre and right coincide there as expected.
+        --}}
+        .gio-checkout-card { box-sizing: border-box; max-width: {{ $container->width }}; margin: {{ $container->alignment->margins() }}; padding: {{ $container->card->css() }}; border: 1px solid var(--gio-border); background: var(--gio-surface); }
         .gio-checkout-form { margin: 0; }
         {{--
             The numbered sections the design draws, set apart by whitespace

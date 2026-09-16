@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Checkout\CheckoutAlignment;
 use App\Support\Checkout\CheckoutConfig;
 use App\Support\Checkout\CheckoutContainer;
 use App\Support\Checkout\CheckoutField;
@@ -1301,6 +1302,8 @@ it('round-trips the container value object through a stored config', function ()
             'enabled' => false,
             'ground' => ['vertical' => '2.5rem', 'horizontal' => '1.5rem'],
             'card' => ['vertical' => '1.75rem', 'horizontal' => '1.75rem'],
+            'width' => '35rem',
+            'alignment' => 'center',
         ]);
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
@@ -1398,6 +1401,98 @@ it('round-trips a merchant\'s padding through a stored config', function () {
             'checkout_config.container.ground.vertical' => '3rem',
             'checkout_config.container.card.horizontal' => '0',
         ]);
+});
+
+it('carries the card width and alignment controls on the container tab', function () {
+    $container = checkoutTabsOf(Page::factory()->create())['Container'];
+
+    /** Both controls are on the Container tab, beside the paddings and behind the same toggle. */
+    $width = fieldInside($container, 'checkout_config.container.width');
+    $alignment = fieldInside($container, 'checkout_config.container.alignment');
+
+    /**
+     * The width is a free length like a padding box, showing the design's
+     * `35rem` as a placeholder so it reads without saving; the alignment is a
+     * fixed left / centre / right, defaulting to centre.
+     */
+    expect($width)->toBeInstanceOf(TextInput::class)
+        ->and($width->getPlaceholder())->toBe('35rem')
+        ->and($alignment)->toBeInstanceOf(Select::class)
+        ->and($alignment->getOptions())->toBe(['left' => 'Left', 'center' => 'Centre', 'right' => 'Right'])
+        ->and($alignment->getDefaultState())->toBe('center');
+});
+
+it('round-trips the card width and alignment through a stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => [
+            'width' => '100%',
+            'alignment' => 'left',
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $container = $page->refresh()->checkout_config->container;
+
+    expect($container->width)->toBe('100%')
+        ->and($container->alignment)->toBe(CheckoutAlignment::Left);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet([
+            'checkout_config.container.width' => '100%',
+            'checkout_config.container.alignment' => 'left',
+        ]);
+});
+
+it('refuses an out-of-shape card width on the tab', function (string $value) {
+    $page = Page::factory()->create();
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => ['width' => $value]]])
+        ->call('save')
+        ->assertHasFormErrors(['checkout_config.container.width']);
+
+    /**
+     * One refusal, on the width box the merchant has to correct, and worded by
+     * the same check a padding uses so the tab and the silent read cannot
+     * disagree about what a length is.
+     */
+    expect($component->errors()->messages())->toHaveCount(1);
+})->with([
+    'a unit that is not allowed' => ['40pt'],
+    'not a length at all' => ['wide'],
+    'over the ceiling' => ['1000rem'],
+    'using calc' => ['calc(100% - 2rem)'],
+    'naming a variable' => ['var(--w)'],
+    'that would close the declaration' => ['35rem; } body { display: none } .x {'],
+]);
+
+it('lets the card width be left empty for the design figure', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => ['width' => null]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Blank is the design's `35rem`, not a refusal — the same as leaving a padding box empty. */
+    expect($page->refresh()->checkout_config->container->width)->toBe('35rem');
+});
+
+it('reads a card width or alignment it cannot use as the design default', function () {
+    $container = CheckoutConfig::fromArray(['container' => [
+        'width' => 'calc(50%)',
+        'alignment' => 'diagonal',
+    ]])->container;
+
+    /**
+     * The silent half of refused twice: an unusable width drops to the design's
+     * figure and an alignment nothing knows to the centre the card has always
+     * been drawn at, rather than a 500 reaching a customer.
+     */
+    expect($container->width)->toBe('35rem')
+        ->and($container->alignment)->toBe(CheckoutAlignment::Centre);
 });
 
 it('lets a merchant hide the product list', function () {

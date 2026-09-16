@@ -32,7 +32,7 @@ Background Style Token. Recolouring or clearing the ground is a colour a flat ru
 exactly what a token is for — and it keeps a Container change flowing through the same cache
 invalidation a Style Token save already triggers, so no new cache concern is introduced.
 
-## Card width as a custom property reverses the retired `max_width` token — deliberately
+## Per-Page card width reverses the retired `max_width` token — deliberately
 
 `.ai/rules/checkout.md` records that `max_width` was retired as a token: how wide the form sits is
 the design's figure, written in the base sheet, and a layout wanting a different width states it in
@@ -40,17 +40,24 @@ its own block. The stated reason a width could not be a token was the breakpoint
 property cannot be read in a media-query prelude, so a per-page breakpoint would force a generated
 rule, the one thing the flat sheet exists not to write.
 
-The Container's card width **is** a per-Page value read as a custom property in `max-width`, which
-reverses that retirement. The reversal is sound because the two cases are not the same: a `var()` in
-a `max-width` declaration is not a media-query prelude. The breakpoint that collapses paired
-questions onto one column stays a fixed figure in the sheet and reads no token; only the card's own
-`max-width` reads the new value. So the concern that retired `max_width` — per-page breakpoints
-forcing generated rules — does not apply, and card width can be a free per-page value without
-reopening it.
+The Container's card width **is** a free per-Page value, written straight into the card's `max-width`
+as the design's figure — the same literal emission the card's padding uses, not a `var()` and not a
+generated selector. This reverses the retirement, and the reversal is sound because the two cases are
+not the same: the value is one figure in the one `.gio-checkout-card` rule, while the breakpoint that
+collapses paired questions onto one column stays a fixed figure in the sheet and reads no per-Page
+value at all. So the concern that retired `max_width` — per-page breakpoints forcing generated rules
+— does not apply, and card width can be a free per-Page value without reopening it. The default is
+`35rem`, so a Config that says nothing about it emits `max-width: 35rem` byte for byte.
 
-This ADR is the record the rule points at: `max_width` is no longer simply retired, it is a Container
-value read as a custom property, and a future reader finding the old retirement note should find this
-alongside it.
+Card **alignment** rides beside it: left / centre / right, three fixed choices and no free value (the
+trade `FieldWidth` already makes, since a typed offset would resolve against a parent whose width
+nobody here knows), placing the card with an `auto` margin on the side with the slack. Centre is
+`margin: 0 auto`, the pair the card has always carried. Both width and alignment apply whether the
+ground is drawn or not, so a bare Checkout can still be narrowed and placed inside a Merchant's own
+wrapper.
+
+This ADR is the record the rule points at: `max_width` is no longer simply retired, it is a per-Page
+Container value, and a future reader finding the old retirement note should find this alongside it.
 
 ## Consequences
 

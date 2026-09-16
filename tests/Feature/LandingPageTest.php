@@ -1201,6 +1201,72 @@ it('dissolves the card entirely for the flush recipe', function () {
         ->and($styles)->not->toContain('.gio-checkout-card { padding: 1.25rem 1rem; }');
 });
 
+it('sizes and places the card at the merchant\'s width and alignment', function (string $alignment, string $margin) {
+    pageStyled(['container' => [
+        'width' => '48rem',
+        'alignment' => $alignment,
+    ]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /**
+     * The width is written into the card's `max-width`, and the alignment as an
+     * auto margin on the side with the slack — left keeps the card against the
+     * start, right against the end, and centre is the `0 auto` the card has
+     * always carried. Both apply with the ground on or off.
+     */
+    expect($card[1] ?? '')->toContain('max-width: 48rem;')
+        ->and($card[1] ?? '')->toContain('margin: '.$margin.';');
+})->with([
+    'left' => ['left', '0 auto 0 0'],
+    'centre' => ['center', '0 auto'],
+    'right' => ['right', '0 0 0 auto'],
+]);
+
+it('fills the parent at 100% width, where the alignments coincide', function () {
+    pageStyled(['container' => [
+        'width' => '100%',
+        'alignment' => 'right',
+    ]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /**
+     * A card as wide as its parent has no slack for an auto margin to take up,
+     * so the alignment is inert — the card fills the wrapper whichever way it is
+     * placed. The chosen margin is still written; it simply has nothing to do.
+     */
+    expect($card[1] ?? '')->toContain('max-width: 100%;')
+        ->and($card[1] ?? '')->toContain('margin: 0 0 0 auto;');
+});
+
+it('sizes and places the card even with the ground dissolved', function () {
+    pageStyled(['container' => [
+        'enabled' => false,
+        'width' => '40rem',
+        'alignment' => 'left',
+    ]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /**
+     * Width and alignment sit on the card rule, which is emitted whether the
+     * ground is drawn or not — so a Merchant who dissolved the ground can still
+     * narrow the card and place it against the start of their own wrapper. The
+     * ground itself is gone.
+     */
+    expect($root[1] ?? '')->toContain('padding: 0;')
+        ->and($card[1] ?? '')->toContain('max-width: 40rem;')
+        ->and($card[1] ?? '')->toContain('margin: 0 auto 0 0;');
+});
+
 it('writes the quieter words in the muted token', function () {
     pageStyled([]);
 
