@@ -928,6 +928,50 @@ it('never lets a stored style value break out of the block it is written into', 
         ->and(styleBlock($html))->toContain('--gio-font: '.StyleToken::Font->defaultValue().';');
 });
 
+it('renders a transparent surface and border when a merchant chooses them', function () {
+    pageStyled(['style_tokens' => ['surface' => 'transparent', 'border' => 'transparent']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Background already let a merchant type `transparent` to drop the ground
+     * behind the card; surface and border take it on the same terms, because
+     * the acceptance belongs to the colour kind and every colour token shares
+     * it. Emitted as the tokens the flat rules already read — the card still
+     * draws the border and the fill it always drew, so a browser that cannot
+     * read the value falls back to the row it drew before, now unpainted. This
+     * is what makes the card dissolve into a merchant's own wrapper.
+     */
+    expect($styles)->toContain('--gio-surface: transparent;')
+        ->and($styles)->toContain('--gio-border: transparent;');
+
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    expect($card[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
+        ->and($card[1] ?? '')->toContain('background: var(--gio-surface)');
+});
+
+it('drops a surface or border that is not a colour and keeps the token refusing one', function () {
+    pageStyled(['style_tokens' => ['surface' => 'reddish', 'border' => 'not a colour']]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * Accepting `transparent` is not a licence for arbitrary values. A word no
+     * browser reads as a colour would drop the declaration it lands in and
+     * leave the merchant looking at a checkout that ignored what they typed, so
+     * the same refusal that passes `transparent` refuses a non-colour — on the
+     * Look tab with a message, and here silently, falling back to the default.
+     */
+    expect($styles)->toContain('--gio-surface: '.StyleToken::Surface->defaultValue().';')
+        ->and($styles)->toContain('--gio-border: '.StyleToken::Border->defaultValue().';');
+
+    expect(StyleToken::Surface->refusal('transparent'))->toBeNull()
+        ->and(StyleToken::Border->refusal('transparent'))->toBeNull()
+        ->and(StyleToken::Surface->refusal('reddish'))->not->toBeNull()
+        ->and(StyleToken::Border->refusal('not a colour'))->not->toBeNull();
+});
+
 it('puts a whole-form failure in a banner at the top of the island', function (CheckoutLayout $layout) {
     pageStyled(['layout' => $layout->value]);
 
