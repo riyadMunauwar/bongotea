@@ -60,6 +60,19 @@ class SupplyResource extends Resource
         return SuppliesTable::configure($table);
     }
 
+    /**
+     * Gated on the cluster's `count stock` Permission like every screen in
+     * here, and closing the resource's own URL too so a User without it gets a
+     * forbidden response rather than a screen they were never meant to reach.
+     * Voiding a delivery is held back further, behind `void supplies`, on the
+     * action itself rather than the resource — a User who counts reaches these
+     * screens; only some of them may strike a delivery out.
+     */
+    public static function canAccess(): bool
+    {
+        return InventoryCluster::canAccess();
+    }
+
     public static function getPages(): array
     {
         return [

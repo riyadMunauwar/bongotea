@@ -38,7 +38,13 @@ use Livewire\Livewire;
  * what a User is served, not what a schema class was asked to build.
  */
 beforeEach(function (): void {
-    $this->counter = User::factory()->create(['name' => 'Nasrin Akter']);
+    /**
+     * Counts shelves and reads the catalogue: `count stock` opens the Stock
+     * Count screens this test drives, and `manage products` opens the Products
+     * list and Stock History where On Hand, Committed and Days of Cover are
+     * read. The Inventory gate is asserted on its own further down.
+     */
+    $this->counter = User::factory()->countingStock()->managingProducts()->create(['name' => 'Nasrin Akter']);
     $this->actingAs($this->counter);
 
     $this->ledger = app(StockLedger::class);
@@ -515,7 +521,14 @@ it('takes one sidebar line, as a working area above reports and settings', funct
     expect(InventoryCluster::getNavigationSort())->toBe(10)
         ->and(StockCountResource::getCluster())->toBe(InventoryCluster::class);
 
-    $this->actingAs(User::factory()->managingSettings()->create());
+    /**
+     * An Owner draws the sidebar in full: every top-level entry is gated on
+     * its own Permission now, and an Owner passes each check regardless, so
+     * this pins Inventory's place among them without having to name every
+     * other gate — which is `AdminShellTest`'s job, and holds the same order
+     * for the panel as a whole.
+     */
+    $this->actingAs(User::factory()->owner()->create());
 
     $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
         ->flatMap(fn ($group) => $group->getItems())

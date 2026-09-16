@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Inventory\Resources\Supplies\Actions;
 
+use App\Enums\Permission;
 use App\Models\Supply;
 use App\Models\SupplyLine;
 use App\Support\Inventory\StockLedger;
@@ -30,6 +31,13 @@ use Filament\Support\Icons\Heroicon;
  * The confirmation says what will happen in units rather than in the word
  * "reverse", because the figure a Merchant is about to watch move is the one
  * on their own shelf.
+ *
+ * Gated on `Permission::VoidSupplies`, a rung above the `count stock` that
+ * opens these screens: a User who records deliveries reaches the document, but
+ * only one the Merchant trusts with the ledger may strike one out. The gate
+ * sits on the action's own visibility, so it is neither drawn nor mountable
+ * without the Permission, and it stacks with the void-once rule rather than
+ * replacing it.
  */
 class VoidSupplyAction
 {
@@ -40,8 +48,17 @@ class VoidSupplyAction
             ->icon(Heroicon::OutlinedNoSymbol)
             ->color('danger')
 
-            /** Voided once. A struck-out delivery has nothing left to take back out, and the screen says so instead. */
-            ->visible(fn (Supply $record): bool => ! $record->isVoided())
+            /**
+             * Two reasons it may not be drawn, and a hidden Filament action
+             * cannot be mounted either, so this is the refusal as well as the
+             * absence. Held back behind `void supplies` — removing a Supply
+             * from the ledger and moving every cost blended off it is not
+             * something the person who records deliveries all day can reach —
+             * and voided once: a struck-out delivery has nothing left to take
+             * back out, and the screen says so instead.
+             */
+            ->visible(fn (Supply $record): bool => (auth()->user()?->can(Permission::VoidSupplies) ?? false)
+                && ! $record->isVoided())
             ->requiresConfirmation()
             ->modalHeading('Void this delivery?')
             ->modalDescription(fn (Supply $record): string => self::whatWillHappen($record))

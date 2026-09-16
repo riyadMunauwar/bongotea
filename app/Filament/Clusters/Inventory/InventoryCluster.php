@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Inventory;
 
+use App\Enums\Permission;
 use BackedEnum;
 use Filament\Clusters\Cluster;
 use Filament\Pages\Enums\SubNavigationPosition;
@@ -23,9 +24,29 @@ use Filament\Support\Icons\Heroicon;
  * arrives, belongs in Reports beside the others (`ReportsCluster` says why:
  * an all-current page draws no window rather than a dead one).
  *
- * Ungated, like Reports and unlike `SettingsCluster`. A User who works Orders
- * is the same User who counts the shelf, and a permission here would gate the
- * shelf against the person standing at it.
+ * Gated on `Permission::CountStock`, its own working area. The reasoning that
+ * left it open — that a User who works Orders is the same User who counts the
+ * shelf — was written when every User could do everything, and stopped being
+ * true the day access became a Merchant's to divide: counting shelves and
+ * phoning the New Orders queue are now separate jobs a Merchant may hand to
+ * separate people, so the person who counts is given the shelf without being
+ * given the Orders queue too. A Merchant whose Orders clerk also counts hands
+ * them both — one Role carrying both Permissions, or two Roles — rather than
+ * having the gate assume it (ADR-0025).
+ *
+ * There is deliberately no separate Permission for adjusting stock. An
+ * Adjustment is worked out from a Stock Count rather than chosen by anybody,
+ * so counting and adjusting are the same power and a second Permission would
+ * gate nothing — a User holding `count stock` takes a Count and the ledger
+ * squares itself with no further ask. Voiding a delivery is the one act held
+ * back separately, behind `Permission::VoidSupplies`, because it removes a
+ * Supply from the ledger and moves every cost blended off it; the immutability
+ * of a Stock Count or a Supply is enforced at the model and the routes, never
+ * as a Permission a Merchant could grant away.
+ *
+ * `canAccess()` closes the cluster's own URL, the way `SettingsCluster` does,
+ * so a User without the Permission gets a forbidden response rather than a
+ * redirect to nowhere; every resource inside defers to it.
  */
 class InventoryCluster extends Cluster
 {
@@ -56,4 +77,15 @@ class InventoryCluster extends Cluster
      * added here later, so none of them declares it.
      */
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
+    /**
+     * Filament already hides the cluster when no resource in it is accessible,
+     * which the resources' own gate arranges. This closes the cluster's own
+     * URL too, so a User without the Permission gets a forbidden response
+     * there rather than a redirect to nowhere.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can(Permission::CountStock) ?? false;
+    }
 }

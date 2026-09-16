@@ -34,7 +34,15 @@ use Livewire\Livewire;
  * a User is served, not what a schema class was asked to build.
  */
 beforeEach(function (): void {
-    $this->buyer = User::factory()->create(['name' => 'Nasrin Akter']);
+    /**
+     * The buyer records deliveries and, in the striking-out block below, voids
+     * one — so they hold `void supplies` on top of the `count stock` these
+     * screens sit behind — and reads Value at Cost on the Products list and
+     * Stock History, which is why `manage products` is here too. The gates
+     * themselves are asserted separately, with Users who hold one Permission
+     * and not the other.
+     */
+    $this->buyer = User::factory()->voidingSupplies()->managingProducts()->create(['name' => 'Nasrin Akter']);
     $this->actingAs($this->buyer);
 
     $this->ledger = app(StockLedger::class);
@@ -297,6 +305,31 @@ it('offers no way to void a delivery a second time', function () {
     expect(StockMovement::query()->where('reason', StockMovementReason::Void)->count())->toBe(1);
 });
 
+it('draws no void action for a User who counts but may not void', function () {
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+    ], null, $this->buyer);
+
+    /** `count stock` opens the document; `void supplies` is the rung this User lacks. */
+    $this->actingAs(User::factory()->countingStock()->create());
+
+    Livewire::test(ViewSupply::class, ['record' => $supply->getKey()])
+        ->assertActionHidden('voidSupply');
+
+    expect($supply->fresh()->isVoided())->toBeFalse();
+});
+
+it('draws the void action for a User who holds void supplies', function () {
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+    ], null, $this->buyer);
+
+    $this->actingAs(User::factory()->voidingSupplies()->create());
+
+    Livewire::test(ViewSupply::class, ['record' => $supply->getKey()])
+        ->assertActionVisible('voidSupply');
+});
+
 it('keeps a voided delivery on the list, and lets a buyer read past it', function () {
     $product = Product::factory()->create();
 
@@ -441,4 +474,38 @@ it('reaches a product\'s movements from the delivery that caused them', function
 
     expect($line->stockMovements->sole()->quantity)->toBe(10)
         ->and(StockMovement::sole()->source->is($line))->toBeTrue();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Who the shelf is gated to
+|--------------------------------------------------------------------------
+*/
+
+it('opens every Inventory screen to a User holding count stock', function () {
+    $this->actingAs(User::factory()->countingStock()->create());
+
+    $this->get(StockCountResource::getUrl('index'))->assertOk();
+    $this->get(SupplierResource::getUrl('index'))->assertOk();
+    $this->get(SupplyResource::getUrl('index'))->assertOk();
+});
+
+it('refuses every Inventory screen, and the cluster URL, to a User without count stock', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get(InventoryCluster::getUrl())->assertForbidden();
+    $this->get(StockCountResource::getUrl('index'))->assertForbidden();
+    $this->get(SupplierResource::getUrl('index'))->assertForbidden();
+    $this->get(SupplyResource::getUrl('index'))->assertForbidden();
+});
+
+it('draws no Inventory entry in the sidebar for a User without count stock', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
+        ->flatMap(fn ($group) => $group->getItems())
+        ->map(fn ($item) => $item->getLabel())
+        ->all();
+
+    expect($labels)->not->toContain('Inventory');
 });

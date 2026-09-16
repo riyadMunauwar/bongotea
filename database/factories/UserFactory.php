@@ -84,6 +84,114 @@ class UserFactory extends Factory
     }
 
     /**
+     * A User who works Orders: one holding a Role that carries `work orders`,
+     * the floor the Orders and Shipments screens and the everyday sending verbs
+     * sit behind. Enough to open the queue, an Order and the Shipments list,
+     * send a parcel, send a batch and check with the gateway — but none of the
+     * acts somebody would regret, which each sit behind a Permission of their
+     * own on top of this floor.
+     */
+    public function workingOrders(): static
+    {
+        return $this->holdingRole('Orders Clerk', Permission::WorkOrders);
+    }
+
+    /**
+     * A User who may also write a parcel off: they work Orders and hold
+     * `abandon parcels` on top, since abandoning is offered from an Order screen
+     * only a User who works Orders can reach. What they may do is the union of
+     * both, carried on one Role here (ADR-0025).
+     */
+    public function abandoningParcels(): static
+    {
+        return $this->holdingRole('Parcel Abandoner', Permission::WorkOrders, Permission::AbandonParcels);
+    }
+
+    /**
+     * A User who may also say what came back from a half-delivered parcel: they
+     * work Orders and hold `answer partly delivered` on top, the one answer the
+     * stock ledger is waiting on.
+     */
+    public function answeringPartlyDelivered(): static
+    {
+        return $this->holdingRole('Returns Clerk', Permission::WorkOrders, Permission::AnswerPartlyDelivered);
+    }
+
+    /**
+     * A User who may also switch a live Order to Cash on Delivery: they work
+     * Orders and hold `switch to cash on delivery` on top, changing how money
+     * is collected rather than an everyday verb.
+     */
+    public function switchingToCashOnDelivery(): static
+    {
+        return $this->holdingRole('Cash Switcher', Permission::WorkOrders, Permission::SwitchToCashOnDelivery);
+    }
+
+    /**
+     * A User who may also delete, force-delete and restore an Order: they work
+     * Orders and hold `delete orders` on top, so the queue cannot be tidied away
+     * by whoever is merely working it.
+     */
+    public function deletingOrders(): static
+    {
+        return $this->holdingRole('Order Remover', Permission::WorkOrders, Permission::DeleteOrders);
+    }
+
+    /**
+     * A User who may open the Products catalogue: one holding a Role that
+     * carries the Permission the resource is gated by. As with every state
+     * here, authority arrives through a Role, never a direct grant (ADR-0025).
+     */
+    public function managingProducts(): static
+    {
+        return $this->holdingRole('Products Manager', Permission::ManageProducts);
+    }
+
+    /**
+     * A User who counts shelves: one holding a Role that carries the
+     * Permission the Inventory cluster is gated by. Enough to open Stock
+     * Counts, Suppliers and Supplies, take a Count and record a Supply — but
+     * not to void a delivery, which is held back behind `void supplies`.
+     */
+    public function countingStock(): static
+    {
+        return $this->holdingRole('Stock Counter', Permission::CountStock);
+    }
+
+    /**
+     * A User who may also strike a delivery out: they count stock and hold
+     * `void supplies` on top, since voiding is offered from a Supply screen
+     * only a User who counts can reach. What they may do is the union of both,
+     * carried on one Role here (ADR-0025).
+     */
+    public function voidingSupplies(): static
+    {
+        return $this->holdingRole('Supply Voider', Permission::CountStock, Permission::VoidSupplies);
+    }
+
+    /**
+     * A User who authors Pages: one holding a Role that carries the Permission
+     * the Pages resource is gated by. Enough to open the list, write and
+     * preview a Page, publish it and pull it back to draft — but not to bin
+     * one, which is held back behind `delete pages`.
+     */
+    public function authoringPages(): static
+    {
+        return $this->holdingRole('Page Author', Permission::AuthorPages);
+    }
+
+    /**
+     * A User who may also bin a Page: they author Pages and hold `delete pages`
+     * on top, since deleting, force-deleting and restoring are offered from the
+     * Pages screens only a User who authors can reach. What they may do is the
+     * union of both, carried on one Role here (ADR-0025).
+     */
+    public function deletingPages(): static
+    {
+        return $this->holdingRole('Page Deleter', Permission::AuthorPages, Permission::DeletePages);
+    }
+
+    /**
      * A User holding no Role at all, which is what Suspended is: they keep
      * their name on everything they did and lose every way in.
      */
