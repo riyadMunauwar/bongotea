@@ -119,11 +119,16 @@ class StockMovement extends Model
      * missing: a movement a Courier's word will one day write has no User
      * behind it at all.
      *
+     * `withTrashed()` because a User who has left is filed away rather than
+     * erased, and the name a person put on a movement must keep rendering
+     * after they are gone — that name is the only thing that lets a surprising
+     * figure be asked about.
+     *
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     /**

@@ -74,11 +74,15 @@ class StockCount extends Model
     /**
      * Who counted, so a surprising correction has somebody to ask about it.
      *
+     * `withTrashed()` because a User who has left is filed away rather than
+     * erased: the name is the whole point of stamping it, so it must keep
+     * rendering here after they are gone.
+     *
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     /**

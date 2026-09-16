@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use App\Http\Middleware\AuthenticateAdmin;
 use App\Support\Settings\GeneralSettings;
@@ -76,6 +77,13 @@ class AdminPanelProvider extends PanelProvider
              * the mark that stands in for it is the render hook further down.
              */
             ->login(Login::class)
+            /**
+             * Every User gets a profile page — their own name and password,
+             * and nothing else (the page is where the reasoning sits). Drawn
+             * inside the panel rather than as a standalone simple page, so a
+             * User reaches it from the account menu without leaving the shell.
+             */
+            ->profile(EditProfile::class, isSimple: false)
             ->colors([
                 'primary' => Color::Blue,
                 /**

@@ -9,6 +9,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Contracts\Permission;
@@ -19,7 +20,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     /**
      * The floor for the panel is holding a Role — any Role.
@@ -72,6 +73,24 @@ class User extends Authenticatable implements FilamentUser
     public function isOwner(): bool
     {
         return $this->hasRole(Role::OWNER);
+    }
+
+    /**
+     * Whether taking the Owner Role off this User would leave the
+     * installation without one.
+     *
+     * An installation must always have at least one Owner, so this is the
+     * question the two lockout guards ask before a demotion, a suspension or
+     * a filing-away is allowed (`App\Support\Access\UserGuard`). It counts
+     * only Owners who could still sign in: a filed-away Owner is a soft-delete
+     * the relation's own scope leaves out, so they are no safety net.
+     *
+     * True only for a User who is the last standing Owner — a non-Owner, or an
+     * Owner with a fellow Owner beside them, answers false.
+     */
+    public function isLastOwner(): bool
+    {
+        return $this->isOwner() && Role::owner()->users()->count() <= 1;
     }
 
     /**

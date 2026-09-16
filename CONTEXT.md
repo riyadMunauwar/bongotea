@@ -446,6 +446,10 @@ _Avoid_: super admin, administrator, root, superuser
 Said of a User holding no Roles. They cannot sign in, and everything they did keeps their name on it. It is not leaving: a suspended User is still listed and comes back the moment a Role is given, where one who has left is filed away. Deliberately the same state as never having been given a Role at all, because "has no job here" and "has no job here yet" are the same fact about today.
 _Avoid_: disabled, deactivated, blocked, banned, inactive
 
+**Filed away**:
+Said of a User who has left, taken off the roster but not erased. They cannot sign in and drop off the default list, and can be brought back if they return — but their name stays on every Stock Count and Adjustment they made, because that name is the only thing that lets a surprising figure be asked about, and deleting the row would null it. Distinct from Suspended: a suspended User is between jobs and expected back with a Role; a filed-away one is gone, and filing them away is what locks them out for good rather than a Role they no longer hold.
+_Avoid_: deleted, archived, removed, terminated, offboarded
+
 ### The installation
 
 **Settings**:
