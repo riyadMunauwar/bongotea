@@ -173,7 +173,16 @@ class OrderCapture
             throw new CheckoutUnavailable("Page [{$page->slug}] was captured with nothing chosen to sell.");
         }
 
-        return $products->map(function (Product $product) use ($page, $quantities): array {
+        /**
+         * The whole basket's cost in one batched read, the way the catalogue
+         * loads it for a list, rather than a correlated subquery per line on
+         * the customer-facing hot path (#170). A Product nothing has ever been
+         * recorded buying is absent from the map, which is read below as the
+         * same unknown a per-row `averageCost()` answers with.
+         */
+        $costs = $this->ledger->averageCostFor($products->modelKeys());
+
+        return $products->map(function (Product $product) use ($page, $quantities, $costs): array {
             $quantity = $quantities[$product->getKey()] ?? null;
 
             if ($quantity === null) {
@@ -200,7 +209,7 @@ class OrderCapture
                  * is unknown and not free: a Product nobody has supplied must
                  * not present itself as infinitely profitable.
                  */
-                'unit_cost' => $this->ledger->averageCost($product),
+                'unit_cost' => $costs[$product->getKey()] ?? null,
 
                 'quantity' => $quantity,
             ];

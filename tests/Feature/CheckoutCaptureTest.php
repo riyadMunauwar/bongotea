@@ -20,6 +20,7 @@ use App\Support\OrderComplete\OrderCompleteLayout;
 use App\Support\Orders\CapturedAnswer;
 use App\Support\Orders\OrderOwnership;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
@@ -187,6 +188,47 @@ it('stamps each line from its own product, and leaves the unknown one unknown', 
 
     expect($lines['Winter Jacket']->unit_cost)->toBe(40000)
         ->and($lines['Wool Scarf']->unit_cost)->toBeNull();
+});
+
+it('reads every line its cost in a constant number of queries, not one per line', function () {
+    $products = Product::factory()->count(3)->create();
+
+    foreach ($products as $product) {
+        boughtIntoStock($product, 5, 40000);
+    }
+
+    /**
+     * The stock ledger is the only thing a Capture reads `stock_movements`
+     * for, and it never writes them at Capture (ADR-0021), so the movements
+     * queries a Capture issues are its cost lookups and nothing else.
+     */
+    $costQueries = function (Page $page, array $quantities): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->postJson(route('checkout.store'), capturePayload($page, ['quantities' => $quantities]))
+            ->assertCreated();
+
+        return collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains($query['query'], 'stock_movements'))
+            ->count();
+    };
+
+    /**
+     * Capture reads the whole basket's cost in one batched query the way the
+     * catalogue does, so a three-line order costs the ledger no more lookups
+     * than a one-line order on the most latency-sensitive request there is —
+     * a per-line subquery would scale query count with basket size (#170).
+     */
+    $single = $costQueries(sellingPage($products[0]), [$products[0]->getKey() => 1]);
+
+    $triple = $costQueries(sellingPage($products->all(), 'trio'), [
+        $products[0]->getKey() => 1,
+        $products[1]->getKey() => 1,
+        $products[2]->getKey() => 1,
+    ]);
+
+    expect($triple)->toBe($single);
 });
 
 it('stamps what a unit was worth even with the shelf emptied', function () {
@@ -2564,6 +2606,36 @@ it('leaves the fingerprint alone when the checkout is reworded', function () {
         ->and($page->checkout_config->words->orderButton->wording)->toBe('Order for {total}')
         ->and($page->checkout_config->words->orderButton->note)->toBe('You pay the courier.')
         ->and($page->checkout_config->words->totalLabel())->toBe('Grand total');
+
+    $this->postJson(route('checkout.store'), $payload)->assertCreated();
+
+    expect(Order::sole()->subtotal)->toBe(99000);
+});
+
+it('leaves the fingerprint alone when the container is dissolved', function () {
+    $jacket = Product::factory()->create(['price' => 99000]);
+    $page = sellingPage($jacket);
+
+    $before = PricingFingerprint::for($page);
+
+    /** Written against the page as the visitor's screen has it, before the merchant turns the ground off. */
+    $payload = capturePayload($page);
+
+    $page->update(['checkout_config' => CheckoutConfig::fromArray([
+        ...$page->checkout_config->toArray(),
+        'container' => ['enabled' => false],
+    ])]);
+
+    $page = $page->refresh();
+
+    /**
+     * The Container is a rendering decision and not a figure handed over at the
+     * door, so like the layout and the copy it stays out of the fingerprint:
+     * a merchant dissolving the ground on a live page turns away nobody
+     * mid-form (ADR-0027).
+     */
+    expect(PricingFingerprint::for($page))->toBe($before)
+        ->and($page->checkout_config->container->enabled)->toBeFalse();
 
     $this->postJson(route('checkout.store'), $payload)->assertCreated();
 

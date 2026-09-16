@@ -164,6 +164,73 @@ class StockLedger
     }
 
     /**
+     * The weighted average cost of many Products at once, keyed by Product id,
+     * loaded in a constant number of queries rather than one lookup per Product.
+     *
+     * Every figure is exactly what `averageCost()` answers for that Product one
+     * at a time — the three cases are the same and in the same order: null
+     * where nothing costed has ever moved, the last stamped cost where the
+     * standing units have come to nothing or less, and the blend otherwise. The
+     * arithmetic is not repeated here, only batched, so the two readers cannot
+     * drift the way `onHand()` and `withOnHand()` cannot.
+     *
+     * This exists for the customer-facing Capture, which stamps a line's cost
+     * per Product in the basket (ADR-0022): reading each with a correlated
+     * subquery would scale the query count of the most latency-sensitive
+     * request in the system with basket size. A Product id not asked about, or
+     * one nothing has been recorded buying, is absent from the map rather than
+     * present as zero — the caller reads a missing key as the same unknown a
+     * per-row `averageCost()` answers with.
+     *
+     * @param  list<int|string>  $productIds
+     * @return array<int, int>
+     */
+    public function averageCostFor(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        /** One pass over the standing rows for the whole basket, grouped by Product. */
+        $totals = StockMovement::query()
+            ->standing()
+            ->whereIn('product_id', $productIds)
+            ->toBase()
+            ->groupBy('product_id')
+            ->selectRaw('product_id, count(unit_cost) as costed, coalesce(sum(quantity), 0) as units, coalesce(sum(quantity * unit_cost), 0) as value')
+            ->get()
+            ->keyBy('product_id');
+
+        /**
+         * The Products whose costed units have come to nothing or less, which
+         * fall back to the last cost stamped exactly as `averageCost()` does —
+         * gathered so that fallback is one more batched query and never one per
+         * Product.
+         */
+        $emptied = $totals
+            ->filter(fn (object $row): bool => (int) $row->costed > 0 && (int) $row->units <= 0)
+            ->keys()
+            ->all();
+
+        $lastStamped = $this->lastStampedCostFor($emptied);
+
+        $costs = [];
+
+        foreach ($totals as $productId => $row) {
+            if ((int) $row->costed === 0) {
+                continue;
+            }
+
+            $costs[(int) $productId] = (int) $row->units <= 0
+                ? ($lastStamped[(int) $productId] ?? null)
+                : (int) round($row->value / $row->units);
+        }
+
+        /** A null fallback drops out, so a missing key stays the one unknown. */
+        return array_filter($costs, fn (?int $cost): bool => $cost !== null);
+    }
+
+    /**
      * What the units held of a Product are worth altogether, in minor units,
      * or null where nothing costed has ever moved.
      *
@@ -979,5 +1046,42 @@ class StockLedger
             ->whereNotNull('unit_cost')
             ->latest('id')
             ->value('unit_cost');
+    }
+
+    /**
+     * The last cost stamped on each of a set of Products, keyed by Product id,
+     * in a constant number of queries — the batched sibling of
+     * `lastStampedCost()`, reached only for the Products `averageCostFor()`
+     * found emptied.
+     *
+     * The latest standing costed movement per Product is its highest id among
+     * them, which `latest('id')` picks one Product at a time; here they are
+     * gathered in one grouped query and their costs read back in a second, so
+     * the fallback stays constant however many Products need it.
+     *
+     * @param  list<int>  $productIds
+     * @return array<int, int>
+     */
+    private function lastStampedCostFor(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $latest = StockMovement::query()
+            ->standing()
+            ->whereIn('product_id', $productIds)
+            ->whereNotNull('unit_cost')
+            ->toBase()
+            ->groupBy('product_id')
+            ->selectRaw('max(id) as id')
+            ->pluck('id');
+
+        return StockMovement::query()
+            ->whereIn('id', $latest)
+            ->toBase()
+            ->pluck('unit_cost', 'product_id')
+            ->map(fn (mixed $cost): int => (int) $cost)
+            ->all();
     }
 }
