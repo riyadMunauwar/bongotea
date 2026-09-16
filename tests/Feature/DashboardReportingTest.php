@@ -24,8 +24,14 @@ use App\Support\Settings\GeneralSettings;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Livewire;
 
+/**
+ * The Dashboard page is ungated, but its widgets are two audiences' now (#161):
+ * the money figures behind `view reports` and the courier to-do list behind
+ * `work orders`. This file asserts the whole screen — the tiles and charts
+ * beside Needs Attention in one order — so its User holds both.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->viewingReports()->workingOrders()->create());
 });
 
 /*

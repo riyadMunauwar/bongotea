@@ -3,11 +3,14 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Concerns\HasReportingWindow;
+use App\Filament\Widgets\GatedOnDashboard;
 use BackedEnum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Widgets\Widget;
+use Filament\Widgets\WidgetConfiguration;
 
 /**
  * The panel's own Dashboard, owning the panel root.
@@ -75,5 +78,48 @@ class Dashboard extends BaseDashboard
     public function filtersForm(Schema $schema): Schema
     {
         return $schema->components($this->reportingWindowComponents());
+    }
+
+    /**
+     * The discovered widgets, less those the current User may not see.
+     *
+     * The page itself is ungated — anyone who holds a Role reaches it — but
+     * its widgets divide into two audiences that stopped being one screen in
+     * #161: the Merchant's figures behind `view reports` and the operator's
+     * to-do list behind `work orders`. Each gated widget names its Permission
+     * through `GatedOnDashboard`, and this drops the ones the User lacks, so a
+     * User who works Orders lands on their to-do list and none of the revenue,
+     * a User holding neither meets only the ungated Cache Path indicator
+     * rather than an error, and the Merchant meets the whole screen.
+     *
+     * The filter lives here, not in each widget's `canView()`, because six of
+     * the money widgets are the Page Report's own and a static `canView()`
+     * would blank them on that screen too — which `author pages` reaches
+     * without `view reports`. `GatedOnDashboard` holds the reasoning.
+     *
+     * @return array<class-string<Widget> | WidgetConfiguration>
+     */
+    public function getWidgets(): array
+    {
+        return array_values(array_filter(
+            parent::getWidgets(),
+            fn (string|WidgetConfiguration $widget): bool => $this->maySeeOnDashboard($widget),
+        ));
+    }
+
+    /**
+     * Whether the current User may see this widget on the Dashboard. A widget
+     * that names no Permission through `GatedOnDashboard` is drawn for
+     * everyone; one that does is drawn only for a User who holds it.
+     */
+    private function maySeeOnDashboard(string|WidgetConfiguration $widget): bool
+    {
+        $class = is_string($widget) ? $widget : $widget->widget;
+
+        if (! is_subclass_of($class, GatedOnDashboard::class)) {
+            return true;
+        }
+
+        return auth()->user()?->can($class::dashboardPermission()) ?? false;
     }
 }

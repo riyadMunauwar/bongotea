@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Reports;
 
+use App\Enums\Permission;
 use BackedEnum;
 use Filament\Clusters\Cluster;
 use Filament\Pages\Enums\SubNavigationPosition;
@@ -35,13 +36,17 @@ use Filament\Support\Icons\Heroicon;
  * backlog drawn under a window a Merchant has narrowed is a backlog that
  * quietly shrinks.
  *
- * Ungated, unlike `SettingsCluster`, and deliberately: the Dashboard already
- * draws Sales, Average Order Value and courier money to every User of the
- * panel, so a permission here would stop nobody from reading the same class of
- * figure one click away — and a gate a Merchant walks around is worse than
- * none, because the next reader assumes the figures are protected. A
- * `view reports` permission is owed on the day the Dashboard's own figures are
- * gated with it, which is its own piece of work.
+ * Gated on `Permission::ViewReports`, and the debt that gate pays is the one
+ * this docblock used to record as owed. The cluster was ungated for as long
+ * as the Dashboard drew Sales, Average Order Value and courier money to every
+ * User, because a permission here would then have stopped nobody from reading
+ * the same class of figure one click away — theatre, and a gate a Merchant
+ * walks around is worse than none. #161 is where that stopped being true: the
+ * Dashboard's own money widgets are gated with `view reports` in the same
+ * breath, so the two are one working area and neither is a way around the
+ * other. `canAccess()` closes the cluster URL and drops the sidebar entry;
+ * each report page delegates to it, the way every Settings page delegates to
+ * `SettingsCluster`.
  */
 class ReportsCluster extends Cluster
 {
@@ -98,4 +103,19 @@ class ReportsCluster extends Cluster
      * working and hide the problem.)
      */
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
+    /**
+     * The reading is one working area held under `view reports`. Filament
+     * already hides the cluster when no page in it is accessible, which the
+     * pages' own gate arranges; this closes the cluster's own URL too, so a
+     * User without the Permission meets a forbidden response there rather than
+     * a redirect to nowhere. It mirrors `SettingsCluster::canAccess()` exactly,
+     * which is the whole point of the pairing: the reading and the configuring
+     * are each one Permission, and every page inside reaches its floor through
+     * this method.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can(Permission::ViewReports) ?? false;
+    }
 }

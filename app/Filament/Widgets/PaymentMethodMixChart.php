@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\PaymentMixRow;
@@ -35,7 +36,7 @@ use Illuminate\Support\Js;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class PaymentMethodMixChart extends ChartWidget
+class PaymentMethodMixChart extends ChartWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use ScopedToPage;
@@ -59,6 +60,16 @@ class PaymentMethodMixChart extends ChartWidget
     private const string ORDERS_STACK = 'orders';
 
     protected static ?int $sort = 40;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). Inert wherever a screen names this widget itself: it is one of
+     * the six the Page Report shares, and that screen names its own.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected ?string $heading = 'Payment Method mix';
 

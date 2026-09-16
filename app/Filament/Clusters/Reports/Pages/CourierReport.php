@@ -57,6 +57,18 @@ class CourierReport extends Page
     protected static ?int $navigationSort = 0;
 
     /**
+     * Held behind `view reports` through the cluster, the way every Settings
+     * page reaches its floor through `SettingsCluster`. The cluster gate and
+     * the Dashboard's money widgets were closed together in #161, so there is
+     * no figure on this screen a User could read one click away without the
+     * Permission that closes it here.
+     */
+    public static function canAccess(): bool
+    {
+        return ReportsCluster::canAccess();
+    }
+
+    /**
      * The Reporting Window across the top, then the report under it.
      *
      * Written out rather than left to the header-widget slot, because that

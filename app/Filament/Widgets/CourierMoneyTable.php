@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Support\Couriers\CourierMoney;
 use App\Support\Couriers\CourierMoneyRow;
 use App\Support\Money;
@@ -40,7 +41,7 @@ use Illuminate\Support\Collection;
  * and does neither. Lazy, like every widget on this screen, so the shell
  * renders before a Courier is called.
  */
-class CourierMoneyTable extends TableWidget
+class CourierMoneyTable extends TableWidget implements GatedOnDashboard
 {
     /**
      * Above Needs Attention, so the three full-width tables sit together at
@@ -48,6 +49,19 @@ class CourierMoneyTable extends TableWidget
      * down it.
      */
     protected static ?int $sort = 65;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161): it is courier *money*, and money is the Merchant's to read. It
+     * sits among the window-ignoring widgets by position, but it is gated
+     * with the figures rather than with the to-do list beside it. The
+     * Dashboard alone draws it, so the gate has no other screen to be inert
+     * on.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected int|string|array $columnSpan = 'full';
 

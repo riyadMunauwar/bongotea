@@ -19,8 +19,14 @@ use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
 use Livewire\Livewire;
 
+/**
+ * The report sits behind `view reports` now (#161), so the User opening it
+ * holds that Permission. It also links each Supplier row into their deliveries
+ * in the Inventory cluster, behind `count stock`, so a User meant to follow
+ * that link holds both.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->viewingReports()->countingStock()->create());
 });
 
 /*

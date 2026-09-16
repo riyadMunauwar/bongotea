@@ -16,8 +16,13 @@ use App\Support\Settings\GeneralSettings;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Livewire\Livewire;
 
+/**
+ * The report sits behind `view reports` now (#161), so the User opening it
+ * holds that Permission; the courier to-do list it keeps off the Dashboard is
+ * a different audience's, gated by `work orders`.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->viewingReports()->create());
 });
 
 /*

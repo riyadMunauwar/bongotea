@@ -35,10 +35,11 @@ use Filament\Widgets\WidgetConfiguration;
  * come to the totals across the top; a Supplier row opens their own buying
  * history, which is where a surprising figure is answered.
  *
- * Ungated, like everything else in this cluster; `ReportsCluster` holds the
- * reasoning. `HasReportingWindow` supplies the control and the screen state,
- * so a Merchant moving between here, the Dashboard and the other reports meets
- * one control rather than four that resemble each other.
+ * Behind `view reports` like everything else in this cluster; `ReportsCluster`
+ * holds the reasoning and this page reaches that floor through it.
+ * `HasReportingWindow` supplies the control and the screen state, so a Merchant
+ * moving between here, the Dashboard and the other reports meets one control
+ * rather than four that resemble each other.
  */
 class BuyingReport extends Page
 {
@@ -57,6 +58,15 @@ class BuyingReport extends Page
      * from the top-level sidebar.
      */
     protected static ?int $navigationSort = 2;
+
+    /**
+     * Held behind `view reports` through the cluster, the way every Settings
+     * page reaches its floor through `SettingsCluster`.
+     */
+    public static function canAccess(): bool
+    {
+        return ReportsCluster::canAccess();
+    }
 
     /**
      * The Reporting Window across the top, then the report under it.

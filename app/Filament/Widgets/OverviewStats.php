@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Clusters\Settings\Pages\Tracking;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
@@ -34,12 +35,22 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class OverviewStats extends StatsOverviewWidget
+class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use ScopedToPage;
 
     protected static ?int $sort = 10;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). Inert wherever a screen names this widget itself: it is one of
+     * the six the Page Report shares, and that screen names its own.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected ?string $heading = 'Overview';
 

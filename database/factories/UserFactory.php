@@ -192,6 +192,18 @@ class UserFactory extends Factory
     }
 
     /**
+     * A User who reads the figures: one holding a Role that carries
+     * `view reports`, the floor the Reports cluster and the Dashboard's own
+     * money widgets both sit behind (#161). Enough to open every report and
+     * to meet Sales, Average Order Value and the rest on the Dashboard — but
+     * none of the operator's to-do list, which sits behind `work orders`.
+     */
+    public function viewingReports(): static
+    {
+        return $this->holdingRole('Reports Reader', Permission::ViewReports);
+    }
+
+    /**
      * A User holding no Role at all, which is what Suspended is: they keep
      * their name on everything they did and lose every way in.
      */

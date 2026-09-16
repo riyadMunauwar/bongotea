@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\OrderResource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -33,7 +34,7 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * the link turns on, so the tile and the queue cannot drift apart. Nothing
  * here counts.
  */
-class UnsentOrdersStat extends StatsOverviewWidget
+class UnsentOrdersStat extends StatsOverviewWidget implements GatedOnDashboard
 {
     /**
      * Above Courier money, so the three widgets that ignore the Reporting
@@ -43,6 +44,18 @@ class UnsentOrdersStat extends StatsOverviewWidget
      * at 65, so no existing widget moves.
      */
     protected static ?int $sort = 63;
+
+    /**
+     * An operator's to-do, drawn on the Dashboard behind `work orders`
+     * (#161): its count links straight into the Orders queue, which the same
+     * Permission gates, so a User without it would meet a tile that only
+     * opens a forbidden list. Drawn only here, so the gate has no other
+     * screen to be inert on.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::WorkOrders;
+    }
 
     protected ?string $heading = 'Waiting for a Courier';
 

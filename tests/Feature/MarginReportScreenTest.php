@@ -14,8 +14,12 @@ use App\Support\Reporting\ReportingWindow;
 use App\Support\Settings\GeneralSettings;
 use Livewire\Livewire;
 
+/**
+ * The report sits behind `view reports` now (#161), so the User opening it
+ * holds that Permission.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->viewingReports()->create());
 });
 
 /*

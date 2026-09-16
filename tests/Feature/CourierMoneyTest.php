@@ -17,8 +17,14 @@ use App\Support\Settings\CourierSettings;
 use Livewire\Livewire;
 use Tests\Fixtures\Couriers\CourierScript;
 
+/**
+ * Courier money is the Merchant's figure, behind `view reports` on the
+ * Dashboard now (#161); the test that places it beside Needs Attention needs
+ * `work orders` too, since that widget carries it. Holding both lets one User
+ * meet the whole foot of the screen.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->viewingReports()->workingOrders()->create());
 });
 
 /*

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\BucketSize;
@@ -33,7 +34,7 @@ use Illuminate\Support\Js;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class SalesOverTimeChart extends ChartWidget
+class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use ScopedToPage;
@@ -47,6 +48,16 @@ class SalesOverTimeChart extends ChartWidget
     private const string ORDERS_LINE_COLOR = '#737373';
 
     protected static ?int $sort = 20;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). Inert wherever a screen names this widget itself: it is one of
+     * the six the Page Report shares, and that screen names its own.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected int|string|array $columnSpan = 'full';
 

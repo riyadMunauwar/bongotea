@@ -34,10 +34,11 @@ use Filament\Widgets\WidgetConfiguration;
  * days (ADR-0022). The Delivery Charge is inside that revenue because `Sales`
  * has always included it, and the Revenue tile says so where it is drawn.
  *
- * Ungated, like everything else in this cluster; `ReportsCluster` holds the
- * reasoning. `HasReportingWindow` supplies the control and the screen state,
- * so a Merchant moving between here, the Dashboard and the other reports meets
- * one control rather than four that resemble each other.
+ * Behind `view reports` like everything else in this cluster; `ReportsCluster`
+ * holds the reasoning and this page reaches that floor through it.
+ * `HasReportingWindow` supplies the control and the screen state, so a Merchant
+ * moving between here, the Dashboard and the other reports meets one control
+ * rather than four that resemble each other.
  */
 class MarginReport extends Page
 {
@@ -56,6 +57,15 @@ class MarginReport extends Page
      * cluster numbers separately from the top-level sidebar.
      */
     protected static ?int $navigationSort = 3;
+
+    /**
+     * Held behind `view reports` through the cluster, the way every Settings
+     * page reaches its floor through `SettingsCluster`.
+     */
+    public static function canAccess(): bool
+    {
+        return ReportsCluster::canAccess();
+    }
 
     /**
      * The Reporting Window across the top, then the report under it.

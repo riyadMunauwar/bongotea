@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Support\Money;
@@ -44,12 +45,23 @@ use Illuminate\Support\Collection;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class PageLeaderboardTable extends TableWidget
+class PageLeaderboardTable extends TableWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use PaginatesRows;
 
     protected static ?int $sort = 80;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). This one the Dashboard alone draws — a Page's own leaderboard
+     * would rank it against nothing — so the gate has no other screen to be
+     * inert on.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected int|string|array $columnSpan = 'full';
 

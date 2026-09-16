@@ -41,8 +41,15 @@ use Livewire\Livewire;
  * what Days of Cover actually says is `InventoryDaysOfCoverTest`'s; neither
  * is measured again here.
  */
+/**
+ * The courier to-do list is the operator's, behind `work orders` now (#161),
+ * and the widgets it links into — the Orders queue behind the backlog tile —
+ * are gated the same way. Courier money sits among these widgets by position
+ * but is the Merchant's figure behind `view reports`, so the ordering
+ * assertions need it too; this User holds both.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->viewingReports()->create());
 });
 
 /**

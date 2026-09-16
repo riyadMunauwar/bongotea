@@ -26,10 +26,12 @@ use Filament\Widgets\WidgetConfiguration;
  * That is the whole difference between this page and `BuyingReport` beside it,
  * which answers what was bought over a span and therefore carries the control.
  *
- * Ungated, like everything else in this cluster: the Dashboard already draws
- * Sales and courier money to every User of the panel, so a permission here
- * would stop nobody reading the same class of figure one click away.
- * `ReportsCluster` holds that reasoning.
+ * Behind `view reports` like everything else in this cluster, and this page
+ * reaches that floor through `ReportsCluster` the way every Settings page
+ * reaches its own through `SettingsCluster`. The cluster was ungated only for
+ * as long as the Dashboard drew the same class of figure to every User; #161
+ * gated the Dashboard's money widgets in the same breath, so the reading is
+ * one working area now. `ReportsCluster` holds that reasoning.
  */
 class StockReport extends Page
 {
@@ -45,6 +47,15 @@ class StockReport extends Page
      * carried, then what is held, then what it cost.
      */
     protected static ?int $navigationSort = 1;
+
+    /**
+     * Held behind `view reports` through the cluster, the way every Settings
+     * page reaches its floor through `SettingsCluster`.
+     */
+    public static function canAccess(): bool
+    {
+        return ReportsCluster::canAccess();
+    }
 
     /**
      * The figures, and nothing above them.

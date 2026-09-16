@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Widgets\Concerns\PaginatesRows;
@@ -52,7 +53,7 @@ use Illuminate\Support\Collection;
  * labels and links and never counts. Lazy, like every report widget, so
  * the shell renders before the queries.
  */
-class NeedsAttentionTable extends TableWidget
+class NeedsAttentionTable extends TableWidget implements GatedOnDashboard
 {
     use PaginatesRows;
 
@@ -62,6 +63,18 @@ class NeedsAttentionTable extends TableWidget
      * neither pushes the tiles and charts down the screen.
      */
     protected static ?int $sort = 70;
+
+    /**
+     * An operator's to-do, drawn on the Dashboard behind `work orders`
+     * (#161): every row links into the Order or Product it names, which a
+     * User without `work orders` could not open — so a to-do list of refusals
+     * is worse than none. Drawn only here, so the gate has no other screen to
+     * be inert on.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::WorkOrders;
+    }
 
     protected int|string|array $columnSpan = 'full';
 

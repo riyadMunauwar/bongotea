@@ -65,12 +65,13 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * `manage settings` because `SettingsCluster::canAccess()` otherwise hides the
  * last entry, `manage products` because `ProductResource::canAccess()`
  * otherwise hides Products, `author pages` because `PageResource::canAccess()`
- * otherwise hides Pages, and `count stock` because
- * `InventoryCluster::canAccess()` otherwise hides Inventory; between them they
- * pin the gated entries for someone who can see them as well as pinning the
- * ungated ones. As each remaining working area gains its gate, its Permission
- * joins this list. Reports is the last ungated top-level entry and is drawn for
- * anybody.
+ * otherwise hides Pages, `count stock` because
+ * `InventoryCluster::canAccess()` otherwise hides Inventory, and `view reports`
+ * because `ReportsCluster::canAccess()` otherwise hides Reports; between them
+ * they pin the gated entries for someone who can see them. As each working area
+ * gained its gate its Permission joined this list, and with Reports gated in
+ * #161 that is now every top-level entry bar the Dashboard, which stays ungated
+ * so anyone who can reach the panel lands somewhere.
  *
  * A cluster contributes one entry under its own label and never the pages or
  * resources inside it, so neither Courier Report nor Stock Counts is in this
@@ -78,7 +79,7 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * clusters to what they draw.
  */
 it('draws the sidebar in the order the panel states', function () {
-    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingProducts()->authoringPages()->countingStock()->create());
+    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingProducts()->authoringPages()->countingStock()->viewingReports()->create());
 
     $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
         ->flatMap(fn ($group) => $group->getItems())

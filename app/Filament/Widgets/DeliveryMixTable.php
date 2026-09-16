@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\Permission;
 use App\Filament\Widgets\Concerns\PaginatesRows;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
@@ -38,13 +39,23 @@ use Illuminate\Support\Collection;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class DeliveryMixTable extends TableWidget
+class DeliveryMixTable extends TableWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use PaginatesRows;
     use ScopedToPage;
 
     protected static ?int $sort = 60;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). Inert wherever a screen names this widget itself: it is one of
+     * the six the Page Report shares, and that screen names its own.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     /**
      * The window's mix, once per render. Private, so Livewire neither

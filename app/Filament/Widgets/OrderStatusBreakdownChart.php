@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\OrderStatus;
+use App\Enums\Permission;
 use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\ReportingWindow;
@@ -28,7 +29,7 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
  *
  * Lazy, like every report widget, so the shell renders before the query.
  */
-class OrderStatusBreakdownChart extends ChartWidget
+class OrderStatusBreakdownChart extends ChartWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use ScopedToPage;
@@ -48,6 +49,16 @@ class OrderStatusBreakdownChart extends ChartWidget
     ];
 
     protected static ?int $sort = 30;
+
+    /**
+     * A Merchant's figure, drawn on the Dashboard behind `view reports`
+     * (#161). Inert wherever a screen names this widget itself: it is one of
+     * the six the Page Report shares, and that screen names its own.
+     */
+    public static function dashboardPermission(): Permission
+    {
+        return Permission::ViewReports;
+    }
 
     protected ?string $heading = 'Order status breakdown';
 
