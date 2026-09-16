@@ -56,6 +56,10 @@ _Avoid_: column, span, size, grid
 One thing about a Checkout a Merchant can restyle — a colour, a length, a typeface. Every token is set once for the whole Checkout and applies to every Checkout Layout alike; no single Checkout Field restyles itself, so a form is styled in exactly one place. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
 _Avoid_: theme, variable, style setting, CSS variable, field appearance
 
+**Container**:
+The two boxes a Checkout draws itself inside, and the per-Page concern that controls them. **The ground** is the band the design paints behind everything — the background fill and the padding around it — and **the card** is the one bordered panel a Customer reads inside it. A Merchant may dissolve the ground so the Checkout sits flush inside a wrapper they drew themselves; the card stays, styled by its own Style Tokens. Container is its own concern and not a Style Token: turning the ground off is structural, not a colour a rule reads, so it belongs to the Checkout Config beside the tokens rather than among them. Every setting keeps the design's current figure as its default, so a Page that says nothing about its Container draws the ground and the card exactly as before.
+_Avoid_: cart, panel, wrapper, frame, box
+
 **Checkout Words**:
 Everything a Checkout says in the Merchant's own words: the Order Button, the totals labels, each Payment Method's long and short label, and the slots a Checkout Layout owns. Every word has a default drawn from the designs, Bangla first and English second, so a Page that says nothing reads the way the design does. Words are copy and never figures, so none is in the Pricing Fingerprint. A word belonging to a layout the Page is not arranged in is kept unseen and comes back when the layout does.
 _Avoid_: labels, copy, content, microcopy, translations

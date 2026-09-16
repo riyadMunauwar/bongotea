@@ -168,6 +168,15 @@ class CheckoutShortcode implements ShortcodeDefinition
             'styleTokens' => $page->checkout_config->styleTokens->completed(),
 
             /**
+             * The Checkout's Container: whether the island draws its ground —
+             * the grey band behind the card and the padding around it — or
+             * sits flush inside the Merchant's own wrapper. A rendering
+             * decision and not a figure, so like the layout and the copy it is
+             * deliberately absent from the fingerprint below (ADR-0027).
+             */
+            'container' => $page->checkout_config->container,
+
+            /**
              * Everything the island says, in the Merchant's words or the
              * design's: the order button and the line beneath it, the totals
              * labels, and what each Payment Method is called. The button's

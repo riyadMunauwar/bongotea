@@ -49,6 +49,19 @@ class CheckoutConfig implements Arrayable
         public readonly StyleTokens $styleTokens,
 
         /**
+         * The Checkout's Container: the ground and the card the island draws
+         * itself inside, and whether the ground is drawn at all.
+         *
+         * A rendering decision only, and its own typed value object rather than
+         * a Style Token: turning the ground off is structural, not a colour a
+         * flat rule reads. Like the layout and the copy it stays out of the
+         * Pricing Fingerprint, so a Merchant dissolving the ground on a live
+         * Page never turns away an Order somebody is half-way through typing
+         * (ADR-0027).
+         */
+        public readonly CheckoutContainer $container,
+
+        /**
          * Whether the Checkout draws the Product List: the Page's Products
          * with their pictures, quantities and line totals.
          *
@@ -155,6 +168,13 @@ class CheckoutConfig implements Arrayable
              * value its rule already carried.
              */
             StyleTokens::none(),
+
+            /**
+             * The ground on, which is the Checkout as it looked before a
+             * Merchant could dissolve it: the grey band behind the card and
+             * the padding around it, exactly as the design draws them.
+             */
+            CheckoutContainer::default(),
 
             /**
              * Shown, which is the Checkout as it has always drawn: a Page
@@ -270,6 +290,9 @@ class CheckoutConfig implements Arrayable
             array_values($fields),
             self::deliveryOptionsFromArray($stored),
             StyleTokens::fromArray((array) ($stored['style_tokens'] ?? [])),
+
+            /** Absent, or a value it cannot use, is the ground on — today's design. */
+            CheckoutContainer::fromArray((array) ($stored['container'] ?? [])),
 
             showProducts: self::showProductsFromArray($stored),
 
@@ -720,7 +743,7 @@ class CheckoutConfig implements Arrayable
     }
 
     /**
-     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, words: array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>, ...<string, ?string>}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
+     * @return array{fields: list<array<string, mixed>>, delivery_options: list<array{label: string, amount: int}>, style_tokens: array<string, string>, container: array{enabled: bool}, show_products: bool, product_picker: bool, default_selection: list<int>, layout: string, words: array{order_button: array{wording: ?string, note: ?string}, subtotal: ?string, delivery: ?string, total: ?string, payment: array<string, array{long: ?string, short: ?string}>, ...<string, ?string>}, payment_methods: list<string>, show_payment_logos: bool, hide_lone_cash_choice: bool}
      */
     public function toArray(): array
     {
@@ -728,6 +751,7 @@ class CheckoutConfig implements Arrayable
             'fields' => $this->fieldsToArray(),
             'delivery_options' => $this->deliveryOptionsToArray(),
             'style_tokens' => $this->styleTokens->toArray(),
+            'container' => $this->container->toArray(),
             'show_products' => $this->showProducts,
             'product_picker' => $this->productPicker,
             'default_selection' => $this->defaultSelection,

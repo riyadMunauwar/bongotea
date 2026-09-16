@@ -1259,6 +1259,55 @@ it('asks for a token with the control its kind calls for', function () {
     expect(fieldInside($look, 'checkout_config.style_tokens.font')->getColumnSpan('default'))->toBe('full');
 });
 
+it('sits the container tab beside look with the with-container toggle first', function () {
+    $tabs = checkoutTabsOf(Page::factory()->create());
+
+    /** Beside Look and after it: both are how the checkout looks, and a merchant reads the tokens before the boxes they sit in. */
+    expect($tabs->keys()->all())->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look', 'Container']);
+
+    $container = $tabs['Container'];
+
+    /**
+     * The toggle first, and on this tab rather than anywhere on the form: it is
+     * the cause the padding, width and alignment controls to come are the
+     * effect of, so a merchant meets it before the settings it governs.
+     */
+    expect(statePathsInside($container)[0])->toBe('checkout_config.container.enabled')
+        ->and(fieldInside($container, 'checkout_config.container.enabled'))->toBeInstanceOf(Toggle::class);
+
+    /** And the Look tab keeps its identity: exactly the eleven tokens, no container control among them. */
+    expect(array_filter(statePathsInside($tabs['Look']), fn (string $path): bool => str_contains($path, 'container')))
+        ->toBeEmpty()
+        ->and(array_filter(statePathsInside($container), fn (string $path): bool => str_contains($path, 'style_tokens')))
+        ->toBeEmpty();
+});
+
+it('round-trips the container value object through a stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => ['enabled' => false]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Written under its own key and read back as the value object, not folded into the tokens. */
+    expect($page->refresh()->checkout_config->container->enabled)->toBeFalse()
+        ->and($page->checkout_config->toArray()['container'])->toBe(['enabled' => false]);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet(['checkout_config.container.enabled' => false]);
+});
+
+it('reads a container value it cannot use as the ground on', function (mixed $stored) {
+    /** Total on read, like every other Config value: an unusable container is dropped for today's design rather than a 500 in front of a customer. */
+    expect(CheckoutConfig::fromArray(['container' => $stored])->container->enabled)->toBeTrue();
+})->with([
+    'nothing stored' => [[]],
+    'not a boolean' => [['enabled' => 'maybe']],
+    'not even an array' => ['on'],
+    'an unknown key' => [['drawn' => false]],
+]);
+
 it('lets a merchant hide the product list', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
     $page = Page::factory()->published()->withBody('<main>[checkout]</main>')->create(['slug' => 'promo']);
@@ -1728,7 +1777,7 @@ it('splits the checkout tab into one nested tab per concern', function () {
      * is met before the picker it gates.
      */
     expect(checkoutTabsOf(Page::factory()->create())->keys()->all())
-        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look']);
+        ->toBe(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look', 'Container']);
 });
 
 it('keeps everything the checkout decides inside the checkout tab', function () {
@@ -1803,6 +1852,12 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
             'saved' => fn (CheckoutConfig $config): ?string => $config->styleTokens->value(StyleToken::Accent),
             'expected' => '#ff0000',
         ],
+        'Container' => [
+            'control' => 'checkout_config.container.enabled',
+            'typed' => ['checkout_config' => ['container' => ['enabled' => false]]],
+            'saved' => fn (CheckoutConfig $config): bool => $config->container->enabled,
+            'expected' => false,
+        ],
     };
 
     /**
@@ -1819,7 +1874,7 @@ it('reaches and saves a setting on every nested checkout tab', function (string 
 
     /** And still written where it always was: no stored Config changed shape. */
     expect(($setting['saved'])($page->refresh()->checkout_config))->toBe($setting['expected']);
-})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look']);
+})->with(['Layout', 'Products', 'Questions', 'Delivery', 'Payment', 'Words', 'Look', 'Container']);
 
 it('puts the style tokens where no question stands in front of them', function () {
     $tabs = checkoutTabsOf(Page::factory()->create());

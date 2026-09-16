@@ -145,6 +145,21 @@ class CheckoutTab
                             ->schema([
                                 Look::section(),
                             ]),
+
+                        /**
+                         * Beside Look, because both are how the checkout
+                         * looks rather than what it asks — but its own tab
+                         * and not a twelfth token: the Look tab is the
+                         * eleven Style Tokens and nothing else, and turning
+                         * the ground off is structural. The toggle is first,
+                         * the cause the padding, width and alignment controls
+                         * the parent feature adds are the effect of.
+                         */
+                        Tab::make('Container')
+                            ->columns(1)
+                            ->schema([
+                                Container::withContainer(),
+                            ]),
                     ]),
             ]);
     }

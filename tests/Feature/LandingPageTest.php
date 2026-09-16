@@ -1091,6 +1091,56 @@ it('fills every box a thumb has to hit with the surface token', function () {
         ->and($root[1] ?? '')->toContain('--gio-background: #f7f8fa;');
 });
 
+it('draws the ground on a page with a default container', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+
+    /**
+     * The ground on is the checkout as designed, and the default for every
+     * page: the design's outer padding and the background token behind the
+     * card. A page that says nothing about its Container draws exactly the
+     * bytes it always did, at every width — the phone narrows the ground it
+     * still has.
+     */
+    expect($root[1] ?? '')->toContain('padding: 2.5rem 1.5rem;')
+        ->and($root[1] ?? '')->toContain('background: var(--gio-background);')
+        ->and($styles)->toContain('@media (max-width: 37.5rem) { .gio-checkout { padding: 1.25rem 1rem; }');
+});
+
+it('removes the ground and keeps the card when the container is off', function () {
+    pageStyled(['container' => ['enabled' => false]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+
+    /**
+     * The ground off dissolves the outer box and nothing else: no grey band and
+     * no padding around the card, so the checkout sits flush inside whatever the
+     * merchant wrapped the shortcode in. The design's ground figures are gone
+     * from the sheet entirely rather than overridden.
+     */
+    expect($root[1] ?? '')->toContain('padding: 0;')
+        ->and($root[1] ?? '')->toContain('background: transparent;')
+        ->and($root[1] ?? '')->not->toContain('padding: 2.5rem 1.5rem')
+        ->and($root[1] ?? '')->not->toContain('background: var(--gio-background)');
+
+    /** No ground to narrow on a phone, so the media query never touches the root — only the card. */
+    expect($styles)->not->toContain('@media (max-width: 37.5rem) { .gio-checkout {')
+        ->and($styles)->toContain('@media (max-width: 37.5rem) { .gio-checkout-card { padding: 1.25rem 1rem; }');
+
+    /** The card is untouched: still the bordered panel at the design's width, filled from the surface token. */
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    expect($card[1] ?? '')->toContain('max-width: 35rem;')
+        ->and($card[1] ?? '')->toContain('padding: 1.75rem;')
+        ->and($card[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
+        ->and($card[1] ?? '')->toContain('background: var(--gio-surface)');
+});
+
 it('writes the quieter words in the muted token', function () {
     pageStyled([]);
 
