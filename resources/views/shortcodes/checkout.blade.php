@@ -326,7 +326,7 @@
         .gio-checkout-image { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; border: 1px solid var(--gio-border); border-radius: var(--gio-radius); }
         .gio-checkout-product-words { flex: 1; min-width: 0; }
         .gio-checkout-name { margin: 0; font-size: .875rem; font-weight: 600; line-height: 1.3; }
-        .gio-checkout-description { margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); }
+        .gio-checkout-description { margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
         .gio-checkout-price { margin: .125rem 0 0; font-size: .75rem; line-height: 1.4; color: var(--gio-muted); white-space: nowrap; }
         .gio-checkout-quantity { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0; }
         .gio-checkout-line-total { flex: none; width: 3.75rem; margin: 0; font-size: .875rem; font-weight: 600; text-align: right; white-space: nowrap; }

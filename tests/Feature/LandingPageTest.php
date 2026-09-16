@@ -1160,6 +1160,28 @@ it('writes the quieter words in the muted token', function () {
     }
 });
 
+it('clamps a product description to two lines and leaves the name wrapping free', function () {
+    pageStyled([]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    /**
+     * A long description clamps to two lines with an ellipsis so it cannot blow
+     * out the row on a narrow phone, at every width — it is in the base sheet,
+     * not behind a media query. The name is the product's identity and is never
+     * truncated: a customer must always be able to tell which product a row is.
+     */
+    preg_match('/\.gio-checkout-description \{([^}]*)\}/', $styles, $description);
+    preg_match('/\.gio-checkout-name \{([^}]*)\}/', $styles, $name);
+
+    expect($description[1] ?? '')->toContain('-webkit-line-clamp: 2')
+        ->and($description[1] ?? '')->toContain('-webkit-box-orient: vertical')
+        ->and($description[1] ?? '')->toContain('display: -webkit-box')
+        ->and($description[1] ?? '')->toContain('overflow: hidden')
+        ->and($name[1] ?? '')->not->toContain('line-clamp')
+        ->and($name[1] ?? '')->not->toContain('-webkit-box');
+});
+
 it('draws the quantity stepper narrow rather than the width of the form', function () {
     pageStyled([]);
 
