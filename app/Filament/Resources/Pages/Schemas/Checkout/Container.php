@@ -2,7 +2,12 @@
 
 namespace App\Filament\Resources\Pages\Schemas\Checkout;
 
+use App\Filament\Resources\Pages\Schemas\RefusedBy;
+use App\Support\Checkout\CheckoutContainer;
+use App\Support\Checkout\CheckoutPadding;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Fieldset;
 
 /**
  * The Checkout's Container: the two boxes the island draws itself inside.
@@ -45,5 +50,62 @@ class Container
              */
             ->rule('boolean')
             ->helperText('On, the checkout draws the grey ground behind the card, with padding around it, as designed. Off, that ground and its padding are removed and the card sits flush inside whatever you wrapped [checkout] in. The card itself is unchanged; recolour or clear the ground with the Background token on the Look tab.');
+    }
+
+    /**
+     * The padding around the card, inside the ground.
+     *
+     * Two boxes rather than one, because top-and-bottom and side-to-side are
+     * the design's own two figures and a Merchant flushing a Checkout into
+     * their layout wants each on its own. Emitted only while the ground is
+     * drawn, so a Page with the toggle off ignores whatever is typed here.
+     */
+    public static function groundPadding(): Fieldset
+    {
+        return Fieldset::make('Ground padding')
+            ->columns(2)
+            ->schema([
+                self::length('checkout_config.container.ground.vertical', 'Top and bottom', CheckoutContainer::defaultGround()->vertical),
+                self::length('checkout_config.container.ground.horizontal', 'Left and right', CheckoutContainer::defaultGround()->horizontal),
+            ]);
+    }
+
+    /**
+     * The padding inside the card, between its border and everything a Customer
+     * reads.
+     *
+     * Set both to 0 for the flush recipe: with the ground off, the Surface
+     * token transparent and the Border token transparent, the card dissolves
+     * into the Merchant's own wrapper entirely.
+     */
+    public static function cardPadding(): Fieldset
+    {
+        return Fieldset::make('Card padding')
+            ->columns(2)
+            ->schema([
+                self::length('checkout_config.container.card.vertical', 'Top and bottom', CheckoutContainer::defaultCard()->vertical),
+                self::length('checkout_config.container.card.horizontal', 'Left and right', CheckoutContainer::defaultCard()->horizontal),
+            ]);
+    }
+
+    /**
+     * One padding length: a number and a unit, refused twice.
+     *
+     * The refusal is the same one the Config makes as it reads a stored value,
+     * asked of `CheckoutPadding` so the tab and the silent read cannot disagree
+     * about what a padding is. Here it is worded and shown on the box that holds
+     * it; there it is silent, because a Config written by some other route has
+     * nobody to tell. Blank is never refused — an empty box is the design's
+     * figure, which the placeholder shows and the read fills in.
+     */
+    private static function length(string $statePath, string $label, string $default): TextInput
+    {
+        return TextInput::make($statePath)
+            ->label($label)
+            /** What is in force while the box is empty, so it reads without saving to find out — the same as a Look token's box. */
+            ->placeholder($default)
+            ->maxLength(CheckoutPadding::MAX_LENGTH)
+            ->helperText('A number and a unit: px, rem, em, % or vw. Use 0 for none.')
+            ->rules([RefusedBy::rule(CheckoutPadding::refusal(...))]);
     }
 }

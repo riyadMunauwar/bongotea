@@ -13,6 +13,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Checkout\CheckoutConfig;
+use App\Support\Checkout\CheckoutContainer;
 use App\Support\Checkout\CheckoutField;
 use App\Support\Checkout\CheckoutLayout;
 use App\Support\Checkout\DeliveryOption;
@@ -1290,9 +1291,17 @@ it('round-trips the container value object through a stored config', function ()
         ->call('save')
         ->assertHasNoFormErrors();
 
-    /** Written under its own key and read back as the value object, not folded into the tokens. */
+    /**
+     * Written under its own key and read back as the value object, not folded
+     * into the tokens. The paddings ride along at the design's figures, kept
+     * when nothing said otherwise.
+     */
     expect($page->refresh()->checkout_config->container->enabled)->toBeFalse()
-        ->and($page->checkout_config->toArray()['container'])->toBe(['enabled' => false]);
+        ->and($page->checkout_config->toArray()['container'])->toBe([
+            'enabled' => false,
+            'ground' => ['vertical' => '2.5rem', 'horizontal' => '1.5rem'],
+            'card' => ['vertical' => '1.75rem', 'horizontal' => '1.75rem'],
+        ]);
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
         ->assertFormSet(['checkout_config.container.enabled' => false]);
@@ -1307,6 +1316,89 @@ it('reads a container value it cannot use as the ground on', function (mixed $st
     'not even an array' => ['on'],
     'an unknown key' => [['drawn' => false]],
 ]);
+
+it('refuses an out-of-shape padding on the box that holds it', function (string $box, string $side, string $value) {
+    $page = Page::factory()->create();
+
+    $path = 'checkout_config.container.'.$box.'.'.$side;
+
+    $component = Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => [$box => [$side => $value]]]])
+        ->call('save')
+        ->assertHasFormErrors([$path]);
+
+    /**
+     * One refusal, on the padding box the merchant has to correct, rather than
+     * a page-level complaint about the container in general. The message is the
+     * value object's own, so the tab and the silent read cannot disagree.
+     */
+    expect($component->errors()->messages())->toHaveCount(1);
+})->with([
+    'a ground padding with a unit that is not allowed' => ['ground', 'vertical', '4pt'],
+    'a ground padding that is not a length' => ['ground', 'horizontal', 'thin'],
+    'a ground padding over the ceiling' => ['ground', 'horizontal', '1000rem'],
+    'a card padding that is negative' => ['card', 'vertical', '-1rem'],
+    'a card padding using calc' => ['card', 'vertical', 'calc(1rem + 2px)'],
+    'a card padding naming a variable' => ['card', 'horizontal', 'var(--gap)'],
+    'a card padding that would close the declaration' => ['card', 'horizontal', '1rem; } body { display: none } .x {'],
+]);
+
+it('lets every padding box be left empty', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => [
+            'ground' => ['vertical' => null, 'horizontal' => null],
+            'card' => ['vertical' => null, 'horizontal' => null],
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    /** Nothing said is the design's figure, not a refusal — the same as leaving a style token empty. */
+    expect($page->refresh()->checkout_config->container->ground)->toEqual(CheckoutContainer::defaultGround())
+        ->and($page->checkout_config->container->card)->toEqual(CheckoutContainer::defaultCard());
+});
+
+it('reads a padding value it cannot use as the box\'s design figure', function () {
+    $container = CheckoutConfig::fromArray(['container' => [
+        'ground' => ['vertical' => '3rem', 'horizontal' => 'calc(1px)'],
+        'card' => ['vertical' => '4pt', 'horizontal' => '0'],
+    ]])->container;
+
+    /**
+     * The silent half of refused twice, each side on its own: a usable length
+     * is kept and one this installation cannot use drops to the design's figure,
+     * rather than a good side being lost with a bad one or a 500 reaching a
+     * customer.
+     */
+    expect($container->ground->vertical)->toBe('3rem')
+        ->and($container->ground->horizontal)->toBe('1.5rem')
+        ->and($container->card->vertical)->toBe('1.75rem')
+        ->and($container->card->horizontal)->toBe('0');
+});
+
+it('round-trips a merchant\'s padding through a stored config', function () {
+    $page = Page::factory()->create();
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['checkout_config' => ['container' => [
+            'ground' => ['vertical' => '3rem', 'horizontal' => '10%'],
+            'card' => ['vertical' => '0', 'horizontal' => '0'],
+        ]]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $container = $page->refresh()->checkout_config->container;
+
+    expect($container->ground->toArray())->toBe(['vertical' => '3rem', 'horizontal' => '10%'])
+        ->and($container->card->toArray())->toBe(['vertical' => '0', 'horizontal' => '0']);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->assertFormSet([
+            'checkout_config.container.ground.vertical' => '3rem',
+            'checkout_config.container.card.horizontal' => '0',
+        ]);
+});
 
 it('lets a merchant hide the product list', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);

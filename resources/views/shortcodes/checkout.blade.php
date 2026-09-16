@@ -153,16 +153,20 @@
      * exactly the bytes it always did.
      */
     $ground = $container->enabled
-        ? 'padding: 2.5rem 1.5rem; background: var(--gio-background);'
+        ? 'padding: '.$container->ground->css().'; background: var(--gio-background);'
         : 'padding: 0; background: transparent;';
 
     /**
-     * The phone tightens the ground's padding, but only where there is a ground
-     * to tighten: with the Container off there is no outer padding to narrow at
-     * any width. Carries its own trailing space, so a page with the ground on
-     * emits the media query byte-for-byte as it always did.
+     * The phone tightens each box's padding, but only where the box is still at
+     * the design's figure: there is no phone padding control, so a Merchant who
+     * set their own gets it at every width rather than losing it below the
+     * breakpoint — which is also what keeps a card padded to 0 for the flush
+     * recipe from being re-padded on a phone. With the Container off there is no
+     * ground to narrow at all. Each carries its own trailing space, so a page at
+     * the design's figures emits the media query byte-for-byte as it always did.
      */
-    $groundOnPhone = $container->enabled ? '.gio-checkout { padding: 1.25rem 1rem; } ' : '';
+    $groundOnPhone = $container->groundTightensOnPhone() ? '.gio-checkout { padding: 1.25rem 1rem; } ' : '';
+    $cardOnPhone = $container->cardTightensOnPhone() ? '.gio-checkout-card { padding: 1.25rem 1rem; } ' : '';
 @endphp
 {{--
     The layout's class rides beside the base one, in every layout, and the
@@ -216,7 +220,7 @@
             property; do not move the read onto one that is not.
         --}}
         .gio-checkout { {{ $styleTokens->declarations() }} box-sizing: border-box; {!! $ground !!} font-family: var(--gio-font); font-size: .875rem; line-height: 1.4; color: var(--gio-text); accent-color: var(--gio-accent); }
-        .gio-checkout-card { box-sizing: border-box; max-width: 35rem; margin: 0 auto; padding: 1.75rem; border: 1px solid var(--gio-border); background: var(--gio-surface); }
+        .gio-checkout-card { box-sizing: border-box; max-width: 35rem; margin: 0 auto; padding: {{ $container->card->css() }}; border: 1px solid var(--gio-border); background: var(--gio-surface); }
         .gio-checkout-form { margin: 0; }
         {{--
             The numbered sections the design draws, set apart by whitespace
@@ -522,7 +526,7 @@
             the name, and the button loses a little of its padding. Nothing
             here reorders anything; it is the same island, tighter.
         --}}
-        @media (max-width: 37.5rem) { {!! $groundOnPhone !!}.gio-checkout-card { padding: 1.25rem 1rem; } .gio-checkout-line-total { flex: 1 0 100%; width: auto; padding: 0 0 0 1.75rem; font-size: .8125rem; text-align: left; } .gio-checkout-submit { padding: .875rem 1rem; font-size: .875rem; } }
+        @media (max-width: 37.5rem) { {!! $groundOnPhone !!}{!! $cardOnPhone !!}.gio-checkout-line-total { flex: 1 0 100%; width: auto; padding: 0 0 0 1.75rem; font-size: .8125rem; text-align: left; } .gio-checkout-submit { padding: .875rem 1rem; font-size: .875rem; } }
         {{--
             Everything above is the base, and it is the same bytes whichever
             arrangement the merchant chose. This is the one block that is not:

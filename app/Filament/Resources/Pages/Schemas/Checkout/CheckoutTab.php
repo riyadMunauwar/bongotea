@@ -159,6 +159,16 @@ class CheckoutTab
                             ->columns(1)
                             ->schema([
                                 Container::withContainer(),
+
+                                /**
+                                 * After the toggle, in the order the two boxes
+                                 * nest: the ground around the card, then the
+                                 * card's own inner padding. Together with the
+                                 * toggle above they are the flush recipe.
+                                 */
+                                Container::groundPadding(),
+
+                                Container::cardPadding(),
                             ]),
                     ]),
             ]);

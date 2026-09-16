@@ -1141,6 +1141,66 @@ it('removes the ground and keeps the card when the container is off', function (
         ->and($card[1] ?? '')->toContain('background: var(--gio-surface)');
 });
 
+it('applies the merchant\'s own ground and card padding at every width', function () {
+    pageStyled(['container' => [
+        'enabled' => true,
+        'ground' => ['vertical' => '3rem', 'horizontal' => '10%'],
+        'card' => ['vertical' => '2rem', 'horizontal' => '1rem'],
+    ]]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /** Two lengths where the sides differ, written into each box's own padding shorthand. */
+    expect($root[1] ?? '')->toContain('padding: 3rem 10%;')
+        ->and($card[1] ?? '')->toContain('padding: 2rem 1rem;');
+
+    /**
+     * A merchant who set their own padding keeps it at every width: there is no
+     * phone padding control, so the phone's tighter design figure would only
+     * take away what they chose.
+     */
+    expect($styles)->not->toContain('.gio-checkout { padding: 1.25rem 1rem; }')
+        ->and($styles)->not->toContain('.gio-checkout-card { padding: 1.25rem 1rem; }');
+});
+
+it('dissolves the card entirely for the flush recipe', function () {
+    /** Container off, card padding 0, and the Surface and Border tokens transparent (#164). */
+    pageStyled([
+        'container' => [
+            'enabled' => false,
+            'card' => ['vertical' => '0', 'horizontal' => '0'],
+        ],
+        'style_tokens' => ['surface' => 'transparent', 'border' => 'transparent'],
+    ]);
+
+    $styles = styleBlock($this->get('/promo')->assertOk()->getContent());
+
+    preg_match('/\.gio-checkout \{([^}]*)\}/', $styles, $root);
+    preg_match('/\.gio-checkout-card \{([^}]*)\}/', $styles, $card);
+
+    /**
+     * The four settings together leave nothing a Customer can see: no ground,
+     * and a card that is a transparent border around a transparent fill with no
+     * padding, so the checkout dissolves into whatever the merchant wrapped the
+     * shortcode in.
+     */
+    expect($root[1] ?? '')->toContain('padding: 0;')
+        ->and($root[1] ?? '')->toContain('background: transparent;')
+        ->and($root[1] ?? '')->toContain('--gio-surface: transparent;')
+        ->and($root[1] ?? '')->toContain('--gio-border: transparent;');
+
+    expect($card[1] ?? '')->toContain('padding: 0;')
+        ->and($card[1] ?? '')->toContain('border: 1px solid var(--gio-border)')
+        ->and($card[1] ?? '')->toContain('background: var(--gio-surface)');
+
+    /** No phone rule re-pads either box, so the card stays dissolved at every width. */
+    expect($styles)->not->toContain('.gio-checkout { padding: 1.25rem 1rem; }')
+        ->and($styles)->not->toContain('.gio-checkout-card { padding: 1.25rem 1rem; }');
+});
+
 it('writes the quieter words in the muted token', function () {
     pageStyled([]);
 
