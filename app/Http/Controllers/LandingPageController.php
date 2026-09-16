@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Permission;
 use App\Models\Page;
 use App\Shortcodes\ShortcodeExpander;
 use App\Support\PageCache\FallbackPageCacheReader;
@@ -163,8 +164,13 @@ class LandingPageController extends Controller
     }
 
     /**
-     * The authoring preview: the exact same expansion pipeline, behind admin
-     * auth, never written to the cache.
+     * The authoring preview: the exact same expansion pipeline, behind the
+     * `author pages` Permission, never written to the cache.
+     *
+     * Gated here rather than on the route, so the check names the typed
+     * Permission case the Pages resource is gated by — a User who cannot open
+     * the Pages screens has no reason to reach a draft through its back door
+     * either. An Owner passes through `can()`'s own bypass.
      *
      * A preview that renders differently is not a preview, so this deliberately
      * shares `expand()` rather than reimplementing it. Without this route the
@@ -187,6 +193,8 @@ class LandingPageController extends Controller
      */
     public function preview(Page $page): Response
     {
+        abort_unless(auth()->user()?->can(Permission::AuthorPages) ?? false, ResponseCode::HTTP_FORBIDDEN);
+
         return response($this->expander->expand($page)->html, ResponseCode::HTTP_OK)
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
             ->header('X-Robots-Tag', 'noindex, nofollow');

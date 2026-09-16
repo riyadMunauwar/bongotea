@@ -7,8 +7,13 @@ use Filament\Enums\DatabaseNotificationsPosition;
 use Filament\Enums\GlobalSearchPosition;
 use Filament\Enums\UserMenuPosition;
 
+/**
+ * These shell assertions are made on the Orders index, which now sits behind
+ * `work orders` (see `OrderResource::canAccess()`), so the User holding this
+ * screen open holds that Permission.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 it('renders the panel without a topbar', function () {
@@ -55,10 +60,17 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * a resource generated later — which declares none, lands at Filament's `-1`
  * and jumps above the Dashboard — is caught here rather than by a Merchant.
  *
- * The User is granted `manage settings` because `SettingsCluster::canAccess()`
- * otherwise hides the last entry, so this pins Settings as last for someone
- * who can see it as well as pinning the seven above it. Reports and Inventory
- * are ungated and are drawn for anybody.
+ * The User is granted `work orders` because `OrderResource::canAccess()` and
+ * `ShipmentResource::canAccess()` otherwise hide Orders and Shipments,
+ * `manage settings` because `SettingsCluster::canAccess()` otherwise hides the
+ * last entry, `manage products` because `ProductResource::canAccess()`
+ * otherwise hides Products, `author pages` because `PageResource::canAccess()`
+ * otherwise hides Pages, and `count stock` because
+ * `InventoryCluster::canAccess()` otherwise hides Inventory; between them they
+ * pin the gated entries for someone who can see them as well as pinning the
+ * ungated ones. As each remaining working area gains its gate, its Permission
+ * joins this list. Reports is the last ungated top-level entry and is drawn for
+ * anybody.
  *
  * A cluster contributes one entry under its own label and never the pages or
  * resources inside it, so neither Courier Report nor Stock Counts is in this
@@ -66,7 +78,7 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * clusters to what they draw.
  */
 it('draws the sidebar in the order the panel states', function () {
-    $this->actingAs(User::factory()->managingSettings()->create());
+    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingProducts()->authoringPages()->countingStock()->create());
 
     $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
         ->flatMap(fn ($group) => $group->getItems())

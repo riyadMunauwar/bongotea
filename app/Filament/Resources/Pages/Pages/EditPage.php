@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Pages\Pages;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Pages\FrontPageNotice;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Pages\Pages\Concerns\FinishesPageSave;
@@ -45,12 +46,24 @@ class EditPage extends EditRecord
             /**
              * Binning a Page is the other way to unseat the Front Page, and it
              * does not pass through `afterSave()`. Same notice, same reason.
+             *
+             * Deleting, force-deleting and restoring each need `delete pages` on
+             * top of the `author pages` floor, because a Slug is claimed for
+             * good and deleting a Page can unseat the Front Page. Gated with
+             * `authorize()` rather than the actions' own `visible()`/`hidden()`
+             * so the Permission check composes with the record-state rules
+             * Filament already puts on them — delete hidden on a trashed row,
+             * restore and force-delete shown only on one — and a User without it
+             * sees none of the three.
              */
             DeleteAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false)
                 ->after(fn (Page $record) => FrontPageNotice::sendIfUnseated($record)),
             ForceDeleteAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false)
                 ->after(fn (Page $record) => FrontPageNotice::sendIfUnseated($record)),
-            RestoreAction::make(),
+            RestoreAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false),
         ];
     }
 

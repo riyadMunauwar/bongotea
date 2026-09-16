@@ -16,8 +16,14 @@ use App\Support\Settings\GeneralSettings;
 use Filament\Widgets\Widget;
 use Livewire\Livewire;
 
+/**
+ * The Page Report is part of the Pages resource, now behind `author pages`
+ * (#158), so the User opening it holds that Permission. Its money widgets are
+ * the Page's own figures and are drawn for anyone who can author, not gated
+ * again behind `view reports`.
+ */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->authoringPages()->create());
 });
 
 /*

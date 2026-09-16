@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Pages\Tables;
 
 use App\Enums\PageStatus;
+use App\Enums\Permission;
 use App\Filament\Resources\Pages\FrontPageNotice;
 use App\Models\Page;
 use App\Support\Pages\FrontPage;
@@ -154,12 +155,20 @@ class PagesTable
                      * A bulk bin is the third way to unseat the Front Page, and
                      * the quietest — a Merchant selecting rows is not looking at
                      * any one of them.
+                     *
+                     * Each needs `delete pages`, like its counterpart on the edit
+                     * screen, and is gated with `authorize()` so the Permission
+                     * composes with the trashed-filter rules Filament already
+                     * puts on the bulk verbs. A User without it sees none drawn.
                      */
                     DeleteBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false)
                         ->after(fn (Collection $records) => $records->each(FrontPageNotice::sendIfUnseated(...))),
                     ForceDeleteBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false)
                         ->after(fn (Collection $records) => $records->each(FrontPageNotice::sendIfUnseated(...))),
-                    RestoreBulkAction::make(),
+                    RestoreBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeletePages) ?? false),
                 ]),
             ]);
     }

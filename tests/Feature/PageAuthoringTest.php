@@ -43,8 +43,14 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
+/**
+ * This file authors both Pages and Products, two working areas now behind their
+ * own Permissions — `author pages` (#158) and `manage products` (#159) — so the
+ * User holding these screens open holds both. What each gate refuses on its own
+ * is asserted in `PagesGatedTest` and `ProductsGatedTest`.
+ */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->authoringPages()->managingProducts()->create());
 });
 
 it('opens the authoring screens', function (string $url) {

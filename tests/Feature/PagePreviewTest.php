@@ -9,6 +9,19 @@ it('requires a signed-in user', function () {
     $this->get(route('pages.preview', $page))->assertRedirect();
 });
 
+/**
+ * The preview is the Pages resource's back door onto a draft, so it is gated by
+ * the same `author pages` Permission (#158): a User who cannot open the Pages
+ * screens has no way to reach a draft through here either.
+ */
+it('refuses a signed-in User who cannot author pages', function () {
+    $page = Page::factory()->create();
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('pages.preview', $page))
+        ->assertForbidden();
+});
+
 it('renders a draft through the same pipeline without publishing it', function () {
     registerShortcode('greeting', fn (): string => '<p>Hello</p>');
 
@@ -20,7 +33,7 @@ it('renders a draft through the same pipeline without publishing it', function (
      * only way to see a page is to publish it — which is also the act that
      * makes it reachable to ad traffic.
      */
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(User::factory()->authoringPages()->create())
         ->get(route('pages.preview', $page))
         ->assertOk()
         ->assertSee('<p>Hello</p>', escape: false);
@@ -29,7 +42,7 @@ it('renders a draft through the same pipeline without publishing it', function (
 it('never writes the preview to the static cache', function () {
     $page = Page::factory()->create(['slug' => 'promo']);
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(User::factory()->authoringPages()->create())
         ->get(route('pages.preview', $page))
         ->assertOk();
 
