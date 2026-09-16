@@ -92,14 +92,29 @@ class EditUser extends EditRecord
     }
 
     /**
-     * Whether saving the form as it stands would suspend the User — that is,
-     * whether it holds no Roles. Public because it is what the save action's
-     * confirmation turns on, and asserting it is how the confirmation is held
-     * to the state that should raise it.
+     * Whether saving the form as it stands would suspend the User — the form
+     * holds no Roles, and the save is one the guards would actually let
+     * through. Public because it is what the save action's confirmation turns
+     * on, and asserting it is how the confirmation is held to the state that
+     * should raise it.
+     *
+     * A save the guards will refuse (emptying your own Roles, or demoting the
+     * last Owner) is deliberately *not* a suspension to confirm: asking a
+     * Merchant to confirm a suspension and then refusing it reads as a
+     * contradiction. Those fall straight through to `handleRecordUpdate`,
+     * which shows the one refusal that fits.
      */
     public function willSuspendOnSave(): bool
     {
-        return blank($this->data['roles'] ?? []);
+        if (filled($this->data['roles'] ?? [])) {
+            return false;
+        }
+
+        return app(UserGuard::class)->refusalForRoles(
+            $this->currentUser(),
+            $this->record,
+            [],
+        ) === null;
     }
 
     private function currentUser(): User

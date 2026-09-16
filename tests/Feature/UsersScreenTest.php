@@ -219,11 +219,14 @@ it('refuses to take away your own last Role', function () {
     $this->actingAs($second);
 
     // A second Owner stands, so the last-Owner guard does not fire; the
-    // own-last-Role guard does.
-    Livewire::test(EditUser::class, ['record' => $second->getKey()])
-        ->set('data.roles', [])
-        ->call('save')
-        ->assertNotified();
+    // own-last-Role guard does. And because that save is going to be refused,
+    // it is not dressed up as a suspension to confirm first.
+    $page = Livewire::test(EditUser::class, ['record' => $second->getKey()])
+        ->set('data.roles', []);
+
+    expect($page->instance()->willSuspendOnSave())->toBeFalse();
+
+    $page->call('save')->assertNotified();
 
     expect($second->fresh()->roles)->not->toBeEmpty();
 });
