@@ -16,11 +16,14 @@ use Filament\Support\Icons\Heroicon;
  * and a page class and nothing else — no list here, in a provider or in
  * config to keep in step.
  *
- * Gated by one Permission for the whole category rather than one per page,
- * because what the gate protects is the category — a User who works Orders
- * should not be one click from a payment key — and not any page in
- * particular. `Permission::ManageSettings` is the floor for everything in
- * here, held through a Role like every other Permission (ADR-0025).
+ * The category has a floor with pages standing above it.
+ * `Permission::ManageSettings` is the floor: `canAccess()` gates the cluster
+ * on it — a User who works Orders should not be one click from a payment key —
+ * and every Settings *page* is reachable to anyone through that floor. A
+ * resource in here may set its own gate higher, and the Roles screen does: it
+ * is Owner-only, so whoever holds the payment keys still cannot promote
+ * themselves. Both the floor and any gate above it are held through a Role
+ * like every other Permission (ADR-0025).
  */
 class SettingsCluster extends Cluster
 {

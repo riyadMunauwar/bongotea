@@ -43,4 +43,17 @@ class Role extends SpatieRole
 
         return $role;
     }
+
+    /**
+     * Whether this is the Owner Role.
+     *
+     * Read where the Owner must be treated apart from every other Role — the
+     * Roles screen locks it against renaming, deletion and ticking — so that
+     * "which Role is untouchable?" is answered by its name in one place rather
+     * than compared against `Role::OWNER` at each site.
+     */
+    public function isOwner(): bool
+    {
+        return $this->name === self::OWNER;
+    }
 }
