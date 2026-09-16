@@ -185,7 +185,7 @@ describe('what a served page tells the browser to report', function () {
 
         $page = Page::factory()->create();
 
-        $html = $this->actingAs(User::factory()->create())
+        $html = $this->actingAs(User::factory()->authoringPages()->create())
             ->get(route('pages.preview', $page))
             ->assertOk()
             ->getContent();

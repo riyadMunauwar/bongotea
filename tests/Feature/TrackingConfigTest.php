@@ -41,7 +41,7 @@ use Tests\Fixtures\Tracking\ProviderScript;
  * thinks.
  */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->managingSettings()->create());
+    $this->actingAs(User::factory()->managingSettings()->authoringPages()->create());
 });
 
 /** The Tracking tab of a Page's edit form, as the screen builds it. */

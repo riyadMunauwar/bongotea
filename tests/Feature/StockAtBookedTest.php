@@ -29,7 +29,7 @@ use Tests\Fixtures\Couriers\CourierScript;
  * than a file.
  */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 
     $this->ledger = app(StockLedger::class);
 });
