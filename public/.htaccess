@@ -109,6 +109,15 @@
     # Only the methods a static file can honestly answer: without the method
     # check, POST /checkout would be served the cached /checkout.html and the
     # order would never reach the application.
+    #
+    # The reserved Front entry is reachable only from the root rule above,
+    # never by name. Without the /_front exclusion, GET /_front would match
+    # page-cache/_front.html here and serve the front page at a second address
+    # — a duplicate of / that leaks the internal cache scheme. Excluded, it
+    # falls through to the front controller, which decides it does not exist.
+    # [NC] because a case-insensitive filesystem answers /_FRONT from
+    # _front.html just the same, and no slug can collide (none carries an _).
+    RewriteCond %{REQUEST_URI} !^/_front$ [NC]
     RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
     RewriteCond %{DOCUMENT_ROOT}/page-cache/$1.html -f
     RewriteRule ^(.+)$ page-cache/$1.html [L]

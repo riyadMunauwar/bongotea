@@ -177,6 +177,24 @@ class FallbackPageCacheReader
             ? self::FRONT_ENTRY
             : ltrim($path, '/');
 
+        /**
+         * Only the empty root may resolve to the reserved Front entry. A
+         * literal `/_front` computes the same entry off the wire, and without
+         * this guard it would find `_front.html` and serve the Front Page's
+         * bytes at a second address — a duplicate of `/` that leaks the
+         * internal cache scheme. The reserved name is reachable one way, from
+         * the root above; asked for by name it falls through to the framework.
+         *
+         * The comparison is case-insensitive because `realpath` below is: on a
+         * case-insensitive filesystem (a Windows or macOS host) `/_FRONT`
+         * canonicalises to the same `_front.html` and would leak the page just
+         * the same. No legal Slug can collide with the guard — a Slug cannot
+         * carry an underscore — so blocking every casing costs nothing real.
+         */
+        if ($path !== '' && strcasecmp($entry, self::FRONT_ENTRY) === 0) {
+            return null;
+        }
+
         $file = realpath($directory.DIRECTORY_SEPARATOR.$entry.'.html');
 
         /**

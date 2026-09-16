@@ -241,6 +241,31 @@ it('answers the site root from the front entry', function () {
         ->and($hit['headers'])->toContain('X-GioPages-Cache: fallback');
 });
 
+it('does not serve the front entry when it is asked for by name', function (string $uri) {
+    $this->cache->putFront('<h1>Front</h1>');
+
+    /**
+     * `_front` is the reserved key `/` resolves to, not an address of its own.
+     * A literal request for it computes the same entry off the wire and would
+     * otherwise find `_front.html` and serve the front page at a second
+     * address — a duplicate of `/` that leaks the internal cache scheme. The
+     * root still answers, so the entry stays reachable the one way it should.
+     */
+    expect($this->reader->resolve($uri, 'GET'))->toBeNull()
+        ->and($this->reader->resolve('/', 'GET'))->not->toBeNull();
+})->with([
+    'bare' => '/_front',
+    'trailing slash' => '/_front/',
+    'with a query string' => '/_front?fbclid=abc123',
+    /**
+     * A case-insensitive filesystem canonicalises `_FRONT.html` to the same
+     * `_front.html`, so the guard has to match the casing `realpath` does or
+     * the leak survives on a Windows or macOS host.
+     */
+    'uppercased' => '/_FRONT',
+    'mixed case' => '/_Front',
+]);
+
 it('answers the site root with a query string attached', function () {
     $this->cache->putFront('<h1>Front</h1>');
 
