@@ -289,7 +289,7 @@ What a User physically counted of one Product, recorded as the number they are h
 _Avoid_: stocktake, cycle count, audit, recount, inventory check
 
 **Adjustment**:
-The Stock Movement that squares the ledger with a Stock Count, carrying a cause chosen from a fixed list — damaged, lost, found, miscount, opening count — the person who counted, and a note where they have something to add. The cause is compulsory and picked rather than typed, because "what am I losing to damage" is a question a Merchant asks of a year of them at once.
+The Stock Movement that squares the ledger with a Stock Count, carrying a cause chosen from a fixed list — damaged, lost, found, miscount, opening count — the person who counted, and a note where they have something to add. The cause is compulsory and picked rather than typed, because "what am I losing to damage" is a question a Merchant asks of a year of them at once. It is reached by two entry paths that come to the same thing: an **exact count**, where a User writes down the number on the shelf; or a direct **Increase (+) / Decrease (−)**, where a Merchant names only how much changed and the ledger reads On Hand and does the arithmetic for them (#174). Both derive exactly one Adjustment Stock Movement of the difference — a +/− is a count with the total worked out rather than a new kind of thing — so a below-zero figure is only ever concluded by the ledger, never asserted: a Decrease that would cross it, or one against an uncounted Product, is refused and pointed back at the exact count.
 _Avoid_: correction, write-off, shrinkage, manual entry, fix
 
 **Return**:
