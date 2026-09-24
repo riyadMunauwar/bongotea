@@ -5,8 +5,11 @@ use App\Enums\StockMovementReason;
 use App\Models\Product;
 use App\Models\StockCount;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Models\User;
+use App\Support\Inventory\AdjustmentBelowZero;
 use App\Support\Inventory\StockLedger;
+use App\Support\Inventory\StockNotCounted;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -181,6 +184,122 @@ it('is the only thing in the application that writes a movement', function () {
      * months later as a figure nobody can account for.
      */
     expect($writers)->toBe(['Support/Inventory/StockLedger.php']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Adjusting by a signed delta
+|--------------------------------------------------------------------------
+*/
+
+it('raises what is held by a positive delta, writing one adjustment of exactly that delta', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    $count = $this->ledger->recordAdjustment($product, 5, AdjustmentCause::Found, 'Found behind the counter', $this->counter);
+
+    expect($this->ledger->onHand($product))->toBe(35)
+        ->and($count->quantity)->toBe(35);
+
+    /** Exactly one movement beyond the opening count, and it is the delta itself. */
+    $adjustment = StockMovement::query()->latest('id')->first();
+
+    expect($adjustment->quantity)->toBe(5)
+        ->and($adjustment->reason)->toBe(StockMovementReason::Adjustment)
+        ->and(StockMovement::count())->toBe(2);
+});
+
+it('lowers what is held by a negative delta, writing one adjustment of exactly that delta', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    $this->ledger->recordAdjustment($product, -2, AdjustmentCause::Damaged, 'Two dropped', $this->counter);
+
+    expect($this->ledger->onHand($product))->toBe(28)
+        ->and(StockMovement::query()->latest('id')->value('quantity'))->toBe(-2)
+        ->and(StockMovement::count())->toBe(2);
+});
+
+it('adopts a product nobody has counted at the delta, when the delta is an increase', function () {
+    $product = Product::factory()->create();
+
+    $this->ledger->recordAdjustment($product, 5, AdjustmentCause::Found, null, $this->counter);
+
+    /** "+5" on a fresh Product means there are five, exactly as a first count of five would. */
+    expect($this->ledger->onHand($product))->toBe(5)
+        ->and(StockMovement::sole()->quantity)->toBe(5);
+});
+
+it('refuses to decrease a product nobody has counted, and writes nothing', function () {
+    $product = Product::factory()->create();
+
+    expect(fn () => $this->ledger->recordAdjustment($product, -3, AdjustmentCause::Damaged, null, $this->counter))
+        ->toThrow(StockNotCounted::class);
+
+    /** An unknown is not a figure to take from, so nothing entered the ledger. */
+    expect($this->ledger->onHand($product))->toBeNull()
+        ->and(StockMovement::count())->toBe(0)
+        ->and(StockCount::count())->toBe(0);
+});
+
+it('refuses a decrease that would take what is held below zero, and writes nothing', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 3, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    expect(fn () => $this->ledger->recordAdjustment($product, -5, AdjustmentCause::Lost, null, $this->counter))
+        ->toThrow(AdjustmentBelowZero::class);
+
+    /** Below zero is a thing the ledger concludes, never one a Merchant asserts: what was held is untouched. */
+    expect($this->ledger->onHand($product))->toBe(3)
+        ->and(StockMovement::count())->toBe(1);
+});
+
+it('allows a decrease that lands exactly on nothing', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 4, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    $this->ledger->recordAdjustment($product, -4, AdjustmentCause::Damaged, null, $this->counter);
+
+    /** A shelf counted down to empty is a legal figure; only below nothing is refused. */
+    expect($this->ledger->onHand($product))->toBe(0)
+        ->and(StockMovement::query()->latest('id')->value('quantity'))->toBe(-4);
+});
+
+it('refuses an adjustment of nothing, which is not an adjustment', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    expect(fn () => $this->ledger->recordAdjustment($product, 0, AdjustmentCause::Miscount, null, $this->counter))
+        ->toThrow(InvalidArgumentException::class);
+
+    expect(StockMovement::count())->toBe(1);
+});
+
+it('carries the cause and note onto the resulting record, attributed to whoever adjusted', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    $count = $this->ledger->recordAdjustment($product, 2, AdjustmentCause::Found, 'Turned up in the stockroom', $this->counter);
+
+    expect($count->cause)->toBe(AdjustmentCause::Found)
+        ->and($count->note)->toBe('Turned up in the stockroom')
+        ->and($count->user->name)->toBe('Nasrin Akter')
+        ->and(StockMovement::query()->latest('id')->first()->user->name)->toBe('Nasrin Akter');
+});
+
+it('stamps the adjustment at the product\'s average cost, inherited from the count it delegates to', function () {
+    $product = Product::factory()->create();
+
+    /** Cost enters at a Supply: ten units at 5.00 each, so the average in force is 500 (ADR-0022). */
+    $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
+        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 500],
+    ]);
+
+    $this->ledger->recordAdjustment($product, 3, AdjustmentCause::Found, null, $this->counter);
+
+    /** The units found are worth what everything else on that shelf is worth. */
+    expect(StockMovement::query()->where('reason', StockMovementReason::Adjustment)->sole()->unit_cost)->toBe(500)
+        ->and($this->ledger->onHand($product))->toBe(13);
 });
 
 /*

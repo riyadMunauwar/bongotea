@@ -33,8 +33,10 @@ use InvalidArgumentException;
  *
  * It is deliberately narrow today. A delivery arrives and raises what is
  * held; a User counts, and the difference is squared away as an Adjustment;
- * a delivery that should never have been recorded is Voided, and every unit
- * of it comes back out at what it came in at; a Courier takes a parcel, and
+ * a User adds or removes a known amount, and that same count does the
+ * arithmetic for them; a delivery that should never have been recorded is
+ * Voided, and every unit of it comes back out at what it came in at; a
+ * Courier takes a parcel, and
  * the units in it leave; the parcel comes back, and they return at what they
  * left at; a User gives the parcel up as dead, and they are written off at
  * that same figure. Everything a parcel is ever owed by a Courier's word is
@@ -899,6 +901,65 @@ class StockLedger
 
             return $count;
         });
+    }
+
+    /**
+     * Add or remove a known number of units, and let a count do the arithmetic.
+     *
+     * The friendlier face of `recordCount()`, for the everyday case a Merchant
+     * has rather than a stocktake: two got dropped, five turned up behind the
+     * counter. The Merchant knows the change and its direction, never the
+     * shelf's new total — so this reads what is held, adds the signed delta to
+     * it, and hands the sum to `recordCount()` as the figure counted. What
+     * comes back is one ordinary Adjustment movement of exactly the delta,
+     * written in one transaction, immutable and cost-stamped at the average —
+     * every one of those inherited rather than re-earned, because a +/− is a
+     * count and not a new kind of thing (ADR-0021).
+     *
+     * The caller signs the delta and its magnitude is a plain positive number:
+     * the screen's button says the direction, so nobody types a minus. A
+     * positive delta (Increase) raises what is held; a negative one (Decrease)
+     * lowers it. A delta of nothing is not an adjustment and is refused.
+     *
+     * A Decrease is guarded where a count is not, because a count is a fact a
+     * User establishes by looking and a Decrease is an assertion about a shelf
+     * they have not recounted. Two things it may not assert:
+     *
+     * - Removing from a Product nobody has counted, which holds an unknown
+     *   rather than a figure to take from (`StockNotCounted`). An Increase on
+     *   the same Product is welcome: it adopts the Product at the delta, the
+     *   way a first count adopts it at what was found.
+     *
+     * - Taking what is held below nothing (`AdjustmentBelowZero`). Below zero
+     *   is a figure the ledger may conclude but never one a Merchant may assert
+     *   by hand; a shelf genuinely emptier than the ledger thinks is answered
+     *   by counting it.
+     */
+    public function recordAdjustment(
+        Product $product,
+        int $delta,
+        AdjustmentCause $cause,
+        ?string $note = null,
+        ?User $adjustedBy = null,
+    ): StockCount {
+        if ($delta === 0) {
+            throw new InvalidArgumentException('An adjustment of nothing is not an adjustment. A +/− carries a signed, non-zero delta.');
+        }
+
+        $onHand = $this->onHand($product);
+
+        if ($delta < 0) {
+            if ($onHand === null) {
+                throw new StockNotCounted($product);
+            }
+
+            if ($onHand + $delta < 0) {
+                throw new AdjustmentBelowZero($product, $onHand, $delta);
+            }
+        }
+
+        /** The count does the arithmetic the Merchant would otherwise have to: On Hand ± delta, recorded as the figure counted. */
+        return $this->recordCount($product, ($onHand ?? 0) + $delta, $cause, $note, $adjustedBy);
     }
 
     /**
