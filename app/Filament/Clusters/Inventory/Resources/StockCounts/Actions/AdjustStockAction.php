@@ -63,7 +63,7 @@ class AdjustStockAction
      */
     public static function increase(): Action
     {
-        return self::base('increase', 'Increase (+)', Heroicon::OutlinedPlusCircle, 'success')
+        return self::base('increase', 'Increase (+)', Heroicon::OutlinedPlusCircle)
             ->modalHeading('Increase stock')
             ->modalDescription('Add units to what is on hand — five that turned up behind the counter. Type how many; the button carries the direction, so there is no sign to type.')
             ->modalSubmitActionLabel('Add to stock')
@@ -83,7 +83,7 @@ class AdjustStockAction
      */
     public static function decrease(): Action
     {
-        return self::base('decrease', 'Decrease (−)', Heroicon::OutlinedMinusCircle, 'danger')
+        return self::base('decrease', 'Decrease (−)', Heroicon::OutlinedMinusCircle)
             ->modalHeading('Decrease stock')
             ->modalDescription('Take units off what is on hand — two that were dropped and broken. Type how many; the button carries the direction, so there is no minus to type.')
             ->modalSubmitActionLabel('Remove from stock')
@@ -98,18 +98,22 @@ class AdjustStockAction
 
     /**
      * The shape both share before their direction is put on: a header action
-     * gated on the cluster's `count stock`.
+     * in the panel's own theme colour, gated on the cluster's `count stock`.
+     *
+     * Both verbs wear `primary` rather than a green/red pair: adding and
+     * removing stock are the same everyday admin act from two sides, and the
+     * screen leads with the brand colour rather than a traffic light.
      *
      * The gate sits on the action's own visibility as well as on the screen it
      * lives on, so a User without the Permission neither sees it nor can mount
      * it — the belt-and-braces `VoidSupplyAction` and the Order actions use.
      */
-    private static function base(string $name, string $label, Heroicon $icon, string $color): Action
+    private static function base(string $name, string $label, Heroicon $icon): Action
     {
         return Action::make($name)
             ->label($label)
             ->icon($icon)
-            ->color($color)
+            ->color('primary')
             ->visible(fn (): bool => InventoryCluster::canAccess());
     }
 

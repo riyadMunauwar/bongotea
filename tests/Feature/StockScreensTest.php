@@ -195,14 +195,15 @@ it('offers no way to edit or delete a count', function () {
 |--------------------------------------------------------------------------
 */
 
-it('offers Increase, Decrease and the relabelled exact-count button, gated on count stock', function () {
+it('offers Increase and Decrease in the theme colour, and no exact-count header button, gated on count stock', function () {
     Livewire::test(ListStockCounts::class)
         ->assertActionVisible('increase')
         ->assertActionVisible('decrease')
-        ->assertActionVisible('create')
-        /** "Count stock" was the developer's word; a Merchant reaches for setting the count they took. */
-        ->assertSee('Set exact count')
-        ->assertDontSee('Count stock');
+        /** Both verbs wear the panel's own colour rather than a green/red pair. */
+        ->assertActionHasColor('increase', 'primary')
+        ->assertActionHasColor('decrease', 'primary')
+        /** The exact-count form is left behind its route; it is not surfaced as a header button. */
+        ->assertActionDoesNotExist('create');
 
     /** The actions ride on `count stock` through the cluster: without it the screen they live on is forbidden. */
     $this->actingAs(User::factory()->create());
