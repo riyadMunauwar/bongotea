@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Enums\Courier;
 use App\Support\Settings\CourierSettings;
+use BackedEnum;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -14,6 +15,7 @@ use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Support\Icons\Heroicon;
 
 /**
  * Where a Merchant switches each Courier on for the installation, types what
@@ -38,6 +40,8 @@ use Filament\Schemas\Components\Utilities\Set;
 class Couriers extends SettingsPage
 {
     protected static string $group = CourierSettings::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
     /** After Tracking, which sorts 3: the last of the things decided once. */
     protected static ?int $navigationSort = 4;

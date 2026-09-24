@@ -6,9 +6,11 @@ use App\Models\Order;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Settings\GeneralSettings;
+use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Icons\Heroicon;
 
 /**
  * The values the app read from environment variables before Settings
@@ -21,6 +23,8 @@ use Filament\Schemas\Components\Section;
 class General extends SettingsPage
 {
     protected static string $group = GeneralSettings::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
 
     protected static ?int $navigationSort = 0;
 

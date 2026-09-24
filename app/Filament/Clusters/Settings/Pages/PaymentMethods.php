@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Enums\PaymentMethod;
 use App\Support\Settings\PaymentSettings;
+use BackedEnum;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -30,6 +31,8 @@ use Filament\Support\Icons\Heroicon;
 class PaymentMethods extends SettingsPage
 {
     protected static string $group = PaymentSettings::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
     protected static ?int $navigationSort = 1;
 

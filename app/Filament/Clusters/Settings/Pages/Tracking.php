@@ -4,10 +4,12 @@ namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Enums\TrackingProvider;
 use App\Support\Settings\TrackingSettings;
+use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Icons\Heroicon;
 
 /**
  * What every Page reports unless it says otherwise, and whether the Merchant
@@ -25,6 +27,8 @@ use Filament\Schemas\Components\Section;
 class Tracking extends SettingsPage
 {
     protected static string $group = TrackingSettings::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     /** After the Destinations resource, which sorts 2: where events go, then which of them do. */
     protected static ?int $navigationSort = 3;

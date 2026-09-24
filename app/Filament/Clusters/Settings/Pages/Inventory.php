@@ -4,8 +4,10 @@ namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Support\Inventory\DaysOfCover;
 use App\Support\Settings\InventorySettings;
+use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Icons\Heroicon;
 
 /**
  * How much warning the Merchant wants before a shelf runs out.
@@ -23,6 +25,8 @@ use Filament\Schemas\Components\Section;
 class Inventory extends SettingsPage
 {
     protected static string $group = InventorySettings::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
     /** Last in the cluster, after Couriers at 4: the newest category of thing decided once. */
     protected static ?int $navigationSort = 5;
