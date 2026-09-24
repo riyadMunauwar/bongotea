@@ -8,6 +8,9 @@ use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\ListStockCounts;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\StockCountResource;
+use App\Filament\Clusters\Inventory\Resources\Suppliers\SupplierResource;
+use App\Filament\Clusters\Inventory\Resources\Supplies\Pages\ListSupplies;
+use App\Filament\Clusters\Inventory\Resources\Supplies\SupplyResource;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\Pages\ProductStockHistory;
 use App\Filament\Resources\Products\ProductResource;
@@ -515,6 +518,38 @@ it('reaches the history from the product a merchant is already looking at', func
     $this->get(ProductResource::getUrl('edit', ['record' => $product]))
         ->assertOk()
         ->assertSee(ProductResource::getUrl('stock', ['record' => $product]));
+});
+
+/*
+|--------------------------------------------------------------------------
+| The words a merchant reads
+|--------------------------------------------------------------------------
+*/
+
+it('shows the stock count resource to a merchant as Stock Adjustments', function () {
+    /** Filament label overrides only — the model, table and slug underneath are untouched. */
+    expect(StockCountResource::getNavigationLabel())->toBe('Stock Adjustments')
+        ->and(StockCountResource::getPluralModelLabel())->toBe('Stock Adjustments')
+        ->and(StockCountResource::getModelLabel())->toBe('Stock Adjustment');
+
+    /** And the plural reaches the User: the list screen titles itself in the merchant's word. */
+    Livewire::test(ListStockCounts::class)
+        ->assertSee('Stock Adjustments');
+});
+
+it('shows the supply resource to a merchant as Purchases', function () {
+    expect(SupplyResource::getNavigationLabel())->toBe('Purchases')
+        ->and(SupplyResource::getPluralModelLabel())->toBe('Purchases')
+        ->and(SupplyResource::getModelLabel())->toBe('Purchase');
+
+    Livewire::test(ListSupplies::class)
+        ->assertSee('Purchases');
+});
+
+it('leaves the cluster and the Suppliers resource named as they were', function () {
+    /** The relabel is two resources wide and no wider: the working area and where goods come from keep their names. */
+    expect(InventoryCluster::getClusterBreadcrumb())->toBe('Inventory')
+        ->and(SupplierResource::getNavigationLabel())->toBe('Suppliers');
 });
 
 it('takes one sidebar line, as a working area above reports and settings', function () {

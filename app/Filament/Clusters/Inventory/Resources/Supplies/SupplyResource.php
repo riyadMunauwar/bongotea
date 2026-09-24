@@ -37,6 +37,23 @@ class SupplyResource extends Resource
 {
     protected static ?string $model = Supply::class;
 
+    /**
+     * A merchant calls goods coming in a **Purchase**, so the sidebar, the list
+     * title and the record read **Purchases** / **Purchase**. A Filament label
+     * override and nothing more: the `Supply` model, the `supplies` table, the
+     * routes and the `supplies` slug underneath are untouched (#172).
+     *
+     * This label is a distinct sense from the tracking Moment **Purchase** (a
+     * sale reported to ad platforms, worth an Order's total). The glossary
+     * records the two so they are never conflated — this one is stock bought
+     * in, that one is a sale sent out.
+     */
+    protected static ?string $navigationLabel = 'Purchases';
+
+    protected static ?string $modelLabel = 'Purchase';
+
+    protected static ?string $pluralModelLabel = 'Purchases';
+
     /** Goods arriving: the tray a delivery lands in, against the lorry that takes parcels away. */
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxArrowDown;
 

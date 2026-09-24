@@ -34,6 +34,21 @@ class StockCountResource extends Resource
     protected static ?string $model = StockCount::class;
 
     /**
+     * A merchant does not reach for "Stock Count" — they reach for a stock
+     * adjustment. So the sidebar, the list title and the record read **Stock
+     * Adjustments** / **Stock Adjustment**, a Filament label override and
+     * nothing more: the model, the `stock_counts` table, the routes and the
+     * `stock-counts` slug underneath are untouched (#172). The domain term is
+     * still **Stock Count** — the glossary keeps it; only the merchant-facing
+     * word changed.
+     */
+    protected static ?string $navigationLabel = 'Stock Adjustments';
+
+    protected static ?string $modelLabel = 'Stock Adjustment';
+
+    protected static ?string $pluralModelLabel = 'Stock Adjustments';
+
+    /**
      * A clipboard with a list on it: somebody walking the shelves writing
      * numbers down, which is exactly what this records. Inventory carries the
      * sidebar entry and its own glyph; this is the tab inside it.

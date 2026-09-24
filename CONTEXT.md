@@ -265,8 +265,8 @@ _Avoid_: outstanding, receivable, pending COD, courier balance, float
 ### Stock
 
 **Supply**:
-Goods arriving from a Supplier, recorded as one document: who they came from, the day they came and the reference they can be found under, with a line per Product saying how many arrived and what each one cost — an Order and its Order Lines, read from the buying side. Recording one raises stock there and then; there is no separate receiving step to forget. Never a purchase: **Purchase** is the tracking Moment reported to ad platforms, worth an Order's total, and the word is not available for goods coming in — no label, no report and no figure about stock may use it.
-_Avoid_: purchase, purchase order, goods receipt, restock, intake
+Goods arriving from a Supplier, recorded as one document: who they came from, the day they came and the reference they can be found under, with a line per Product saying how many arrived and what each one cost — an Order and its Order Lines, read from the buying side. Recording one raises stock there and then; there is no separate receiving step to forget. **Supply** is the domain term and the model; a shop owner reaches for **Purchase**, so that is the word the Inventory admin wears — the Purchases resource is Supplies relabelled, with nothing underneath moved (#172). That merchant label is a **distinct sense** from the tracking Moment **Purchase**, which is a sale reported to ad platforms, worth an Order's total: this one is stock bought in, that one is a sale sent out, and the two are never conflated. The word carries the buying sense only where a merchant reads a stock screen — a tracking figure never counts a Supply, and no stock report borrows the Moment's sense.
+_Avoid_: purchase order, goods receipt, restock, intake — and never let the two senses of **purchase** blur: the buying label here, the tracking Moment elsewhere
 
 **Supplier**:
 Somebody the Merchant buys from, known by a name, a phone number and a note rather than by however somebody spelled it on the day, so that everything ever bought from one of them reads as one buying history. A Supplier is never a Customer: one is where goods come from and the other is where they go, and the two never overlap.
@@ -405,7 +405,7 @@ One configured place a Provider's events are sent: for Facebook, a dataset and t
 _Avoid_: pixel, account, connection, integration
 
 **Purchase**:
-Exactly one is counted per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales. It is sent twice — once from the Customer's browser and once from the server — and counted once, because both copies carry the order number as the deduplication id.
+Exactly one is counted per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales. It is sent twice — once from the Customer's browser and once from the server — and counted once, because both copies carry the order number as the deduplication id. Not the **Purchases** the Inventory admin shows: that label is a Supply — stock bought in — where this Moment is a sale sent out. The two share a word and nothing else (#172).
 _Avoid_: conversion, sale, transaction
 
 **Pixel**:
