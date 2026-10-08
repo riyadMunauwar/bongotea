@@ -51,6 +51,6 @@ Filament reads an undeclared `$navigationSort` as `-1`, not as "last". Every top
 
 The three clusters sit in the tens and hundreds rather than at 5, 6 and 7 so that a category arriving later has somewhere to go without renumbering the five resources above them. A *resource* still takes the next integer.
 
-Pages and resources inside a cluster are numbered separately and are not part of the top-level order — Settings holds General 0, Store 1, Announcement 2, Menus 3, Payment Methods 4, Destinations 5, Tracking 6, Couriers 7, Inventory 8, Users 9, Roles 10 (`StorefrontSettingsPagesTest` asserts it); Reports holds Courier Report 0, Stock Report 1, Buying Report 2; Inventory holds Stock Counts 0, Supplies 1, Suppliers 2. A cluster contributes one entry to the sidebar under its own label, so what is inside it never appears in the `AdminShellTest` list.
+Pages and resources inside a cluster are numbered separately and are not part of the top-level order — Settings holds General 0, Store 1, Announcement 2, Menus 3, Payment Methods 4, Destinations 5, Tracking 6, Couriers 7, SMS 8, Inventory 9, Users 10, Roles 11 (`StorefrontSettingsPagesTest` asserts it); Reports holds Courier Report 0, Stock Report 1, Buying Report 2; Inventory holds Stock Counts 0, Supplies 1, Suppliers 2. A cluster contributes one entry to the sidebar under its own label, so what is inside it never appears in the `AdminShellTest` list.
 
 The full reasoning, including why Pages uses the custom `giopages-funnel` icon rather than `Heroicon::OutlinedFunnel`, is in the AdminPanelProvider rules.

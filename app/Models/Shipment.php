@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Courier;
 use App\Enums\ShipmentStatus;
 use App\Observers\ShipmentObserver;
+use App\Observers\ShipmentTextObserver;
 use Database\Factories\ShipmentFactory;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -32,7 +33,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * said at the time is kept whole on the row, because a dispute months later
  * needs what was actually said rather than what was made of it.
  */
-#[ObservedBy(ShipmentObserver::class)]
+#[ObservedBy([ShipmentObserver::class, ShipmentTextObserver::class])]
 #[Fillable([
     'order_id',
     'courier',

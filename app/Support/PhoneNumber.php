@@ -57,6 +57,18 @@ class PhoneNumber
     }
 
     /**
+     * A number as an SMS Gateway takes it — the country code and the
+     * national digits, no `+` and no punctuation, so `8801712345678` — or
+     * null when what was given cannot be one.
+     */
+    public static function asInternational(string $number): ?string
+    {
+        $national = self::nationalDigits($number);
+
+        return $national === null ? null : self::settings()->phoneCountryCode.$national;
+    }
+
+    /**
      * Strip the number down to its national digits — no country code, no trunk
      * prefix, no punctuation — or null when the result is not a plausible
      * length.

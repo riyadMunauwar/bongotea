@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Observers\OrderObserver;
+use App\Observers\OrderTextObserver;
 use App\Support\Settings\PaymentSettings;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -29,7 +30,7 @@ use Spatie\Activitylog\Support\LogOptions;
  * and at what price. Every relation off this model is a reference for
  * context, never a source of truth for a figure.
  */
-#[ObservedBy(OrderObserver::class)]
+#[ObservedBy([OrderObserver::class, OrderTextObserver::class])]
 #[Fillable([
     'customer_id',
     'customer_name',

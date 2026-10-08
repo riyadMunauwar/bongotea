@@ -19,6 +19,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | routes/*.php, app/Http/Controllers/TrackingController.php, app/Http/Controllers/CourierController.php | .ai/rules/routes.md |
 | app/Support/Settings/**, app/Models/Setting.php, app/Filament/Clusters/Settings/**, app/Providers/Filament/AdminPanelProvider.php, app/Support/Reporting/** | .ai/rules/settings.md |
 | app/Filament/Resources/Shipments/** | .ai/rules/shipments.md |
+| app/Support/Sms/**, app/Enums/SmsGateway.php, app/Enums/OrderText.php, app/Support/Settings/SmsSettings.php, app/Observers/OrderTextObserver.php, app/Observers/ShipmentTextObserver.php, app/Filament/Clusters/Settings/Pages/Sms.php, tests/Fixtures/Sms/** | .ai/rules/sms.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
 | app/Filament/Clusters/Inventory/Resources/Supplies/**, app/Filament/Clusters/Inventory/Resources/Suppliers/** | .ai/rules/supplies.md |
 | tests/** | .ai/rules/tests.md |
