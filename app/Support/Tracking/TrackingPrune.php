@@ -27,11 +27,11 @@ use Illuminate\Database\Eloquent\Model;
  *
  * **The Visit aggregate is not touched, and there is nothing to roll up into
  * it first.** `VisitCounter` writes `visit_counts` at report time, one row per
- * Page per Merchant-day, so the figure already exists before this ever runs
- * and survives the rows below it being deleted. It is not derived from the
- * outbox and must never be: an outbox row exists only where a Destination
- * does, so a Page reporting nowhere would count nothing, and a Page reporting
- * two provider events for one load would count twice. Anything added here
+ * Merchant-day for the whole store, so the figure already exists before this
+ * ever runs and survives the rows below it being deleted. It is not derived
+ * from the outbox and must never be: an outbox row exists only where a
+ * Destination does, so a store reporting nowhere would count nothing, and one
+ * reporting two provider events for one load would count twice. Anything added here
  * that a figure is derived from must be derived **before** the delete that
  * removes it, in this same method — a prune that runs before its own rollup
  * loses a month of history and does it invisibly.

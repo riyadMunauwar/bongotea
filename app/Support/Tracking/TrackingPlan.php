@@ -80,13 +80,11 @@ final class TrackingPlan
     }
 
     /**
-     * Whether what the store reports may name what was bought.
-     *
-     * Always, for now: whether to withhold the basket becomes a store-wide
-     * Tracking setting of its own.
+     * Whether what the store reports may name what was bought, as the
+     * Tracking settings have it.
      */
     public function sendsContentDetail(): bool
     {
-        return true;
+        return $this->settings->namesProducts;
     }
 }

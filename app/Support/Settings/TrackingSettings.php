@@ -7,8 +7,8 @@ use App\Support\Tracking\EventSwitches;
 
 /**
  * What the store decides about tracking: which of each Provider's events
- * fire, whether every storefront load is counted as a Visit, and how hard the
- * beacon may be leaned on.
+ * fire, whether they name the Products bought, whether every storefront load
+ * is counted as a Visit, and how hard the beacon may be leaned on.
  *
  * Deliberately not here: anything about `user_data`. Meta computes match
  * quality per dataset, so a switch for it would be a Merchant quietly
@@ -57,6 +57,17 @@ class TrackingSettings extends SettingsGroup
      * Moment is worth having on its own.
      */
     public bool $countsVisits;
+
+    /**
+     * Whether what the store reports may name the Products bought.
+     *
+     * On by default, because an ad platform optimises on what sells. Off, an
+     * event still says what it was worth and how many items it held, and
+     * nothing about which teas they were. The answer is frozen onto each
+     * outbox row at Moment time, so switching this changes what is reported
+     * from then on and never what is already waiting.
+     */
+    public bool $namesProducts = true;
 
     public function __construct()
     {

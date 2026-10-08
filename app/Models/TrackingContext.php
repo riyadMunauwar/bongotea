@@ -105,7 +105,7 @@ class TrackingContext extends Model
     /**
      * What was kept for this Order at Capture, or nothing where the browser's
      * word was never worth keeping — an Order that reported at Capture, or
-     * one on a Page reporting nowhere at all.
+     * one captured while the store reported nowhere at all.
      */
     public static function forOrder(Order $order): self
     {
