@@ -5,6 +5,7 @@ use App\Enums\PaymentMethod;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CourierController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StorefrontHomeController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
@@ -12,6 +13,12 @@ use Illuminate\Support\Facades\Route;
 | The `web` group: session, cookies, PreventRequestForgery. Nothing here is
 | ever cached.
 */
+
+/*
+| The storefront: Inertia pages inside the shared header and footer.
+*/
+
+Route::get('/', StorefrontHomeController::class)->name('home');
 
 /*
 | The Order Complete Page, addressed by order number.

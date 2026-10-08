@@ -1,9 +1,159 @@
+/*
+ * The storefront's stylesheet. The admin panel has its own theme
+ * (`filament/admin/theme.css`) and shares nothing with this file.
+ *
+ * Every colour is a token from the design handoff's README
+ * (`docs/bongotea-html-ui-mockup/.../design_handoff_bongotea/README.md`),
+ * named as the README names it; the shadcn/ui variables are pointed at those
+ * tokens so a shadcn component draws in the store's colours. The handful of
+ * shades the mockup's markup uses without naming them in the README (the
+ * dark footer and top bar, the payment badges) are tokens too, under the
+ * names below, so no component writes a hex value of its own.
+ */
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+/* Anek Bangla, self-hosted: the only family, at the four weights the design uses. */
+@import '@fontsource/anek-bangla/400.css';
+@import '@fontsource/anek-bangla/500.css';
+@import '@fontsource/anek-bangla/600.css';
+@import '@fontsource/anek-bangla/700.css';
+
+@source '../views/app.blade.php';
+
+:root {
+    --radius: 10px;
+
+    /* README core colours */
+    --primary: #2e6b45;
+    --primary-dark: #1f4d31;
+    --ink: #16261d;
+    --muted: #5c6660;
+    --border: #e2e6e2;
+    --border-input: #d3d9d4;
+    --green-50: #edf3ee;
+    --green-25: #f7faf7;
+    --green-200: #a9c7b2;
+    --gold-accent: #d4ae76;
+    --gold-text: #9a6a2f;
+    --dark-panel: #1f3a2b;
+    --on-dark-sub: #c5d3c9;
+    --error: #f04438;
+    --disabled: #a7b1aa;
+    --page-bg: #ffffff;
+
+    /* shadcn/ui's names, pointed at the tokens above */
+    --background: var(--page-bg);
+    --foreground: var(--ink);
+    --primary-foreground: #ffffff;
+    --muted-foreground: var(--muted);
+    --accent: var(--green-50);
+    --accent-foreground: var(--primary-dark);
+    --input: var(--border-input);
+    --ring: var(--primary);
+    --destructive: var(--error);
+    --popover: #ffffff;
+    --popover-foreground: var(--ink);
+    --card: #ffffff;
+    --card-foreground: var(--ink);
+}
+
+@theme inline {
+    --font-sans: 'Anek Bangla', system-ui, sans-serif;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-primary: var(--primary);
+    --color-primary-dark: var(--primary-dark);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-ink: var(--ink);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-green-50: var(--green-50);
+    --color-green-25: var(--green-25);
+    --color-green-200: var(--green-200);
+    --color-gold-accent: var(--gold-accent);
+    --color-gold-text: var(--gold-text);
+    --color-dark-panel: var(--dark-panel);
+    --color-on-dark-sub: var(--on-dark-sub);
+    --color-error: var(--error);
+    --color-disabled: var(--disabled);
+
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) + 2px);
+}
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    /* The README's breakpoints: small phone, mobile layout, full nav (Tailwind's own lg). */
+    --breakpoint-sm: 37.5rem;
+    --breakpoint-md: 53.75rem;
+
+    /* Shades the mockup's markup uses beyond the README's table. */
+    --color-night: #12231a;
+    --color-night-raised: #1a3326;
+    --color-night-hover: #1f3b2d;
+    --color-night-text: #e2ebe4;
+    --color-night-muted: #a9bbae;
+    --color-night-faint: #8ea596;
+    --color-divider: #eef1ee;
+    --color-drawer-rule: #d3e2d7;
+    --color-drawer-text: #2e3d34;
+    --color-cart-badge: #c2410c;
+    --color-whatsapp: #25d366;
+    --color-bkash: #e2136e;
+    --color-nagad: #ec1c24;
+
+    /* The mockup's three shadows: the sticky header, a dropdown panel, the green pill button. */
+    --shadow-header: 0 1px 0 #e2e6e2, 0 4px 14px rgba(22, 38, 29, 0.05);
+    --shadow-dropdown: 0 12px 32px rgba(22, 38, 29, 0.12);
+    --shadow-pill: 0 4px 12px rgba(46, 107, 69, 0.3);
+}
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-background font-sans text-foreground antialiased;
+        margin: 0;
+    }
+
+    a {
+        color: var(--primary);
+    }
+
+    a:hover {
+        color: var(--primary-dark);
+    }
+
+    input,
+    textarea,
+    button {
+        font-family: inherit;
+    }
+
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+}
+
+/* The mockup's content column: 1240px wide with a side gutter that grows with the screen. */
+@utility shell-container {
+    max-width: 1240px;
+    margin-inline: auto;
+    padding-inline: clamp(16px, 4vw, 32px);
 }

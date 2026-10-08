@@ -12,6 +12,7 @@
         "ai-sdk-development",
         "laravel-best-practices",
         "testing-best-practices",
+        "inertia-react-development",
         "tailwindcss-development"
     ]
 }

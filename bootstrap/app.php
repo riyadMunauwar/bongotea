@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
          * route belongs.
          */
         $middleware->redirectGuestsTo(fn (): string => route('filament.admin.auth.login'));
+
+        $middleware->web(append: [
+            HandleInertiaRequests::class,
+        ]);
 
         /**
          * preventRequestForgery(originOnly: true) is deliberately NOT set.

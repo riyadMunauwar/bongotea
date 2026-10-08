@@ -33,12 +33,12 @@ class DestinationResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
 
     /**
-     * After the Settings pages, which sort 0 and 1. A resource left at
+     * After the Settings pages, which sort 0 to 4. A resource left at
      * Filament's default would sort ahead of them and the cluster's own URL
      * would open onto this rather than onto General, which is where a
      * Merchant expects Settings to start.
      */
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
 
     /**
      * "Tracking Destinations" in the sidebar, "Destination" on the record: the
