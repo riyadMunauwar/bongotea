@@ -20,10 +20,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * the token that writes to it, under a name the Merchant chose.
  *
  * A Merchant may hold several — separate brands, separate clients — and marks
- * one default per Provider, which is where a Page that has picked nothing
- * reports. The observer keeps that "exactly one" true and flushes every
- * cached Page whenever one is saved or deleted, because a Destination's
- * dataset is baked into the Pixel snippet a cached Page carries.
+ * one default per Provider, which is where the store reports. The observer
+ * keeps that "exactly one" true.
  *
  * Whether this Destination can actually be sent to is not asked here: it is
  * the Provider's answer, in one wording, through `refusal()`.
@@ -94,8 +92,8 @@ class Destination extends Model
     }
 
     /**
-     * Where a Page that has picked no Destination of its own reports: the one
-     * marked default for each Provider, switched on.
+     * Where the store reports: the one marked default for each Provider,
+     * switched on.
      *
      * @param  Builder<Destination>  $query
      */

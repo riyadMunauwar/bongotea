@@ -17,10 +17,10 @@ use Filament\Support\Contracts\HasLabel;
  */
 enum TrackingMoment: string implements HasLabel
 {
-    /** One load of a published Page. */
+    /** One load of a storefront page. */
     case Visit = 'visit';
 
-    /** A visitor touching a Checkout Field for the first time on a page load. */
+    /** A visitor starting the checkout. */
     case CheckoutStarted = 'checkout_started';
 
     /** A visitor submitted the Checkout and an Order came into existence. */

@@ -171,9 +171,9 @@ class UserFactory extends Factory
 
     /**
      * A User who authors Pages: one holding a Role that carries the Permission
-     * the Pages resource is gated by. Enough to open the list, write and
-     * preview a Page, publish it and pull it back to draft — but not to bin
-     * one, which is held back behind `delete pages`.
+     * the Pages resource is gated by. Enough to open the list, write a Page,
+     * publish it and pull it back to draft — but not to delete one, which is
+     * held back behind `delete pages`.
      */
     public function authoringPages(): static
     {
@@ -181,9 +181,9 @@ class UserFactory extends Factory
     }
 
     /**
-     * A User who may also bin a Page: they author Pages and hold `delete pages`
-     * on top, since deleting, force-deleting and restoring are offered from the
-     * Pages screens only a User who authors can reach. What they may do is the
+     * A User who may also delete a Page: they author Pages and hold
+     * `delete pages` on top, since deleting is offered from the Pages screens
+     * only a User who authors can reach. What they may do is the
      * union of both, carried on one Role here (ADR-0025).
      */
     public function deletingPages(): static

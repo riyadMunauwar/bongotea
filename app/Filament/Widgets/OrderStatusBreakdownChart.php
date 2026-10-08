@@ -4,7 +4,6 @@ namespace App\Filament\Widgets;
 
 use App\Enums\OrderStatus;
 use App\Enums\Permission;
-use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\ReportingWindow;
 use Filament\Support\RawJs;
@@ -12,7 +11,7 @@ use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 
 /**
- * The Order status breakdown, half width under the leaderboard: a doughnut
+ * The Order status breakdown, half width: a doughnut
  * of New, Confirmed and Cancelled over the Reporting Window, so a Merchant
  * can see how much of the window is still undecided. Each slice is drawn
  * in the colour the status badge wears in the queue, so the chart and the
@@ -22,17 +21,11 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
  * here counts. A window with no Orders draws an empty ring rather than an
  * error.
  *
- * One class in both places it is drawn: the whole installation on the
- * Dashboard, and one Page on that Page's Report, which is the record
- * `ScopedToPage` hands to the module — nothing else here changes, so a Page
- * whose Orders are all still New simply draws one arc.
- *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class OrderStatusBreakdownChart extends ChartWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
-    use ScopedToPage;
 
     /**
      * The slice colours, one per status in the order the ring is drawn:
@@ -52,8 +45,7 @@ class OrderStatusBreakdownChart extends ChartWidget implements GatedOnDashboard
 
     /**
      * A Merchant's figure, drawn on the Dashboard behind `view reports`
-     * (#161). Inert wherever a screen names this widget itself: it is one of
-     * the six the Page Report shares, and that screen names its own.
+     * (#161).
      */
     public static function dashboardPermission(): Permission
     {
@@ -74,7 +66,7 @@ class OrderStatusBreakdownChart extends ChartWidget implements GatedOnDashboard
      */
     protected function getData(): array
     {
-        $breakdown = app(ReportingQuery::class)->statusBreakdown(ReportingWindow::fromFilters($this->pageFilters), $this->record);
+        $breakdown = app(ReportingQuery::class)->statusBreakdown(ReportingWindow::fromFilters($this->pageFilters));
         $statuses = OrderStatus::cases();
 
         return [

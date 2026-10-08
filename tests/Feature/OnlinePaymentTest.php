@@ -4,10 +4,9 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Models\Order;
-use App\Models\Page;
 use App\Models\Payment;
-use App\Support\Checkout\CheckoutConfig;
 use App\Support\Orders\OrderOwnership;
+use App\Support\Payments\PaymentStarter;
 use App\Support\Settings\PaymentSettings;
 use Illuminate\Support\Facades\Http;
 use Spatie\Activitylog\Models\Activity;
@@ -15,37 +14,17 @@ use Tests\Fixtures\Payments\GatewayScript;
 use Tests\Fixtures\Payments\SslCommerzScript;
 
 /**
- * The road every gateway walks — the dataset, the Page offering it, the
- * Capture and the addresses — lives in `tests/Pest.php` and
- * `tests/Datasets/OnlineGateways.php`, shared with the Notification and sweep
- * tests, which walk the same road from the other end.
+ * The road every gateway walks — the dataset, the Capture and the addresses —
+ * lives in `tests/Pest.php` and `tests/Datasets/OnlineGateways.php`, shared
+ * with the Notification and sweep tests, which walk the same road from the
+ * other end.
  */
-
-/**
- * The same Page asking for a phone and nothing else, its payment section
- * carried through untouched.
- */
-function askingOnlyForPhone(Page $page): Page
-{
-    $page->update(['checkout_config' => CheckoutConfig::fromArray([
-        ...$page->checkout_config->toArray(),
-        'fields' => array_map(
-            fn (array $field): array => $field['key'] === 'phone' ? $field : [...$field, 'enabled' => false],
-            $page->checkout_config->fieldsToArray(),
-        ),
-    ])]);
-
-    return $page->refresh();
-}
-
-it('captures the order, starts a pending payment for its total, and sends the customer to the gateway', function (GatewayScript $gateway) {
+it('starts a pending payment for the order total, and sends the customer to the gateway', function (GatewayScript $gateway) {
     $gateway->fakeStart();
 
-    $page = pageOffering($gateway);
-
-    $response = $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => $gateway->method()->value]))
-        ->assertCreated()
-        ->assertJsonPath('redirect', $gateway->gatewayPageUrl());
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect($gateway->gatewayPageUrl());
 
     $order = Order::sole();
     $payment = Payment::sole();
@@ -68,18 +47,15 @@ it('captures the order, starts a pending payment for its total, and sends the cu
 
     /** The mandatory fields were filled from the Order, and every way back is the Processing Page addressed by our reference. */
     $gateway->assertStartedFor($payment, processingUrl($payment), notificationUrl($payment));
-
-    /** The ownership cookie is handed over here, before the browser leaves for the gateway (ADR-0014). */
-    $response->assertCookie(OrderOwnership::COOKIE, json_encode([$order->order_number]));
 })->with('online gateways');
 
 it('lands the browser that ordered on the full page after the gateway sends it back with no cookies', function (GatewayScript $gateway) {
     $gateway->fakeStart();
 
-    $capture = $this->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
-        ->assertCreated();
-    $ownership = $capture->getCookie(OrderOwnership::COOKIE)->getValue();
+    payingOnline($gateway)->assertRedirect($gateway->gatewayPageUrl());
+
     $payment = Payment::sole();
+    $ownership = (string) json_encode([$payment->order->order_number]);
 
     /** The return is a cross-site POST carrying nothing: no session, no cookie of ours. */
     $this->post(processingUrl($payment), $gateway->paidReturn($payment))->assertOk();
@@ -90,7 +66,7 @@ it('lands the browser that ordered on the full page after the gateway sends it b
         ->assertOk()
         ->assertJsonPath('redirect', route('checkout.order-complete', $payment->order->order_number));
 
-    /** The same-origin visit that follows carries what Capture handed over, and that is what unlocks the Customer. */
+    /** The same-origin visit that follows carries what the placing browser holds, and that is what unlocks the Customer. */
     $this->withCookie(OrderOwnership::COOKIE, $ownership)
         ->get(route('checkout.order-complete', $payment->order->order_number))
         ->assertOk()
@@ -100,28 +76,11 @@ it('lands the browser that ordered on the full page after the gateway sends it b
         ->assertSee('01712345678');
 })->with('online gateways');
 
-it('answers a plain form post with a 303 to the gateway', function (GatewayScript $gateway) {
+it('fills fixed placeholders for the details the order does not hold, rather than asking for the gateway', function (GatewayScript $gateway) {
     $gateway->fakeStart();
 
-    $this->post(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
-        ->assertStatus(303)
-        ->assertRedirect($gateway->gatewayPageUrl());
-
-    expect(Payment::sole()->state)->toBe(PaymentState::Pending);
-})->with('online gateways');
-
-it('fills fixed placeholders for the fields the checkout did not ask, rather than asking for the gateway\'s sake', function (GatewayScript $gateway) {
-    $gateway->fakeStart();
-
-    $page = pageOffering($gateway);
-
-    /** A checkout asking for a phone and nothing else. */
-    $this->postJson(route('checkout.store'), capturePayload(askingOnlyForPhone($page), [
-        'payment_method' => $gateway->method()->value,
-        'name' => null,
-        'address' => null,
-        'district' => null,
-    ]))->assertCreated();
+    /** An Order holding a phone and a District and nothing else. */
+    payingOnline($gateway, ['name' => null, 'address' => null])->assertRedirect();
 
     $order = Order::sole();
 
@@ -135,11 +94,9 @@ it('fills fixed placeholders for the fields the checkout did not ask, rather tha
 it('marks the payment failed and lands on the retry page with the order kept when the gateway cannot be reached at capture', function (GatewayScript $gateway) {
     $gateway->fakeOutage();
 
-    $page = pageOffering($gateway);
-
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => $gateway->method()->value]))
-        ->assertCreated()
-        ->assertJsonPath('redirect', route('checkout.retry', Order::sole()->order_number));
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect(route('checkout.retry', Order::sole()->order_number));
 
     $payment = Payment::sole();
 
@@ -154,7 +111,7 @@ it('marks the payment failed and lands on the retry page with the order kept whe
 it('marks the payment failed and lands on the retry page when the gateway refuses to start it', function (GatewayScript $gateway) {
     $gateway->fakeStartRefused();
 
-    $this->post(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
+    payingOnline($gateway)
         ->assertStatus(303)
         ->assertRedirect(route('checkout.retry', Order::sole()->order_number));
 
@@ -212,7 +169,7 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
     /** An online Order's figure is a total, not something to pay at the door; and the page shows the Order, never the Customer. */
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
-        ->assertSee('Your order is confirmed')
+        ->assertSee('Order placed')
         ->assertSee('Paid')
         ->assertSee($gateway->method()->getLabel())
         ->assertSee('Total')
@@ -380,17 +337,16 @@ it('switches to cash on delivery from the retry page without starting a payment'
         ->and($payment->order->refresh()->isUnpaid())->toBeFalse();
 })->with('online gateways');
 
-it('starts no payment and calls no gateway for a method the page lists but can no longer offer', function (GatewayScript $gateway) {
+it('starts no payment and calls no gateway for a method the store has since switched off', function (GatewayScript $gateway) {
     Http::fake();
 
-    $page = pageOffering($gateway);
-    $payload = capturePayload($page, ['payment_method' => $gateway->method()->value]);
+    $gateway->makeUsable();
+    $order = orderAsCaptured(['payment_method' => $gateway->method()]);
 
     app(PaymentSettings::class)->with([PaymentSettings::property($gateway->method(), 'Enabled') => false])->save();
 
-    $this->postJson(route('checkout.store'), $payload)
-        ->assertCreated()
-        ->assertJsonPath('redirect', route('checkout.retry', Order::sole()->order_number));
+    expect(app(PaymentStarter::class)->start($order))->toBeNull()
+        ->and($order->followingPageUrl())->toBe(route('checkout.retry', $order->order_number));
 
     Http::assertNothingSent();
 
@@ -446,13 +402,13 @@ it('goes to the live host once the sandbox switch is off', function () {
         'GatewayPageURL' => 'https://securepay.sslcommerz.com/EasyCheckOut/testcdeLIVEKEY',
     ])]);
 
-    $page = pageOffering($gateway);
+    $gateway->makeUsable();
 
     app(PaymentSettings::class)->with(['sslcommerzSandbox' => false])->save();
 
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'sslcommerz']))
-        ->assertCreated()
-        ->assertJsonPath('redirect', 'https://securepay.sslcommerz.com/EasyCheckOut/testcdeLIVEKEY');
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect('https://securepay.sslcommerz.com/EasyCheckOut/testcdeLIVEKEY');
 
     Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'));
 });

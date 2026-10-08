@@ -1,10 +1,8 @@
 <?php
 
 use App\Models\Customer;
-use App\Models\Order;
-use App\Models\Page;
-use App\Models\Product;
 use App\Models\Setting;
+use App\Support\PhoneNumber;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\SettingsGroup;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +22,6 @@ it('answers every general setting from config when nothing has been saved', func
         ->and($general->phoneTrunkPrefix)->toBe((string) config('giopages.phone.trunk_prefix'))
         ->and($general->phoneNationalLengthMin)->toBe((int) config('giopages.phone.national_length.min'))
         ->and($general->phoneNationalLengthMax)->toBe((int) config('giopages.phone.national_length.max'))
-        ->and($general->deliveryCharge)->toBe((float) config('giopages.delivery.charge'))
         ->and($general->checkoutMaxQuantity)->toBe((int) config('giopages.checkout.max_quantity'))
         ->and($general->checkoutRateLimit)->toBe((int) config('giopages.checkout.rate_limit'));
 });
@@ -73,15 +70,14 @@ it('reads a null in the row as the empty value of the property, never as an erro
      */
     Setting::query()->create([
         'key' => GeneralSettings::key(),
-        'value' => ['currencySymbol' => null, 'phoneTrunkPrefix' => null, 'checkoutMaxQuantity' => null, 'deliveryCharge' => null],
+        'value' => ['currencySymbol' => null, 'phoneTrunkPrefix' => null, 'checkoutMaxQuantity' => null],
     ]);
 
     $general = app(GeneralSettings::class);
 
     expect($general->currencySymbol)->toBe('')
         ->and($general->phoneTrunkPrefix)->toBe('')
-        ->and($general->checkoutMaxQuantity)->toBe(0)
-        ->and($general->deliveryCharge)->toBe(0.0);
+        ->and($general->checkoutMaxQuantity)->toBe(0);
 });
 
 it('queries a group once per request, and not at all when nothing asks for it', function () {
@@ -129,31 +125,7 @@ it('keeps a secret property out of the row in plain text and hands it back whole
     expect($group::load()->apiKey)->toBe('sk_live_very_secret');
 });
 
-it('shows a customer prices in the currency the merchant saved, even on a page already cached', function () {
-    sellingPage(Product::factory()->create(['price' => 99000]));
-
-    $this->get('/promo')->assertOk()->assertSee('data-currency-symbol="৳"', escape: false);
-
-    /** The symbol is baked into the cached file, so the save has to be what throws it away. */
-    expect($this->cache->has('promo'))->toBeTrue();
-
-    $general = app(GeneralSettings::class);
-    $general->currencySymbol = '$';
-    $general->currencyDecimals = 0;
-    $general->save();
-
-    expect($this->cache->has('promo'))->toBeFalse();
-
-    $this->get('/promo')
-        ->assertOk()
-        ->assertSee('data-currency-symbol="$"', escape: false)
-        ->assertSee('data-currency-decimals="0"', escape: false)
-        ->assertDontSee('data-currency-symbol="৳"', escape: false);
-});
-
-it('validates a customer phone number by the rules the merchant saved', function () {
-    $page = sellingPage(Product::factory()->create());
-
+it('reads and stores a customer phone number by the rules the merchant saved', function () {
     $general = app(GeneralSettings::class);
     $general->phoneCountryCode = '44';
     $general->phoneTrunkPrefix = '0';
@@ -161,54 +133,23 @@ it('validates a customer phone number by the rules the merchant saved', function
     $general->phoneNationalLengthMax = 10;
     $general->save();
 
-    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '07700 900123']))->assertCreated();
+    orderAsCaptured(['phone' => '07700 900123']);
 
     /** Ten digits was fine in Bangladesh; the row now says the country is the United Kingdom. */
-    $this->postJson(route('checkout.store'), capturePayload($page, ['phone' => '+880 1712 345678']))
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['phone']);
-
-    expect(Customer::sole()->phone)->toBe('+447700900123')
-        ->and(Order::count())->toBe(1);
+    expect(PhoneNumber::isValid('+880 1712 345678'))->toBeFalse()
+        ->and(Customer::sole()->phone)->toBe('+447700900123');
 });
 
-it('caps a quantity at the ceiling the merchant saved', function () {
-    $page = sellingPage(Product::factory()->create());
-
-    $general = app(GeneralSettings::class);
-    $general->checkoutMaxQuantity = 2;
-    $general->save();
-
-    $this->get('/promo')->assertOk()->assertSee('max="2"', escape: false);
-
-    $this->postJson(route('checkout.store'), capturePayload($page, [
-        'quantities' => [$page->products->sole()->getKey() => 3],
-    ]))->assertUnprocessable();
-});
-
-it('turns away a flood of captures at the rate the merchant saved', function () {
-    $page = sellingPage(Product::factory()->create());
-
+it('turns away a flood of checkout choices at the rate the merchant saved', function () {
     $general = app(GeneralSettings::class);
     $general->checkoutRateLimit = 1;
     $general->save();
 
-    $this->postJson(route('checkout.store'), capturePayload($page))->assertCreated();
+    $order = orderAsCaptured();
 
-    $this->postJson(route('checkout.store'), capturePayload($page))->assertTooManyRequests();
+    $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => 'cash_on_delivery'])->assertRedirect();
 
-    expect(Order::count())->toBe(1);
-});
-
-it('seeds a new page with the delivery charge the merchant saved', function () {
-    $general = app(GeneralSettings::class);
-    $general->deliveryCharge = 120;
-    $general->save();
-
-    $page = Page::factory()->create();
-
-    expect($page->checkout_config->deliveryOptionsToArray())
-        ->toBe([['label' => 'Delivery', 'amount' => 12000]]);
+    $this->post(route('checkout.retry.choose', $order->order_number), ['payment_method' => 'cash_on_delivery'])->assertTooManyRequests();
 });
 
 it('defaults the timezone to the config key, which itself defaults to Dhaka', function () {

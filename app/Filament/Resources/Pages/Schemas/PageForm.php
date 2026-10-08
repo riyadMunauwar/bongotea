@@ -3,19 +3,9 @@
 namespace App\Filament\Resources\Pages\Schemas;
 
 use App\Enums\PageStatus;
-use App\Filament\Resources\Pages\Schemas\Checkout\CheckoutTab;
-use App\Filament\Resources\Pages\Schemas\OrderComplete\OrderCompleteTab;
-use App\Filament\Resources\Pages\Schemas\Tracking\TrackingTab;
-use App\Shortcodes\PageBodyValidator;
-use Closure;
-use Filament\Forms\Components\CodeEditor;
-use Filament\Forms\Components\CodeEditor\Enums\Language;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -25,132 +15,35 @@ class PageForm
 {
     public static function configure(Schema $schema): Schema
     {
-        /**
-         * Five columns, not the two the resource hands out: the authoring tabs
-         * take four and Publishing takes the fifth, so the sidebar runs the
-         * full height beside whichever tab is open. Every Tab and Section
-         * states its own columns because the default is invisible in the PHP —
-         * see .ai/rules/resources.md.
-         */
         return $schema
-            ->columns(5)
             ->components([
-                Tabs::make()
-                    ->columnSpan(4)
-                    ->tabs([
-                        Tab::make('Page')
-                            ->columns(1)
-                            ->schema([
-                                TextInput::make('title')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->helperText('An admin label only. The document\'s own <title> is what a visitor and Facebook see.')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
-                                        if (blank($get('slug')) && filled($state)) {
-                                            $set('slug', Str::slug($state));
-                                        }
-                                    }),
-
-                                /**
-                                 * Filament's unique rule queries the raw table, so a
-                                 * soft-deleted page still holds its slug — which is the
-                                 * intent: a slug that was ever live is baked into ad
-                                 * creatives and must never be reissued.
-                                 */
-                                TextInput::make('slug')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->unique(ignoreRecord: true)
-                                    ->rule('regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/')
-                                    ->prefix(url('/').'/')
-                                    ->helperText('Flat, lowercase, hyphen-separated. A slug stays claimed even after the page is deleted.'),
-
-                                CodeEditor::make('body')
-                                    ->language(Language::Html)
-                                    ->required()
-                                    ->columnSpanFull()
-                                    ->helperText('A complete HTML document. Nothing is wrapped around it and no stylesheet of ours is injected. Write [checkout] where the order form should appear. The only thing added to what you paste is the tracking snippet, where this Page reports to a Destination.'),
-                            ]),
-
-                        /**
-                         * Everything the checkout decides, one schema class per
-                         * concern. Kept whole in its own namespace so that a
-                         * ticket touching the questions edits a small file
-                         * rather than a block in the middle of this one.
-                         */
-                        CheckoutTab::make(),
-
-                        /**
-                         * Where the Customer lands once the Order is
-                         * placed: a second thing a Page decides, so a
-                         * tab beside Checkout rather than inside it.
-                         */
-                        OrderCompleteTab::make(),
-
-                        /**
-                         * Where this Page reports and what it
-                         * reports there: a fourth thing a Page
-                         * decides, beside what it sells and what
-                         * it says afterwards.
-                         */
-                        TrackingTab::make(),
-                    ]),
-
-                Section::make('Publishing')
-                    ->columnSpan(1)
-                    ->columns(1)
+                Section::make('Page')
+                    ->columnSpanFull()
+                    ->columns(2)
                     ->schema([
+                        TextInput::make('title')
+                            ->required()
+                            ->maxLength(255)
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
+                                if (blank($get('slug')) && filled($state)) {
+                                    $set('slug', Str::slug($state));
+                                }
+                            }),
+
+                        TextInput::make('slug')
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(ignoreRecord: true)
+                            ->rule('regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/')
+                            ->prefix(url('/').'/')
+                            ->helperText('Flat, lowercase, hyphen-separated.'),
+
                         Select::make('status')
                             ->options(PageStatus::class)
                             ->default(PageStatus::Draft->value)
                             ->required()
-                            ->live()
-                            ->helperText('Only a published page is reachable at its slug.')
-                            ->rules([
-                                /**
-                                 * Why this page cannot go live is asked and answered in
-                                 * the same place. The body and the linked products sit
-                                 * in different tabs, so an error raised on either is
-                                 * invisible from the other; this sidebar is on screen
-                                 * whichever tab is open.
-                                 *
-                                 * Publishing is what puts a Page in front of paid
-                                 * traffic, so that is where the linter blocks. A draft
-                                 * may hold a half-written shortcode.
-                                 */
-                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                    /**
-                                     * The status arrives as a raw string on create and as
-                                     * a cast enum on edit, so neither comparison is safe
-                                     * on its own.
-                                     */
-                                    $status = $value instanceof PageStatus
-                                        ? $value
-                                        : PageStatus::tryFrom((string) $value);
-
-                                    if ($status !== PageStatus::Published) {
-                                        return;
-                                    }
-
-                                    /** Get resolves against the whole schema, so a tab is no barrier. */
-                                    $errors = app(PageBodyValidator::class)
-                                        ->errors((string) $get('body'), count($get('products') ?? []));
-
-                                    foreach ($errors as $error) {
-                                        $fail($error);
-                                    }
-                                },
-                            ]),
-
-                        /**
-                         * Filled automatically the first time a Page is published
-                         * (see PageObserver) and never overwritten, so what is
-                         * typed here survives.
-                         */
-                        DateTimePicker::make('published_at')
-                            ->label('Published at')
-                            ->seconds(false),
+                            ->helperText('Only a published page is reachable at its slug.'),
                     ]),
             ]);
     }

@@ -5,7 +5,6 @@ namespace App\Support\Tracking;
 use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
-use App\Models\Page;
 use App\Models\Payment;
 use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
@@ -32,8 +31,8 @@ class MomentRecorder
     ) {}
 
     /**
-     * A Moment the browser is the only witness to: a Page was loaded, or a
-     * visitor started filling in its Checkout.
+     * A Moment the browser is the only witness to: a storefront page was
+     * loaded, or a visitor started the checkout.
      *
      * The deduplication id is the browser's own, made up for that page load
      * and carried here by the beacon, because the copy the Pixel fired
@@ -42,13 +41,11 @@ class MomentRecorder
      * unique index doing its job, and two loads are two Visits under two
      * identifiers.
      *
-     * No outbox row at all where the Page reports nowhere — which is also what
-     * makes the beacon free on a Page nobody is tracking, since no such Page
-     * carries one unless the Merchant is counting Visits.
+     * No outbox row at all where the store reports nowhere.
      *
      * The Merchant's own Visit figure is taken first and separately, because
-     * it owes nothing to any ad platform: a Page with no Destination anywhere
-     * still counts its loads while counting is on, and a Page whose `PageView`
+     * it owes nothing to any ad platform: a store with no Destination anywhere
+     * still counts its loads while counting is on, and a store whose `PageView`
      * is switched off still counts them too. That is what keeps the Moment
      * seam honest rather than decorative — if a Visit existed only to feed a
      * Provider's event, the first platform added would bend it.
@@ -56,26 +53,24 @@ class MomentRecorder
      * What was being bought comes in from the caller rather than from an
      * Order, because a visitor who has started filling the Checkout has not
      * placed one yet. It is frozen onto the row for the reason the content
-     * detail is: the sweep runs later, and the Page may be repriced or in the
-     * bin by then. A Page load is about no Products at all and carries none.
+     * detail is: the sweep runs later, and a Product may be repriced or in the
+     * bin by then. A page load is about no Products at all and carries none.
      */
     public function reportedByBrowser(
-        Page $page,
         TrackingMoment $moment,
         string $deduplicationId,
         TrackingContext $context,
         ?Selection $selection = null,
     ): void {
         if ($moment === TrackingMoment::Visit) {
-            $this->visits->count($page);
+            $this->visits->count();
         }
 
         $this->record(
-            $this->plans->forPage($page),
+            $this->plans->current(),
             $moment,
             deduplicationId: $deduplicationId,
             occurredAt: Carbon::now(),
-            page: $page,
             order: null,
             context: $context,
             selection: $selection,
@@ -96,7 +91,7 @@ class MomentRecorder
      */
     public function captured(Order $order, TrackingContext $context): void
     {
-        $plan = $this->plans->forPage($order->page);
+        $plan = $this->plans->current();
 
         /** Nowhere to report to is nothing to report, and nothing worth keeping an IP address for. */
         if ($plan->reportsNowhere()) {
@@ -126,7 +121,6 @@ class MomentRecorder
             TrackingMoment::Capture,
             deduplicationId: $order->order_number,
             occurredAt: $order->created_at ?? Carbon::now(),
-            page: $order->page,
             order: $order,
             context: $context,
         );
@@ -155,11 +149,10 @@ class MomentRecorder
         }
 
         $this->record(
-            $this->plans->forPage($order->page),
+            $this->plans->current(),
             TrackingMoment::Paid,
             deduplicationId: $order->order_number,
             occurredAt: $payment->verified_at ?? Carbon::now(),
-            page: $order->page,
             order: $order,
             context: TrackingContext::forOrder($order),
         );
@@ -181,7 +174,7 @@ class MomentRecorder
 
     /**
      * One row per applicable Destination per event that Destination's
-     * Provider produces for this Moment — less the events this Page does not
+     * Provider produces for this Moment — less the events the store does not
      * report, which the Plan takes off the list.
      *
      * The deduplication id is what the browser copy of the same event will
@@ -194,14 +187,13 @@ class MomentRecorder
         TrackingMoment $moment,
         string $deduplicationId,
         Carbon $occurredAt,
-        ?Page $page,
         ?Order $order,
         TrackingContext $context,
         ?Selection $selection = null,
     ): void {
         foreach ($plan->destinations() as $destination) {
             foreach ($plan->eventsFor($destination, $moment) as $event) {
-                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $page, $order, $context, $plan->sendsContentDetail(), $selection);
+                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $order, $context, $plan->sendsContentDetail(), $selection);
             }
         }
     }
@@ -212,7 +204,6 @@ class MomentRecorder
         string $event,
         string $deduplicationId,
         Carbon $occurredAt,
-        ?Page $page,
         ?Order $order,
         TrackingContext $context,
         bool $contentDetail,
@@ -227,11 +218,6 @@ class MomentRecorder
             [
                 'moment' => $moment,
                 'occurred_at' => $occurredAt,
-                'page_id' => $page?->getKey(),
-
-                /** The attribution that survives the Page being renamed or deleted, as an Order keeps its own. */
-                'page_slug' => $page?->slug ?? $order?->page_slug,
-
                 'order_id' => $order?->getKey(),
                 'source_url' => $context->source_url,
                 'ip_address' => $context->ip_address,
@@ -241,8 +227,8 @@ class MomentRecorder
                 /**
                  * Frozen here rather than read back at delivery: the sweep
                  * runs minutes or hours later, hands a driver the row and the
-                 * Order it points at, and the Page that decided this may be
-                 * in the bin by then.
+                 * Order it points at, and the setting that decided this may
+                 * have changed by then.
                  */
                 'content_detail' => $contentDetail,
 

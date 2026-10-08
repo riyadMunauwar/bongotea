@@ -28,7 +28,7 @@ class DestinationForm
                     ->columns(2)
                     ->schema([
                         TextInput::make('label')
-                            ->helperText('Your own name for it, so you can tell it apart when a Page picks one.')
+                            ->helperText('Your own name for it, so you can tell it apart from the others.')
                             ->required()
                             ->maxLength(255),
 
@@ -73,7 +73,7 @@ class DestinationForm
 
                         Toggle::make('is_default')
                             ->label('Default for this provider')
-                            ->helperText('Where a Page that has not picked a Destination reports. Marking this unmarks the current default.')
+                            ->helperText('Where the store reports for this provider. Marking this unmarks the current default.')
                             ->default(false),
                     ]),
             ]);

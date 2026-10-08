@@ -4,7 +4,7 @@
     Ours like the Order Complete Page, and never cached: addressed per order and
     read while the customer decides. It shows the Order and not the Customer,
     for the reason the Order Complete Page does — this URL is a bearer handle that
-    ends up in history and in a gateway's logs — and it draws the Page's
+    ends up in history and in a gateway's logs — and it draws the store's
     Payment Methods again, so the customer finishes without re-typing a thing.
 
     A plain form with a real action: a customer whose script never runs can
@@ -19,7 +19,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Order {{ $order->order_number }} is unpaid</title>
 {{--
-    The Pixel, where the Page reports to a Destination: the base code and the
+    The Pixel, where the store reports to a Destination: the base code and the
     load of this page, and no Purchase — nothing has been bought here yet.
 --}}
 @if ($snippet !== '')
@@ -105,10 +105,10 @@
         </div>
 
         {{--
-            The Page's methods as it offers them now, the Order's own method
+            The store's methods as it takes them now, the Order's own method
             picked where it is still among them so a customer retrying the
             same one needs no extra tap, else the first. The server refuses a
-            name the Page does not offer.
+            name the store does not take.
         --}}
         <form method="post" action="{{ route('checkout.retry.choose', $order->order_number) }}">
             @csrf

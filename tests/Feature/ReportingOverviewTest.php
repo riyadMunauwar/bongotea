@@ -2,7 +2,6 @@
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
-use App\Models\Page;
 use App\Models\Payment;
 use App\Support\Reporting\Overview;
 use App\Support\Reporting\ReportingPreset;
@@ -18,9 +17,9 @@ use Carbon\CarbonImmutable;
 | tests/Pest.php, shared with the other module tests.
 */
 
-function overviewOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): Overview
+function overviewOf(ReportingPreset $preset = ReportingPreset::Last7Days): Overview
 {
-    return app(ReportingQuery::class)->overview(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->overview(ReportingWindow::of($preset, reportingNow()));
 }
 
 it('counts every Order in the window whatever its status, and sums Sales over the ones not Cancelled, Delivery Charge included', function () {
@@ -110,17 +109,6 @@ it('carries the comparison window figures, counted the same way over the span be
         ->and($overview->comparison->orders)->toBe(2)
         ->and($overview->comparison->cancelled)->toBe(1)
         ->and($overview->comparison->sales)->toBe(16000);
-});
-
-it('scopes to a Page when given one, leaving other Pages\' Orders out', function () {
-    $page = Page::factory()->create();
-    orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id]);
-    orderCapturedAt('2026-09-05 13:00', attributes: ['page_id' => $page->id]);
-    orderCapturedAt('2026-09-05 14:00');
-
-    expect(overviewOf(page: $page)->figures->orders)->toBe(2)
-        ->and(overviewOf()->figures->orders)->toBe(3)
-        ->and($page->orders()->count())->toBe(2);
 });
 
 it('cuts the day at the Merchant\'s midnight, so an Order at 23:30 Dhaka is yesterday and one at 00:30 is today', function () {

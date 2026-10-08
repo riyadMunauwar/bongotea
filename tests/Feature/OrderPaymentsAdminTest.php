@@ -428,8 +428,7 @@ it('records every payment outcome on the order\'s trail, whoever verified it', f
 it('records a payment that could not be started as failed on the trail', function (GatewayScript $gateway) {
     $gateway->fakeOutage();
 
-    $this->postJson(route('checkout.store'), capturePayload(pageOffering($gateway), ['payment_method' => $gateway->method()->value]))
-        ->assertCreated();
+    payingOnline($gateway)->assertRedirect();
 
     $order = Order::sole();
 

@@ -44,8 +44,8 @@ class TrackingContext extends Model
     use HasFactory;
 
     /**
-     * What the Checkout names the bag of click identifiers its island fills
-     * in from the browser just before it submits.
+     * What a request names the bag of click identifiers the browser fills in
+     * just before it submits.
      */
     public const CLICK_IDS_FIELD = 'click_ids';
 

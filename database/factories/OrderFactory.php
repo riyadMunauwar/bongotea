@@ -6,7 +6,6 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\Page;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,16 +18,14 @@ class OrderFactory extends Factory
      */
     public function definition(): array
     {
-        $page = Page::factory();
-
         return [
             'customer_id' => Customer::factory(),
-            'page_id' => $page,
-            'page_slug' => fn (array $attributes): string => Page::find($attributes['page_id'])?->slug ?? 'promo',
             'customer_name' => fake()->name(),
             'customer_phone' => fn (array $attributes): string => Customer::find($attributes['customer_id'])->phone,
             'customer_address' => fake()->streetAddress(),
             'customer_district' => fake()->randomElement(config('giopages.districts')),
+            'shop_name' => null,
+            'note' => null,
             'delivery_label' => 'Delivery',
             'delivery_charge' => 6000,
             'payment_method' => PaymentMethod::CashOnDelivery,

@@ -15,7 +15,7 @@ use App\Models\TrackingEvent;
  * that produces, the sweep hands it batches to deliver, and the snippet
  * builder asks it what the browser should run. Adding TikTok is one class
  * implementing this and one case on `TrackingProvider` — the outbox, the
- * sweep, the beacon and the Tracking tab are untouched.
+ * sweep, the beacon and the Tracking settings page are untouched.
  *
  * The questions are deliberately narrow. Nothing here takes a Page, a
  * Request or a Settings group: a driver reads the row or the Destination it
@@ -133,10 +133,10 @@ interface Provider
      * One outbox row as this Provider's wire format: exactly what `send()`
      * puts in a batch for it.
      *
-     * Asked separately from sending so that a Merchant can be shown what a
-     * Page will report before it reports anything — the Tracking tab's
-     * preview builds a sample row and prints this, rather than describing the
-     * payload a second time and drifting from it. It reads the row it is
+     * Asked separately from sending so that a Merchant can be shown what the
+     * store will report before it reports anything — a preview builds a
+     * sample row and prints this, rather than describing the payload a
+     * second time and drifting from it. It reads the row it is
      * handed and the Order that row points at, and nothing else, so a row
      * that was never saved previews as truly as one that was.
      *

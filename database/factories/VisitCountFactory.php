@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Page;
 use App\Models\VisitCount;
 use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
@@ -14,7 +13,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class VisitCountFactory extends Factory
 {
     /**
-     * A day's loads of one published Page.
+     * A day's Visits across the whole store.
      *
      * The day is the Merchant's own, because that is what the aggregate is
      * keyed by and what a Reporting Window compares against — a factory
@@ -26,7 +25,6 @@ class VisitCountFactory extends Factory
     public function definition(): array
     {
         return [
-            'page_id' => Page::factory()->published(),
             'visited_on' => self::merchantDay(),
             'visits' => fake()->numberBetween(1, 500),
         ];

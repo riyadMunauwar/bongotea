@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\OrderStatus;
-use App\Models\Page;
 use App\Support\Reporting\DeliveryMix;
 use App\Support\Reporting\DeliveryMixRow;
 use App\Support\Reporting\ReportingPreset;
@@ -14,9 +13,9 @@ use App\Support\Reporting\ReportingWindow;
 | The helpers are in tests/Pest.php, shared with the other module tests.
 */
 
-function deliveryMixOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): DeliveryMix
+function deliveryMixOf(ReportingPreset $preset = ReportingPreset::Last7Days): DeliveryMix
 {
-    return app(ReportingQuery::class)->deliveryMix(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->deliveryMix(ReportingWindow::of($preset, reportingNow()));
 }
 
 /**
@@ -76,7 +75,6 @@ it('names the five Districts the most Orders were bound for, leaving out the Ord
     $bound('Barishal', 1);
     $bound('', 7);
 
-    orderCapturedAt('2026-09-05 12:00', attributes: ['customer_district' => null]);
     orderCapturedAt('2026-09-05 13:00', attributes: ['customer_district' => 'Dhaka'], status: OrderStatus::Cancelled);
 
     expect(deliveryMixOf()->districts)->toBe([
@@ -86,17 +84,6 @@ it('names the five Districts the most Orders were bound for, leaving out the Ord
         'Sylhet' => 3,
         'Rajshahi' => 2,
     ]);
-});
-
-it('counts one Page alone when scoped to it', function () {
-    $page = Page::factory()->create();
-    orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id, 'delivery_label' => 'Inside Dhaka', 'customer_district' => 'Dhaka']);
-    orderCapturedAt('2026-09-05 13:00', attributes: ['delivery_label' => 'Outside Dhaka', 'customer_district' => 'Sylhet']);
-
-    $mix = deliveryMixOf(page: $page);
-
-    expect(deliveryMixRows($mix))->toBe([['Inside Dhaka', 1, 6000]])
-        ->and($mix->districts)->toBe(['Dhaka' => 1]);
 });
 
 it('is empty on a window with nothing captured', function () {

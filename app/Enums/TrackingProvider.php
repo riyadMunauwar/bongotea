@@ -44,9 +44,8 @@ enum TrackingProvider: string implements HasLabel
      *
      * Derived from the driver's own answers rather than listed, because the
      * driver is already the only thing that speaks this Provider's
-     * vocabulary: a Provider that gains an event gains a switch on every
-     * Tracking tab and on the tracking settings page without either being
-     * edited, and the same derivation serves every Provider rather than being
+     * vocabulary: a Provider that gains an event gains a switch on the
+     * tracking settings page without it being edited, and the same derivation serves every Provider rather than being
      * copied into each driver.
      *
      * @return list<string>

@@ -240,36 +240,6 @@
 }
 
 /*
- * A question this page has stopped asking.
- *
- * A question row on the Checkout tab is one line, so the summary is all a
- * merchant has to go on — and a switched-off question keeps its wording,
- * waiting for the day it comes back. Something on the row has to say it is
- * inert, or it reads as one the customer is being asked.
- *
- * Found by the row's Edit button: `Questions::ASKED_MARKER` is on that one
- * control, and its value is the "Ask for this" switch as the row was drawn.
- * The switch itself lives in the modal the button opens, and the row is
- * redrawn as the modal closes, so the dim follows the switch by the time the
- * merchant can see the row again. Nothing nested inside a question row carries
- * the marker, so `:has()` cannot reach past the question it belongs to.
- *
- * The row gives up its fill and its label goes quiet. Losing the fill does
- * most of the work — an outlined row among filled ones recedes without
- * disappearing — and it says the same thing in both modes without either
- * needing a value of its own, which is the point of the token discipline
- * above.
- */
-.fi-fo-repeater
-    .fi-fo-repeater-item:has([data-gp-question-asked='false']) {
-    background-color: transparent;
-
-    & > .fi-fo-repeater-item-header > .fi-fo-repeater-item-header-label {
-        opacity: 0.5;
-    }
-}
-
-/*
  * And the fields inside an item follow the item, not the section: the same
  * figure governs a container's padding and the gaps within it one level down
  * as it does one level up. Left at the section's 1rem, an Order Line's three
@@ -290,59 +260,4 @@
  */
 .fi-in-text-item > .fi-copyable {
     border-radius: var(--gp-radius);
-}
-
-/*
- * The Checkout Layout picker: Filament's radio with descriptions, drawn as a
- * grid of cards so a merchant chooses a layout by what it looks like.
- *
- * `LayoutCards` (app/Filament/Forms/Components) writes the grid and the
- * thumbnail slot; this is the card around them. Each card is a bordered
- * surface holding the picture above the radio and its words, the chosen one
- * outlined in the primary colour through the same hairline every other
- * surface here uses — no shadow, per the rule above. An option with no
- * picture yet keeps its slot, so the grid holds its shape as thumbnails land.
- */
-.fi-fo-radio.gp-layout-cards {
-    gap: 0.75rem;
-
-    & > .gp-layout-card {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        margin: 0;
-        border: 1px solid var(--gp-border);
-        border-radius: var(--gp-radius);
-        background-color: var(--gp-surface);
-        cursor: pointer;
-        overflow: hidden;
-
-        &:has(.fi-radio-input:checked) {
-            border-color: var(--gp-action);
-            outline: 1px solid var(--gp-action);
-            outline-offset: -1px;
-        }
-
-        & > .gp-layout-card-thumbnail {
-            display: block;
-            aspect-ratio: 3 / 2;
-            background-color: var(--gp-surface-muted);
-            border-bottom: 1px solid var(--gp-border);
-
-            & > img {
-                display: block;
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-        }
-
-        & > .fi-radio-input {
-            margin: 0.875rem 0 0 0.875rem;
-        }
-
-        & > .fi-fo-radio-label-text {
-            padding: 0.375rem 0.875rem 0.875rem;
-        }
-    }
 }

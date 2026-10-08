@@ -4,7 +4,6 @@ namespace App\Filament\Widgets;
 
 use App\Enums\Permission;
 use App\Filament\Widgets\Concerns\PaginatesRows;
-use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\ProductRankingRow;
 use App\Support\Reporting\ReportingQuery;
@@ -21,9 +20,8 @@ use Illuminate\Support\Collection;
  * Top Products, half width: one row per Product sold in the Reporting
  * Window, with the units it moved and what they earned, so a Merchant
  * knows what to stock. Highest revenue first, which is the module's own
- * order and the only one this table has — sorting by a clicked figure is
- * the leaderboard's job, not a widget whose whole point is the top of the
- * list.
+ * order and the only one this table has — a widget whose whole point is
+ * the top of the list.
  *
  * The ranking itself is unbounded — `ReportingQuery::productRanking()`
  * returns a row for every Product sold in the window, which on a real
@@ -31,9 +29,7 @@ use Illuminate\Support\Collection;
  * top of the list, which is the whole of what the widget is for; the rest
  * is reachable rather than drawn.
  *
- * It sits under the Payment Method mix on the Dashboard and above it on a
- * Page Report, where which Product carries this Page is the first thing
- * asked of the report.
+ * It sits under the Payment Method mix on the Dashboard.
  *
  * A Product deleted since it sold keeps its row under the name its Order
  * Lines recorded, marked deleted while it is only soft-deleted, which is
@@ -49,14 +45,12 @@ class TopProductsTable extends TableWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
     use PaginatesRows;
-    use ScopedToPage;
 
     protected static ?int $sort = 50;
 
     /**
      * A Merchant's figure, drawn on the Dashboard behind `view reports`
-     * (#161). Inert wherever a screen names this widget itself: it is one of
-     * the six the Page Report shares, and that screen names its own.
+     * (#161).
      */
     public static function dashboardPermission(): Permission
     {
@@ -119,7 +113,7 @@ class TopProductsTable extends TableWidget implements GatedOnDashboard
      */
     private function rows(): Collection
     {
-        $ranking = app(ReportingQuery::class)->productRanking(ReportingWindow::fromFilters($this->pageFilters), $this->record);
+        $ranking = app(ReportingQuery::class)->productRanking(ReportingWindow::fromFilters($this->pageFilters));
 
         return collect($ranking->rows)->map(fn (ProductRankingRow $row): array => [
             ArrayRecord::getKeyName() => $row->product === null ? 'name:'.$row->recordedName : 'product:'.$row->product->getKey(),

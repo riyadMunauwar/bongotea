@@ -66,11 +66,11 @@ final class Selection
 
     /**
      * What a visitor has in front of them: the Products named, each at the
-     * quantity given, priced from the Page's own Products.
+     * quantity given, priced from the Products themselves.
      *
      * Prices are read here and never accepted from whoever named the
-     * Products, exactly as a Delivery Charge is derived from the Page at
-     * Capture — what arrives is a list of names and a count, and nothing
+     * Products, exactly as every figure on an Order is derived at Capture —
+     * what arrives is a list of names and a count, and nothing
      * that arrives can say what anything costs.
      *
      * The value is what those Products come to and carries no Delivery

@@ -6,7 +6,6 @@ use App\Filament\Resources\Destinations\Pages\CreateDestination;
 use App\Filament\Resources\Destinations\Pages\EditDestination;
 use App\Filament\Resources\Destinations\Pages\ListDestinations;
 use App\Models\Destination;
-use App\Models\Product;
 use App\Models\TrackingEvent;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
@@ -134,50 +133,6 @@ it('takes its undeliverable outbox rows with it when it is deleted', function ()
     $destination->delete();
 
     expect(TrackingEvent::find($row->getKey()))->toBeNull();
-});
-
-/**
- * A Settings group flushes every cached Page because its base class does it;
- * a model does not get that for free, and a Destination's dataset is baked
- * into the Pixel snippet a cached Page carries. Without this, changing a
- * dataset ID leaves every cached Page serving the old one.
- */
-it('forgets every cached page when a destination is saved', function () {
-    sellingPage(Product::factory()->create());
-
-    $this->get('/promo')->assertOk();
-
-    expect($this->cache->has('promo'))->toBeTrue();
-
-    Destination::factory()->create();
-
-    expect($this->cache->has('promo'))->toBeFalse();
-});
-
-it('forgets every cached page when a destinations dataset changes', function () {
-    $destination = Destination::factory()->create();
-
-    sellingPage(Product::factory()->create());
-    $this->get('/promo')->assertOk();
-
-    expect($this->cache->has('promo'))->toBeTrue();
-
-    $destination->update(['dataset' => '999888777666555']);
-
-    expect($this->cache->has('promo'))->toBeFalse();
-});
-
-it('forgets every cached page when a destination is deleted', function () {
-    $destination = Destination::factory()->create();
-
-    sellingPage(Product::factory()->create());
-    $this->get('/promo')->assertOk();
-
-    expect($this->cache->has('promo'))->toBeTrue();
-
-    $destination->delete();
-
-    expect($this->cache->has('promo'))->toBeFalse();
 });
 
 it('says why a destination is unusable in the providers own wording, once', function () {

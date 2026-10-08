@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\PaymentMethod;
-use App\Models\Product;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\PaymentSettings;
 use Illuminate\Support\Facades\DB;
@@ -139,22 +138,19 @@ it('refuses every online method when the installation currency is not BDT, and c
     expect($settings->usableMethods())->toBe([PaymentMethod::CashOnDelivery, PaymentMethod::SslCommerz]);
 });
 
-it('filters a page\'s list to the usable methods in the page\'s order, keeps the raw list whole, and falls back to cash', function () {
-    $page = payingBy(sellingPage(Product::factory()->create()), ['sslcommerz', 'bkash', 'cash_on_delivery']);
+it('offers an order the usable methods, and falls back to cash where the store can take nothing', function () {
+    $order = orderAsCaptured();
 
-    expect($page->checkout_config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
+    expect($order->retryPaymentMethods())->toBe([PaymentMethod::CashOnDelivery]);
 
     storePaymentSettings(['sslcommerzEnabled' => true, 'sslcommerzStoreId' => 'store_live_1', 'sslcommerzStorePassword' => 'pw_live_1']);
 
-    $config = $page->refresh()->checkout_config;
+    expect($order->retryPaymentMethods())->toBe([PaymentMethod::CashOnDelivery, PaymentMethod::SslCommerz]);
 
-    expect($config->offeredMethods())->toBe([PaymentMethod::SslCommerz, PaymentMethod::CashOnDelivery])
-        ->and(PaymentMethod::names($config->paymentMethods))->toBe(['sslcommerz', 'bkash', 'cash_on_delivery']);
-
-    /** Nothing usable left in the list: the page still has one way to order. */
+    /** Nothing usable left at all: the Order is still owed one way to be settled. */
     storePaymentSettings(['cashOnDeliveryEnabled' => false, 'sslcommerzEnabled' => false]);
 
-    expect($page->refresh()->checkout_config->offeredMethods())->toBe([PaymentMethod::CashOnDelivery]);
+    expect($order->retryPaymentMethods())->toBe([PaymentMethod::CashOnDelivery]);
 });
 
 it('draws the default logo until a replacement is stored, then the replacement from the public disk', function () {

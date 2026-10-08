@@ -18,8 +18,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
- * The Needs Attention list, full width at the foot of the Dashboard above
- * the Page leaderboard: what an operator must act on now, whatever window
+ * The Needs Attention list, full width at the foot of the Dashboard: what
+ * an operator must act on now, whatever window
  * the rest of the screen is counted over. One row per condition — New for
  * over a day, a Payment Pending for over an hour, Paid twice, Paid and
  * Cancelled, a parcel that came back, a parcel that half arrived and nobody
@@ -58,9 +58,8 @@ class NeedsAttentionTable extends TableWidget implements GatedOnDashboard
     use PaginatesRows;
 
     /**
-     * Second from last, under the figures and above the Page leaderboard —
-     * the two full-width tables together at the foot of the Dashboard, so
-     * neither pushes the tiles and charts down the screen.
+     * Under the figures, at the foot of the Dashboard, so it never pushes
+     * the tiles and charts down the screen.
      */
     protected static ?int $sort = 70;
 

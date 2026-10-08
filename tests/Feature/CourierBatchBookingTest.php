@@ -245,7 +245,7 @@ it('leaves an order needing a delivery area unsent and names it back, rather tha
     /** An address this Courier's own list makes nothing of, and no District to fall back on. */
     $unplaceable = orderReadyToSend($script, [
         'customer_address' => 'Behind the big tree',
-        'customer_district' => null,
+        'customer_district' => '',
     ]);
 
     sendBatchWithCourier([$sendable, $unplaceable], $script);
@@ -261,7 +261,7 @@ it('leaves an order needing a delivery area unsent and names it back, rather tha
 it('books an order whose address names nowhere in particular, where the courier reads free text', function (CourierScript $script) {
     $order = orderReadyToSend($script, [
         'customer_address' => 'Behind the big tree',
-        'customer_district' => null,
+        'customer_district' => '',
     ]);
 
     sendBatchWithCourier([$order], $script);

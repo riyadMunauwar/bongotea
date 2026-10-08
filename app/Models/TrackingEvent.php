@@ -28,8 +28,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'event',
     'deduplication_id',
     'occurred_at',
-    'page_id',
-    'page_slug',
     'order_id',
     'source_url',
     'ip_address',
@@ -67,10 +65,10 @@ class TrackingEvent extends Model
             'click_ids' => 'array',
 
             /**
-             * Whether this event may name what was bought, as the Page
-             * decided when the Moment happened. Read by the driver off the
-             * row it is handed, so a Page edited or deleted since cannot
-             * change what a queued event says.
+             * Whether this event may name what was bought, as decided when
+             * the Moment happened. Read by the driver off the row it is
+             * handed, so a setting changed since cannot change what a queued
+             * event says.
              */
             'content_detail' => 'boolean',
 

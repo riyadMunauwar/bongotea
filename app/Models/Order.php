@@ -6,11 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
 use App\Observers\OrderObserver;
-use App\Support\Checkout\StyleTokens;
-use App\Support\Money;
-use App\Support\OrderComplete\OrderCompleteConfig;
-use App\Support\OrderComplete\OrderCompleteWords;
-use App\Support\Orders\AsCapturedAnswers;
+use App\Support\Settings\PaymentSettings;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -26,25 +22,23 @@ use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
- * A Customer's committed request for products, captured on a Page at an agreed
- * price.
+ * A Customer's committed request for products, captured at an agreed price.
  *
  * An Order records everything it needs to be fulfilled without consulting
- * anything else: the customer's details, the page it came from, and — on its
- * lines — what was sold and at what price. Every relation off this model is a
- * reference for context, never a source of truth for a figure.
+ * anything else: the customer's details and — on its lines — what was sold
+ * and at what price. Every relation off this model is a reference for
+ * context, never a source of truth for a figure.
  */
 #[ObservedBy(OrderObserver::class)]
 #[Fillable([
     'customer_id',
-    'page_id',
-    'page_slug',
     'customer_name',
     'customer_phone',
     'customer_email',
     'customer_address',
     'customer_district',
-    'answers',
+    'shop_name',
+    'note',
     'delivery_label',
     'delivery_charge',
     'payment_method',
@@ -81,12 +75,6 @@ class Order extends Model
     private const ARRIVED_FLAG = 'has_arrived';
 
     /**
-     * The key of the Merchant's question whose answer is the Customer's note
-     * for the courier; see `deliveryNote()`.
-     */
-    private const NOTE_ANSWER_KEY = 'note';
-
-    /**
      * Mirrors the database defaults, because an Order exists before its lines
      * do: Capture inserts the Order and then attaches the line that gives it a
      * subtotal, and the total invariant has to hold over an integer in between.
@@ -110,14 +98,6 @@ class Order extends Model
              * neither this nor `status` ever overwrites the other (ADR-0013).
              */
             'payment_method' => PaymentMethod::class,
-
-            /**
-             * The answers to the questions this Page's Merchant added of their
-             * own, each carrying the wording and the control it was asked with.
-             * Read as an empty list where a Checkout asked none, so a screen
-             * never branches on whether an Order has a snapshot.
-             */
-            'answers' => AsCapturedAnswers::class,
 
             'subtotal' => 'integer',
             'delivery_charge' => 'integer',
@@ -151,17 +131,6 @@ class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
-    }
-
-    /**
-     * The Page this Order was captured on, when it still exists. `page_slug`
-     * is the attribution that survives regardless.
-     *
-     * @return BelongsTo<Page, $this>
-     */
-    public function page(): BelongsTo
-    {
-        return $this->belongsTo(Page::class)->withTrashed();
     }
 
     /**
@@ -474,24 +443,12 @@ class Order extends Model
     }
 
     /**
-     * What the Customer wrote for the courier, when the Page asked and they
-     * answered.
-     *
-     * The Checkout has no built-in note; a Merchant who wants one adds a
-     * question keyed `note`, and this is what the Customer typed into it.
-     * Null where the Page never asked, the Customer left it blank, or the
-     * question keyed so is not one a person types into, so the Order Complete
-     * Page draws a line only when there is one to draw.
+     * What the Customer wrote for the courier, or null where they wrote
+     * nothing, so a screen draws a line only when there is one to draw.
      */
     public function deliveryNote(): ?string
     {
-        foreach ($this->answers as $answer) {
-            if ($answer->key === self::NOTE_ANSWER_KEY && $answer->optionLabel === null && is_string($answer->value) && trim($answer->value) !== '') {
-                return $answer->value;
-            }
-        }
-
-        return null;
+        return filled($this->note) ? trim($this->note) : null;
     }
 
     /**
@@ -508,53 +465,15 @@ class Order extends Model
     }
 
     /**
-     * What this Order's Order Complete Page says and how it is arranged: the
-     * Config of the Page it was captured on, read as it stands now rather than
-     * snapshotted. The default Config where the Page is gone, because a
-     * Customer with an old link is owed the page and never an error.
-     */
-    public function orderCompleteConfig(): OrderCompleteConfig
-    {
-        return $this->page?->order_complete_config ?? OrderCompleteConfig::default();
-    }
-
-    /**
-     * What this Order's Order Complete Page says: the Config's words with this
-     * Order's own number and total in place of the placeholders, and the Page
-     * it was captured on as the address a button with no link of its own goes
-     * to. That address survives the Page: `page_slug` is the attribution kept
-     * for exactly that.
-     */
-    public function orderCompleteWords(): OrderCompleteWords
-    {
-        return $this->orderCompleteConfig()->wordsFor(
-            $this->order_number,
-            Money::format($this->total),
-            route('landing.show', $this->page_slug),
-        );
-    }
-
-    /**
-     * What this Order's Page styles its Checkout with, for the page after the
-     * order to match the form before it. Nothing said where the Page is gone,
-     * which completes to the look the page has always had.
-     */
-    public function pageStyleTokens(): StyleTokens
-    {
-        return $this->page?->checkout_config->styleTokens ?? StyleTokens::none();
-    }
-
-    /**
-     * The Payment Methods the Retry Page offers this Order: what its Page
-     * offers now, read through the same filtered list the Checkout draws
-     * from. Cash on Delivery alone where the Page is gone, because an Order
-     * with nothing to be paid through is still owed a way to be settled.
+     * The Payment Methods the Retry Page offers this Order: whatever the
+     * store can take payment by now, and Cash on Delivery alone where it can
+     * take nothing, because an Order is always owed a way to be settled.
      *
      * @return list<PaymentMethod>
      */
     public function retryPaymentMethods(): array
     {
-        return $this->page?->checkout_config->offeredMethods() ?? [PaymentMethod::CashOnDelivery];
+        return app(PaymentSettings::class)->usableMethods() ?: [PaymentMethod::CashOnDelivery];
     }
 
     /**

@@ -18,9 +18,9 @@ use App\Models\Order;
  * on is a string, and an event that is about no Order at all still has to
  * agree on one.
  *
- * For a Page that string does not exist when the document is written. A
- * published Page is one file served to every visitor, so an identifier baked
- * in at render time would be the same for all of them and the Provider would
+ * For a page load that string does not exist when the document is written.
+ * Where one document is served to every visitor, an identifier baked in at
+ * render time would be the same for all of them and the Provider would
  * count the whole campaign as one Visit. What is carried for those is
  * therefore JavaScript naming the value the browser makes up on load, not
  * the value — which is why every Provider asks `deduplicationIdSource()` for
@@ -51,8 +51,8 @@ final class BrowserEvent
          * about nothing.
          *
          * Carried the way the deduplication id above is, and for the same
-         * reason: a published Page is one file served to everyone, so what a
-         * particular visitor has ticked cannot be written into it.
+         * reason: one document served to everyone cannot carry what a
+         * particular visitor has in their Cart.
          */
         public readonly ?string $selectionSource = null,
     ) {}
@@ -68,7 +68,7 @@ final class BrowserEvent
     }
 
     /**
-     * An event about the load of a Page, deduplicated on an identifier the
+     * An event about the load of a page, deduplicated on an identifier the
      * browser makes up for that load and posts to the beacon, so the copy
      * this fires and the copy the beacon writes are one event.
      *

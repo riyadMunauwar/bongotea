@@ -7,19 +7,15 @@ use App\Filament\Clusters\Reports\Pages\MarginReport;
 use App\Filament\Clusters\Reports\Pages\StockReport;
 use App\Filament\Clusters\Reports\ReportsCluster;
 use App\Filament\Pages\Dashboard;
-use App\Filament\Resources\Pages\PageResource;
-use App\Filament\Widgets\CachePathIndicator;
 use App\Filament\Widgets\CourierMoneyTable;
 use App\Filament\Widgets\DeliveryMixTable;
 use App\Filament\Widgets\NeedsAttentionTable;
 use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
-use App\Filament\Widgets\PageLeaderboardTable;
 use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
 use App\Filament\Widgets\TopProductsTable;
 use App\Filament\Widgets\UnsentOrdersStat;
-use App\Models\Page;
 use App\Models\User;
 use Filament\Facades\Filament;
 
@@ -50,7 +46,6 @@ function dashboardMoneyWidgets(): array
         TopProductsTable::class,
         DeliveryMixTable::class,
         CourierMoneyTable::class,
-        PageLeaderboardTable::class,
     ];
 }
 
@@ -139,8 +134,7 @@ it('draws Needs Attention and Unsent Orders on the Dashboard for a User holding 
 /**
  * A plain Member holds a Role — so the panel floor lets them in — but neither
  * `view reports` nor `work orders`. They meet a Dashboard carrying none of the
- * gated widgets and no error, only the ungated Cache Path indicator, which is
- * operational truth rather than either audience's figure.
+ * gated widgets, and no error.
  */
 it('leaves a User holding neither with a working Dashboard carrying none of the gated widgets', function () {
     $this->actingAs(User::factory()->create());
@@ -152,8 +146,6 @@ it('leaves a User holding neither with a working Dashboard carrying none of the 
     foreach ([...dashboardMoneyWidgets(), ...dashboardOperatorWidgets()] as $widget) {
         expect($widgets)->not->toContain($widget);
     }
-
-    expect($widgets)->toContain(CachePathIndicator::class);
 });
 
 /**
@@ -168,25 +160,4 @@ it('draws every gated widget on the Dashboard for a User holding both Permission
     foreach ([...dashboardMoneyWidgets(), ...dashboardOperatorWidgets()] as $widget) {
         expect($widgets)->toContain($widget);
     }
-});
-
-/**
- * The gate is the Dashboard's, not the widget's own: six of the money widgets
- * are the Page Report's as well, and that screen is reached through
- * `author pages`. A User who authors but does not read reports still meets
- * every one of them there — proof the widgets are not blanked everywhere by a
- * global `canView()`.
- */
-it('still draws the shared widgets on the Page Report for a User with author pages but not view reports', function () {
-    $this->actingAs(User::factory()->authoringPages()->create());
-
-    $page = Page::factory()->published()->create();
-
-    expect(auth()->user()->can(Permission::ViewReports))->toBeFalse();
-
-    $this->get(PageResource::getUrl('report', ['record' => $page]))
-        ->assertOk()
-        ->assertSeeLivewire(OverviewStats::class)
-        ->assertSeeLivewire(TopProductsTable::class)
-        ->assertSeeLivewire(DeliveryMixTable::class);
 });

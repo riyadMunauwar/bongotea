@@ -3,28 +3,18 @@
 namespace App\Observers;
 
 use App\Models\Destination;
-use App\Support\PageCache\PageCacheInvalidator;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Two jobs a Destination does not get for free.
+ * The default flag, which a Destination does not get for free.
  *
- * The first is the default flag. Exactly one Destination per Provider carries
- * it, so a Page that has picked nothing always has somewhere sensible to
- * report: the first Destination for a Provider takes it, marking a second one
- * unmarks the first, and deleting the one that holds it passes it on rather
- * than leaving the Provider with none.
- *
- * The second is the static cache. A saved Settings group flushes every cached
- * Page because the base class does it; a model does not get that, and a
- * Destination's dataset is baked into the Pixel snippet a cached Page
- * carries. Without this, changing a dataset ID leaves every cached Page
- * serving the old one with no sign that anything is wrong.
+ * Exactly one Destination per Provider carries it, so the store always has
+ * somewhere sensible to report: the first Destination for a Provider takes
+ * it, marking a second one unmarks the first, and deleting the one that holds
+ * it passes it on rather than leaving the Provider with none.
  */
 class DestinationObserver
 {
-    public function __construct(private readonly PageCacheInvalidator $invalidator) {}
-
     /**
      * The first Destination for a Provider is that Provider's default: a
      * Merchant who adds one and stops has not configured nothing.
@@ -39,8 +29,6 @@ class DestinationObserver
     public function saved(Destination $destination): void
     {
         $this->keepOneDefaultPerProvider($destination);
-
-        $this->invalidator->forgetEveryPage();
     }
 
     /**
@@ -58,8 +46,6 @@ class DestinationObserver
                 ?->forceFill(['is_default' => true])
                 ->saveQuietly();
         }
-
-        $this->invalidator->forgetEveryPage();
     }
 
     /**
@@ -69,8 +55,8 @@ class DestinationObserver
      *
      * The second half is the one that matters. Unticking the box is not a
      * way to say "report nowhere" — that is what switching a Destination off
-     * is — and a Provider with no default silently stops every Page
-     * reporting to it while the screen still says it is reporting.
+     * is — and a Provider with no default silently stops the store reporting
+     * to it while the screen still says it is reporting.
      *
      * Written quietly, and after the save rather than before it, because the
      * row that wins is the one that was just saved: doing it in `saving`

@@ -5,10 +5,9 @@ namespace App\Support\Reporting;
 /**
  * The three glossary figures that are ratios of the counts a span comes to,
  * for anything that carries `$orders`, `$sales`, `$cancelled` and
- * `$visits`: the Overview's figures and a leaderboard row alike. Kept
- * as methods over the counts, so a rate is never stored beside the counts
- * it disagrees with, and written once, so the Overview and the leaderboard
- * cannot round differently.
+ * `$visits`. Kept as methods over the counts, so a rate is never stored
+ * beside the counts it disagrees with, and written once, so no two screens
+ * can round differently.
  *
  * @property-read int $orders
  * @property-read int $sales
@@ -55,7 +54,7 @@ trait HasSalesRatios
      * Null, not zero, where Visits are not counted: a rate with no
      * denominator is not zero, it is unknown, and a Merchant who has not
      * switched counting on must be told that rather than shown a 0.0% they
-     * would read as a Page that sells nothing. Zero where a span was counted
+     * would read as a store that sells nothing. Zero where a span was counted
      * and had no Visits at all.
      */
     public function conversionRate(): ?float

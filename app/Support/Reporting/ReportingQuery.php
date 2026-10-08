@@ -8,7 +8,6 @@ use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\Page;
 use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\Supplier;
@@ -26,9 +25,8 @@ use Illuminate\Support\Collection;
 
 /**
  * The one seam every report widget calls, and the only place the glossary's
- * counting rules are written in SQL. It takes a Reporting Window and,
- * optionally, a Page to scope to, and hands back plain typed results; a
- * widget formats and draws, and never counts.
+ * counting rules are written in SQL. It takes a Reporting Window and hands
+ * back plain typed results; a widget formats and draws, and never counts.
  *
  * Everything aggregates in the database. A window is cut into its buckets
  * with one CASE over the bucket boundaries the window itself computed, so
@@ -39,7 +37,7 @@ use Illuminate\Support\Collection;
  * loops over is the list of buckets.
  *
  * Orders are not the only rows it reads: Visits come from the aggregate the
- * beacon writes, which is a count per Page per day rather than a row per
+ * beacon writes, which is a count per day rather than a row per
  * load. That one is compared as whole days in the Merchant's timezone, since
  * that is what it is keyed by — never as the UTC instants every Order figure
  * beside it is cut on — and it answers null rather than zero where the
@@ -56,8 +54,7 @@ use Illuminate\Support\Collection;
  * is compared as whole days like the Visit aggregate and never as the UTC
  * instants an Order is cut on.
  *
- * The overview, the Sales over time series, the Page leaderboard, the
- * status breakdown, the Payment Method mix, the Product ranking, the
+ * The overview, the Sales over time series, the status breakdown, the Payment Method mix, the Product ranking, the
  * Delivery mix, the courier performance, the buying figures, the stock held
  * and the Needs Attention list are here. A later result is another method
  * returning another result class, built on `ordersIn()`, `notCancelledIn()`,
@@ -114,13 +111,13 @@ final class ReportingQuery
      * grouped query, every bucket in the answer whether or not a row fell
      * inside it.
      */
-    public function salesOverTime(ReportingWindow $window, ?Page $page = null): SalesOverTime
+    public function salesOverTime(ReportingWindow $window): SalesOverTime
     {
         $buckets = $window->buckets();
         $cancelled = OrderStatus::Cancelled->value;
 
         $rows = $this->groupedByBucket(
-            $this->ordersIn($window, $page),
+            $this->ordersIn($window),
             $buckets,
             'count(*) as order_count, '.self::SALES,
             [$cancelled],
@@ -145,9 +142,9 @@ final class ReportingQuery
      * The stat tiles' figures for a window, the comparison window's beside
      * them, and the window's own bucket by bucket for the sparklines.
      */
-    public function overview(ReportingWindow $window, ?Page $page = null): Overview
+    public function overview(ReportingWindow $window): Overview
     {
-        $buckets = $this->figuresByBucket($window, $window->buckets(), $page);
+        $buckets = $this->figuresByBucket($window, $window->buckets());
 
         $figures = array_reduce(
             $buckets,
@@ -164,76 +161,19 @@ final class ReportingQuery
          */
         return new Overview(
             $window,
-            $figures->withVisits($this->visitsIn($window, $page)),
-            $this->figuresByBucket($comparison, [$whole], $page)[0]->withVisits($this->visitsIn($comparison, $page)),
+            $figures->withVisits($this->visitsIn($window)),
+            $this->figuresByBucket($comparison, [$whole])[0]->withVisits($this->visitsIn($comparison)),
             $buckets,
         );
-    }
-
-    /**
-     * One row per Page with Orders in the window, trashed Pages included,
-     * and one per recorded slug for Orders whose Page is gone for good.
-     * One grouped query over the Orders, one over the Visit aggregate where
-     * the Merchant counts Visits, and one lookup of the Pages named; the rows
-     * come back Sales first, and the largest thing looped over is the list of
-     * Pages.
-     */
-    public function pageLeaderboard(ReportingWindow $window): PageLeaderboard
-    {
-        $cancelled = OrderStatus::Cancelled->value;
-
-        /**
-         * Grouped by the live link where there is one, and by the recorded
-         * slug only where there is not: an Order whose Page was renamed
-         * still belongs to that Page, while two hard-deleted Pages that
-         * shared nothing but a null are told apart by their slugs.
-         */
-        $rows = $this->ordersIn($window)
-            ->selectRaw(
-                'page_id, min(page_slug) as page_slug, count(*) as order_count, '
-                .self::SALES.', '
-                .self::STATUS_COUNT.' as cancelled',
-                [$cancelled, $cancelled],
-            )
-            ->groupByRaw("page_id, (case when page_id is null then page_slug else '' end)")
-            ->get();
-
-        $pages = Page::withTrashed()->findMany($rows->pluck('page_id')->filter())->keyBy(fn (Page $page): int => $page->getKey());
-        $visits = $this->visitsByPageIn($window);
-
-        $leaderboard = $rows
-            ->map(fn (object $row): PageLeaderboardRow => new PageLeaderboardRow(
-                page: $row->page_id === null ? null : $pages->get((int) $row->page_id),
-                slug: (string) $row->page_slug,
-                orders: (int) $row->order_count,
-                sales: (int) $row->sales,
-                cancelled: (int) $row->cancelled,
-
-                /**
-                 * A Page deleted for good keeps no counts and takes none: its
-                 * Orders sit here under a recorded slug, and a slug is not
-                 * something a load was ever counted against.
-                 */
-                visits: $visits === null || $row->page_id === null ? null : ($visits[(int) $row->page_id] ?? 0),
-            ))
-            ->sortBy([
-                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => $b->sales <=> $a->sales,
-                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => $b->orders <=> $a->orders,
-                fn (PageLeaderboardRow $a, PageLeaderboardRow $b): int => strcasecmp($a->title(), $b->title()),
-            ])
-            ->values()
-            ->all();
-
-        return new PageLeaderboard($window, $visits !== null, $leaderboard);
     }
 
     /**
      * How many of the window's Orders are New, Confirmed and Cancelled, for
      * the doughnut: one query, three status counts on one row.
      */
-    public function statusBreakdown(ReportingWindow $window, ?Page $page = null): StatusBreakdown
+    public function statusBreakdown(ReportingWindow $window): StatusBreakdown
     {
-        $row = $this->ordersIn($window, $page)
+        $row = $this->ordersIn($window)
             ->selectRaw(
                 self::STATUS_COUNT.' as new_orders, '
                 .self::STATUS_COUNT.' as confirmed, '
@@ -262,17 +202,17 @@ final class ReportingQuery
      * The method column is read under another name so the model's enum cast
      * does not touch it: the rows are keyed by the stored value.
      */
-    public function paymentMix(ReportingWindow $window, ?Page $page = null): PaymentMix
+    public function paymentMix(ReportingWindow $window): PaymentMix
     {
         $cancelled = OrderStatus::Cancelled->value;
 
-        $perMethod = $this->ordersIn($window, $page)
+        $perMethod = $this->ordersIn($window)
             ->selectRaw('payment_method as method, count(*) as order_count, '.self::SALES, [$cancelled])
             ->groupBy('payment_method')
             ->get()
             ->keyBy('method');
 
-        $unpaid = $this->ordersIn($window, $page)
+        $unpaid = $this->ordersIn($window)
             ->unpaid()
             ->selectRaw('payment_method as method, count(*) as unpaid')
             ->groupBy('payment_method')
@@ -311,10 +251,10 @@ final class ReportingQuery
      * the names their Lines recorded. The largest thing looped over is the
      * list of Products.
      */
-    public function productRanking(ReportingWindow $window, ?Page $page = null): ProductRanking
+    public function productRanking(ReportingWindow $window): ProductRanking
     {
         $rows = OrderLine::query()
-            ->joinSub($this->notCancelledIn($window, $page)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
+            ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
             ->selectRaw('product_id, min(product_name) as product_name, sum(quantity) as units, sum(line_total) as revenue')
             ->groupByRaw("product_id, (case when product_id is null then product_name else '' end)")
             ->get();
@@ -361,14 +301,14 @@ final class ReportingQuery
      * is missing part of its cost rather than quietly drawing one that is too
      * high (ADR-0022).
      */
-    public function margin(ReportingWindow $window, ?Page $page = null): Margin
+    public function margin(ReportingWindow $window): Margin
     {
-        $money = $this->notCancelledIn($window, $page)
+        $money = $this->notCancelledIn($window)
             ->selectRaw('sum(total) as sales, sum(delivery_charge) as delivery_charge')
             ->first();
 
         $rows = OrderLine::query()
-            ->joinSub($this->notCancelledIn($window, $page)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
+            ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
             ->selectRaw(
                 'product_id, min(product_name) as product_name, '
                 .'sum(quantity) as units, '
@@ -562,9 +502,9 @@ final class ReportingQuery
      * is left out altogether, because "no District" is not a place a
      * courier covers.
      */
-    public function deliveryMix(ReportingWindow $window, ?Page $page = null): DeliveryMix
+    public function deliveryMix(ReportingWindow $window): DeliveryMix
     {
-        $rows = $this->notCancelledIn($window, $page)
+        $rows = $this->notCancelledIn($window)
             ->selectRaw("coalesce(delivery_label, '') as label, count(*) as order_count, sum(delivery_charge) as delivery_charge")
             ->groupBy('label')
             ->get()
@@ -581,7 +521,7 @@ final class ReportingQuery
             ->values()
             ->all();
 
-        $districts = $this->notCancelledIn($window, $page)
+        $districts = $this->notCancelledIn($window)
             ->whereNotNull('customer_district')
             ->where('customer_district', '!=', '')
             ->selectRaw('customer_district as district, count(*) as order_count')
@@ -869,13 +809,13 @@ final class ReportingQuery
      * @param  list<ReportingBucket>  $buckets
      * @return list<OverviewFigures>
      */
-    private function figuresByBucket(ReportingWindow $window, array $buckets, ?Page $page): array
+    private function figuresByBucket(ReportingWindow $window, array $buckets): array
     {
         $cancelled = OrderStatus::Cancelled->value;
         $new = OrderStatus::New->value;
 
         $counted = $this->groupedByBucket(
-            $this->ordersIn($window, $page),
+            $this->ordersIn($window),
             $buckets,
             'count(*) as order_count, '
             .self::SALES.', '
@@ -884,7 +824,7 @@ final class ReportingQuery
             [$cancelled, $cancelled, $new],
         );
 
-        $unpaid = $this->groupedByBucket($this->ordersIn($window, $page)->unpaid(), $buckets, 'count(*) as unpaid');
+        $unpaid = $this->groupedByBucket($this->ordersIn($window)->unpaid(), $buckets, 'count(*) as unpaid');
 
         $figures = [];
 
@@ -926,46 +866,22 @@ final class ReportingQuery
     }
 
     /**
-     * How many Visits the window holds, over the whole installation or on one
-     * Page — and null where the Merchant is not counting them.
+     * How many Visits the window holds — and null where the Merchant is not
+     * counting them.
      *
      * Null rather than zero is the whole of how a screen knows to say the
      * feature is off instead of drawing a silent nought, and the switch is
      * read here rather than on a widget so that "not counted" has one
      * wording, as every other counting rule does.
      */
-    private function visitsIn(ReportingWindow $window, ?Page $page = null): ?int
+    private function visitsIn(ReportingWindow $window): ?int
     {
         if (! $this->countsVisits()) {
             return null;
         }
 
         return (int) $this->visitsOverDays($window)
-            ->when($page, fn (Builder $query, Page $page) => $query->where('page_id', $page->getKey()))
             ->sum('visits');
-    }
-
-    /**
-     * The window's Visits per Page, keyed by Page — and null where the
-     * Merchant is not counting them, which is how the leaderboard tells a
-     * Page with no Visits apart from an installation with no counting.
-     *
-     * @return array<int, int>|null
-     */
-    private function visitsByPageIn(ReportingWindow $window): ?array
-    {
-        if (! $this->countsVisits()) {
-            return null;
-        }
-
-        return $this->visitsOverDays($window)
-            /** Rows orphaned by a hard-deleted Page still count towards the installation and belong to no row here. */
-            ->whereNotNull('page_id')
-            ->selectRaw('page_id, sum(visits) as visits')
-            ->groupBy('page_id')
-            ->get()
-            ->mapWithKeys(fn (VisitCount $row): array => [(int) $row->page_id => (int) $row->visits])
-            ->all();
     }
 
     /**
@@ -1113,16 +1029,15 @@ final class ReportingQuery
 
     /**
      * The Orders captured inside a window, soft-deleted ones already gone
-     * through the model's scope, on one Page when asked.
+     * through the model's scope.
      *
      * @return Builder<Order>
      */
-    private function ordersIn(ReportingWindow $window, ?Page $page = null): Builder
+    private function ordersIn(ReportingWindow $window): Builder
     {
         return Order::query()
             ->where('created_at', '>=', $window->start->toDateTimeString())
-            ->where('created_at', '<', $window->end->toDateTimeString())
-            ->when($page, fn (Builder $query, Page $page) => $query->where('page_id', $page->getKey()));
+            ->where('created_at', '<', $window->end->toDateTimeString());
     }
 
     /**
@@ -1133,9 +1048,9 @@ final class ReportingQuery
      *
      * @return Builder<Order>
      */
-    private function notCancelledIn(ReportingWindow $window, ?Page $page = null): Builder
+    private function notCancelledIn(ReportingWindow $window): Builder
     {
-        return $this->ordersIn($window, $page)->where('status', '!=', OrderStatus::Cancelled->value);
+        return $this->ordersIn($window)->where('status', '!=', OrderStatus::Cancelled->value);
     }
 
     /**

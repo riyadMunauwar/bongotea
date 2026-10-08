@@ -3,19 +3,15 @@
 use App\Enums\PaymentMethod;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\Orders\OrderResource;
-use App\Filament\Resources\Pages\PageResource;
-use App\Filament\Widgets\CachePathIndicator;
 use App\Filament\Widgets\DeliveryMixTable;
 use App\Filament\Widgets\NeedsAttentionTable;
 use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
-use App\Filament\Widgets\PageLeaderboardTable;
 use App\Filament\Widgets\PaymentMethodMixChart;
 use App\Filament\Widgets\SalesOverTimeChart;
 use App\Filament\Widgets\TopProductsTable;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
@@ -38,18 +34,14 @@ beforeEach(function (): void {
 | The counting is proved against the query module in ReportingOverviewTest;
 | what is asserted here is what a User meets on the Dashboard — the
 | Reporting Window filter and what it remembers, the tile row and one figure
-| drawn through it with the currency symbol, and that the Cache Path
-| indicator has kept its place below.
+| drawn through it with the currency symbol.
 */
 
 it('carries the Reporting Window filter above the tile row, defaulting to the last seven days', function () {
-    Page::factory()->published()->create();
-
     $this->get('/admin')
         ->assertOk()
         ->assertSee('Reporting Window')
-        ->assertSeeLivewire(OverviewStats::class)
-        ->assertSeeLivewire(CachePathIndicator::class);
+        ->assertSeeLivewire(OverviewStats::class);
 
     Livewire::test(Dashboard::class)
         ->assertSchemaStateSet([ReportingWindow::PRESET_FILTER => 'last_7_days'], 'filtersForm')
@@ -133,7 +125,6 @@ it('measures each tile against the comparison window, up or down', function () {
 });
 
 it('draws Sales over time below the tiles: a Sales line and an Orders line over every bucket of the chosen window', function () {
-    Page::factory()->published()->create();
     Order::factory()->create(['subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
     Order::factory()->cancelled()->create(['subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
 
@@ -146,7 +137,7 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
     expect(array_search(OverviewStats::class, $widgets, true))
         ->toBeLessThan(array_search(SalesOverTimeChart::class, $widgets, true))
         ->and(array_search(SalesOverTimeChart::class, $widgets, true))
-        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
+        ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true));
 
     /**
      * The data is handed to Chart.js as JavaScript, so it is read off the
@@ -167,69 +158,7 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
         ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
 });
 
-it('draws the Page leaderboard last of the reports, above the Cache Path indicator: a row per Page with its own figures, Sales first and sortable, each row opening that Page\'s Report', function () {
-    $top = Page::factory()->published()->create(['title' => 'Summer combo', 'published_at' => now()->subDays(10)]);
-    $other = Page::factory()->create(['title' => 'Winter combo']);
-    $retired = Page::factory()->published()->create(['title' => 'Retired combo']);
-
-    Order::factory()->create(['page_id' => $top->id, 'subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
-    Order::factory()->create(['page_id' => $other->id, 'subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
-    Order::factory()->cancelled()->create(['page_id' => $other->id, 'subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
-    Order::factory()->create(['page_id' => $retired->id, 'subtotal' => 10000, 'delivery_charge' => 6000, 'created_at' => now()]);
-    Order::factory()->create(['page_id' => null, 'page_slug' => 'gone-combo', 'subtotal' => 5000, 'delivery_charge' => 6000, 'created_at' => now()]);
-    $retired->delete();
-
-    $this->get('/admin')
-        ->assertOk()
-        ->assertSeeLivewire(PageLeaderboardTable::class);
-
-    $widgets = array_values(app(Dashboard::class)->getWidgets());
-
-    expect(array_search(DeliveryMixTable::class, $widgets, true))
-        ->toBeLessThan(array_search(PageLeaderboardTable::class, $widgets, true))
-        ->and(array_search(PageLeaderboardTable::class, $widgets, true))
-        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
-
-    $symbol = app(GeneralSettings::class)->currencySymbol;
-
-    /**
-     * Each Page's row carries that Page's figures alone: the top Page's
-     * Sales, not the installation's; the other Page's Cancellation Rate,
-     * not the top Page's. The retired Page keeps its row, marked, and the
-     * hard-deleted one's Orders sit under their slug.
-     */
-    $leaderboard = Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
-        ->assertSee('Page leaderboard')
-        ->assertSee('Summer combo')
-        ->assertSee($symbol.'560.00')
-        ->assertDontSee($symbol.'1090.00')
-        ->assertSee('Winter combo')
-        ->assertSee('50.0%')
-        ->assertDontSee('20.0%')
-        ->assertSee('Retired combo')
-        ->assertSeeHtml('">deleted</span>')
-        ->assertSee('gone-combo')
-        ->assertSee('Not counted')
-        /** A Merchant drilling down from figures arrives at figures, never at the form. */
-        ->assertSee(PageResource::getUrl('report', ['record' => $top]))
-        ->assertSee(PageResource::getUrl('report', ['record' => $retired]))
-        ->assertDontSee(PageResource::getUrl('edit', ['record' => $top]));
-
-    $titles = fn (): array => $leaderboard->instance()->getTableRecords()->pluck('title')->values()->all();
-
-    expect($titles())->toBe(['Summer combo', 'Winter combo', 'Retired combo', 'gone-combo']);
-
-    $leaderboard->sortTable('orders', 'desc');
-
-    expect($titles()[0])->toBe('Winter combo');
-
-    Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'yesterday']])
-        ->assertDontSee('Summer combo')
-        ->assertSee('No Orders in this window');
-});
-
 it('draws the status breakdown and the Payment Method mix side by side under the Sales chart, each obeying the filter', function () {
-    Page::factory()->published()->create();
     Order::factory()->create(['subtotal' => 50000, 'delivery_charge' => 6000, 'created_at' => now()]);
     Order::factory()->cancelled()->create(['subtotal' => 20000, 'delivery_charge' => 6000, 'created_at' => now()]);
     Payment::factory()->for(Order::factory()->create(['subtotal' => 10000, 'delivery_charge' => 6000, 'payment_method' => PaymentMethod::Bkash, 'created_at' => now()]))->paid()->create();
@@ -247,7 +176,7 @@ it('draws the status breakdown and the Payment Method mix side by side under the
         ->and(array_search(OrderStatusBreakdownChart::class, $widgets, true))
         ->toBeLessThan(array_search(PaymentMethodMixChart::class, $widgets, true))
         ->and(array_search(PaymentMethodMixChart::class, $widgets, true))
-        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true))
+        ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true))
         ->and(app(OrderStatusBreakdownChart::class)->getColumnSpan())->toBe(1)
         ->and(app(PaymentMethodMixChart::class)->getColumnSpan())->toBe(1);
 
@@ -286,7 +215,7 @@ it('draws the status breakdown and the Payment Method mix side by side under the
         ->assertSee('Payment Method mix');
 });
 
-it('draws Needs Attention full width at the foot of the Dashboard above the leaderboard, saying in words that it ignores the window, each row naming its condition and opening its Order', function () {
+it('draws Needs Attention full width at the foot of the Dashboard, saying in words that it ignores the window, each row naming its condition and opening its Order', function () {
     $uncalled = Order::factory()->create(['customer_name' => 'Rahim Uddin', 'created_at' => now()->subHours(25)]);
     $refundable = Order::factory()->cancelled()->create(['payment_method' => PaymentMethod::Bkash, 'created_at' => now()]);
     Payment::factory()->for($refundable)->paid()->create(['method' => PaymentMethod::Bkash]);
@@ -311,8 +240,6 @@ it('draws Needs Attention full width at the foot of the Dashboard above the lead
     expect($headerWidgets)->toBe([])
         ->and(array_search(DeliveryMixTable::class, $widgets, true))
         ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true))
-        ->and(array_search(NeedsAttentionTable::class, $widgets, true))
-        ->toBeLessThan(array_search(PageLeaderboardTable::class, $widgets, true))
         ->and(app(NeedsAttentionTable::class)->getColumnSpan())->toBe('full');
 
     Livewire::test(NeedsAttentionTable::class)
@@ -340,8 +267,6 @@ it('says plainly that nothing needs attention when the list is empty, whatever t
 });
 
 it('draws Top Products and the Delivery mix side by side under the Payment Method mix, each obeying the filter', function () {
-    Page::factory()->published()->create();
-
     $tea = Product::factory()->create(['name' => 'Sylhet tea', 'price' => 30000]);
     $mug = Product::factory()->create(['name' => 'Clay mug', 'price' => 10000]);
 
@@ -363,7 +288,7 @@ it('draws Top Products and the Delivery mix side by side under the Payment Metho
         ->and(array_search(TopProductsTable::class, $widgets, true))
         ->toBeLessThan(array_search(DeliveryMixTable::class, $widgets, true))
         ->and(array_search(DeliveryMixTable::class, $widgets, true))
-        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true))
+        ->toBeLessThan(array_search(NeedsAttentionTable::class, $widgets, true))
         ->and(app(TopProductsTable::class)->getColumnSpan())->toBe(1)
         ->and(app(DeliveryMixTable::class)->getColumnSpan())->toBe(1);
 
@@ -398,68 +323,36 @@ it('draws Top Products and the Delivery mix side by side under the Payment Metho
         ->assertDontSee('Outside Dhaka');
 });
 
-it('keeps the Cache Path indicator on the Dashboard, below the reports', function () {
-    Page::factory()->published()->create();
-
-    $this->get('/admin')
-        ->assertOk()
-        ->assertSeeLivewire(CachePathIndicator::class);
-
-    $widgets = array_values(app(Dashboard::class)->getWidgets());
-
-    expect(array_search(OverviewStats::class, $widgets, true))
-        ->toBeLessThan(array_search(CachePathIndicator::class, $widgets, true));
-});
-
-it('pages the Page leaderboard at ten rows, sorting the whole leaderboard before the page is cut, and returning to the first page when the Reporting Window changes', function () {
+it('pages Top Products at ten rows, ranking the whole list before the page is cut, and returning to the first page when the Reporting Window changes', function () {
     /**
-     * Twelve Pages ranked by the Sales each was given, so there is a second
-     * page at all. The lowest-ranked of them is the one carrying the most
-     * Orders — it sits on page two, which is where a sort by Orders has to
-     * reach to be a sort of the leaderboard rather than of the page in view.
+     * Twelve Products ranked by what each earned, so there is a second page
+     * at all, and the page in view is cut from the ranking of all twelve.
      */
-    $pages = collect(range(1, 12))->map(function (int $rank): Page {
-        $page = Page::factory()->published()->create(['title' => "Combo {$rank}"]);
+    collect(range(1, 12))->each(function (int $rank): void {
+        $product = Product::factory()->create(['name' => "Tea {$rank}", 'price' => (13 - $rank) * 10000]);
 
-        Order::factory()->create([
-            'page_id' => $page->getKey(),
-            'subtotal' => (13 - $rank) * 10000,
-            'delivery_charge' => 0,
-            'created_at' => now(),
-        ]);
+        $order = Order::factory()->create(['delivery_charge' => 0, 'created_at' => now()]);
 
-        return $page;
+        OrderLine::factory()->for($order)->create(['product_id' => $product->id, 'product_name' => $product->name, 'unit_price' => $product->price, 'quantity' => 1]);
     });
 
-    Order::factory()->count(2)->create([
-        'page_id' => $pages->last()->getKey(),
-        'subtotal' => 100,
-        'delivery_charge' => 0,
-        'created_at' => now(),
-    ]);
+    $table = Livewire::test(TopProductsTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
 
-    $leaderboard = Livewire::test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
-
-    $records = fn (): LengthAwarePaginator => $leaderboard->instance()->getTableRecords();
-    $titles = fn (): array => $records()->getCollection()->pluck('title')->values()->all();
+    $records = fn (): LengthAwarePaginator => $table->instance()->getTableRecords();
+    $names = fn (): array => $records()->getCollection()->pluck('name')->values()->all();
 
     expect($records())->toBeInstanceOf(LengthAwarePaginator::class)
         ->and($records()->total())->toBe(12)
         ->and($records()->perPage())->toBe(10)
         ->and($records()->lastPage())->toBe(2)
-        ->and($titles())->toHaveCount(10)
-        ->and($titles()[0])->toBe('Combo 1')
-        ->and($titles())->not->toContain('Combo 12');
+        ->and($names())->toHaveCount(10)
+        ->and($names()[0])->toBe('Tea 1')
+        ->and($names())->not->toContain('Tea 12');
 
-    $leaderboard->call('setPage', 2);
+    $table->call('setPage', 2);
 
     expect($records()->currentPage())->toBe(2)
-        ->and($titles())->toBe(['Combo 11', 'Combo 12']);
-
-    $leaderboard->sortTable('orders', 'desc');
-
-    expect($records()->currentPage())->toBe(1)
-        ->and($titles()[0])->toBe('Combo 12');
+        ->and($names())->toBe(['Tea 11', 'Tea 12']);
 
     /**
      * A new window is a new question, so it is answered from the top.
@@ -469,9 +362,7 @@ it('pages the Page leaderboard at ten rows, sorting the whole leaderboard before
      * invoked where Livewire invokes it — on the component itself, once the
      * reactive property it watches has changed.
      */
-    $leaderboard->call('setPage', 2);
-
-    $instance = $leaderboard->instance();
+    $instance = $table->instance();
 
     expect($instance->getTablePage())->toBe(2);
 
@@ -481,10 +372,7 @@ it('pages the Page leaderboard at ten rows, sorting the whole leaderboard before
 });
 
 it('pages every collection-backed report table at ten rows, offering the standard page sizes', function () {
-    $page = Page::factory()->published()->create();
-
     $order = Order::factory()->create([
-        'page_id' => $page->getKey(),
         'delivery_label' => 'Inside Dhaka',
         'delivery_charge' => 6000,
         'created_at' => now(),
@@ -498,7 +386,7 @@ it('pages every collection-backed report table at ten rows, offering the standar
      * at all. What is pinned is that every one of them does, at the same page
      * size, with the same sizes on offer.
      */
-    foreach ([NeedsAttentionTable::class, PageLeaderboardTable::class, TopProductsTable::class, DeliveryMixTable::class] as $widget) {
+    foreach ([NeedsAttentionTable::class, TopProductsTable::class, DeliveryMixTable::class] as $widget) {
         $instance = Livewire::test($widget)->instance();
 
         expect($instance->getTable()->isPaginated())->toBeTrue()
@@ -534,19 +422,15 @@ it('answers a page past the end of a report table with its last page, so a stale
 
     /** The same clamp on a table with a real second page: the last one, not nothing. */
     collect(range(1, 12))->each(function (int $rank): void {
-        $page = Page::factory()->published()->create(['title' => "Combo {$rank}"]);
+        $product = Product::factory()->create(['name' => "Tea {$rank}", 'price' => (13 - $rank) * 10000]);
 
-        Order::factory()->create([
-            'page_id' => $page->getKey(),
-            'subtotal' => (13 - $rank) * 10000,
-            'delivery_charge' => 0,
-            'created_at' => now(),
-        ]);
+        OrderLine::factory()->for(Order::factory()->create(['delivery_charge' => 0, 'created_at' => now()]))
+            ->create(['product_id' => $product->id, 'product_name' => $product->name, 'unit_price' => $product->price, 'quantity' => 1]);
     });
 
-    $leaderboard = Livewire::withQueryParams(['page' => 99])
-        ->test(PageLeaderboardTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
+    $products = Livewire::withQueryParams(['page' => 99])
+        ->test(TopProductsTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']]);
 
-    expect($leaderboard->instance()->getTableRecords()->currentPage())->toBe(2)
-        ->and($leaderboard->instance()->getTableRecords()->count())->toBeGreaterThan(0);
+    expect($products->instance()->getTableRecords()->currentPage())->toBe(2)
+        ->and($products->instance()->getTableRecords()->count())->toBeGreaterThan(0);
 });

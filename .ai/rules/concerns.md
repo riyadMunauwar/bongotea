@@ -6,7 +6,7 @@ paths:
 # Concerns
 
 ## The Reporting Window control lives in one trait, drawn one way
-`App\Filament\Concerns\HasReportingWindow` holds Filament's `HasFilters` plus the preset select and the two Custom date pickers. A screen that carries a report uses the trait and draws `reportingWindowComponents()` as a filter form (`filtersForm()`, with `HasFiltersForm`): the Dashboard and the Page Report both do. Never restate the presets on a new screen, and do not reintroduce the modal drawing the Page edit screen used to have — the edit screen carries no report at all now, and one drawing is the point.
+`App\Filament\Concerns\HasReportingWindow` holds Filament's `HasFilters` plus the preset select and the two Custom date pickers. A screen that carries a report uses the trait and draws `reportingWindowComponents()` as a filter form (`filtersForm()`, with `HasFiltersForm`): the Dashboard and the windowed reports do. Never restate the presets on a new screen; one drawing is the point.
 
 The widgets are wired by `HasFilters` alone — `getWidgetsSchemaComponents()` passes `$this->filters` as `pageFilters` because the property exists. A screen that ever applies the window server-side (an action, not a live field) must call `updatedFilters()` afterwards, or the session forgets the choice.
 

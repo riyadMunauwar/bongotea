@@ -5,12 +5,11 @@ namespace App\Support\Orders;
 use RuntimeException;
 
 /**
- * Raised when a Capture is attempted against a Page with nothing left to sell,
- * or for a Product the submission gave no quantity for.
+ * Raised when a Cart cannot become an Order as it stands: it is empty, a line
+ * names a Product no longer sold or no kilograms, a Product appears twice, or
+ * there is no District to deliver to.
  *
- * Normally unreachable: publishing a Page with no linked Product is blocked,
- * and the request is validated before it gets here. It exists for the window in
- * between — a Product soft-deleted or newly linked between the visitor loading
- * a cached page and submitting it.
+ * Never corrected silently. A Capture either sells exactly what was asked
+ * for or refuses, so a courier never collects a total nobody agreed to.
  */
 class CheckoutUnavailable extends RuntimeException {}

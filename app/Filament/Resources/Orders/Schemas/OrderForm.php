@@ -78,24 +78,14 @@ class OrderForm
                             ->state(fn (?Order $record) => $record?->created_at)
                             ->dateTime(),
 
-                        /**
-                         * The slug as captured, not the Page's current one. A
-                         * renamed or deleted Page must not rewrite which
-                         * campaign this order belongs to.
-                         */
-                        TextEntry::make('page_slug')
-                            ->label('Ordered from')
-                            ->state(fn (?Order $record): ?string => $record?->page_slug),
-
                         OrderDocument::paymentMethod(),
                     ]),
 
                 /**
-                 * Only the phone is compulsory here. Every other detail is a
-                 * question the Page's Checkout may never have asked, and an
-                 * editor that refused to save without one would make a
-                 * perfectly good Order unworkable — the operator would have to
-                 * invent an address to correct a quantity.
+                 * Only the phone and the District are compulsory here, as
+                 * they are at Capture. An editor that refused to save without
+                 * an address would make an otherwise good Order unworkable —
+                 * the operator would have to invent one to correct a quantity.
                  */
                 Section::make('Deliver to')
                     ->schema([
@@ -152,9 +142,9 @@ class OrderForm
                                 config('giopages.districts'),
                                 config('giopages.districts'),
                             ))
+                            ->required()
                             ->searchable()
-                            ->native(false)
-                            ->placeholder(OrderDocument::NOT_ASKED),
+                            ->native(false),
 
                         Textarea::make('customer_address')
                             ->label('Address')
@@ -162,10 +152,20 @@ class OrderForm
                             ->maxLength(1000)
                             ->dehydrateStateUsing(self::nullWhenBlank())
                             ->placeholder(OrderDocument::NOT_ASKED),
+
+                        TextInput::make('shop_name')
+                            ->label('Shop name')
+                            ->maxLength(255)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->placeholder(OrderDocument::NOT_ASKED),
+
+                        Textarea::make('note')
+                            ->label('Note')
+                            ->rows(2)
+                            ->maxLength(1000)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->placeholder(OrderDocument::NOT_ASKED),
                     ]),
-
-                ...OrderDocument::answers(),
-
                 ...OrderDocument::payments(),
 
                 ...OrderDocument::shipments(),

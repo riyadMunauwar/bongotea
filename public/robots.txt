@@ -1,7 +1,2 @@
-# The static page cache lives inside the document root, so every cached page is
-# also reachable at /page-cache/<slug>.html. The webserver configurations refuse
-# that address outright; this line is what reaches the installs they do not —
-# OpenLiteSpeed without the vhost snippet, and any host where the rewrite rules
-# never took. The lock is a refusal to serve; this is a request not to index.
 User-agent: *
-Disallow: /page-cache/
+Disallow:

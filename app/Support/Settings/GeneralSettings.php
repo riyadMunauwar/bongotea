@@ -4,8 +4,7 @@ namespace App\Support\Settings;
 
 /**
  * The installation-wide values the app read from config before Settings
- * existed: currency, phone rules, the default Delivery Charge and the
- * checkout limits.
+ * existed: currency, timezone, phone rules and the checkout limits.
  *
  * Every default is the config value, which in turn reads the `GIOPAGES_*`
  * environment variables — so an installation with no saved row, and the
@@ -36,22 +35,6 @@ class GeneralSettings extends SettingsGroup
     /** Most digits a national number may have once the prefixes are stripped. */
     public int $phoneNationalLengthMax;
 
-    /** The one Delivery Option a new Page is born with, in major units. */
-    public float $deliveryCharge;
-
-    /**
-     * Which Page answers the Site Root, by id. Zero is none, and the Site Root
-     * serves the Placeholder.
-     *
-     * An id rather than a Slug because a Slug can be changed — the
-     * `wasChanged('slug')` branch in `PageCacheInvalidator` exists for that —
-     * and a rename would silently orphan the pointer. Zero being "none" also
-     * makes the damaged row harmless: `coerce()` reads a stored null on a
-     * non-nullable int as `0`, so a row somebody hand-edited falls back to the
-     * Placeholder rather than to a Page nobody chose.
-     */
-    public int $frontPageId;
-
     /** Upper bound on a single line's quantity. */
     public int $checkoutMaxQuantity;
 
@@ -74,8 +57,6 @@ class GeneralSettings extends SettingsGroup
         $this->phoneTrunkPrefix = (string) config('giopages.phone.trunk_prefix');
         $this->phoneNationalLengthMin = (int) config('giopages.phone.national_length.min');
         $this->phoneNationalLengthMax = (int) config('giopages.phone.national_length.max');
-        $this->deliveryCharge = (float) config('giopages.delivery.charge');
-        $this->frontPageId = (int) config('giopages.front_page_id');
         $this->checkoutMaxQuantity = (int) config('giopages.checkout.max_quantity');
         $this->checkoutRateLimit = (int) config('giopages.checkout.rate_limit');
         $this->timezone = (string) config('giopages.timezone');

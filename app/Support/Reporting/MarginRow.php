@@ -91,8 +91,8 @@ final readonly class MarginRow
      *
      * Null wherever the margin is, and null again where the units earned
      * nothing at all: a rate with no denominator is unknown rather than zero,
-     * which is the reading `HasSalesRatios::conversionRate()` already takes of
-     * a Page whose Visits are not counted. A nought would be worse than
+     * which is the reading `HasSalesRatios::conversionRate()` already takes
+     * where Visits are not counted. A nought would be worse than
      * unhelpful here — a line given away at a stamped cost really did lose
      * money, and a 0.0% in the column a Merchant ranks by would read as break
      * even.

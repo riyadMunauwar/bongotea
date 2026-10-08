@@ -13,7 +13,6 @@ use App\Models\Payment;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Models\User;
-use App\Support\Checkout\CheckoutFieldType;
 use App\Support\Couriers\CourierBooker;
 use App\Support\Couriers\CourierNotUsable;
 use App\Support\Couriers\DeliveryArea;
@@ -23,7 +22,6 @@ use App\Support\Couriers\OrderAlreadyShipping;
 use App\Support\Couriers\ParcelDetails;
 use App\Support\Couriers\ParcelField;
 use App\Support\Money;
-use App\Support\Orders\CapturedAnswer;
 use App\Support\PhoneNumber;
 use App\Support\Settings\CourierSettings;
 use Filament\Forms\Components\Select;
@@ -86,16 +84,13 @@ function answering(CourierScript $script, array $answers): array
 }
 
 /**
- * An Order carrying the note its Customer wrote for the rider, which is a
- * Merchant's own question keyed `note` and not a column.
+ * An Order carrying the note its Customer wrote for the rider.
  */
 function orderWithDeliveryNote(CourierScript $script, string $note): Order
 {
     $order = orderReadyToSend($script);
 
-    $order->update(['answers' => [
-        new CapturedAnswer('note', 'Note for the courier', CheckoutFieldType::Textarea, $note),
-    ]]);
+    $order->update(['note' => $note]);
 
     return $order->refresh();
 }

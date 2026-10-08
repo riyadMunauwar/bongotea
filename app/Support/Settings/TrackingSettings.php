@@ -6,31 +6,24 @@ use App\Enums\TrackingProvider;
 use App\Support\Tracking\EventSwitches;
 
 /**
- * What the installation decides about tracking once: which of each Provider's
- * events fire on a Page that has said nothing about them, and how hard the
+ * What the store decides about tracking: which of each Provider's events
+ * fire, whether every storefront load is counted as a Visit, and how hard the
  * beacon may be leaned on.
  *
- * The half of a Page's Tracking Config that is not per Page. A Merchant who
- * decides they want no `ViewContent` anywhere says it here rather than on
- * every Page, and a Page that wants it anyway says so on its own tab — the
- * per-Page word wins, and silence inherits.
- *
  * Deliberately not here: anything about `user_data`. Meta computes match
- * quality per dataset rather than per Page, so a switch for it would be a
- * Merchant quietly degrading every Page sharing a Destination; what is
- * offered instead is the per-Page `custom_data` suppression, which costs
- * nothing outside the Page that asks for it.
+ * quality per dataset, so a switch for it would be a Merchant quietly
+ * degrading every event sharing a Destination.
  */
 class TrackingSettings extends SettingsGroup
 {
     /**
-     * What is fired for a Page that says nothing, by Provider and then by the
-     * Provider's own name for the event.
+     * What is fired, by Provider and then by the Provider's own name for the
+     * event.
      *
      * An event absent here is on. That is the whole of why this can be one
      * loose array rather than a property per event: a Provider that gains a
-     * fifth event gains a switch on this page and on every Tracking tab with
-     * no data migration and no edit here, and an installation that has never
+     * fifth event gains a switch on the Tracking page with no data migration
+     * and no edit here, and an installation that has never
      * opened this page reports everything, which is what it did before this
      * group existed.
      *
@@ -51,18 +44,17 @@ class TrackingSettings extends SettingsGroup
     public int $beaconRateLimit;
 
     /**
-     * Whether every load of a published Page is counted as a Visit.
+     * Whether every storefront load is counted as a Visit.
      *
      * Off until a Merchant asks for it. Counting is an increment on the path
      * of a page load, and this is a product served from shared hosting — a
      * write per visit that nobody asked for is the wrong default, however
-     * small it is. Switching it on is what turns the Visits tile and the
-     * leaderboard's Conversion Rate from a sentence into a figure.
+     * small it is. Switching it on is what turns the Visits tile from a
+     * sentence into a figure.
      *
-     * It owes nothing to any ad platform: a Page with no Destination anywhere
-     * in the installation still carries the beacon while this is on, and still
-     * counts. That is the whole of why the Visit Moment is worth having on its
-     * own.
+     * It owes nothing to any ad platform: a store with no Destination anywhere
+     * still counts while this is on. That is the whole of why the Visit
+     * Moment is worth having on its own.
      */
     public bool $countsVisits;
 
@@ -78,7 +70,7 @@ class TrackingSettings extends SettingsGroup
     }
 
     /**
-     * Whether a Page that has said nothing about this event reports it.
+     * Whether the store reports this event.
      *
      * On unless the installation has said otherwise, so an event that nobody
      * has an opinion about fires — the same direction the consent hook

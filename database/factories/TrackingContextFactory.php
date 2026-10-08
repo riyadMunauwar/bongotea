@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class TrackingContextFactory extends Factory
 {
     /**
-     * What an ad click that placed an Order left behind: the Page it landed
-     * on, the browser it arrived in, and Facebook's two identifiers in the
+     * What an ad click that placed an Order left behind: the address it was
+     * placed from, the browser it arrived in, and Facebook's two identifiers in the
      * shape Meta itself writes them.
      *
      * @return array<string, mixed>

@@ -114,11 +114,9 @@ it('refreshes the token once when bKash no longer honours it, and takes a second
             : Http::response(['message' => 'Unauthorized'], 401);
     });
 
-    $page = pageOffering($gateway);
-
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'bkash']))
-        ->assertCreated()
-        ->assertJsonPath('redirect', $gateway->gatewayPageUrl());
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect($gateway->gatewayPageUrl());
 
     $order = Payment::sole()->order;
 
@@ -153,11 +151,9 @@ it('marks the payment failed at capture and leaves it pending at verification wh
             : null;
     });
 
-    $page = pageOffering($gateway);
-
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'bkash']))
-        ->assertCreated()
-        ->assertJsonPath('redirect', route('checkout.retry', Order::sole()->order_number));
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect(route('checkout.retry', Order::sole()->order_number));
 
     $failed = Payment::sole();
 
@@ -168,7 +164,7 @@ it('marks the payment failed at capture and leaves it pending at verification wh
     $refusesToGrant = false;
     $gateway->fakeStart();
 
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'bkash']))->assertCreated();
+    payingOnline($gateway)->assertRedirect();
 
     $pending = Payment::query()->latest('id')->firstOrFail();
 
@@ -190,13 +186,13 @@ it('speaks to the host the Merchant typed, live once the sandbox switch is off',
 
     Http::fake(['live.bkash.example/*' => Http::response(['statusCode' => '0000', 'id_token' => 'live-token', 'paymentID' => 'TR0011LIVE', 'bkashURL' => 'https://payment.bkash.com/?hash=live'])]);
 
-    $page = pageOffering($gateway);
+    $gateway->makeUsable();
 
     app(PaymentSettings::class)->with(['bkashSandbox' => false, 'bkashLiveHost' => 'https://live.bkash.example/v1.2.0-beta/'])->save();
 
-    $this->postJson(route('checkout.store'), capturePayload($page, ['payment_method' => 'bkash']))
-        ->assertCreated()
-        ->assertJsonPath('redirect', 'https://payment.bkash.com/?hash=live');
+    payingOnline($gateway)
+        ->assertStatus(303)
+        ->assertRedirect('https://payment.bkash.com/?hash=live');
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://live.bkash.example/v1.2.0-beta/tokenized/checkout/token/grant');
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://live.bkash.example/v1.2.0-beta/tokenized/checkout/create'

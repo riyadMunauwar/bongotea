@@ -21,18 +21,18 @@ use Tests\Fixtures\Tracking\ProviderScript;
  */
 
 /**
- * A Cash on Delivery Order captured on a Page selling one Product, with the
- * Provider's Destination configured before the Capture so the server copy is
- * written too.
+ * A Cash on Delivery Order captured for one Product, with the Provider's
+ * Destination configured before the Capture so the server copy is written
+ * too.
  */
 function orderPlacedOn(ProviderScript $script, ?Product $product = null): Order
 {
     $script->makeDestination();
 
-    test()->postJson(route('checkout.store'), capturePayload(sellingPage($product ?? Product::factory()->create())))
-        ->assertCreated();
+    $order = orderAsCaptured(lines: [['product' => $product ?? Product::factory()->create(), 'kilograms' => 1]]);
+    recordCaptureOf($order);
 
-    return Order::sole();
+    return $order;
 }
 
 /**
@@ -67,7 +67,7 @@ it('reports the page load and the purchase from the order complete page of the b
     /** The Purchase carries what the server copy carries: the same money, the same basket, the same reference. */
     $purchase = $events[1];
 
-    expect($script->valueOf($purchase))->toBe(1050.0)
+    expect($script->valueOf($purchase))->toBe(990.0)
         ->and($script->currencyOf($purchase))->toBe('BDT')
         ->and($script->orderReferenceOf($purchase))->toBe($order->order_number)
         ->and($script->contentsOf($purchase))->toBe([
@@ -144,23 +144,21 @@ it('consults one global for consent and fires unless it is explicitly false', fu
 })->with('tracking providers');
 
 it('carries no pixel and requests nothing from anyone where no destination is configured', function () {
-    $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
+    $html = orderCompletePageFor(orderAsCaptured());
 
-    $html = orderCompletePageFor(Order::sole());
-
-    /** The document a Page with no Destination serves is the one it has always served. */
+    /** The document a store with no Destination serves is the one it has always served. */
     expect($html)->not->toContain('<script')
         ->and($html)->not->toContain(TrackingSnippet::CONSENT_HOOK)
         ->and($html)->not->toContain('src=');
 });
 
 it('carries no pixel for a destination the merchant has switched off, because that is what a campaign break is', function (ProviderScript $script) {
-    $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
+    $order = orderAsCaptured();
 
     $destination = $script->makeDestination();
     $destination->update(['enabled' => false]);
 
-    expect(orderCompletePageFor(Order::sole()))->not->toContain('<script');
+    expect(orderCompletePageFor($order))->not->toContain('<script');
 })->with('tracking providers');
 
 /**
@@ -176,39 +174,13 @@ it('still carries the pixel for a destination that has no access token yet', fun
     expect($script->carriesBaseCodeFor(Destination::sole(), orderCompletePageFor($order)))->toBeTrue();
 })->with('tracking providers');
 
-it('reports to the destination of an order whose page is in the bin', function (ProviderScript $script) {
-    $order = orderPlacedOn($script);
-
-    $order->page->delete();
-
-    $html = orderCompletePageFor($order);
-
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
-        ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([$script->pageViewEvent(), $script->purchaseEvent()]);
-})->with('tracking providers');
-
-it('falls back to the default destination for an order whose page is gone for good', function (ProviderScript $script) {
-    $order = orderPlacedOn($script);
-
-    $order->page->forceDelete();
-
-    $html = orderCompletePageFor($order->refresh());
-
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
-        ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([$script->pageViewEvent(), $script->purchaseEvent()]);
-})->with('tracking providers');
-
 /**
  * A visitor on any of these three pages has already bought, or is about to be
  * moved on by a Verification. None of them is a Visit: counting them would
  * dilute the Merchant's own Conversion Rate with the people who converted.
  */
 it('counts the order complete page as no visit, however often it is reloaded', function () {
-    (new FacebookScript)->makeDestination();
-
-    $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
-
-    $order = Order::sole();
+    $order = orderPlacedOn(new FacebookScript);
 
     orderCompletePageFor($order);
     orderCompletePageFor($order);

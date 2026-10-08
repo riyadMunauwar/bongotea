@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\OrderStatus;
-use App\Models\Page;
 use App\Support\Reporting\BucketSize;
 use App\Support\Reporting\ReportingPreset;
 use App\Support\Reporting\ReportingQuery;
@@ -16,9 +15,9 @@ use Carbon\CarbonImmutable;
 | The helpers are in tests/Pest.php, shared with the other module tests.
 */
 
-function salesOverTimeOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): SalesOverTime
+function salesOverTimeOf(ReportingPreset $preset = ReportingPreset::Last7Days): SalesOverTime
 {
-    return app(ReportingQuery::class)->salesOverTime(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->salesOverTime(ReportingWindow::of($preset, reportingNow()));
 }
 
 /**
@@ -87,13 +86,4 @@ it('is all zeros on a window with nothing captured, one point per bucket still',
     expect($series->points)->toHaveCount(7)
         ->and(ordersPerPoint($series))->toBe([0, 0, 0, 0, 0, 0, 0])
         ->and(salesPerPoint($series))->toBe([0, 0, 0, 0, 0, 0, 0]);
-});
-
-it('scopes to a Page when given one, leaving other Pages\' Orders out', function () {
-    $page = Page::factory()->create();
-    orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id]);
-    orderCapturedAt('2026-09-05 13:00');
-
-    expect(ordersPerPoint(salesOverTimeOf(page: $page)))->toBe([0, 0, 1, 0, 0, 0, 0])
-        ->and(ordersPerPoint(salesOverTimeOf()))->toBe([0, 0, 2, 0, 0, 0, 0]);
 });

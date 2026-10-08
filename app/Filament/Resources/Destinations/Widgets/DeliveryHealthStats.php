@@ -27,7 +27,7 @@ class DeliveryHealthStats extends StatsOverviewWidget
 {
     protected ?string $heading = 'Delivery';
 
-    protected ?string $description = 'Whether what your Pages recorded is actually reaching your ad accounts.';
+    protected ?string $description = 'Whether what your store recorded is actually reaching your ad accounts.';
 
     public static function canView(): bool
     {

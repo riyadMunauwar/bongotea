@@ -2,7 +2,6 @@
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
-use App\Models\Page;
 use App\Models\Payment;
 use App\Support\Reporting\PaymentMix;
 use App\Support\Reporting\PaymentMixRow;
@@ -16,9 +15,9 @@ use App\Support\Reporting\ReportingWindow;
 | The helpers are in tests/Pest.php, shared with the other module tests.
 */
 
-function paymentMixOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): PaymentMix
+function paymentMixOf(ReportingPreset $preset = ReportingPreset::Last7Days): PaymentMix
 {
-    return app(ReportingQuery::class)->paymentMix(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->paymentMix(ReportingWindow::of($preset, reportingNow()));
 }
 
 /**
@@ -68,17 +67,6 @@ it('splits each online method into Paid and Unpaid by the Order scopes: a Pendin
         ->and($bkash->orders)->toBe(1)
         ->and($bkash->paid())->toBe(0)
         ->and($bkash->unpaid)->toBe(1);
-});
-
-it('counts one Page alone when scoped to it', function () {
-    $page = Page::factory()->create();
-    orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id, 'payment_method' => PaymentMethod::Bkash]);
-    orderCapturedAt('2026-09-05 13:00', attributes: ['payment_method' => PaymentMethod::SslCommerz]);
-
-    $mix = paymentMixOf(page: $page);
-
-    expect(paymentMixMethods($mix))->toBe([PaymentMethod::Bkash])
-        ->and($mix->rows[0]->orders)->toBe(1);
 });
 
 it('is empty on a window with nothing captured', function () {

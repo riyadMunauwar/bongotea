@@ -8,10 +8,9 @@ use Closure;
  * What somebody has said about a Provider's events, keyed by the Provider and
  * then by the Provider's own name for the event.
  *
- * The shape a Page's Tracking Config holds, the shape the tracking settings
- * row holds, and the shape the Tracking tab hands over — one walk, read the
- * same way by all three, so a Merchant's switches cannot be read one way on
- * the tab and another on the path of a Moment.
+ * The shape the tracking settings row holds and the shape the Tracking page
+ * hands over — one walk, read the same way by both, so a Merchant's switches
+ * cannot be read one way on the page and another on the path of a Moment.
  *
  * Reading is total and forgiving, like every stored shape here: anything that
  * is not a Provider's name over an event's name over an answer is nothing

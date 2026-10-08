@@ -3,7 +3,6 @@
 use App\Enums\TrackingEventState;
 use App\Models\Destination;
 use App\Models\Order;
-use App\Models\Page;
 use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
 use App\Models\VisitCount;
@@ -145,10 +144,8 @@ it('keeps the order a pruned tracking context belonged to, because tracking neve
 });
 
 it('never touches the visit aggregate, so last months conversion rate is still there next month', function () {
-    $page = Page::factory()->published()->create();
-
-    VisitCount::query()->create(['page_id' => $page->getKey(), 'visited_on' => '2026-01-01', 'visits' => 4200]);
-    VisitCount::query()->create(['page_id' => $page->getKey(), 'visited_on' => now()->toDateString(), 'visits' => 7]);
+    VisitCount::query()->create(['visited_on' => '2026-01-01', 'visits' => 4200]);
+    VisitCount::query()->create(['visited_on' => now()->toDateString(), 'visits' => 7]);
 
     /** The rows a rollup would have been tempted to derive it from, all prunable. */
     $destination = Destination::factory()->create();

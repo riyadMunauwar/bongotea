@@ -70,50 +70,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Delivery
-    |--------------------------------------------------------------------------
-    |
-    | The one Delivery Option a Page is born with, in major units — a single
-    | arrangement named "Delivery", added to the total with no question asked.
-    |
-    | A starting point and not the answer: delivery is priced per Page from
-    | here on, as Delivery Options the Merchant names and prices themselves
-    | (ADR-0005). Changing this changes what the *next* Page starts from and
-    | nothing that already exists, which is the point — an installation-wide
-    | figure reaching every live campaign at once is what that ADR ended.
-    |
-    */
-
-    'delivery' => [
-        'charge' => env('GIOPAGES_DELIVERY_CHARGE', 60),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Front Page
-    |--------------------------------------------------------------------------
-    |
-    | Which Page answers the Site Root, by id. Zero means none, and the Site
-    | Root serves the Placeholder instead (ADR-0023).
-    |
-    | A default here rather than in the Settings group alone, because every
-    | property of a group is set from config in its constructor and the row is
-    | only ever the override (ADR-0012). A Merchant chooses this from a
-    | dropdown; the environment variable is here for an installation that
-    | provisions itself.
-    |
-    */
-
-    'front_page_id' => (int) env('GIOPAGES_FRONT_PAGE_ID', 0),
-
-    /*
-    |--------------------------------------------------------------------------
     | Districts
     |--------------------------------------------------------------------------
     |
-    | The structured region courier APIs want. It settles nothing about what an
-    | Order costs — Delivery Options do that (ADR-0005) — and a Page may switch
-    | the question off entirely. A config list rather than a table: it is not
+    | The structured region courier APIs want, and a required part of every
+    | Order's delivery details. A config list rather than a table: it is not
     | data the merchant manages, and it must be swappable per installation — a
     | merchant outside Bangladesh replaces this list wholesale.
     |
@@ -152,9 +113,9 @@ return [
     |
     | Weight and declared value are what make an unattended booking possible
     | at all. RedEx refuses a parcel without either, and the system holds
-    | neither: no page asks a customer how heavy their order is, and it must
-    | not start. The type codes are each courier's own documented words for
-    | "an ordinary parcel going to a home", spelled as that courier spells
+    | neither: the checkout does not ask a customer how heavy their parcel
+    | is. The type codes are each courier's own documented words for "an
+    | ordinary parcel going to a home", spelled as that courier spells
     | them, and a merchant with a different arrangement overrides them in
     | Settings rather than here.
     |
@@ -236,7 +197,7 @@ return [
         'beacon_rate_limit' => (int) env('GIOPAGES_TRACKING_BEACON_RATE_LIMIT', 300),
 
         /**
-         * Whether every load of a published Page is counted as a Visit.
+         * Whether every storefront load is counted as a Visit.
          *
          * Off, because it is a database write on the path of a page load and
          * this product is served from shared hosting: adding one to every

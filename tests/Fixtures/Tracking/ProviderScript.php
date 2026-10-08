@@ -51,9 +51,9 @@ abstract class ProviderScript
     abstract public function checkoutStartedEvents(): array;
 
     /**
-     * Everything this Provider is told when a Page is loaded, in the order
-     * it is reported — the load itself among them, since a landing Page is a
-     * page view and a look at the thing being sold at once.
+     * Everything this Provider is told when a page is loaded, in the order
+     * it is reported — the load itself among them, since a storefront page
+     * is a page view and a look at the thing being sold at once.
      *
      * @return list<string>
      */

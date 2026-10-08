@@ -509,17 +509,16 @@ it('works an order that has been deleted without falling over', function () {
         ->and($order->total)->toBe(204000);
 });
 
-it('works an order taken on a form that never asked for an address', function () {
+it('works an order that holds no name or address', function () {
     /**
-     * A Page whose Checkout asks for a phone number and nothing else — a
-     * lead-capture campaign, or one where the courier calls to arrange
-     * everything. The Order is complete as far as it goes, so it queues, opens
-     * and saves like any other.
+     * A phone order taken with a number and a District and nothing else, where
+     * the courier calls to arrange the rest. The Order is complete as far as
+     * it goes, so it queues, opens and saves like any other.
      */
     $order = capturedOrder(attributes: [
         'customer_name' => null,
         'customer_address' => null,
-        'customer_district' => null,
+        'customer_district' => 'Dhaka',
     ]);
 
     Livewire::test(ListOrders::class)
@@ -530,7 +529,7 @@ it('works an order taken on a form that never asked for an address', function ()
         ->assertSeeText('Not asked for');
 
     /**
-     * Nothing here may demand a detail the Checkout never collected: an
+     * Nothing here may demand an optional detail the Order never held: an
      * operator recording a confirmation call would otherwise have to invent an
      * address before the screen would save.
      */
@@ -568,58 +567,4 @@ it('shows an email address only where one was captured', function () {
 
     Livewire::test(ViewOrder::class, ['record' => $withoutEmail->getKey()])
         ->assertSeeText('Not asked for');
-});
-
-it('reads the questions a merchant added of their own off the order alone', function (string $screen) {
-    $order = capturedOrder(attributes: ['answers' => [
-        ['key' => 'colour', 'label' => 'Which colour?', 'type' => 'select', 'value' => 'moss', 'option_label' => 'Moss green'],
-        ['key' => 'gift_wrap', 'label' => 'Gift wrap this', 'type' => 'checkbox', 'value' => true, 'option_label' => null],
-        ['key' => 'gift_note', 'label' => 'Gift note', 'type' => 'text', 'value' => null, 'option_label' => null],
-    ]]);
-
-    /**
-     * The page it was captured on is gone altogether, which is the strongest
-     * form of the question this screen must never ask: everything it needs was
-     * copied onto the order at Capture (ADR-0006).
-     */
-    $order->page->products()->detach();
-    $order->page->forceDelete();
-
-    Livewire::test($screen, ['record' => $order->getKey()])
-        ->assertSee('Which colour?')
-        /** The wording the customer picked it under, not the value submitted. */
-        ->assertSee('Moss green')
-        ->assertSee('Gift wrap this')
-        ->assertSee('Yes')
-        /** Asked and left alone, which is a different thing from never asked. */
-        ->assertSee('Gift note')
-        ->assertSee('Left blank');
-})->with(['view' => ViewOrder::class, 'edit' => EditOrder::class]);
-
-it('says nothing about questions on an order whose page asked none of its own', function (string $screen) {
-    $order = capturedOrder();
-
-    /**
-     * Most orders. An empty heading over nothing is a section a fulfiller
-     * learns to skip, and the ones that matter go with it.
-     */
-    Livewire::test($screen, ['record' => $order->getKey()])
-        ->assertSuccessful()
-        ->assertDontSee('Also asked');
-})->with(['view' => ViewOrder::class, 'edit' => EditOrder::class]);
-
-it('leaves the answers a merchant question collected alone when an order is corrected', function () {
-    $order = capturedOrder(attributes: ['answers' => [
-        ['key' => 'colour', 'label' => 'Which colour?', 'type' => 'select', 'value' => 'moss', 'option_label' => 'Moss green'],
-    ]]);
-
-    /**
-     * What was agreed at Capture is what gets collected at the door, and these
-     * answers are agreed the way a product's name and price are. Correcting a
-     * quantity must not disturb them.
-     */
-    editingLines($order, fn (array $line): array => [...$line, 'quantity' => 3]);
-
-    expect($order->refresh()->answers[0]->toArray())
-        ->toBe(['key' => 'colour', 'label' => 'Which colour?', 'type' => 'select', 'value' => 'moss', 'option_label' => 'Moss green']);
 });

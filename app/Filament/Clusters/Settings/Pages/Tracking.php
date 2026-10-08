@@ -12,17 +12,15 @@ use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * What every Page reports unless it says otherwise, and whether the Merchant
- * counts their own Visits while it does.
+ * What the store reports, and whether the Merchant counts their own Visits
+ * while it does.
  *
  * One section per Provider, listing exactly the events that Provider declares
  * — so the page grows on its own as a Provider gains an event, and a second
- * platform is a section nobody had to write. A Page's own Tracking tab
- * overrules any of these; silence there inherits what is decided here.
+ * platform is a section nobody had to write.
  *
  * Everything is on by default and nothing is required. A Merchant who never
- * opens this page reports everything their Pages' Providers produce, which is
- * what an installation did before this page existed.
+ * opens this page reports everything their Providers produce.
  */
 class Tracking extends SettingsPage
 {
@@ -66,16 +64,16 @@ class Tracking extends SettingsPage
             ...array_map(self::provider(...), TrackingProvider::cases()),
 
             Section::make('Visits')
-                ->description('Your own figures, owing nothing to any ad platform: the Visits tile on the Dashboard, and a Conversion Rate on the Page leaderboard.')
+                ->description('Your own figure, owing nothing to any ad platform: the Visits tile on the Dashboard.')
                 ->columns(1)
                 ->schema([
                     Toggle::make('countsVisits')
                         ->label('Count Visits')
-                        ->helperText('Off. Counting a Visit is a small database write on every load of a published Page, so it is not switched on for you. On, every load is counted — every load, not every visitor, which is how an ad platform counts the same thing. Loads of the Order Complete and Retry Pages are not Visits.'),
+                        ->helperText('Off. Counting a Visit is a small database write on every storefront load, so it is not switched on for you. On, every load is counted — every load, not every visitor, which is how an ad platform counts the same thing. Loads of the Order Complete and Retry Pages are not Visits.'),
                 ]),
 
             Section::make('Beacon')
-                ->description('The small same-origin request a tracked Page makes after it has painted, which is how the server learns about a load that only the browser saw.')
+                ->description('The small same-origin request a storefront page makes after it has painted, which is how the server learns about a load that only the browser saw.')
                 ->columns(1)
                 ->schema([
                     TextInput::make('beaconRateLimit')
@@ -96,13 +94,13 @@ class Tracking extends SettingsPage
     private static function provider(TrackingProvider $provider): Section
     {
         return Section::make($provider->getLabel())
-            ->description('What a Page reports to a '.$provider->getLabel().' Destination unless its own Tracking tab says otherwise.')
+            ->description('What the store reports to its '.$provider->getLabel().' Destination.')
             ->columns(1)
             ->schema(array_map(
                 fn (string $event): Toggle => Toggle::make("eventDefaults.{$provider->value}.{$event}")
                     ->label($event)
                     ->default(true)
-                    ->helperText('Off, and no Page reports '.$event.' except one that switches it on for itself.'),
+                    ->helperText('Off, and the store does not report '.$event.'.'),
                 $provider->events(),
             ));
     }

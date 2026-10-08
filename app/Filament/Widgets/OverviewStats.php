@@ -4,7 +4,6 @@ namespace App\Filament\Widgets;
 
 use App\Enums\Permission;
 use App\Filament\Clusters\Settings\Pages\Tracking;
-use App\Filament\Widgets\Concerns\ScopedToPage;
 use App\Support\Money;
 use App\Support\Reporting\Overview;
 use App\Support\Reporting\OverviewFigures;
@@ -29,23 +28,17 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * `ReportingQuery`; nothing here counts, and money is drawn through
  * `Money` so the currency Setting is honoured.
  *
- * One class in both places it is drawn: the whole installation on the
- * Dashboard, and one Page on that Page's Report, which is the record
- * `ScopedToPage` hands to the module — nothing else here changes.
- *
  * Lazy, like every report widget, so the shell renders before the query.
  */
 class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
 {
     use InteractsWithPageFilters;
-    use ScopedToPage;
 
     protected static ?int $sort = 10;
 
     /**
      * A Merchant's figure, drawn on the Dashboard behind `view reports`
-     * (#161). Inert wherever a screen names this widget itself: it is one of
-     * the six the Page Report shares, and that screen names its own.
+     * (#161).
      */
     public static function dashboardPermission(): Permission
     {
@@ -59,7 +52,7 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
      */
     protected function getStats(): array
     {
-        $overview = app(ReportingQuery::class)->overview(ReportingWindow::fromFilters($this->pageFilters), $this->record);
+        $overview = app(ReportingQuery::class)->overview(ReportingWindow::fromFilters($this->pageFilters));
 
         $current = $overview->figures;
         $previous = $overview->comparison;

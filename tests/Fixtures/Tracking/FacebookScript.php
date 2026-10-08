@@ -71,8 +71,8 @@ class FacebookScript extends ProviderScript
     }
 
     /**
-     * Meta wants both for a landing Page: the page view its base code makes,
-     * and the look at the product the page is selling.
+     * Meta wants both for a storefront page: the page view its base code
+     * makes, and the look at the product the page is selling.
      *
      * @return list<string>
      */

@@ -72,7 +72,7 @@ class Dashboard extends BaseDashboard
     /**
      * The Reporting Window control itself, drawn here as a filter form
      * across the top of the screen. Its components are
-     * `HasReportingWindow`'s, so a Page Report offers the same presets and
+     * `HasReportingWindow`'s, so every report offers the same presets and
      * the same two date pickers, drawn the same way.
      */
     public function filtersForm(Schema $schema): Schema
@@ -89,13 +89,9 @@ class Dashboard extends BaseDashboard
      * to-do list behind `work orders`. Each gated widget names its Permission
      * through `GatedOnDashboard`, and this drops the ones the User lacks, so a
      * User who works Orders lands on their to-do list and none of the revenue,
-     * a User holding neither meets only the ungated Cache Path indicator
-     * rather than an error, and the Merchant meets the whole screen.
-     *
-     * The filter lives here, not in each widget's `canView()`, because six of
-     * the money widgets are the Page Report's own and a static `canView()`
-     * would blank them on that screen too — which `author pages` reaches
-     * without `view reports`. `GatedOnDashboard` holds the reasoning.
+     * a User holding neither meets an empty screen rather than an error, and
+     * the Merchant meets the whole screen. `GatedOnDashboard` holds the
+     * reasoning.
      *
      * @return array<class-string<Widget> | WidgetConfiguration>
      */

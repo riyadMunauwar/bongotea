@@ -3,7 +3,6 @@
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\Page;
 use App\Models\Product;
 use App\Support\Reporting\Margin;
 use App\Support\Reporting\MarginRow;
@@ -29,9 +28,9 @@ use Illuminate\Database\Eloquent\Builder;
 | `CheckoutCaptureTest`.
 */
 
-function marginOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): Margin
+function marginOf(ReportingPreset $preset = ReportingPreset::Last7Days): Margin
 {
-    return app(ReportingQuery::class)->margin(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->margin(ReportingWindow::of($preset, reportingNow()));
 }
 
 /**
@@ -66,9 +65,9 @@ function marginRows(Margin $margin): array
  * Sales as the Dashboard draws it, over the same window, so the two figures
  * can be compared rather than asserted against a number typed twice.
  */
-function salesOver(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): int
+function salesOver(ReportingPreset $preset = ReportingPreset::Last7Days): int
 {
-    return app(ReportingQuery::class)->overview(ReportingWindow::of($preset, reportingNow()), $page)->figures->sales;
+    return app(ReportingQuery::class)->overview(ReportingWindow::of($preset, reportingNow()))->figures->sales;
 }
 
 /**
@@ -241,21 +240,6 @@ it('keeps a Product withdrawn from the catalogue under what it earned, and says 
     expect($row)->not->toBeNull()
         ->and($row->isDeleted())->toBeTrue()
         ->and($row->margin())->toBe(1000);
-});
-
-it('answers for one Page alone when asked about one', function () {
-    [$tea] = aWeekOfSelling();
-
-    $page = Page::factory()->published()->create(['title' => 'Summer combo']);
-
-    soldAtCost(orderCapturedAt('2026-09-05 12:00', subtotal: 30000, attributes: ['page_id' => $page->getKey()]), $tea, 1, 20000);
-
-    $margin = marginOf(page: $page);
-
-    expect($margin->revenue)->toBe(salesOver(page: $page))
-        ->and($margin->revenue)->toBe(36000)
-        ->and($margin->cost)->toBe(20000)
-        ->and(marginRows($margin))->toBe([['Sylhet tea', 1, 30000, 20000, 10000]]);
 });
 
 it('reads a window that sold nothing as no rows, nothing earned and nothing made', function () {

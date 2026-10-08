@@ -38,10 +38,6 @@ abstract class TestCase extends BaseTestCase
      * is ever wanted against an HTTP request it belongs inside this method,
      * below the flush, where it cannot be undone behind the test's back.
      *
-     * It matters here because `LandingPageTest` asserts a Page comes back byte
-     * for byte, and those same bytes are what `StaticPageCache` freezes onto
-     * disk for every visitor after the first.
-     *
      * @param  array<string, mixed>  $parameters
      * @param  array<string, mixed>  $cookies
      * @param  array<string, mixed>  $files

@@ -4,10 +4,8 @@ use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
-use App\Models\Page;
 use App\Models\Product;
 use App\Models\TrackingEvent;
-use App\Support\Checkout\CheckoutConfig;
 use App\Support\Settings\GeneralSettings;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\DB;
@@ -25,22 +23,26 @@ use Tests\Fixtures\Tracking\ProviderScript;
 
 /**
  * A captured Cash on Delivery Order reporting to a usable Destination: the
- * shape every test here starts from, driven through the real Checkout so the
+ * shape every test here starts from, captured and recorded for real so the
  * row under test is one a Customer actually produced.
  *
+ * @param  array<string, mixed>  $details
  * @return array{0: Destination, 1: Order}
  */
-function reportingCapture(ProviderScript $script, int $price = 99000, int $quantity = 1, array $overrides = []): array
+function reportingCapture(ProviderScript $script, int $price = 99000, int $quantity = 1, array $details = [], int $deliveryCharge = 0): array
 {
     $destination = $script->makeDestination();
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => $price]);
 
-    test()->postJson(route('checkout.store'), capturePayload(sellingPage($product), [
-        'quantities' => [$product->getKey() => $quantity],
-        ...$overrides,
-    ]))->assertCreated();
+    $order = orderAsCaptured($details, [['product' => $product, 'kilograms' => $quantity]]);
 
-    return [$destination, Order::sole()];
+    if ($deliveryCharge > 0) {
+        $order->update(['delivery_charge' => $deliveryCharge]);
+    }
+
+    recordCaptureOf($order->refresh());
+
+    return [$destination, $order];
 }
 
 it('delivers every pending row for a destination in one request and marks them sent', function (ProviderScript $script) {
@@ -77,11 +79,11 @@ it('reports the purchase with the order number as both the deduplication id and 
         ->and($script->orderReferenceOf($event))->toBe($order->order_number)
         ->and($script->actionSourceOf($event))->toBe('website')
         ->and($script->eventTimeOf($event))->toBe($order->created_at->getTimestamp())
-        ->and($script->sourceUrlOf($event))->toBe(route('landing.show', 'promo'));
+        ->and($script->sourceUrlOf($event))->toBe('https://shop.test/checkout');
 })->with('tracking providers');
 
 it('reports a value that includes the delivery charge, so it agrees with the merchants own sales figure', function (ProviderScript $script) {
-    [, $order] = reportingCapture($script, price: 99000, quantity: 2);
+    [, $order] = reportingCapture($script, price: 99000, quantity: 2, deliveryCharge: 6000);
 
     expect($order->subtotal)->toBe(198000)
         ->and($order->delivery_charge)->toBe(6000)
@@ -119,42 +121,19 @@ it('reports the contents from the order lines, at the price and quantity agreed 
     ]);
 })->with('tracking providers');
 
-/**
- * The same Page, asking for an email address too. Email is built in but off
- * in a new Config, and switching it on is the single highest-value thing a
- * Merchant can do for match quality — so it is worth a test that it travels.
- */
-function checkoutAskingForEmail(Page $page): Page
-{
-    $page->checkout_config = CheckoutConfig::fromArray([
-        'fields' => array_map(
-            fn (array $field): array => $field['key'] === 'email'
-                ? [...$field, 'enabled' => true, 'required' => true]
-                : $field,
-            $page->checkout_config->fieldsToArray(),
-        ),
-        'delivery_options' => $page->checkout_config->deliveryOptionsToArray(),
-    ]);
-
-    $page->save();
-
-    return $page->refresh();
-}
-
 it('hashes every match key, and leaves the ip, the user agent and the click identifiers plain', function (ProviderScript $script) {
     $script->makeDestination();
-    $page = checkoutAskingForEmail(sellingPage(Product::factory()->create()));
 
-    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.42'])
-        ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile'])
-        ->postJson(route('checkout.store'), capturePayload($page, [
-            'name' => 'Rahim Uddin',
-            'email' => 'Rahim.Uddin@Example.COM',
-            'district' => 'Dhaka',
-        ]))
-        ->assertCreated();
+    $order = orderAsCaptured([
+        'name' => 'Rahim Uddin',
+        'email' => 'Rahim.Uddin@Example.COM',
+        'district' => 'Dhaka',
+    ]);
 
-    $order = Order::sole();
+    recordCaptureOf($order, server: [
+        'REMOTE_ADDR' => '203.0.113.42',
+        'HTTP_USER_AGENT' => 'Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile',
+    ]);
 
     $script->fakeAccepted();
     $this->artisan('tracking:sweep')->assertSuccessful();
@@ -189,11 +168,8 @@ it('hashes every match key, and leaves the ip, the user agent and the click iden
 it('leaves a match key out rather than sending a hashed blank the provider can never match', function (ProviderScript $script) {
     $script->makeDestination();
 
-    /** The Checkout asked for a phone and an address and nothing else; Email is built in but off by default. */
-    $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create()), [
-        'name' => 'Rahim',
-        'email' => null,
-    ]))->assertCreated();
+    /** The Customer gave a one-word name and no email. */
+    recordCaptureOf(orderAsCaptured(['name' => 'Rahim', 'email' => null]));
 
     $script->fakeAccepted();
     $this->artisan('tracking:sweep')->assertSuccessful();

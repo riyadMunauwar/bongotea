@@ -28,8 +28,8 @@ final readonly class OverviewFigures
         /** Still New: awaiting the confirmation call. */
         public int $new,
         /**
-         * Loads of the published Page or Pages the span covers; null where
-         * the Merchant is not counting Visits.
+         * Storefront loads the span covers; null where the Merchant is not
+         * counting Visits.
          *
          * Only a whole window ever carries one. The Visit aggregate is a
          * count per day, and a bucket may be an hour, so a bucket's Visits

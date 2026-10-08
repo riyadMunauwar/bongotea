@@ -6,7 +6,6 @@ use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Product;
 use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
 use App\Support\Payments\PaymentSweep;
@@ -30,8 +29,8 @@ function sweepingPaymentsAfter(Payment $payment, int $seconds): void
  * Seam A, the other half: the Purchase an Order paid online reports, which
  * belongs to the Verification that says Paid rather than to the Capture.
  *
- * Driven through the real Checkout POST, the real verification endpoints and
- * the real sweep, and asserted on the outbox row that lands — no ad platform
+ * Driven through a real Capture, the real verification endpoints and the
+ * real sweep, and asserted on the outbox row that lands — no ad platform
  * is spoken to from any of them, and the row is the whole of what a Moment
  * does. The gateway is one script, because none of this is about which
  * gateway took the money.
@@ -41,6 +40,7 @@ it('reports nothing at capture and one purchase once a verification marks the pa
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
+    recordCaptureOf($payment->order);
 
     /** Money has not moved yet: the Order may still be abandoned at the gateway. */
     expect(TrackingEvent::count())->toBe(0);
@@ -64,8 +64,6 @@ it('reports nothing at capture and one purchase once a verification marks the pa
         ->and($row->deduplication_id)->toBe($order->order_number)
 
         ->and($row->order_id)->toBe($order->getKey())
-        ->and($row->page_slug)->toBe('promo')
-
         /** When the money was found to have moved, not when the row is swept out. */
         ->and($row->occurred_at->timestamp)->toBe($payment->refresh()->verified_at->timestamp);
 })->with('tracking providers');
@@ -166,10 +164,12 @@ it('reports the purchase with what the browser told us at capture, long after th
     $script->makeDestination();
     $gateway = new SslCommerzScript;
 
-    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.42'])
-        ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile']);
+    $payment = capturedFor($gateway);
 
-    $payment = capturedFor($gateway, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
+    recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()], [
+        'REMOTE_ADDR' => '203.0.113.42',
+        'HTTP_USER_AGENT' => 'Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile',
+    ]);
 
     $gateway->fakeVerifiedPaid($payment);
 
@@ -182,8 +182,8 @@ it('reports the purchase with what the browser told us at capture, long after th
         ->and($row->user_agent)->toBe('Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile')
         ->and($row->click_ids)->toBe($script->browserClickIds())
 
-        /** The Page the visitor was on, not the Checkout endpoint and not the gateway's own address. */
-        ->and($row->source_url)->toBe(route('landing.show', 'promo'));
+        /** The address the visitor ordered from, not the gateway's own. */
+        ->and($row->source_url)->toBe('https://shop.test/checkout');
 })->with('tracking providers');
 
 /**
@@ -195,33 +195,33 @@ it('keeps what the browser said for an order whose purchase is still to come', f
     $script->makeDestination();
     $gateway = new SslCommerzScript;
 
-    capturedFor($gateway, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
+    $payment = capturedFor($gateway);
+    recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
 
     $context = TrackingContext::sole();
 
     expect($context->order_id)->toBe(Order::sole()->getKey())
         ->and($context->click_ids)->toBe($script->browserClickIds())
-        ->and($context->source_url)->toBe(route('landing.show', 'promo'))
+        ->and($context->source_url)->toBe('https://shop.test/checkout')
         ->and($context->ip_address)->not->toBeNull();
 })->with('tracking providers');
 
 it('keeps nothing for a cash on delivery order, which reported everything it had at capture', function (ProviderScript $script) {
     $script->makeDestination();
 
-    $this->postJson(route('checkout.store'), capturePayload(sellingPage(Product::factory()->create())))->assertCreated();
+    recordCaptureOf(orderAsCaptured());
 
     expect(TrackingEvent::count())->toBe(1)
         ->and(TrackingContext::count())->toBe(0);
 })->with('tracking providers');
 
 /**
- * An IP address with no purpose is not collected at all. A Page reporting
+ * An IP address with no purpose is not collected at all. A store reporting
  * nowhere has nothing a click identifier could ever be used for.
  */
 it('keeps nothing at all where no destination is configured', function () {
-    $gateway = new SslCommerzScript;
-
-    capturedFor($gateway, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
+    $payment = capturedFor(new SslCommerzScript);
+    recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
 
     expect(TrackingContext::count())->toBe(0)
         ->and(TrackingEvent::count())->toBe(0);
@@ -230,7 +230,8 @@ it('keeps nothing at all where no destination is configured', function () {
 it('keeps nothing for a destination the merchant has switched off, because that is what a campaign break is', function () {
     Destination::factory()->disabled()->create();
 
-    capturedFor(new SslCommerzScript, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
+    $payment = capturedFor(new SslCommerzScript);
+    recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
 
     expect(TrackingContext::count())->toBe(0);
 });
@@ -244,7 +245,8 @@ it('keeps one context per order however many times the capture moment is recorde
     $script->makeDestination();
     $gateway = new SslCommerzScript;
 
-    capturedFor($gateway, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
+    $payment = capturedFor($gateway);
+    recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
 
     $order = Order::sole();
 

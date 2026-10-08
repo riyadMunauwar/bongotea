@@ -149,10 +149,6 @@ class ProductsTable
                     ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
                     ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
 
-                TextColumn::make('pages_count')
-                    ->label('On pages')
-                    ->counts('pages'),
-
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()

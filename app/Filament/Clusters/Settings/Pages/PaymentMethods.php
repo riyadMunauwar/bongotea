@@ -25,8 +25,8 @@ use Filament\Support\Icons\Heroicon;
  *
  * A switched-on gateway with a blank credential is offered nowhere — the
  * group's rule, not this page's — so nothing here is required: a Merchant may
- * switch a gateway on and finish typing later, and the Checkout tab words why
- * it is not yet drawn.
+ * switch a gateway on and finish typing later, and the page words why it is
+ * not yet offered.
  */
 class PaymentMethods extends SettingsPage
 {

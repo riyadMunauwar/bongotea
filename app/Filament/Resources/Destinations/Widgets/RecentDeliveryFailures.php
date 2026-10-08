@@ -123,7 +123,7 @@ class RecentDeliveryFailures extends TableWidget
 
                 TextColumn::make('event')
                     ->label('Event')
-                    ->description(fn (TrackingEvent $record): ?string => $record->page_slug),
+                    ->description(fn (TrackingEvent $record): ?string => $record->source_url),
 
                 /**
                  * The whole of what the Provider said, wrapped rather than

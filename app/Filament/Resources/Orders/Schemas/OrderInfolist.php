@@ -52,21 +52,13 @@ class OrderInfolist
                             ->label('Taken')
                             ->dateTime(),
 
-                        /**
-                         * The slug as captured, not the Page's current one. A
-                         * renamed or deleted Page must not rewrite which
-                         * campaign this order belongs to.
-                         */
-                        TextEntry::make('page_slug')
-                            ->label('Ordered from'),
-
                         OrderDocument::paymentMethod(),
                     ]),
 
                 /**
-                 * Every detail here but the phone is a question the Page's
-                 * Checkout may not have asked, so each says so in its own place
-                 * rather than reading as an Order someone filled in badly.
+                 * An optional detail the Customer left blank says so in its
+                 * own place rather than reading as an Order someone filled in
+                 * badly.
                  */
                 Section::make('Deliver to')
                     ->schema([
@@ -88,16 +80,20 @@ class OrderInfolist
                             ->placeholder(OrderDocument::NOT_ASKED),
 
                         TextEntry::make('customer_district')
-                            ->label('District')
-                            ->placeholder(OrderDocument::NOT_ASKED),
+                            ->label('District'),
 
                         TextEntry::make('customer_address')
                             ->label('Address')
                             ->placeholder(OrderDocument::NOT_ASKED),
+
+                        TextEntry::make('shop_name')
+                            ->label('Shop name')
+                            ->placeholder(OrderDocument::NOT_ASKED),
+
+                        TextEntry::make('note')
+                            ->label('Note')
+                            ->placeholder(OrderDocument::NOT_ASKED),
                     ]),
-
-                ...OrderDocument::answers(),
-
                 ...OrderDocument::payments(),
 
                 ...OrderDocument::shipments(),

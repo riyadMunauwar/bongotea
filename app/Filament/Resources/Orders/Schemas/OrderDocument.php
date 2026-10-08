@@ -9,10 +9,8 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Shipment;
 use App\Support\Money;
-use App\Support\Orders\CapturedAnswer;
 use Closure;
 use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
@@ -31,7 +29,7 @@ use Filament\Support\Icons\Heroicon;
 class OrderDocument
 {
     /**
-     * What stands where a detail the Checkout never asked for would have been.
+     * What stands where an optional detail would have been.
      *
      * Said once for both screens, and said in those words rather than left
      * blank: an empty cell reads as an Order someone filled in badly, and
@@ -39,15 +37,6 @@ class OrderDocument
      * two it is.
      */
     public const NOT_ASKED = 'Not asked for';
-
-    /**
-     * What stands where a question was asked and the Customer answered nothing.
-     *
-     * The other half of the distinction NOT_ASKED draws, and the half worth a
-     * phone call: this Order was taken on a form that put the question in front
-     * of somebody who left it alone.
-     */
-    public const NOT_ANSWERED = 'Left blank';
 
     /**
      * The heading of the Unpaid callout, spelled once so the test that pins it
@@ -128,13 +117,12 @@ class OrderDocument
      * Payment whatever its method now says: an Order switched to Cash on
      * Delivery keeps its history, and a Pending Payment on it may still end
      * Paid. Absent only for a Cash on Delivery Order that never had one,
-     * which is most Orders. Handed the Payments themselves
-     * as records rather than form data, for the reason `answers()` gives: the
-     * edit screen hydrates whatever a repeatable holds, and a Payment is
-     * written by a Verification alone. Empty where nothing was ever started,
-     * and it says so, because an Unpaid Order with no Payment is the "method
-     * the Page no longer offers" case and an operator should be able to tell
-     * it from a Customer who tried and failed.
+     * which is most Orders. Handed the Payments themselves as records rather
+     * than form data: the edit screen hydrates whatever a repeatable holds,
+     * and a Payment is written by a Verification alone. Empty where nothing
+     * was ever started, and it says so, because an Unpaid Order with no
+     * Payment is the "method the store no longer takes" case and an operator
+     * should be able to tell it from a Customer who tried and failed.
      *
      * The two raw responses are printed whole, as JSON, because a dispute
      * months later needs what the gateway actually said rather than what was
@@ -302,71 +290,5 @@ class OrderDocument
                 ? null
                 : (string) json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         };
-    }
-
-    /**
-     * The questions the Page's Merchant added of their own, answered.
-     *
-     * Read from the Order and never from the Page: the wording, the control and
-     * the chosen option's label were all copied in at Capture, so this reads
-     * the same after the question is reworded, deleted, or the Page itself
-     * force-deleted (ADR-0006).
-     *
-     * Absent where the Checkout asked none, which is most Orders. An empty
-     * "also asked" heading over nothing is a section a fulfiller learns to skip.
-     *
-     * Read-only on both screens. What was agreed at Capture is what gets
-     * collected at the door, and these answers are agreed the way a Product's
-     * name and price are.
-     *
-     * @return array<int, Section>
-     */
-    public static function answers(): array
-    {
-        return [
-            Section::make('Also asked')
-                ->columnSpanFull()
-                ->visible(fn (?Order $record): bool => filled($record?->answers))
-                ->schema([
-                    RepeatableEntry::make('answers')
-                        ->hiddenLabel()
-                        /**
-                         * Handed the two lines a person reads rather than the
-                         * answers themselves. The edit screen hydrates whatever
-                         * a repeatable holds, and an Order's snapshot is
-                         * readonly by construction — as what was agreed at
-                         * Capture should be.
-                         */
-                        ->state(fn (?Order $record): array => array_map(
-                            fn (CapturedAnswer $answer): array => [
-                                'label' => $answer->label,
-                                'display' => $answer->display,
-                            ],
-                            $record?->answers ?? [],
-                        ))
-                        ->table([
-                            TableColumn::make('Question'),
-                            TableColumn::make('Answer'),
-                        ])
-                        /**
-                         * Labels repeat the column headings on purpose. Filament
-                         * hides them once the table is wide enough to show its
-                         * header row, and falls back to them when it stacks on a
-                         * narrow screen.
-                         */
-                        ->schema([
-                            TextEntry::make('label')
-                                ->label('Question')
-                                ->hintIcon(
-                                    Heroicon::OutlinedQuestionMarkCircle,
-                                    tooltip: 'As asked. The question may have been reworded or removed from the page since.',
-                                ),
-
-                            TextEntry::make('display')
-                                ->label('Answer')
-                                ->placeholder(self::NOT_ANSWERED),
-                        ]),
-                ]),
-        ];
     }
 }

@@ -28,119 +28,12 @@
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
     # Redirect Trailing Slashes If Not A Folder...
-    #
-    # This also canonicalises for the cache lookup below: entries are keyed on
-    # the path alone, so /promo/ would look up "page-cache/promo/.html" and miss
-    # forever. One key, reached by one address.
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
-
-    # Serve The Static Page Cache...
-    #
-    # A published landing page is answered by Apache — or by LiteSpeed, which
-    # reads this same file — reading one file off disk. PHP is not contacted;
-    # Laravel only *writes* the file on a miss and *deletes* it on a save. See
-    # app/Support/PageCache, and deploy/nginx/giopages.conf for the same three
-    # rules expressed as one try_files.
-    #
-    # These rules ship configured rather than as a snippet to merge, because
-    # under the supported layouts (deploy/README.md) this is the file the
-    # webserver actually reads: a merchant on shared hosting deploys and the
-    # cache works with no step they can forget.
-
-    # The cache lives inside the document root, so every cached page is also
-    # reachable at /page-cache/<slug>.html. Nothing may enter that way — a
-    # second indexable address for a page splits the ranking of the one the
-    # merchant's ad creatives point at.
-    #
-    # Both conditions read values Apache has already resolved, so the lock does
-    # not depend on how the client spelled the address. REQUEST_URI is the
-    # decoded, dot-normalised path, which is what /page%2Dcache/promo.html and
-    # /./page-cache/promo.html both arrive here as. REDIRECT_STATUS is empty
-    # only on a request as it came off the wire: the cache lookup below re-runs
-    # these rules through an internal redirect, which sets it, so our own
-    # rewrite reaches the file and a client asking for it does not.
-    #
-    # This is weaker than nginx's `internal`, which is a property of the
-    # location and cannot be spelled around at all. What it does guarantee is
-    # the narrower thing the cache needs: a request that entered from a client
-    # and resolves under the cache directory is refused whatever spelling it
-    # used, while the rewrite we perform ourselves is served. A nested .htaccess
-    # with a Require directive would not do — authorization applies to internal
-    # redirects too, so it would refuse our own rewrite as well as the
-    # visitor's.
-    RewriteCond %{ENV:REDIRECT_STATUS} ^$
-    RewriteCond %{REQUEST_URI} ^/+page-cache(/|$) [NC]
-    RewriteRule ^ - [F,L]
-
-    # The Site Root.
-    #
-    # THIS MUST STAY ABOVE THE -d RULE BELOW. "/" resolves to the document
-    # root, which is a directory, so the -d rule matches it and stops rewriting
-    # — that is exactly why the root used to fall through to index.php. Move
-    # this below it and the front page silently stops being served from the
-    # cache, on a correctly configured host, with every test still green.
-    #
-    # The root has no slug to be keyed on, and Apache cannot read a merchant's
-    # settings to learn which page was designated, so it answers to a constant
-    # instead (ADR-0023). The underscore is what makes _front unspellable as a
-    # slug, so no page can ever own this entry. Still existence-based: no file,
-    # no front page, and the request goes through to the application, which
-    # decides between the front page and the placeholder and caches whichever
-    # it drew.
-    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
-    RewriteCond %{DOCUMENT_ROOT}/page-cache/_front.html -f
-    RewriteRule ^$ page-cache/_front.html [L]
-
-    # A real file — an asset, or the front controller itself — is served as it
-    # is and never reaches the cache lookup. A directory stops here too, which
-    # is how the site root falls through to index.php when nothing has been
-    # cached for it above.
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    # The cache lookup. The key is the path with no query string attached, so
-    # /promo, /promo?fbclid=... and /promo?utm_source=fb all resolve to one
-    # cached file — which is the entire point, since every ad click arrives
-    # with a tracking parameter.
-    #
-    # Only the methods a static file can honestly answer: without the method
-    # check, POST /checkout would be served the cached /checkout.html and the
-    # order would never reach the application.
-    #
-    # The reserved Front entry is reachable only from the root rule above,
-    # never by name. Without the /_front exclusion, GET /_front would match
-    # page-cache/_front.html here and serve the front page at a second address
-    # — a duplicate of / that leaks the internal cache scheme. Excluded, it
-    # falls through to the front controller, which decides it does not exist.
-    # [NC] because a case-insensitive filesystem answers /_FRONT from
-    # _front.html just the same, and no slug can collide (none carries an _).
-    RewriteCond %{REQUEST_URI} !^/_front$ [NC]
-    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
-    RewriteCond %{DOCUMENT_ROOT}/page-cache/$1.html -f
-    RewriteRule ^(.+)$ page-cache/$1.html [L]
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
-</IfModule>
-
-# Compression happens on the fly here, on a cached page as on any other
-# response. The pre-compressed .html.gz sibling the cache writes is read by
-# nginx and by the fallback reader, and deliberately not by Apache: serving it
-# needs optional modules, needs override permissions not every shared host
-# grants, and collides with LiteSpeed's own compression layer — exposure not
-# worth 1–3% of payload on the default path. deploy/README.md documents it as
-# opt-in for a merchant who controls their host.
-#
-# Only text/html: a cached page is what this configuration is here to serve,
-# and compressing the rest of the document root is a separate decision nobody
-# has made. A merchant who wants their assets compressed too adds the types.
-<IfModule mod_deflate.c>
-    <IfModule mod_filter.c>
-        AddOutputFilterByType DEFLATE text/html
-    </IfModule>
 </IfModule>

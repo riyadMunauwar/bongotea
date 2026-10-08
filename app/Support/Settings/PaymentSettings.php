@@ -11,9 +11,9 @@ use Illuminate\Support\Str;
  * Payment Method: whether it is on, what the gateway needs to be spoken to,
  * whether that is the sandbox or real money, and the logo the Checkout draws.
  *
- * One row for every method rather than one per method, because a Page's
- * offered list is read against all of them at once and a row per method would
- * be a query per method on every render. The properties follow one naming
+ * One row for every method rather than one per method, because the usable
+ * list is read against all of them at once and a row per method would be a
+ * query per method on every render. The properties follow one naming
  * rule so that nothing here lists methods by hand: a method's properties are
  * its name in camel case, then `Enabled`, `Sandbox`, `Logo`, and each of its
  * credentials — so `sslcommerzEnabled` and `sslcommerzStoreId`. A method with
@@ -45,7 +45,7 @@ class PaymentSettings extends SettingsGroup
 
     public const LOGO_DIRECTORY = 'payment-methods';
 
-    /** Cash on Delivery: on, so every Page keeps its one way to order. */
+    /** Cash on Delivery: on, so the store keeps its one way to order. */
     public bool $cashOnDeliveryEnabled = true;
 
     /** A replacement logo for Cash on Delivery, as a path on the logo disk; blank draws the default. */
@@ -159,9 +159,8 @@ class PaymentSettings extends SettingsGroup
     }
 
     /**
-     * The methods the Merchant has switched on, in the enum's order. What the
-     * Checkout tab lists — including one that is on but not yet usable, so the
-     * tab can word why.
+     * The methods the Merchant has switched on, in the enum's order —
+     * including one that is on but not yet usable, so a screen can word why.
      *
      * @return list<PaymentMethod>
      */
@@ -192,7 +191,7 @@ class PaymentSettings extends SettingsGroup
 
     /**
      * Whether the Merchant has switched a method on. A method with no settings
-     * here yet is off, whatever a Page lists.
+     * here yet is off.
      */
     public function isEnabled(PaymentMethod $method): bool
     {
@@ -205,9 +204,9 @@ class PaymentSettings extends SettingsGroup
     }
 
     /**
-     * Why a method cannot be offered, in the words the Checkout tab draws
-     * beside it, or null where it can. The one wording of the rule, so the tab
-     * and the Checkout cannot disagree about what is allowed: a method is
+     * Why a method cannot be offered, in the words a screen draws beside it,
+     * or null where it can. The one wording of the rule, so no two screens
+     * can disagree about what is allowed: a method is
      * usable when it is on, every credential it needs is filled, and, for an
      * online method, the installation currency is BDT.
      */
@@ -288,8 +287,7 @@ class PaymentSettings extends SettingsGroup
     /**
      * Where the Checkout fetches a method's logo from: the Merchant's
      * replacement where one is stored, else the default shipped with the
-     * method. Absolute, because it is baked into a cached page and read from
-     * anywhere the page is served.
+     * method. Absolute, so it reads the same from anywhere it is drawn.
      */
     public function logoUrlFor(PaymentMethod $method): string
     {

@@ -16,13 +16,12 @@ use Filament\Widgets\WidgetConfiguration;
 /**
  * Which Courier actually delivers, on a screen of its own inside Reports.
  *
- * It answers of the couriers what the Page Report answers of one Page, and is
- * built the same way: the Reporting Window across the top as a filter form,
- * the figures under it, and every figure counted over the same days in the
- * Merchant's own timezone. `HasReportingWindow` supplies the control and the
- * screen state, so a Merchant moving between here, the Dashboard and a Page
- * Report meets one control rather than three that resemble each other, and
- * Filament keeps the chosen window in the session under this class's key.
+ * Built like the Dashboard: the Reporting Window across the top as a filter
+ * form, the figures under it, and every figure counted over the same days in
+ * the Merchant's own timezone. `HasReportingWindow` supplies the control and
+ * the screen state, so a Merchant moving between here and the Dashboard meets
+ * one control rather than two that resemble each other, and Filament keeps
+ * the chosen window in the session under this class's key.
  *
  * Every figure on it is broken down by Courier and none of them is added up
  * across couriers (ADR-0018): the three speak three vocabularies and agree on

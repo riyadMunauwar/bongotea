@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\OrderStatus;
-use App\Models\Page;
 use App\Models\Payment;
 use App\Support\Reporting\ReportingPreset;
 use App\Support\Reporting\ReportingQuery;
@@ -14,9 +13,9 @@ use App\Support\Reporting\StatusBreakdown;
 | The helpers are in tests/Pest.php, shared with the other module tests.
 */
 
-function statusBreakdownOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): StatusBreakdown
+function statusBreakdownOf(ReportingPreset $preset = ReportingPreset::Last7Days): StatusBreakdown
 {
-    return app(ReportingQuery::class)->statusBreakdown(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->statusBreakdown(ReportingWindow::of($preset, reportingNow()));
 }
 
 it('counts New, Confirmed and Cancelled over the Orders in the window, a Cancelled Order that was Paid still Cancelled', function () {
@@ -34,17 +33,6 @@ it('counts New, Confirmed and Cancelled over the Orders in the window, a Cancell
         ->and($breakdown->count(OrderStatus::Confirmed))->toBe(1)
         ->and($breakdown->count(OrderStatus::Cancelled))->toBe(2)
         ->and($breakdown->orders())->toBe(5);
-});
-
-it('counts one Page alone when scoped to it', function () {
-    $page = Page::factory()->create();
-    orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id], status: OrderStatus::Confirmed);
-    orderCapturedAt('2026-09-05 13:00', status: OrderStatus::Confirmed);
-
-    $breakdown = statusBreakdownOf(page: $page);
-
-    expect($breakdown->count(OrderStatus::Confirmed))->toBe(1)
-        ->and($breakdown->orders())->toBe(1);
 });
 
 it('reads as zeros on a window with nothing captured', function () {

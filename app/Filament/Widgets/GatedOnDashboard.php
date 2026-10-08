@@ -17,15 +17,10 @@ use App\Enums\Permission;
  *
  * The gate is read by the Dashboard rather than declared in each widget's
  * `canView()` because `canView()` is static and blind to where the widget is
- * drawn: six of the money widgets are also the Page Report's own, reached
- * through `author pages`, and a global `canView()` would wrongly blank them
- * there. So this method is consulted only by the Dashboard's own widget
+ * drawn. So this method is consulted only by the Dashboard's own widget
  * selection and is inert wherever a screen names the widget explicitly.
  *
- * A widget implementing nothing here is drawn for every panel User. The Cache
- * Path indicator is the one that stays that way, being per-installation
- * operational truth rather than either audience's figure — so a User holding
- * neither Permission meets it alone rather than an empty screen or an error.
+ * A widget implementing nothing here is drawn for every panel User.
  */
 interface GatedOnDashboard
 {

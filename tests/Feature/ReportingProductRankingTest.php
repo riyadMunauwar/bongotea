@@ -3,7 +3,6 @@
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\Page;
 use App\Models\Product;
 use App\Support\Reporting\ProductRanking;
 use App\Support\Reporting\ProductRankingRow;
@@ -17,9 +16,9 @@ use App\Support\Reporting\ReportingWindow;
 | The helpers are in tests/Pest.php, shared with the other module tests.
 */
 
-function productRankingOf(ReportingPreset $preset = ReportingPreset::Last7Days, ?Page $page = null): ProductRanking
+function productRankingOf(ReportingPreset $preset = ReportingPreset::Last7Days): ProductRanking
 {
-    return app(ReportingQuery::class)->productRanking(ReportingWindow::of($preset, reportingNow()), $page);
+    return app(ReportingQuery::class)->productRanking(ReportingWindow::of($preset, reportingNow()));
 }
 
 /**
@@ -121,17 +120,6 @@ it('merges a Product renamed since it sold into one row, under the name it now c
     $product->update(['name' => 'Sylhet tea, loose']);
 
     expect(productRankingRows(productRankingOf()))->toBe([['Sylhet tea, loose', 2, 60000]]);
-});
-
-it('counts one Page alone when scoped to it', function () {
-    $page = Page::factory()->create();
-    $tea = Product::factory()->create(['name' => 'Sylhet tea', 'price' => 30000]);
-    $mug = Product::factory()->create(['name' => 'Clay mug', 'price' => 10000]);
-
-    soldOn(orderCapturedAt('2026-09-05 12:00', attributes: ['page_id' => $page->id]), $tea, 1);
-    soldOn(orderCapturedAt('2026-09-05 13:00'), $mug, 1);
-
-    expect(productRankingRows(productRankingOf(page: $page)))->toBe([['Sylhet tea', 1, 30000]]);
 });
 
 it('is empty on a window that sold nothing', function () {

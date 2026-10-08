@@ -105,7 +105,7 @@ class Facebook implements Provider
 
     /**
      * A Visit is two events, because Meta wants a page view and a product
-     * view and a landing Page is both at once. Capture and Paid each produce
+     * view and a storefront page can be both at once. Capture and Paid each produce
      * a `Purchase`; which of the two an Order goes through is decided by how
      * it is being paid and not here — a Cash on Delivery Order has no later
      * moment, and an online one has no earlier certainty.

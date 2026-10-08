@@ -3,7 +3,6 @@
 namespace App\Support\Settings;
 
 use App\Models\Setting;
-use App\Support\PageCache\PageCacheInvalidator;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +23,7 @@ use ReflectionProperty;
  * never queries its row. There is no cache layer on purpose; adding one with
  * forget-on-save is a change to `load()` and `save()` alone (ADR-0012).
  *
- * Hydration is total, like a stored Checkout Config: a key the class no longer
+ * Hydration is total, like every stored shape here: a key the class no longer
  * has is ignored, a property the row never mentioned keeps its default, so a
  * property can be added to a group with no data migration and an old row
  * keeps working.
@@ -169,17 +168,14 @@ abstract class SettingsGroup
     }
 
     /**
-     * Write the group as its row, make this instance the one the rest of the
-     * request reads, and forget every cached public Page: a Setting is read
-     * while a Page is rendered, so a cached render carries the old value.
+     * Write the group as its row and make this instance the one the rest of
+     * the request reads.
      */
     public function save(): static
     {
         Setting::query()->updateOrCreate(['key' => static::key()], ['value' => $this->toArray()]);
 
         app()->instance(static::class, $this);
-
-        app(PageCacheInvalidator::class)->forgetEveryPage();
 
         return $this;
     }

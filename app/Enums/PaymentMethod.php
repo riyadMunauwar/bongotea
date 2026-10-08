@@ -15,13 +15,11 @@ use Filament\Support\Contracts\HasLabel;
  * One of the named ways an Order can be paid.
  *
  * A fixed set known by name rather than rows a Merchant defines: a Merchant has
- * one bKash account, and a Page's list of names survives a Settings row being
- * wiped. Each case resolves to one driver behind one contract, so adding a
+ * one bKash account, and a stored name survives a Settings row being wiped. Each case resolves to one driver behind one contract, so adding a
  * gateway is one class and one case here (ADR-0013). The enum is the registry.
  *
- * The four online cases are named now so that a Page can already hold a list
- * that mentions them, and so that Orders, Payments and Settings all spell them
- * one way. Whether one can be offered is the Payment Methods settings' to say
+ * The four online cases are named so that Orders, Payments and Settings all
+ * spell them one way. Whether one can be offered is the Payment Methods settings' to say
  * (`isUsable()`); whether a Payment can then be started is its driver's, and a
  * method with none captures the Order Unpaid and sends the Customer to the
  * Retry Page.
@@ -49,10 +47,10 @@ enum PaymentMethod: string implements HasLabel
     /**
      * What a stored name is, whatever it happens to hold.
      *
-     * Total, like everything a Config is read from: a name nothing knows, or
-     * something that is not a name at all, is null rather than an exception,
-     * and the caller drops it. A landing page answering paid traffic with a
-     * 500 costs more than a list one method shorter than a Merchant meant.
+     * Total, like every stored shape here: a name nothing knows, or something
+     * that is not a name at all, is null rather than an exception, and the
+     * caller drops it. A page answering paid traffic with a 500 costs more
+     * than a list one method shorter than a Merchant meant.
      */
     public static function fromStored(mixed $stored): ?self
     {
@@ -74,7 +72,7 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
-     * What the Checkout tab and the Checkout call each method, keyed by name.
+     * What each method is called on screen, keyed by name.
      *
      * @return array<string, string>
      */
