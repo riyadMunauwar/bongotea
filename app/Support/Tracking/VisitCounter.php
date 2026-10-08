@@ -70,11 +70,14 @@ class VisitCounter
             return;
         }
 
+        /** In a savepoint whenever a transaction is open, because PostgreSQL aborts the whole transaction on a refused insert. */
+        $query = VisitCount::query();
+
         try {
-            VisitCount::query()->create([
+            $query->withSavepointIfNeeded(fn () => $query->create([
                 'visited_on' => $date,
                 'visits' => 1,
-            ]);
+            ]));
         } catch (UniqueConstraintViolationException) {
             $this->increment($date);
         }

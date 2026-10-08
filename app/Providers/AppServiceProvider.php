@@ -11,6 +11,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,6 +39,16 @@ class AppServiceProvider extends ServiceProvider
                 $app->singleton($group, fn (): SettingsGroup => $group::load());
             }
         });
+
+        /**
+         * Every admin record is addressed by its integer id, so anything else
+         * in a `{record}` is a missing page. Said here rather than left to the
+         * database, because PostgreSQL refuses to compare a bigint with a word
+         * like `create` and the 404 becomes a 500. In `register()` because a
+         * pattern only reaches routes added after it, and Filament adds the
+         * panel's while its own provider boots, before this one does.
+         */
+        Route::pattern('record', '[0-9]+');
     }
 
     /**

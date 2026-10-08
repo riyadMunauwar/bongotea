@@ -971,6 +971,10 @@ class StockLedger
      * against the same traffic (ADR-0019): a poll and a webhook arrive
      * together, and a question asked before an insert answers for a moment
      * that has passed by the time the insert lands.
+     *
+     * The insert runs inside a savepoint whenever a transaction is open:
+     * PostgreSQL aborts the whole transaction on a refused insert, so
+     * without one every statement after the harmless refusal fails.
      */
     private function writeOnce(
         Product $product,
@@ -992,14 +996,14 @@ class StockLedger
         ?User $user = null,
     ): void {
         try {
-            $this->write(
+            StockMovement::query()->withSavepointIfNeeded(fn () => $this->write(
                 product: $product,
                 quantity: $quantity,
                 reason: $reason,
                 source: $source,
                 unitCost: $unitCost,
                 user: $user,
-            );
+            ));
         } catch (UniqueConstraintViolationException) {
             /** Somebody told us the same thing twice, which is what the key is there to make harmless. */
         }

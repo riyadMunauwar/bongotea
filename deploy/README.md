@@ -21,6 +21,14 @@ controller's paths is **not supported**: Laravel's public path helper resolves
 relative to the application directory, so the storage link and asset URLs split
 between two directories that never meet.
 
+## Docker, on Dokploy
+
+`docker-compose.yml` at the repository root is the whole stack — app, queue
+worker, scheduler, SSR and PostgreSQL — and its header comments are the deploy
+notes. The storage link, first Owner and everything below still apply, run
+from Dokploy's terminal on the `app` container; the link is already made in
+the image.
+
 ## Apache, and LiteSpeed Enterprise
 
 Nothing to do. `public/.htaccess` ships configured, and LiteSpeed Enterprise

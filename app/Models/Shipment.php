@@ -16,7 +16,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
  * One attempt to get one Order to a door through one Courier.
@@ -345,22 +344,22 @@ class Shipment extends Model
      * insert answers for a moment that has passed by the time it is written.
      * The first telling is answered with either way, so a caller can never
      * tell how many times it was told.
+     *
+     * `createOrFirst` rather than a hand-written catch, because it puts the
+     * insert inside a savepoint: PostgreSQL aborts the whole surrounding
+     * transaction on a refused insert, and the sweep calls this inside one.
      */
     public function recordEvent(ShipmentStatus $status, ?string $rawStatus = null, DateTimeInterface|string|null $occurredAt = null): ShipmentEvent
     {
-        $deduplicationId = ShipmentEvent::deduplicationIdFor($rawStatus ?? $status->value, $occurredAt);
-
-        try {
-            return $this->events()->create([
+        return $this->events()->createOrFirst(
+            ['deduplication_id' => ShipmentEvent::deduplicationIdFor($rawStatus ?? $status->value, $occurredAt)],
+            [
                 'status' => $status,
                 'raw_status' => $rawStatus,
                 'occurred_at' => $occurredAt,
                 'recorded_at' => now(),
-                'deduplication_id' => $deduplicationId,
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            return $this->events()->where('deduplication_id', $deduplicationId)->sole();
-        }
+            ],
+        );
     }
 
     /**

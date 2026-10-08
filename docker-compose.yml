@@ -1,0 +1,166 @@
+# Production stack for Dokploy: app (PHP-FPM + nginx), queue worker,
+# scheduler, SSR (Node) and PostgreSQL, all built from ./Dockerfile.
+#
+# Deploying on Dokploy
+#   1. Create a Compose service from this repository, compose path
+#      ./docker-compose.yml, and turn on Advanced → Isolated Deployments so
+#      the services keep reaching each other once Traefik's network is added.
+#   2. Environment tab — set at least:
+#        APP_KEY=base64:...   (php artisan key:generate --show)
+#        APP_URL=https://shop.example.com
+#        DB_PASSWORD=<long random string>
+#      Anything else below with a ${VAR:-default} may be overridden there.
+#      Dokploy writes these to .env next to this file; compose reads them
+#      from there, and only what is listed under x-laravel-env reaches PHP.
+#   3. Domains tab — add the domain on service `app`, container port 80,
+#      HTTPS on. Nothing else gets a domain: SSR and PostgreSQL stay internal,
+#      and no service publishes a host port.
+#   4. Deploy. The app container migrates on every start, then reports
+#      healthy; the worker and scheduler wait for that.
+#   5. First deploy only, from Dokploy's terminal on the `app` container:
+#        php artisan make:filament-user
+#        php artisan giopages:owner you@example.com
+#
+# Data lives in two named volumes, `database` and `public-files` (Product
+# images: the public `local` disk, served at /storage). Both work with
+# Dokploy's Volume Backups. Deleting them deletes the store.
+
+x-laravel-build: &laravel-build
+  context: .
+  target: app
+
+x-laravel-env: &laravel-env
+  APP_NAME: ${APP_NAME:-Bongotea}
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_KEY: ${APP_KEY:?Set APP_KEY in Dokploy's Environment tab}
+  APP_URL: ${APP_URL:?Set APP_URL in Dokploy's Environment tab}
+  APP_LOCALE: ${APP_LOCALE:-en}
+
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-warning}
+
+  DB_CONNECTION: pgsql
+  DB_HOST: database
+  DB_PORT: "5432"
+  DB_DATABASE: ${DB_DATABASE:-bongotea}
+  DB_USERNAME: ${DB_USERNAME:-bongotea}
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy's Environment tab}
+
+  SESSION_DRIVER: database
+  SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
+  CACHE_STORE: database
+  QUEUE_CONNECTION: database
+  FILESYSTEM_DISK: local
+
+  # TLS ends at Traefik, which is the only thing that can reach nginx.
+  TRUSTED_PROXIES: "*"
+
+  INERTIA_SSR_ENABLED: "true"
+  INERTIA_SSR_URL: http://ssr:13714
+
+  MAIL_MAILER: ${MAIL_MAILER:-log}
+  MAIL_SCHEME: ${MAIL_SCHEME:-}
+  MAIL_HOST: ${MAIL_HOST:-}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Bongotea}
+
+services:
+  app:
+    build: *laravel-build
+    restart: unless-stopped
+    environment:
+      <<: *laravel-env
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - public-files:/var/www/html/storage/app/private
+    expose:
+      - "80"
+    depends_on:
+      database:
+        condition: service_healthy
+      ssr:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Migrations and the view cache run before nginx starts.
+      start_period: 120s
+
+  worker:
+    build: *laravel-build
+    restart: unless-stopped
+    user: www-data
+    environment: *laravel-env
+    command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
+    # Shares the files volume: a queued media job reads what the app saved.
+    volumes:
+      - public-files:/var/www/html/storage/app/private
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "artisan queue:work"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  scheduler:
+    build: *laravel-build
+    restart: unless-stopped
+    user: www-data
+    environment: *laravel-env
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - public-files:/var/www/html/storage/app/private
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "artisan schedule:work"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  # Never give this a domain: it answers /shutdown to anyone who can reach it.
+  # If it is down, pages still load, drawn in the browser instead.
+  ssr:
+    build:
+      context: .
+      target: ssr
+    restart: unless-stopped
+    expose:
+      - "13714"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:13714/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-bongotea}
+      POSTGRES_USER: ${DB_USERNAME:-bongotea}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy's Environment tab}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  database:
+  public-files:

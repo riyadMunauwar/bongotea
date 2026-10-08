@@ -19,6 +19,14 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
         },
     },
+    /*
+     * The SSR bundle carries its dependencies inside it, so the production
+     * SSR container is Node and one file — it has no node_modules, because
+     * every package here is a devDependency.
+     */
+    ssr: {
+        noExternal: true,
+    },
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],

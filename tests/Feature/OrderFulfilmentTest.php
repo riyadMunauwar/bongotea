@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
 use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -77,6 +78,11 @@ it('offers no way to type an order in by hand', function () {
      * no Page behind it and no Customer resolved from a phone number.
      */
     $this->get('/admin/orders/create')->assertNotFound();
+});
+
+it('answers a record address that is not an id without asking the database, because PostgreSQL raises on it', function () {
+    expect(Route::getRoutes()->getByName('filament.admin.resources.orders.view')->wheres)
+        ->toBe(['record' => '[0-9]+']);
 });
 
 it('shows an order a human can act on', function () {
