@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders;
 
 use App\Enums\OrderStatus;
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
@@ -43,6 +44,22 @@ class OrderResource extends Resource
 
     /** Second, under the Dashboard. See `Pages\Dashboard` for the whole order. */
     protected static ?int $navigationSort = 1;
+
+    /**
+     * The fulfilment surface is the working area of whoever holds `work orders`
+     * (ADR-0025): a User without it is refused the queue, an Order and the
+     * sidebar entry alike, rather than shown a screen they cannot use. Closing
+     * the resource's own URL too gives a forbidden response rather than a
+     * redirect to nowhere.
+     *
+     * The everyday sending verbs — send with a courier, send a batch, check
+     * with the gateway — sit inside this floor and need nothing finer; the acts
+     * somebody would regret carry their own Permission, gated on the Action.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can(Permission::WorkOrders) ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {

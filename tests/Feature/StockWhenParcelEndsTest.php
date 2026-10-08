@@ -29,7 +29,8 @@ use Tests\Fixtures\Couriers\CourierScript;
  * whoever was carrying it.
  */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    /** Abandoning a parcel needs `abandon parcels` on top of the `work orders` floor its screen sits behind. */
+    $this->actingAs(User::factory()->abandoningParcels()->create());
 
     $this->ledger = app(StockLedger::class);
 });

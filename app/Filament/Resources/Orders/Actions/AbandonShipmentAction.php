@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\Shipment;
 use Filament\Actions\Action;
@@ -44,7 +45,15 @@ class AbandonShipmentAction
             ->color('danger')
 
             /**
-             * Offered while there is a parcel to write off — which means a
+             * Writing a parcel off writes a Loss and an Unsold against stock and
+             * is a decision only a person may make, so it is held back from the
+             * person who sends parcels all day: it needs `abandon parcels` on
+             * top of the `work orders` floor that reaches this screen. Folded
+             * into `visible()` as the first condition, so a User without it never
+             * sees the action rather than seeing it and being refused on click,
+             * and a hidden Filament action cannot be mounted either.
+             *
+             * The rest is when there is a parcel to write off — which means a
              * parcel a Courier has actually been handed. A row a batch wrote
              * and the sweep has not dispatched yet is Active and is still not
              * one to abandon: nobody has been offered it, so nobody failed to
@@ -58,7 +67,8 @@ class AbandonShipmentAction
              * opens, and an Order that should never have existed is not one to
              * make decisions about — restoring it first is the answer.
              */
-            ->visible(fn (Order $record): bool => ! $record->trashed()
+            ->visible(fn (Order $record): bool => (auth()->user()?->can(Permission::AbandonParcels) ?? false)
+                && ! $record->trashed()
                 && ($shipment = self::parcelOut($record)) !== null
                 && ! $shipment->isAwaitingDispatch())
             ->requiresConfirmation()

@@ -38,7 +38,8 @@ use Tests\Fixtures\Couriers\CourierScript;
  * says which items came back.
  */
 beforeEach(function (): void {
-    $this->answering = User::factory()->create();
+    /** Answering a half-arrived parcel needs `answer partly delivered` on top of the `work orders` floor its screen sits behind. */
+    $this->answering = User::factory()->answeringPartlyDelivered()->create();
 
     $this->actingAs($this->answering);
 

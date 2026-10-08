@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\Actions\BookBatchWithCourierAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Models\Order;
@@ -286,10 +287,21 @@ class OrdersTable
                  */
                 BookBatchWithCourierAction::make(),
 
+                /**
+                 * Deleting, force-deleting and restoring in bulk need
+                 * `delete orders` just as their per-Order counterparts on
+                 * `EditOrder` do, so the queue cannot be cleared by whoever is
+                 * working it. Gated with `authorize()` so the Permission check
+                 * composes with the TrashedFilter-state rules Filament already
+                 * puts on each — a User without it is shown none of the three.
+                 */
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
+                    ForceDeleteBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
+                    RestoreBulkAction::make()
+                        ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
                 ]),
             ]);
     }

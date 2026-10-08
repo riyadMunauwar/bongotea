@@ -30,7 +30,7 @@ use Tests\Fixtures\Couriers\CourierScript;
  * then offers each row exactly once.
  */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 /**

@@ -21,7 +21,7 @@ use Livewire\Livewire;
  * `ShipmentScreensTest`'s.
  */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 /*

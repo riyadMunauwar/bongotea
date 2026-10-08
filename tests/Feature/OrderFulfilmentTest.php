@@ -16,7 +16,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Livewire\Livewire;
 
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 /**

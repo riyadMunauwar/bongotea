@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\Actions\AbandonShipmentAction;
 use App\Filament\Resources\Orders\Actions\AnswerPartlyDeliveredAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
@@ -56,10 +57,21 @@ class EditOrder extends EditRecord
              * existed; an Order that happened but will not be fulfilled is
              * `cancelled`, and conflating the two makes real conversion
              * unknowable.
+             *
+             * Deleting, force-deleting and restoring each need `delete orders`
+             * on top of the `work orders` floor, so the queue cannot be tidied
+             * away by whoever is working it. Gated with `authorize()` rather
+             * than the actions' own `visible()`/`hidden()` so the Permission
+             * check composes with the record-state rules Filament already puts
+             * on them — delete hidden on a trashed row, restore and force-delete
+             * shown only on one — and a User without it sees none of the three.
              */
-            DeleteAction::make(),
-            ForceDeleteAction::make(),
-            RestoreAction::make(),
+            DeleteAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
+            ForceDeleteAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
+            RestoreAction::make()
+                ->authorize(fn (): bool => auth()->user()?->can(Permission::DeleteOrders) ?? false),
         ];
     }
 

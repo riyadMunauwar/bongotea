@@ -26,8 +26,14 @@ use Tests\Fixtures\Payments\SslCommerzScript;
  * the call. The fulfilment axis is `OrderFulfilmentTest`'s and is untouched
  * here (ADR-0013).
  */
+/**
+ * A User who works Orders and may also switch one to Cash on Delivery: the
+ * screens sit behind `work orders` and that one act behind
+ * `switch to cash on delivery`. Checking with the gateway needs nothing finer —
+ * it is an everyday verb inside the `work orders` floor.
+ */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->switchingToCashOnDelivery()->create());
 });
 
 /**

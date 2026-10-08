@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Shipment;
@@ -47,7 +48,14 @@ class AnswerPartlyDeliveredAction
             ->color('warning')
 
             /**
-             * Offered while there is a question. A parcel that arrived whole,
+             * Naming which units came back is the one answer the stock ledger is
+             * waiting on, and a decision only a person the Merchant chose should
+             * make, so it needs `answer partly delivered` on top of the
+             * `work orders` floor. Folded into `visible()` as the first
+             * condition, so a User without it never sees the action rather than
+             * seeing it refused on click, and a hidden action cannot be mounted.
+             *
+             * The rest is when there is a question. A parcel that arrived whole,
              * came back whole or is still out is asking nothing, and one
              * somebody has already answered is answered.
              *
@@ -56,7 +64,9 @@ class AnswerPartlyDeliveredAction
              * opens, and an Order that should never have existed is not one to
              * make decisions about.
              */
-            ->visible(fn (Order $record): bool => ! $record->trashed() && self::halfArrived($record) !== null)
+            ->visible(fn (Order $record): bool => (auth()->user()?->can(Permission::AnswerPartlyDelivered) ?? false)
+                && ! $record->trashed()
+                && self::halfArrived($record) !== null)
             ->modalHeading('Which items came back?')
             ->modalDescription(fn (Order $record): string => self::whatTheCourierSaid($record))
             ->modalSubmitActionLabel('Record what came back')

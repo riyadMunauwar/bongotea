@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shipments;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Shipments\Pages\ListShipments;
 use App\Filament\Resources\Shipments\Pages\ViewShipment;
 use App\Filament\Resources\Shipments\Schemas\ShipmentInfolist;
@@ -50,6 +51,18 @@ class ShipmentResource extends Resource
 
     /** Third, directly under Orders: a parcel is what became of one. See `Pages\Dashboard` for the whole order. */
     protected static ?int $navigationSort = 2;
+
+    /**
+     * The parcels are part of the same working area as the Orders they came
+     * from, so they sit behind the same floor: `work orders` (ADR-0025). A User
+     * without it is refused the list and the sidebar entry, not shown a surface
+     * they have no Order to reach it from. Closing the resource's own URL too
+     * gives a forbidden response rather than a redirect to nowhere.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can(Permission::WorkOrders) ?? false;
+    }
 
     public static function infolist(Schema $schema): Schema
     {

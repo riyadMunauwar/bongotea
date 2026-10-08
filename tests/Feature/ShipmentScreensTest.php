@@ -29,7 +29,7 @@ use Tests\Fixtures\Couriers\CourierScript;
  * against that Courier's own vocabulary rather than against one invented here.
  */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 /*

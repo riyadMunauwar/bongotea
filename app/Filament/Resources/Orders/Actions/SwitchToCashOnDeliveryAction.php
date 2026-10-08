@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\PaymentMethod;
+use App\Enums\Permission;
 use App\Models\Order;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -32,7 +33,16 @@ class SwitchToCashOnDeliveryAction
             ->label('Switch to Cash on Delivery')
             ->icon(Heroicon::OutlinedBanknotes)
             ->color('warning')
-            ->visible(fn (Order $record): bool => $record->isUnpaid())
+
+            /**
+             * Changing how money is collected on a live Order is not an everyday
+             * verb, so it needs `switch to cash on delivery` on top of the
+             * `work orders` floor. Folded into `visible()` as the first
+             * condition, so a User without it never sees the action rather than
+             * seeing it refused on click; the rest keeps it to an Unpaid Order.
+             */
+            ->visible(fn (Order $record): bool => (auth()->user()?->can(Permission::SwitchToCashOnDelivery) ?? false)
+                && $record->isUnpaid())
             ->requiresConfirmation()
             ->modalHeading('Switch this order to Cash on Delivery?')
             ->modalDescription(fn (Order $record): string => $record->pendingPayments()->exists()

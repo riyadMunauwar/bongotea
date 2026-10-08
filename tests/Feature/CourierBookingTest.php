@@ -46,8 +46,14 @@ use Tests\Fixtures\Couriers\RedExScript;
  * test here reaches for a driver: the couriers' asymmetries are asked of the
  * script, never branched on by name.
  */
+/**
+ * The booker also writes parcels off in this suite, so the User holds
+ * `abandon parcels` on top of the `work orders` floor booking rides on. Where a
+ * case asserts the abandon action is *hidden*, it is the record-state rule doing
+ * the hiding (no parcel out, or a deleted Order), with the Permission held.
+ */
 beforeEach(function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->abandoningParcels()->create());
 });
 
 /**

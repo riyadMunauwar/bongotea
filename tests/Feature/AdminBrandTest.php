@@ -3,8 +3,9 @@
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\User;
 
+/** The brand assertions render the Orders index, which now sits behind `work orders`. */
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->workingOrders()->create());
 });
 
 it('names the panel GioPages rather than the framework default', function () {
