@@ -1,5 +1,7 @@
 # The fingerprint is split: what the courier collects, and nothing else
 
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The Pricing Fingerprint is replaced by a Quote checked at Capture.
+
 Everything that determines the figure handed over at the door — the linked Product ids, their
 prices, and the Delivery Option amounts — is fingerprinted into the rendered form and re-checked at
 Capture. A mismatch is refused outright, with a message telling the Customer to reload. Nothing else

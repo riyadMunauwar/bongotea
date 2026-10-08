@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
-Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+The repo is `riyadMunauwar/bongotea` (the `origin` remote). This clone also has a `source` remote pointing at `riyadMunauwar/giopages`, the project it began as, so `gh` may not infer the right one: pass `--repo riyadMunauwar/bongotea` to every `gh issue` / `gh pr` command.
 
 ## Pull requests as a triage surface
 

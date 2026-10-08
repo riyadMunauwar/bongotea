@@ -1,5 +1,7 @@
 # The page cache has two readers
 
+> **Superseded by [ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md).** The static page cache is gone; the storefront is rendered by Inertia with SSR.
+
 `StaticPageCache` writes `<slug>.html` and a `.gz` sibling. Two separate things read them back: the
 webserver, where it has been configured to — `public/.htaccess` on Apache and LiteSpeed, `try_files`
 on nginx, the vhost snippet on OpenLiteSpeed — and `FallbackPageCacheReader`, from inside

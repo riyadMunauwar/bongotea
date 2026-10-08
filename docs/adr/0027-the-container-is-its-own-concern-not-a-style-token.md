@@ -1,5 +1,7 @@
 # The Container is its own concern, not a Style Token
 
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The Checkout is one fixed form; there is no per-Page Container.
+
 The Checkout draws itself inside two boxes. The **ground** is the section the design paints behind
 everything — `.gio-checkout`, the background token's fill and the design's outer padding. The
 **card** is the one bordered panel the Customer reads inside it — `.gio-checkout-card`, the surface

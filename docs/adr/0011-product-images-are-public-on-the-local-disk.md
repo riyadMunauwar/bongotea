@@ -1,5 +1,7 @@
 # Product images are public, on the disk they already sit on
 
+> **Still in force for Bongo Tea, on different grounds.** The static page cache and the Checkout island are gone ([ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md)), so the cache-flush consequence no longer applies, but images still need unsigned, long-lived URLs because shared links and Open Graph previews outlive any signature. Revisit when the Product gallery is built: moving it to the `public` disk, the alternative below, would supersede this.
+
 Media uploaded to a Product's image collection lands on the `local` disk, and that disk is now
 declared `'visibility' => 'public'`. Laravel registers a serve route for a local disk with
 `'serve' => true`, and for a disk whose visibility is private that route demands a signed URL. The

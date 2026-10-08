@@ -1,5 +1,7 @@
 # A Checkout Config is self-contained, per Page
 
+> **Superseded by [ADR-0028](0028-the-tier-is-chosen-by-the-whole-carts-kilograms-from-one-store-wide-table.md) and [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** Prices and Delivery Bands are store-wide, and the Checkout is no longer configured per Page.
+
 Every Page carries a complete Checkout Config of its own: fields, Delivery Options, linked Products,
 appearance. It is seeded when the Page is created, so a Page publishes without anyone opening the
 Checkout tab, and it can be copied wholesale from another Page. Nothing is inherited at render time.

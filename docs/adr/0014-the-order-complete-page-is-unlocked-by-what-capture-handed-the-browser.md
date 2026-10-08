@@ -1,5 +1,7 @@
 # The Order Complete Page is unlocked by what Capture handed the browser
 
+> **Still in force for Bongo Tea.** The Order Complete Page is now one fixed, store-wide route rather than a Page's configured screen ([ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md)), and the cookie rule below applies to it unchanged.
+
 The Order Complete Page shows the Customer their own name, number and address, because a Customer
 who has just typed them wants to see that they were taken down right. It is addressed by order
 number alone, and that address ends up in browser history and Referer headers, so the address

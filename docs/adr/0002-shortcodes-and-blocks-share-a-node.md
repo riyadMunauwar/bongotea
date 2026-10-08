@@ -1,5 +1,7 @@
 # A Shortcode and a Block are one definition reached two ways
 
+> **Superseded by [ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md).** Shortcodes are gone; a Block kind is one definition with a Filament schema and a React component.
+
 The block builder is the product, but v1 ships only shortcodes. To stop the two becoming parallel
 systems that drift, they share a **node** — a `{name, attributes}` pair — rather than sharing a
 renderer. A Shortcode Definition declares its name, an attribute schema, and a single `render()`

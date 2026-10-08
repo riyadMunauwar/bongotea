@@ -163,7 +163,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 ### Issue tracker
 
-Issues live as GitHub issues in `riyadMunauwar/giopages`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues in `riyadMunauwar/bongotea`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

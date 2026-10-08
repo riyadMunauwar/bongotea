@@ -1,8 +1,10 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # A Checkout Layout may behave, but never reorders the document or changes what is captured
+
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The Checkout is one fixed form; there are no Checkout Layouts.
 
 The ten Checkout Layouts drawn for the shortcode include two that are not arrangements alone:
 Stepper shows one panel at a time behind Next and Back, and Accordion opens one section at a time

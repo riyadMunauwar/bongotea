@@ -1,5 +1,7 @@
 # A layout's rules ship only to the pages that draw it
 
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The Checkout is one fixed form; there are no Checkout Layouts.
+
 The Checkout offers five arrangements — stacked, split, compact, summary-first and form-only. They
 share one base stylesheet, as they always have. What is new is that a layout's own rules are emitted
 only when a Page is arranged in it: a Page drawn stacked carries the base sheet and the stacked

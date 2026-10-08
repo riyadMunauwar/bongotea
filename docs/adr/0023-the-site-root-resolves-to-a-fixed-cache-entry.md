@@ -1,5 +1,7 @@
 # The Site Root resolves to a fixed cache entry, not to a Slug
 
+> **Superseded by [ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md).** The home page is the System Page with the home role, served at `/`; there is no Front Page setting, Placeholder or page cache.
+
 A Merchant designates one published Page as the **Front Page**, and the **Site Root** serves that
 Page's bytes from the static cache with the framework never booting. The root entry is a fixed
 filename — `page-cache/_front.html` and its `.gz` sibling — written from the same render that writes

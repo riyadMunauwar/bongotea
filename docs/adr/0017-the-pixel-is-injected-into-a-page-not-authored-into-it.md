@@ -1,5 +1,7 @@
 # The Pixel is injected into a Page, not authored into it
 
+> **Superseded by [ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md).** The Pixel is injected into the Inertia root document; the principle — injected, never authored — carries over.
+
 A Page's `body` is the whole HTML document and belongs to the Merchant. Until now nothing was
 added to it: the only thing the system wrote into a served Page was the Checkout island, and that
 reached no further than the point `[checkout]` was expanded at. **The tracking snippet breaks

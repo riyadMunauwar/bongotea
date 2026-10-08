@@ -1,5 +1,7 @@
 # A Merchant may pre-tick Products in the Picker
 
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The browser Cart replaces the Product Picker.
+
 A Product Picker opened with nothing ticked, and the glossary stated the reason as domain law: on a
 cash-on-delivery Page an extra nobody chose is not a larger sale, it is a refused parcel. A Merchant
 may now designate any subset of a Page's Products to open ticked — one, several, or none, which

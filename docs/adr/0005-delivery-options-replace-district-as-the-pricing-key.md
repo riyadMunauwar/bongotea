@@ -1,5 +1,7 @@
 # Delivery Options replace District as the pricing key
 
+> **Superseded by [ADR-0028](0028-the-tier-is-chosen-by-the-whole-carts-kilograms-from-one-store-wide-table.md).** The Delivery Charge is read from store-wide Delivery Bands by total Kilograms.
+
 Delivery pricing keys off Delivery Options — label-and-amount pairs a Merchant authors on each Page
 — and no longer off District. None means no delivery row and no charge; one is added to the total
 with no picker; two or more are offered as a choice, and the Order records the chosen label beside

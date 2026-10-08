@@ -1,5 +1,7 @@
 # One field list, two storage destinations
 
+> **Superseded by [ADR-0029](0029-the-cart-lives-in-the-browser-and-capture-checks-a-quote.md).** The Checkout is one fixed form for the whole store, with no Merchant-defined fields.
+
 A Checkout's fields are a single ordered list. The built-in ones the system knows by name — name,
 phone, email, address, district — and the Merchant's own sit in it together, are reordered together,
 styled the same way and validated the same way. What differs is one property of a Checkout Field:

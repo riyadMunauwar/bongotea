@@ -1,5 +1,7 @@
 # Shortcodes expand on render, never on save
 
+> **Superseded by [ADR-0030](0030-a-page-is-made-only-of-blocks-and-a-system-page-is-known-by-its-role.md).** Pages are made only of Blocks; there are no shortcodes.
+
 A Page's stored `body` keeps the literal `[checkout]` text forever; expansion happens when the
 Page is rendered, on a cache miss. The obvious optimisation is the opposite — expand once at save
 time and store the result — but the static page cache (issue #4) means there is no per-request cost to
