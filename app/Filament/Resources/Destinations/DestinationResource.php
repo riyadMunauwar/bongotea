@@ -38,7 +38,7 @@ class DestinationResource extends Resource
      * would open onto this rather than onto General, which is where a
      * Merchant expects Settings to start.
      */
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 6;
 
     /**
      * "Tracking Destinations" in the sidebar, "Destination" on the record: the

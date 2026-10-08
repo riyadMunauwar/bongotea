@@ -31,6 +31,19 @@ class Money
     }
 
     /**
+     * Minor units as a whole number of major units, for a field that takes
+     * whole taka: 62000 -> "620". An amount that is not a whole unit keeps
+     * its decimals, so the field refuses it rather than a save quietly
+     * dropping them.
+     */
+    public static function toWholeMajorString(int $minorUnits): string
+    {
+        return $minorUnits % self::factor() === 0
+            ? (string) intdiv($minorUnits, self::factor())
+            : self::toMajorString($minorUnits);
+    }
+
+    /**
      * Minor units as a number in major units, for a chart axis that draws
      * its own symbol and decimals. Display goes through `format()`.
      */
@@ -53,7 +66,11 @@ class Money
         return app(GeneralSettings::class)->currencyDecimals;
     }
 
-    private static function factor(): int
+    /**
+     * How many minor units make one whole unit of the currency: what a Tier
+     * Price rounds to.
+     */
+    public static function factor(): int
     {
         return 10 ** self::decimals();
     }

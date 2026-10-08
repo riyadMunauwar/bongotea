@@ -43,10 +43,10 @@ class UserResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     /**
-     * Sort 10, above the Roles resource at 11 and below the Settings pages
-     * (0–9).
+     * Sort 11, above the Roles resource at 12 and below the Settings pages
+     * (0–10).
      */
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 11;
 
     public static function form(Schema $schema): Schema
     {

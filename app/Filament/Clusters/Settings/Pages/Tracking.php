@@ -38,8 +38,8 @@ class Tracking extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
-    /** After the Destinations resource, which sorts 5: where events go, then which of them do. */
-    protected static ?int $navigationSort = 6;
+    /** After the Destinations resource, which sorts 6: where events go, then which of them do. */
+    protected static ?int $navigationSort = 7;
 
     /**
      * Every declared event drawn at what it actually does, over whatever the

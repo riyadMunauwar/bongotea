@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\DiscountType;
 use App\Enums\ProductStatus;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -27,10 +28,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * "taken out of the catalogue" — for good, while its address keeps
  * answering. Every characteristic is optional, so a Product can be published
  * bare and enriched later.
+ *
+ * `price` is the Regular Price: what a Kilogram costs in the first Tier, and
+ * what every Tier Discount is taken off. The discounts are keyed by Tier key
+ * (`PricingSettings`), and a Tier with none charges the Tier below's price;
+ * what a Kilogram costs is only ever worked out by `PriceBook`.
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price',
-    'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
+    'discount_type', 'tier_discounts', 'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
     'brewing_guide', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
     'seo_title', 'seo_description', 'seo_image',
 ])]
@@ -63,6 +69,8 @@ class Product extends Model implements HasMedia
     {
         return [
             'price' => 'integer',
+            'discount_type' => DiscountType::class,
+            'tier_discounts' => 'array',
             'strength' => 'integer',
             'best_for' => 'array',
             'business_tips' => 'array',

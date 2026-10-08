@@ -28,8 +28,8 @@ class Inventory extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
-    /** After Couriers at 7 and SMS at 8: the newest category of thing decided once. */
-    protected static ?int $navigationSort = 9;
+    /** After Couriers at 8 and SMS at 9: the newest category of thing decided once. */
+    protected static ?int $navigationSort = 10;
 
     /**
      * @return array<Section>

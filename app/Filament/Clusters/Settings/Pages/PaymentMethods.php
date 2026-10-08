@@ -34,8 +34,8 @@ class PaymentMethods extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
-    /** After the store's identity, announcement and Menus (1–3): how it is paid, then where its events go. */
-    protected static ?int $navigationSort = 4;
+    /** After the store's identity, announcement, Menus and Pricing (1–4): how it is paid, then where its events go. */
+    protected static ?int $navigationSort = 5;
 
     /**
      * @return array<Component>

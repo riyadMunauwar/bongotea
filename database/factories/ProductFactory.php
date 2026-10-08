@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\DiscountType;
 use App\Enums\ProductStatus;
 use App\Models\Brand;
 use App\Models\Category;
@@ -32,6 +33,8 @@ class ProductFactory extends Factory
 
             /** Minor units: 990.00 is stored as 99000. */
             'price' => fake()->numberBetween(10, 500) * 10000,
+            'discount_type' => DiscountType::Percent,
+            'tier_discounts' => [],
             'status' => ProductStatus::Published,
             'is_available' => true,
         ];

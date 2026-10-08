@@ -34,7 +34,7 @@ class Sms extends SettingsPage
     protected static ?string $title = 'SMS';
 
     /** Beside Couriers: the last of the companies the store pays to do something for it. */
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 9;
 
     /**
      * @return array<Section>

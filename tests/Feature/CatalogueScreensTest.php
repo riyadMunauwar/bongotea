@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CategoryTheme;
+use App\Enums\DiscountType;
 use App\Enums\ProductStatus;
 use App\Filament\Resources\Brands\BrandResource;
 use App\Filament\Resources\Brands\Pages\CreateBrand;
@@ -17,6 +18,9 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Pricing\PriceBook;
+use App\Support\Pricing\ProductPrices;
+use App\Support\Pricing\TierPrice;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
@@ -255,6 +259,102 @@ it('publishes a Product with nothing but its name, slug, Category, Brand and pri
         ->assertHasNoFormErrors();
 
     expect(Product::query()->where('slug', 'bare')->sole()->strength)->toBeNull();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Regular Price and Tier Discounts
+|--------------------------------------------------------------------------
+*/
+
+it('stores a Regular Price in minor units and a percentage per Tier, leaving a blank Tier to charge the one below', function () {
+    Livewire::test(CreateProduct::class)
+        ->fillForm([
+            'name' => 'Premium',
+            'slug' => 'premium',
+            'category_id' => $this->category->getKey(),
+            'brand_id' => $this->brand->getKey(),
+            'price' => '620',
+            'discount_type' => DiscountType::Percent->value,
+            'tier_discounts' => ['tier-2' => '5', 'tier-3' => '10', 'tier-4' => '', 'tier-5' => '16', 'tier-6' => '20'],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $product = Product::query()->where('slug', 'premium')->sole();
+
+    expect($product->price)->toBe(62000)
+        ->and($product->discount_type)->toBe(DiscountType::Percent)
+        ->and($product->tier_discounts)->toBe(['tier-2' => 5, 'tier-3' => 10, 'tier-4' => null, 'tier-5' => 16, 'tier-6' => 20])
+        ->and(array_map(fn (TierPrice $step): int => $step->price, PriceBook::current()->ladder(ProductPrices::of($product))))
+        ->toBe([62000, 58900, 55800, 55800, 52100, 49600]);
+});
+
+it('takes a fixed discount in whole taka, stores it in minor units and opens it in taka again', function () {
+    Livewire::test(CreateProduct::class)
+        ->fillForm([
+            'name' => 'Strong',
+            'slug' => 'strong',
+            'category_id' => $this->category->getKey(),
+            'brand_id' => $this->brand->getKey(),
+            'price' => '460',
+            'discount_type' => DiscountType::Fixed->value,
+            'tier_discounts' => ['tier-2' => '20', 'tier-3' => '40'],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $product = Product::query()->where('slug', 'strong')->sole();
+
+    expect($product->tier_discounts)->toMatchArray(['tier-2' => 2000, 'tier-3' => 4000]);
+
+    Livewire::test(EditProduct::class, ['record' => $product->getKey()])
+        ->assertSchemaStateSet(['price' => 460, 'tier_discounts.tier-2' => 20, 'tier_discounts.tier-3' => 40]);
+});
+
+it('opens a Regular Price that is not whole taka with its decimals, so a save asks for it rather than dropping them', function () {
+    $product = Product::factory()->create(['price' => 99050]);
+
+    Livewire::test(EditProduct::class, ['record' => $product->getKey()])
+        ->assertSchemaStateSet(['price' => '990.50'])
+        ->call('save')
+        ->assertHasFormErrors(['price']);
+
+    expect($product->fresh()->price)->toBe(99050);
+});
+
+it('draws the Tier Prices the typed discounts come to', function () {
+    Livewire::test(CreateProduct::class)
+        ->fillForm([
+            'price' => '650',
+            'discount_type' => DiscountType::Percent->value,
+            'tier_discounts' => ['tier-2' => '5', 'tier-3' => '8'],
+        ])
+        ->assertSee('1–5 kg: ৳650.00')
+        ->assertSee('6–10 kg: ৳618.00')
+        ->assertSee('11–15 kg: ৳598.00')
+        ->assertSee('51+ kg: ৳598.00');
+});
+
+it('refuses a percentage over 100, a fixed discount above the Regular Price, and part of a taka', function () {
+    $product = [
+        'name' => 'Refused',
+        'slug' => 'refused',
+        'category_id' => $this->category->getKey(),
+        'brand_id' => $this->brand->getKey(),
+    ];
+
+    Livewire::test(CreateProduct::class)
+        ->fillForm([...$product, 'price' => '620.50', 'discount_type' => DiscountType::Percent->value, 'tier_discounts' => ['tier-2' => '101']])
+        ->call('create')
+        ->assertHasFormErrors(['price', 'tier_discounts.tier-2']);
+
+    Livewire::test(CreateProduct::class)
+        ->fillForm([...$product, 'price' => '460', 'discount_type' => DiscountType::Fixed->value, 'tier_discounts' => ['tier-2' => '461']])
+        ->call('create')
+        ->assertHasFormErrors(['tier_discounts.tier-2']);
+
+    expect(Product::query()->where('slug', 'refused')->exists())->toBeFalse();
 });
 
 it('requires a Category and a Brand on every Product', function () {
