@@ -49,20 +49,23 @@ class ProductResource extends Resource
 
     /**
      * The catalogue is one working area held under one Permission
-     * (`Permission::ManageProducts`), and this is the whole of its gate. It
+     * (`Permission::ManageCatalogue`), and this is the whole of its gate. It
      * closes every page the resource owns at once — the list, the editor and
      * the Stock History — because each resource Page aborts unless
      * `canAccess()` passes, and it drops the Products entry from the sidebar
      * for a User who lacks it rather than leaving a link that only 403s.
+     * Categories, Brands and Tags ask this same question, so the four open
+     * and close together.
      *
-     * There is no gate finer than this on purpose (ADR-0026): deleting,
-     * force-deleting and restoring a Product ride on the same Permission, with
-     * no policy and no row-level verb, because the resource is one unit of
-     * trust and a Permission names a working area, never a verb on a row.
+     * There is no gate finer than this on purpose (ADR-0026): taking a
+     * Product out of the catalogue and putting it back ride on the same
+     * Permission, with no policy and no row-level verb, because the resource
+     * is one unit of trust and a Permission names a working area, never a
+     * verb on a row.
      */
     public static function canAccess(): bool
     {
-        return auth()->user()?->can(Permission::ManageProducts) ?? false;
+        return auth()->user()?->can(Permission::ManageCatalogue) ?? false;
     }
 
     /**

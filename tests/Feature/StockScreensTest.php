@@ -43,11 +43,11 @@ use Livewire\Livewire;
 beforeEach(function (): void {
     /**
      * Counts shelves and reads the catalogue: `count stock` opens the Stock
-     * Count screens this test drives, and `manage products` opens the Products
+     * Count screens this test drives, and `manage catalogue` opens the Products
      * list and Stock History where On Hand, Committed and Days of Cover are
      * read. The Inventory gate is asserted on its own further down.
      */
-    $this->counter = User::factory()->countingStock()->managingProducts()->create(['name' => 'Nasrin Akter']);
+    $this->counter = User::factory()->countingStock()->managingCatalogue()->create(['name' => 'Nasrin Akter']);
     $this->actingAs($this->counter);
 
     $this->ledger = app(StockLedger::class);

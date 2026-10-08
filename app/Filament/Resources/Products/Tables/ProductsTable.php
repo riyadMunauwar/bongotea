@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Enums\ProductStatus;
 use App\Models\Product;
 use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\DaysOfCover;
@@ -10,11 +11,13 @@ use App\Support\Money;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Support\Enums\FontWeight;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,6 +33,7 @@ class ProductsTable
             /** Every stock figure is summed into the query the list already runs, so a catalogue of any size costs one of them. */
             ->modifyQueryUsing(function (Builder $query) use ($cover): Builder {
                 $ledger = app(StockLedger::class);
+                $query->with(['category', 'brand']);
 
                 return $cover->withUnitsShipped(
                     app(CommittedStock::class)->withCommitted(
@@ -38,13 +42,23 @@ class ProductsTable
                 );
             })
             ->columns([
-                SpatieMediaLibraryImageColumn::make('image')
-                    ->collection(Product::IMAGE_COLLECTION)
+                /** The cover: the gallery's first image, as a card draws it. */
+                SpatieMediaLibraryImageColumn::make('gallery')
+                    ->collection(Product::GALLERY_COLLECTION)
+                    ->limit(1)
                     ->label(''),
 
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn (Product $record): string => "{$record->category->name} · {$record->brand->name}"),
+
+                TextColumn::make('status')
+                    ->badge(),
+
+                IconColumn::make('is_available')
+                    ->label('Available')
+                    ->boolean(),
 
                 TextColumn::make('price')
                     ->formatStateUsing(fn (int $state): string => Money::format($state))
@@ -155,16 +169,30 @@ class ProductsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                TrashedFilter::make(),
+                SelectFilter::make('category')
+                    ->relationship('category', 'name')
+                    ->preload(),
+                SelectFilter::make('brand')
+                    ->relationship('brand', 'name')
+                    ->preload(),
+                SelectFilter::make('status')
+                    ->options(ProductStatus::class),
+                TernaryFilter::make('is_available')
+                    ->label('Available'),
+                /** Taken out of the catalogue is the soft delete; this is how to find those again. */
+                TrashedFilter::make()
+                    ->label('Taken out of the catalogue'),
             ])
             ->recordActions([
                 EditAction::make(),
             ])
             ->toolbarActions([
+                /** Taken out and put back, never force-deleted, for the reason `EditProduct` gives. */
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->label('Take out of catalogue'),
+                    RestoreBulkAction::make()
+                        ->label('Put back in catalogue'),
                 ]),
             ]);
     }

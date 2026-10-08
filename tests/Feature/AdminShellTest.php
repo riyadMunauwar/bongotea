@@ -63,7 +63,7 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * The User is granted `work orders` because `OrderResource::canAccess()` and
  * `ShipmentResource::canAccess()` otherwise hide Orders and Shipments,
  * `manage settings` because `SettingsCluster::canAccess()` otherwise hides the
- * last entry, `manage products` because `ProductResource::canAccess()`
+ * last entry, `manage catalogue` because `ProductResource::canAccess()`
  * otherwise hides Products, `author pages` because `PageResource::canAccess()`
  * otherwise hides Pages, `count stock` because
  * `InventoryCluster::canAccess()` otherwise hides Inventory, and `view reports`
@@ -79,7 +79,7 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * clusters to what they draw.
  */
 it('draws the sidebar in the order the panel states', function () {
-    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingProducts()->authoringPages()->countingStock()->viewingReports()->create());
+    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingCatalogue()->authoringPages()->countingStock()->viewingReports()->create());
 
     $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
         ->flatMap(fn ($group) => $group->getItems())

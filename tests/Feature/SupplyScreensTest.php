@@ -38,11 +38,11 @@ beforeEach(function (): void {
      * The buyer records deliveries and, in the striking-out block below, voids
      * one — so they hold `void supplies` on top of the `count stock` these
      * screens sit behind — and reads Value at Cost on the Products list and
-     * Stock History, which is why `manage products` is here too. The gates
+     * Stock History, which is why `manage catalogue` is here too. The gates
      * themselves are asserted separately, with Users who hold one Permission
      * and not the other.
      */
-    $this->buyer = User::factory()->voidingSupplies()->managingProducts()->create(['name' => 'Nasrin Akter']);
+    $this->buyer = User::factory()->voidingSupplies()->managingCatalogue()->create(['name' => 'Nasrin Akter']);
     $this->actingAs($this->buyer);
 
     $this->ledger = app(StockLedger::class);

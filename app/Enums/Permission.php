@@ -38,7 +38,7 @@ enum Permission: string implements HasLabel
 {
     case WorkOrders = 'work orders';
     case AuthorPages = 'author pages';
-    case ManageProducts = 'manage products';
+    case ManageCatalogue = 'manage catalogue';
     case CountStock = 'count stock';
     case ViewReports = 'view reports';
     case ManageSettings = 'manage settings';
@@ -61,7 +61,7 @@ enum Permission: string implements HasLabel
         return match ($this) {
             self::WorkOrders => 'Work Orders',
             self::AuthorPages => 'Author Pages',
-            self::ManageProducts => 'Manage Products',
+            self::ManageCatalogue => 'Manage catalogue',
             self::CountStock => 'Count stock',
             self::ViewReports => 'View reports',
             self::ManageSettings => 'Manage settings',
@@ -85,7 +85,7 @@ enum Permission: string implements HasLabel
         return match ($this) {
             self::WorkOrders,
             self::AuthorPages,
-            self::ManageProducts,
+            self::ManageCatalogue,
             self::CountStock,
             self::ViewReports,
             self::ManageSettings => self::WORKING_AREAS,

@@ -138,13 +138,14 @@ class UserFactory extends Factory
     }
 
     /**
-     * A User who may open the Products catalogue: one holding a Role that
-     * carries the Permission the resource is gated by. As with every state
-     * here, authority arrives through a Role, never a direct grant (ADR-0025).
+     * A User who may build the catalogue — Products, Categories, Brands and
+     * Tags: one holding a Role that carries the Permission all four are gated
+     * by. As with every state here, authority arrives through a Role, never a
+     * direct grant (ADR-0025).
      */
-    public function managingProducts(): static
+    public function managingCatalogue(): static
     {
-        return $this->holdingRole('Products Manager', Permission::ManageProducts);
+        return $this->holdingRole('Catalogue Manager', Permission::ManageCatalogue);
     }
 
     /**
