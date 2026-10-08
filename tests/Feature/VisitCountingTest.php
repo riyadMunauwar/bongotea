@@ -167,6 +167,27 @@ describe('what the merchant is shown', function () {
             ->assertDontSee('900');
     });
 
+    it('draws the store-wide Conversion Rate beside Visits: every Order over every Visit, Cancelled ones included', function () {
+        countingVisits();
+
+        VisitCount::factory()->on(0, 40)->create();
+        VisitCount::factory()->on(1, 20)->create();
+
+        Order::factory()->create(['created_at' => now()]);
+        Order::factory()->cancelled()->create(['created_at' => now()]);
+
+        Livewire::test(OverviewStats::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+            ->assertSeeInOrder(['Visits', '40', 'Conversion Rate', '5.0%'])
+            ->assertSee('5.0 pts up on the day before');
+    });
+
+    it('reads the Conversion Rate as not counted, never as nought, while Visits are off', function () {
+        Order::factory()->create(['created_at' => now()]);
+
+        Livewire::test(OverviewStats::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'today']])
+            ->assertSeeInOrder(['Conversion Rate', 'Not counted', 'Counted once Visits are']);
+    });
+
     /**
      * A nought on a tile beside six tiles carrying figures reads as no
      * traffic, which is a Merchant's worst afternoon and would be a lie. So

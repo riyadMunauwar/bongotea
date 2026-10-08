@@ -16,11 +16,12 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Js;
 
 /**
- * Sales over time, full width under the stat tiles: a Sales line and an
- * Orders line across the Reporting Window, so a Merchant can see whether
- * Sales moved because of volume or because of value. Each has its own axis,
- * money on the left in the installation's currency and a count on the
- * right, since the two are never on one scale.
+ * Sales over time, full width under the stat tiles: a Sales line, an
+ * Orders line and a Kilograms Sold line across the Reporting Window, so a
+ * Merchant can see whether Sales moved because of volume or because of
+ * value. Each has its own axis, money on the left in the installation's
+ * currency and the count and the weight on the right, since none of them
+ * is on another's scale.
  *
  * The points come whole from `ReportingQuery::salesOverTime()`: one per
  * hour of a one-day window, one per day otherwise, an empty bucket already
@@ -40,6 +41,13 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
      * shade reads on both the light and the dark surface.
      */
     private const string ORDERS_LINE_COLOR = '#737373';
+
+    /**
+     * The neutral Kilograms Sold is drawn in, for the same reason: a lighter
+     * shade than Orders and a dotted line, so the three are told apart
+     * without a second colour.
+     */
+    private const string KILOGRAMS_LINE_COLOR = '#a3a3a3';
 
     protected static ?int $sort = 20;
 
@@ -87,6 +95,14 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
                     'borderColor' => self::ORDERS_LINE_COLOR,
                     'borderDash' => [4, 4],
                 ],
+                [
+                    'label' => 'Kilograms Sold',
+                    'data' => $salesOverTime->series(fn (SalesOverTimePoint $point): int => $point->kilograms),
+                    'yAxisID' => 'y2',
+                    'tension' => 0.3,
+                    'borderColor' => self::KILOGRAMS_LINE_COLOR,
+                    'borderDash' => [1, 3],
+                ],
             ],
         ];
     }
@@ -106,10 +122,11 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
     }
 
     /**
-     * Two axes: money on the left, ticked with the currency symbol and its
-     * decimals so the axis agrees with the tiles; Orders on the right, whole
-     * numbers only, its grid left off so the chart has one set of lines.
-     * Hovering anywhere on a bucket shows both figures for it.
+     * Three axes: money on the left, ticked with the currency symbol and its
+     * decimals so the axis agrees with the tiles; Orders and Kilograms Sold
+     * on the right, whole numbers only, their grids left off so the chart has
+     * one set of lines. Hovering anywhere on a bucket shows every figure for
+     * it.
      */
     protected function getOptions(): RawJs
     {
@@ -135,6 +152,16 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
                         border: { display: false },
                         grid: { drawOnChartArea: false },
                         ticks: { precision: 0 },
+                    },
+                    y2: {
+                        beginAtZero: true,
+                        position: 'right',
+                        border: { display: false },
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            precision: 0,
+                            callback: (value) => value.toLocaleString() + ' kg',
+                        },
                     },
                 },
             }

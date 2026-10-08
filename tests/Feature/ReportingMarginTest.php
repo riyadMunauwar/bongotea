@@ -117,6 +117,17 @@ it('counts revenue exactly as Sales counts it, Delivery Charge and all', functio
         ->and($margin->goodsRevenue() + $margin->deliveryCharge)->toBe($margin->revenue);
 });
 
+it('weighs the very Orders Sales counts, so its Kilograms are the Dashboard\'s Kilograms Sold', function () {
+    [$tea] = aWeekOfSelling();
+
+    soldAtCost(orderCapturedAt('2026-09-07 12:00', status: OrderStatus::Cancelled), $tea, 10, 18000);
+
+    $kilogramsSold = app(ReportingQuery::class)->overview(ReportingWindow::of(ReportingPreset::Last7Days, reportingNow()))->figures->kilograms;
+
+    expect(marginOf()->units)->toBe($kilogramsSold)
+        ->and($kilogramsSold)->toBe(4);
+});
+
 it('is Sales over the window less the stamped costs of the very same Orders', function () {
     aWeekOfSelling();
 

@@ -75,6 +75,14 @@ final class ReportingQuery
     private const string SALES = 'sum(case when status != ? then total else 0 end) as sales';
 
     /**
+     * Kilograms Sold, in SQL: the Kilograms on the very Orders `SALES` sums,
+     * read off a query `weighed()` has joined each Order's Kilograms onto.
+     * Binds the Cancelled status once, like `SALES`, and is always selected
+     * beside it so the two can never be cut over different Orders.
+     */
+    private const string KILOGRAMS_SOLD = 'sum(case when status != ? then coalesce(order_kilograms, 0) else 0 end) as kilograms';
+
+    /**
      * How many Orders hold one status. Binds that status once.
      */
     private const string STATUS_COUNT = 'sum(case when status = ? then 1 else 0 end)';
@@ -107,7 +115,7 @@ final class ReportingQuery
     public const int PENDING_PAYMENT_ATTENTION_AFTER_MINUTES = 60;
 
     /**
-     * Orders and Sales per bucket of a window, for the line chart: one
+     * Orders, Sales and Kilograms Sold per bucket of a window, for the line chart: one
      * grouped query, every bucket in the answer whether or not a row fell
      * inside it.
      */
@@ -117,10 +125,10 @@ final class ReportingQuery
         $cancelled = OrderStatus::Cancelled->value;
 
         $rows = $this->groupedByBucket(
-            $this->ordersIn($window),
+            $this->weighed($this->ordersIn($window)),
             $buckets,
-            'count(*) as order_count, '.self::SALES,
-            [$cancelled],
+            'count(*) as order_count, '.self::SALES.', '.self::KILOGRAMS_SOLD,
+            [$cancelled, $cancelled],
         );
 
         $points = [];
@@ -132,6 +140,7 @@ final class ReportingQuery
                 bucket: $bucket,
                 orders: (int) ($row->order_count ?? 0),
                 sales: (int) ($row->sales ?? 0),
+                kilograms: (int) ($row->kilograms ?? 0),
             );
         }
 
@@ -191,7 +200,7 @@ final class ReportingQuery
     }
 
     /**
-     * Orders and Sales per recorded Payment Method, and each online method's
+     * Orders, Sales and Kilograms Sold per recorded Payment Method, and each online method's
      * Orders split between Paid and Unpaid, for the bar chart. Two grouped
      * queries: one for what a row says on its own, and one under
      * `Order::unpaid()` — the scope is the rule for Unpaid, and is not
@@ -206,8 +215,8 @@ final class ReportingQuery
     {
         $cancelled = OrderStatus::Cancelled->value;
 
-        $perMethod = $this->ordersIn($window)
-            ->selectRaw('payment_method as method, count(*) as order_count, '.self::SALES, [$cancelled])
+        $perMethod = $this->weighed($this->ordersIn($window))
+            ->selectRaw('payment_method as method, count(*) as order_count, '.self::SALES.', '.self::KILOGRAMS_SOLD, [$cancelled, $cancelled])
             ->groupBy('payment_method')
             ->get()
             ->keyBy('method');
@@ -232,6 +241,7 @@ final class ReportingQuery
                 method: $method,
                 orders: (int) $row->order_count,
                 sales: (int) $row->sales,
+                kilograms: (int) $row->kilograms,
                 unpaid: $method->isOnline() ? (int) ($unpaid->get($method->value)?->unpaid ?? 0) : null,
             );
         }
@@ -815,13 +825,14 @@ final class ReportingQuery
         $new = OrderStatus::New->value;
 
         $counted = $this->groupedByBucket(
-            $this->ordersIn($window),
+            $this->weighed($this->ordersIn($window)),
             $buckets,
             'count(*) as order_count, '
             .self::SALES.', '
+            .self::KILOGRAMS_SOLD.', '
             .self::STATUS_COUNT.' as cancelled, '
             .self::STATUS_COUNT.' as new_orders',
-            [$cancelled, $cancelled, $new],
+            [$cancelled, $cancelled, $cancelled, $new],
         );
 
         $unpaid = $this->groupedByBucket($this->ordersIn($window)->unpaid(), $buckets, 'count(*) as unpaid');
@@ -834,6 +845,7 @@ final class ReportingQuery
             $figures[] = new OverviewFigures(
                 orders: (int) ($row->order_count ?? 0),
                 sales: (int) ($row->sales ?? 0),
+                kilograms: (int) ($row->kilograms ?? 0),
                 cancelled: (int) ($row->cancelled ?? 0),
                 unpaid: (int) ($unpaid->get($index)?->unpaid ?? 0),
                 new: (int) ($row->new_orders ?? 0),
@@ -1038,6 +1050,31 @@ final class ReportingQuery
         return Order::query()
             ->where('created_at', '>=', $window->start->toDateTimeString())
             ->where('created_at', '<', $window->end->toDateTimeString());
+    }
+
+    /**
+     * The same Orders, each carrying its Kilograms under `order_kilograms`:
+     * the sum of its Lines, joined on as one row per Order so that counting
+     * the Orders, summing their totals and summing their weight all stay one
+     * grouped query over one row each. An Order with no Lines carries null,
+     * which `KILOGRAMS_SOLD` reads as none.
+     *
+     * The joined table names nothing but `order_id` and `order_kilograms`, so
+     * every unqualified column the bucket CASE and the aggregates read is
+     * still the Order's own.
+     *
+     * @param  Builder<Order>  $orders
+     * @return Builder<Order>
+     */
+    private function weighed(Builder $orders): Builder
+    {
+        return $orders->leftJoinSub(
+            OrderLine::query()->toBase()->selectRaw('order_id, sum(quantity) as order_kilograms')->groupBy('order_id'),
+            'weights',
+            'weights.order_id',
+            '=',
+            'orders.id',
+        );
     }
 
     /**

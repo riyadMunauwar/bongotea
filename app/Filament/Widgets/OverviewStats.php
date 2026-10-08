@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\Permission;
 use App\Filament\Clusters\Settings\Pages\Tracking;
+use App\Support\Kilograms;
 use App\Support\Money;
 use App\Support\Reporting\Overview;
 use App\Support\Reporting\OverviewFigures;
@@ -17,10 +18,12 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
  * The row of stat tiles under the Reporting Window: Orders and Sales side
- * by side, never collapsed into one; Average Order Value and the
+ * by side, never collapsed into one, and Kilograms Sold beside Sales, the
+ * same Orders weighed rather than totalled; Average Order Value and the
  * Cancellation Rate; Unpaid and New awaiting call, the two queues; and
  * Visits, which is a figure where the Merchant has switched Visit counting
- * on and a sentence pointing at that switch where they have not.
+ * on and a sentence pointing at that switch where they have not, with the
+ * store-wide Conversion Rate beside it, which is unknown while Visits are.
  *
  * Each tile reads its change against the comparison window, coloured by
  * whether up is good — it is not for the Cancellation Rate or Unpaid — and
@@ -64,6 +67,9 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
             $this->tile('Sales', Money::format($current->sales), $overview, fn (OverviewFigures $figures): int => $figures->sales)
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->sales, $previous->sales, upIsGood: true)),
 
+            $this->tile('Kilograms Sold', Kilograms::format($current->kilograms), $overview, fn (OverviewFigures $figures): int => $figures->kilograms)
+                ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->kilograms, $previous->kilograms, upIsGood: true)),
+
             $this->tile('Average Order Value', Money::format($current->averageOrderValue()), $overview, fn (OverviewFigures $figures): int => $figures->averageOrderValue())
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->averageOrderValue(), $previous->averageOrderValue(), upIsGood: true)),
 
@@ -77,11 +83,35 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->new, $previous->new, upIsGood: true)),
 
             $this->visits($overview),
+            $this->conversionRate($overview),
         ];
     }
 
     /**
-     * The Visits tile: loads of the Merchant's published Pages in the window,
+     * The Conversion Rate tile: Orders over Visits for the whole store, or
+     * "Not counted" where Visits are off — a rate with no denominator is
+     * unknown, and a 0.0% would read as a store that sells nothing. No
+     * sparkline, for the reason the Visits tile has none.
+     */
+    private function conversionRate(Overview $overview): Stat
+    {
+        $rate = $overview->figures->conversionRate();
+
+        if ($rate === null) {
+            return Stat::make('Conversion Rate', 'Not counted')
+                ->description('Counted once Visits are')
+                ->descriptionColor('gray');
+        }
+
+        $previous = $overview->comparison->conversionRate();
+
+        /** A comparison nobody counted is unknown, so no change is measured against it rather than against a nought. */
+        return Stat::make('Conversion Rate', $this->percent($rate))
+            ->tap(fn (Stat $stat) => $previous === null ? null : $this->describeRateChange($stat, $overview, $rate, $previous, upIsGood: true));
+    }
+
+    /**
+     * The Visits tile: loads of the store in the window,
      * or the sentence that says counting is off and where to switch it on.
      *
      * Off is said rather than drawn as a nought, because a zero on a tile
@@ -152,23 +182,23 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
 
     /**
      * The change in a rate, in percentage points rather than a percentage
-     * of a percentage: "3.2 pts up on the previous 7 days". Up is never
-     * good for a rate drawn here.
+     * of a percentage: "3.2 pts up on the previous 7 days". Up is bad for
+     * the Cancellation Rate and good for the Conversion Rate.
      */
-    private function describeRateChange(Stat $stat, Overview $overview, float $current, float $previous): void
+    private function describeRateChange(Stat $stat, Overview $overview, float $current, float $previous, bool $upIsGood = false): void
     {
         $against = $this->comparisonName($overview);
         $points = round(($current - $previous) * 100, 1);
 
         if ($points === 0.0) {
-            $this->describe($stat, "No change on {$against}", 0, upIsGood: false);
+            $this->describe($stat, "No change on {$against}", 0, $upIsGood);
 
             return;
         }
 
         $direction = $points > 0 ? 'up' : 'down';
 
-        $this->describe($stat, number_format(abs($points), 1).' pts '.$direction." on {$against}", $points <=> 0, upIsGood: false);
+        $this->describe($stat, number_format(abs($points), 1).' pts '.$direction." on {$against}", $points <=> 0, $upIsGood);
     }
 
     /**

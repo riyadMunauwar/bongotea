@@ -69,6 +69,18 @@ it('splits each online method into Paid and Unpaid by the Order scopes: a Pendin
         ->and($bkash->unpaid)->toBe(1);
 });
 
+it('carries Kilograms Sold beside Sales per Payment Method, over the Orders Sales counts', function () {
+    weighing(orderCapturedAt('2026-09-05 12:00', attributes: ['payment_method' => PaymentMethod::CashOnDelivery]), 4, 3);
+    weighing(orderCapturedAt('2026-09-05 13:00', attributes: ['payment_method' => PaymentMethod::CashOnDelivery], status: OrderStatus::Cancelled), 25);
+    weighing(orderCapturedAt('2026-09-05 14:00', attributes: ['payment_method' => PaymentMethod::SslCommerz]), 10);
+    orderCapturedAt('2026-09-05 15:00', attributes: ['payment_method' => PaymentMethod::SslCommerz]);
+
+    [$cash, $sslcommerz] = paymentMixOf()->rows;
+
+    expect($cash->kilograms)->toBe(7)
+        ->and($sslcommerz->kilograms)->toBe(10);
+});
+
 it('is empty on a window with nothing captured', function () {
     orderCapturedAt('2026-09-02 12:00');
 

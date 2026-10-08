@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Reports\Widgets;
 
+use App\Support\Kilograms;
 use App\Support\Money;
 use App\Support\Reporting\Margin;
 use App\Support\Reporting\ReportingQuery;
@@ -20,6 +21,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * is the one thing a Merchant reading this beside the Dashboard needs told.
  * The charge is in the figure because `Sales` has always included it; it
  * belongs to an Order rather than to any Product, so it is on no row below.
+ * Kilograms Sold stands beside it, as it does beside `Sales` everywhere: the
+ * Lines of those very Orders, weighed.
  *
  * Where nothing sold in the window carries a stamped cost the money tiles say
  * so in words rather than drawing a nought, exactly as `StockValueStat` does
@@ -52,13 +55,17 @@ class MarginTotalsStat extends StatsOverviewWidget
                 ->description('Sales over this window, Delivery Charge included')
                 ->descriptionColor('gray'),
 
+            Stat::make('Kilograms Sold', Kilograms::format($margin->units))
+                ->description('Weighed over the same Orders as the revenue')
+                ->descriptionColor('gray'),
+
             $this->cost($margin),
             $this->margin($margin),
         ];
     }
 
     /**
-     * What the units sold were stamped as costing at Capture.
+     * What the kilograms sold were stamped as costing at Capture.
      */
     private function cost(Margin $margin): Stat
     {
@@ -124,9 +131,9 @@ class MarginTotalsStat extends StatsOverviewWidget
     private function coverage(Margin $margin): string
     {
         if ($margin->everythingCosted()) {
-            return 'What the units sold were stamped as costing';
+            return 'What the kilograms sold were stamped as costing';
         }
 
-        return number_format($margin->costedUnits).' of '.number_format($margin->units).' units carry a stamped cost';
+        return number_format($margin->costedUnits).' of '.Kilograms::format($margin->units).' carry a stamped cost';
     }
 }

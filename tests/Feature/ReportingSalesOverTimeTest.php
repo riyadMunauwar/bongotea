@@ -80,10 +80,22 @@ it('counts a Cancelled Order towards Orders but not Sales, and a soft-deleted on
         ->and($series->points[2]->sales)->toBe(56000);
 });
 
+it('carries Kilograms Sold beside Sales in every point, over the Orders Sales counts', function () {
+    weighing(orderCapturedAt('2026-09-03 08:00'), 4, 3);
+    weighing(orderCapturedAt('2026-09-05 12:00'), 10);
+    weighing(orderCapturedAt('2026-09-05 13:00', status: OrderStatus::Cancelled), 25);
+    weighing(orderCapturedAt('2026-09-05 14:00'), 6)->delete();
+
+    $series = salesOverTimeOf();
+
+    expect($series->series(fn (SalesOverTimePoint $point): int => $point->kilograms))->toBe([7, 0, 10, 0, 0, 0, 0]);
+});
+
 it('is all zeros on a window with nothing captured, one point per bucket still', function () {
     $series = salesOverTimeOf();
 
     expect($series->points)->toHaveCount(7)
         ->and(ordersPerPoint($series))->toBe([0, 0, 0, 0, 0, 0, 0])
-        ->and(salesPerPoint($series))->toBe([0, 0, 0, 0, 0, 0, 0]);
+        ->and(salesPerPoint($series))->toBe([0, 0, 0, 0, 0, 0, 0])
+        ->and($series->series(fn (SalesOverTimePoint $point): int => $point->kilograms))->toBe([0, 0, 0, 0, 0, 0, 0]);
 });

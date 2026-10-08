@@ -556,3 +556,18 @@ function orderCapturedAt(string $instant, int $subtotal = 50000, array $attribut
         'created_at' => CarbonImmutable::parse($instant, 'Asia/Dhaka')->utc(),
     ], $attributes));
 }
+
+/**
+ * Lines added to an Order, one per weight given, each a Product of its own:
+ * what Kilograms Sold reads, since an Order's Kilograms are the sum of its
+ * lines. The line observer re-reads the subtotal, so a test weighing an
+ * Order asserts on Kilograms rather than on the money it was captured with.
+ */
+function weighing(Order $order, int ...$kilograms): Order
+{
+    foreach ($kilograms as $weight) {
+        OrderLine::factory()->for($order)->create(['quantity' => $weight]);
+    }
+
+    return $order;
+}

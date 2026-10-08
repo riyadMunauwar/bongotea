@@ -26,10 +26,10 @@ use Livewire\Features\SupportPagination\WithoutUrlPagination;
  *   matching `CanPaginateRecords::paginateTableQuery()`.
  *
  * The rows handed in must already be in their final order. Sorting belongs to
- * the widget because it differs — the leaderboard re-sorts on the clicked
- * column, the others keep the order `ReportingQuery` hands over — and it has
- * to happen across the whole result before this slices it, or page one would
- * be the top of an unsorted list.
+ * the widget — every one today keeps the order `ReportingQuery` hands over,
+ * and one that re-sorts on a clicked column does it there — and it has to
+ * happen across the whole result before this slices it, or page one would be
+ * the top of an unsorted list.
  *
  * A widget reading the Reporting Window pairs this with
  * `updatedPageFilters()`, because Filament resets the table page for its own

@@ -4,8 +4,8 @@ namespace App\Support\Reporting;
 
 /**
  * One bucket of a Sales over time series: the slice of the window and the
- * two figures a Merchant reads against it, Orders and Sales, side by side
- * as the glossary insists. A bucket nothing was captured in is a point at
+ * figures a Merchant reads against it, Orders and Sales, side by side as
+ * the glossary insists, and Kilograms Sold beside Sales. A bucket nothing was captured in is a point at
  * zero, so a quiet hour draws as a dip and never as a gap.
  */
 final readonly class SalesOverTimePoint
@@ -16,5 +16,7 @@ final readonly class SalesOverTimePoint
         public int $orders,
         /** The totals, Delivery Charge included, of the ones not Cancelled, in minor units. */
         public int $sales,
+        /** Kilograms Sold: the Kilograms on those same Orders. */
+        public int $kilograms,
     ) {}
 }

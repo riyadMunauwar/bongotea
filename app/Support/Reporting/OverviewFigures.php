@@ -6,8 +6,8 @@ namespace App\Support\Reporting;
  * The counts one span of Orders comes to, by the glossary's rules: a whole
  * Reporting Window, its comparison window, or one bucket of it. Every
  * figure that can be read straight off the rows is a property; the three
- * that are ratios of them are methods, shared with the leaderboard's rows
- * through `HasSalesRatios`, so a rate is never stored beside the counts it
+ * that are ratios of them are methods, written once in
+ * `HasSalesRatios`, so a rate is never stored beside the counts it
  * disagrees with.
  *
  * Money is integer minor units, like everywhere else; formatting is the
@@ -22,6 +22,8 @@ final readonly class OverviewFigures
         public int $orders,
         /** The totals, Delivery Charge included, of the Orders not Cancelled. */
         public int $sales,
+        /** Kilograms Sold: the Kilograms on those very Orders, the weight side of `$sales`. */
+        public int $kilograms,
         public int $cancelled,
         /** An online method and no Paid Payment, as `Order::unpaid()` reads it. */
         public int $unpaid,
@@ -42,7 +44,7 @@ final readonly class OverviewFigures
 
     public static function none(): self
     {
-        return new self(0, 0, 0, 0, 0);
+        return new self(0, 0, 0, 0, 0, 0);
     }
 
     /**
@@ -51,7 +53,7 @@ final readonly class OverviewFigures
      */
     public function withVisits(?int $visits): self
     {
-        return new self($this->orders, $this->sales, $this->cancelled, $this->unpaid, $this->new, $visits);
+        return new self($this->orders, $this->sales, $this->kilograms, $this->cancelled, $this->unpaid, $this->new, $visits);
     }
 
     /**
@@ -63,6 +65,7 @@ final readonly class OverviewFigures
         return new self(
             $this->orders + $other->orders,
             $this->sales + $other->sales,
+            $this->kilograms + $other->kilograms,
             $this->cancelled + $other->cancelled,
             $this->unpaid + $other->unpaid,
             $this->new + $other->new,

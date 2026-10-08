@@ -108,6 +108,17 @@ it('draws the tiles for the chosen window, money with the currency symbol, and c
     expect($widget->getData()['pageFilters'][ReportingWindow::PRESET_FILTER])->toBe('today');
 });
 
+it('draws Kilograms Sold beside Sales, measured against the comparison window like it', function () {
+    weighing(Order::factory()->create(['created_at' => now()]), 4, 3);
+    weighing(Order::factory()->cancelled()->create(['created_at' => now()]), 25);
+    weighing(Order::factory()->create(['created_at' => now()->subDays(8)]), 5);
+
+    Livewire::test(OverviewStats::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSeeInOrder(['Sales', 'Kilograms Sold', 'Average Order Value'])
+        ->assertSee('7 kg')
+        ->assertSee('40% up on the previous 7 days');
+});
+
 it('measures each tile against the comparison window, up or down', function () {
     Order::factory()->create(['subtotal' => 50000, 'created_at' => now()]);
     Order::factory()->cancelled()->create(['subtotal' => 50000, 'created_at' => now()]);
@@ -156,6 +167,24 @@ it('draws Sales over time below the tiles: a Sales line and an Orders line over 
         ->and($data['datasets'][0]['data'])->toBe([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 560.0])
         ->and($data['datasets'][1]['label'])->toBe('Orders')
         ->and($data['datasets'][1]['data'])->toBe([0, 0, 0, 0, 0, 0, 2]);
+});
+
+it('draws Kilograms Sold beside Sales on both charts, on an axis of its own', function () {
+    weighing(Order::factory()->create(['created_at' => now()]), 4, 3);
+    weighing(Order::factory()->cancelled()->create(['created_at' => now()]), 25);
+    weighing(Order::factory()->create(['payment_method' => PaymentMethod::Bkash, 'created_at' => now()->subDays(3)]), 10);
+
+    $kilogramsOn = fn (string $widget): array => collect((fn (): array => $this->getData())->call(
+        Livewire::test($widget, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])->instance(),
+    )['datasets'])->firstWhere('label', 'Kilograms Sold');
+
+    $overTime = $kilogramsOn(SalesOverTimeChart::class);
+    $mix = $kilogramsOn(PaymentMethodMixChart::class);
+
+    expect($overTime['data'])->toBe([0, 0, 0, 10, 0, 0, 7])
+        ->and($overTime['yAxisID'])->toBe('y2')
+        ->and($mix['data'])->toBe([7, 10])
+        ->and($mix['yAxisID'])->toBe('y2');
 });
 
 it('draws the status breakdown and the Payment Method mix side by side under the Sales chart, each obeying the filter', function () {
@@ -302,7 +331,7 @@ it('draws Top Products and the Delivery mix side by side under the Payment Metho
      */
     Livewire::test(TopProductsTable::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
         ->assertSee('Top Products')
-        ->assertSee('Units sold')
+        ->assertSee('Kilograms sold')
         ->assertSee('Sylhet tea')
         ->assertSee($symbol.'600.00')
         ->assertSee('Clay mug');

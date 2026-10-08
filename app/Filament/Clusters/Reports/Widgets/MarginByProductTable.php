@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Reports\Widgets;
 
 use App\Filament\Widgets\Concerns\PaginatesRows;
+use App\Support\Kilograms;
 use App\Support\Money;
 use App\Support\Reporting\MarginRow;
 use App\Support\Reporting\ReportingQuery;
@@ -78,8 +79,8 @@ class MarginByProductTable extends TableWidget
                     ->placeholder(''),
 
                 TextColumn::make('units')
-                    ->label('Units sold')
-                    ->numeric()
+                    ->label('Kilograms sold')
+                    ->formatStateUsing(fn (int $state): string => Kilograms::format($state))
                     ->alignEnd(),
 
                 TextColumn::make('revenue')

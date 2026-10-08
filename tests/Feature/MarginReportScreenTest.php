@@ -161,11 +161,19 @@ it('says the revenue across the top is Sales, Delivery Charge and all', function
         ->assertSee(app(GeneralSettings::class)->currencySymbol.'1510.00');
 });
 
+it('draws Kilograms Sold beside the revenue, over the same Orders', function () {
+    [$tea] = aWeekOfMargin();
+    soldDaysAgo($tea, 1, 25, 18000, OrderStatus::Cancelled);
+
+    Livewire::test(MarginTotalsStat::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
+        ->assertSeeInOrder(['Revenue', 'Kilograms Sold', '5 kg', 'Cost of goods']);
+});
+
 it('admits how much of the window has a cost behind it rather than drawing the margin as a fact', function () {
     aWeekOfMargin();
 
     Livewire::test(MarginTotalsStat::class, ['pageFilters' => [ReportingWindow::PRESET_FILTER => 'last_7_days']])
-        ->assertSee('4 of 5 units carry a stamped cost')
+        ->assertSee('4 of 5 kg carry a stamped cost')
         ->assertSee('At most 70.6% of revenue, with part of the cost unknown');
 });
 

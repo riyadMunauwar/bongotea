@@ -94,7 +94,7 @@ final readonly class Margin
          */
         public ?int $cost,
 
-        /** Units sold across every row. */
+        /** Kilograms sold across every row: Kilograms Sold over the window, since the rows are every Line of the Orders `Sales` counts. */
         public int $units,
 
         /** How many of them carried a stamped cost. */

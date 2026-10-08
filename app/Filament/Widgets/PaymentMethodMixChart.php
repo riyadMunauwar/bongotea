@@ -17,7 +17,8 @@ use Illuminate\Support\Js;
  * The Payment Method mix, half width beside the status breakdown: one
  * group of bars per Payment Method the window's Orders recorded, so a
  * Merchant can see whether a gateway is earning its fee. Each method has
- * an Orders bar and a Sales bar; the Orders bar of an online method is
+ * an Orders bar, a Sales bar and a Kilograms Sold bar beside it; the
+ * Orders bar of an online method is
  * stacked Paid over Unpaid, in the colours the payment badge wears in the
  * queue, while a Cash on Delivery Order is simply due and its bar is one
  * neutral block. Sales is drawn in the theme's primary, as every chart's
@@ -45,6 +46,13 @@ class PaymentMethodMixChart extends ChartWidget implements GatedOnDashboard
     private const string UNPAID_COLOR = '#ef4444';
 
     private const string DUE_ON_DELIVERY_COLOR = '#a3a3a3';
+
+    /**
+     * The neutral the Kilograms Sold bar is drawn in: darker than the due
+     * block so the two greys are not read as one figure, and not chromatic,
+     * so Sales stays the only bar in the theme's primary.
+     */
+    private const string KILOGRAMS_COLOR = '#525252';
 
     /**
      * The name Chart.js stacks the three Orders datasets under, so they
@@ -108,15 +116,22 @@ class PaymentMethodMixChart extends ChartWidget implements GatedOnDashboard
                     'data' => $mix->series(fn (PaymentMixRow $row): float => Money::toMajor($row->sales)),
                     'yAxisID' => 'y1',
                 ],
+                [
+                    'label' => 'Kilograms Sold',
+                    'data' => $mix->series(fn (PaymentMixRow $row): int => $row->kilograms),
+                    'backgroundColor' => self::KILOGRAMS_COLOR,
+                    'yAxisID' => 'y2',
+                ],
             ],
         ];
     }
 
     /**
-     * Two axes: Orders on the left, whole numbers only; Sales on the right,
+     * Three axes: Orders on the left, whole numbers only; Sales on the right,
      * ticked with the currency symbol and its decimals so the axis agrees
-     * with the tiles, its grid left off so the chart has one set of lines.
-     * Hovering a method shows every figure for it.
+     * with the tiles, and Kilograms Sold beside it in kilograms, their grids
+     * left off so the chart has one set of lines. Hovering a method shows
+     * every figure for it.
      */
     protected function getOptions(): RawJs
     {
@@ -143,6 +158,16 @@ class PaymentMethodMixChart extends ChartWidget implements GatedOnDashboard
                         grid: { drawOnChartArea: false },
                         ticks: {
                             callback: (value) => {$symbol} + value.toLocaleString(undefined, { minimumFractionDigits: {$decimals}, maximumFractionDigits: {$decimals} }),
+                        },
+                    },
+                    y2: {
+                        beginAtZero: true,
+                        position: 'right',
+                        border: { display: false },
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            precision: 0,
+                            callback: (value) => value.toLocaleString() + ' kg',
                         },
                     },
                 },

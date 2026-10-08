@@ -37,6 +37,29 @@ it('counts every Order in the window whatever its status, and sums Sales over th
         ->and($overview->figures->cancellationRate())->toBe(1 / 3);
 });
 
+it('counts Kilograms Sold over the very Orders Sales counts: not Cancelled, not deleted, and inside the window', function () {
+    weighing(orderCapturedAt('2026-09-05 12:00'), 4, 3);
+    weighing(orderCapturedAt('2026-09-06 12:00', status: OrderStatus::Confirmed), 10);
+    weighing(orderCapturedAt('2026-09-07 12:00', status: OrderStatus::Cancelled), 25);
+    weighing(orderCapturedAt('2026-09-07 13:00'), 6)->delete();
+    weighing(orderCapturedAt('2026-09-10 00:00'), 8);
+    orderCapturedAt('2026-09-08 12:00');
+
+    expect(overviewOf()->figures->kilograms)->toBe(17);
+});
+
+it('carries Kilograms Sold into the comparison window and bucket by bucket', function () {
+    weighing(orderCapturedAt('2026-08-30 12:00'), 5);
+    weighing(orderCapturedAt('2026-09-03 09:00'), 2);
+    weighing(orderCapturedAt('2026-09-09 08:00'), 1, 1);
+
+    $overview = overviewOf();
+
+    expect($overview->figures->kilograms)->toBe(4)
+        ->and($overview->comparison->kilograms)->toBe(5)
+        ->and($overview->series(fn ($figures): int => $figures->kilograms))->toBe([2, 0, 0, 0, 0, 0, 2]);
+});
+
 it('leaves a soft-deleted Order out of every figure', function () {
     orderCapturedAt('2026-09-05 12:00');
     orderCapturedAt('2026-09-06 12:00')->delete();
