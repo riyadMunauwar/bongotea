@@ -18,7 +18,7 @@ use Illuminate\Console\Command;
  */
 class GrantOwnerCommand extends Command
 {
-    protected $signature = 'giopages:owner {email : The email address of the User to make an Owner}';
+    protected $signature = 'bongotea:owner {email : The email address of the User to make an Owner}';
 
     protected $description = 'Grant the Owner Role to the User registered under the given email address';
 

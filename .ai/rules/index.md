@@ -9,10 +9,10 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/** | .ai/rules/app.md |
 | app/Models/Product.php, app/Models/Category.php, app/Models/Brand.php, app/Models/Tag.php, app/Enums/CategoryTheme.php, app/Enums/ProductStatus.php, app/Filament/Resources/Products/**, app/Filament/Resources/Categories/**, app/Filament/Resources/Brands/**, app/Filament/Resources/Tags/** | .ai/rules/catalogue.md |
 | app/Filament/Concerns/** | .ai/rules/concerns.md |
-| app/Models/Enquiry.php, app/Enums/EnquiryStatus.php, app/Http/Controllers/EnquiryController.php, app/Http/Requests/EnquiryRequest.php, app/Observers/EnquiryAlertObserver.php, app/Support/Sms/EnquiryAlerts.php, app/Support/Pages/Blocks/ContactForm.php, app/Filament/Resources/Enquiries/** | .ai/rules/enquiries.md |
 | app/Support/Couriers/**, app/Enums/Courier.php, app/Enums/ShipmentStatus.php, app/Models/Shipment.php, app/Models/ShipmentEvent.php, app/Filament/Resources/Orders/Actions/BookWithCourierAction.php, tests/Fixtures/Couriers/**, app/Console/Commands/SweepCouriersCommand.php | .ai/rules/couriers.md |
 | app/Support/Customers/**, app/Models/Customer.php, app/Models/OneTimeCode.php, app/Enums/OrderProgress.php, app/Http/Controllers/SigningInController.php, app/Http/Requests/OneTimeCodeRequest.php, app/Http/Requests/SignInRequest.php, app/Support/Pages/Blocks/MyOrders.php | .ai/rules/customers.md |
 | {Dockerfile,docker-compose.yml,deploy/docker/**,config/trustedproxy.php} | .ai/rules/docker.md |
+| app/Models/Enquiry.php, app/Enums/EnquiryStatus.php, app/Http/Controllers/EnquiryController.php, app/Http/Requests/EnquiryRequest.php, app/Observers/EnquiryAlertObserver.php, app/Support/Sms/EnquiryAlerts.php, app/Support/Pages/Blocks/ContactForm.php, app/Filament/Resources/Enquiries/** | .ai/rules/enquiries.md |
 | app/Filament/** | .ai/rules/filament.md |
 | app/Support/Inventory/**, app/Models/StockMovement.php, app/Models/StockCount.php, app/Models/Supplier.php, app/Models/Supply.php, app/Models/SupplyLine.php, app/Enums/StockMovementReason.php, app/Enums/AdjustmentCause.php, app/Support/Orders/OrderCapture.php, app/Models/OrderLine.php, app/Filament/Clusters/Inventory/** | .ai/rules/inventory.md |
 | resources/js/** | .ai/rules/js.md |

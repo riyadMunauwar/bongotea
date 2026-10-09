@@ -12,7 +12,7 @@ use App\Models\User;
 it('makes the User at that address an Owner', function () {
     $user = User::factory()->create(['name' => 'Rumi', 'email' => 'rumi@example.com']);
 
-    $this->artisan('giopages:owner', ['email' => 'rumi@example.com'])
+    $this->artisan('bongotea:owner', ['email' => 'rumi@example.com'])
         ->expectsOutputToContain('Rumi (rumi@example.com) is now an Owner.')
         ->assertSuccessful();
 
@@ -28,13 +28,13 @@ it('makes the User at that address an Owner', function () {
 it('brings a suspended User back as an Owner', function () {
     $user = User::factory()->suspended()->create(['email' => 'rumi@example.com']);
 
-    $this->artisan('giopages:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
+    $this->artisan('bongotea:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
 
     $this->actingAs($user->fresh())->get('/admin')->assertOk();
 });
 
 it('says so when the address matches nobody, and fails', function () {
-    $this->artisan('giopages:owner', ['email' => 'nobody@example.com'])
+    $this->artisan('bongotea:owner', ['email' => 'nobody@example.com'])
         ->expectsOutputToContain('No User is registered under nobody@example.com.')
         ->assertFailed();
 
@@ -44,9 +44,9 @@ it('says so when the address matches nobody, and fails', function () {
 it('is safe to run twice', function () {
     $user = User::factory()->create(['name' => 'Rumi', 'email' => 'rumi@example.com']);
 
-    $this->artisan('giopages:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
+    $this->artisan('bongotea:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
 
-    $this->artisan('giopages:owner', ['email' => 'rumi@example.com'])
+    $this->artisan('bongotea:owner', ['email' => 'rumi@example.com'])
         ->expectsOutputToContain('Rumi (rumi@example.com) is already an Owner.')
         ->assertSuccessful();
 
@@ -61,7 +61,7 @@ it('makes an Owner beside an existing one', function () {
     User::factory()->owner()->create();
     $second = User::factory()->create(['email' => 'second@example.com']);
 
-    $this->artisan('giopages:owner', ['email' => 'second@example.com'])->assertSuccessful();
+    $this->artisan('bongotea:owner', ['email' => 'second@example.com'])->assertSuccessful();
 
     expect($second->fresh()->isOwner())->toBeTrue()
         ->and(User::query()->get()->filter->isOwner())->toHaveCount(2);
@@ -70,7 +70,7 @@ it('makes an Owner beside an existing one', function () {
 it('leaves the Owner Role carrying no Permission rows', function () {
     User::factory()->create(['email' => 'rumi@example.com']);
 
-    $this->artisan('giopages:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
+    $this->artisan('bongotea:owner', ['email' => 'rumi@example.com'])->assertSuccessful();
 
     expect(Role::owner()->permissions)->toBeEmpty();
 });

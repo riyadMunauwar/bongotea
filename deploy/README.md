@@ -72,7 +72,7 @@ anybody can get in — a user holding no role is refused at the door.
 Make one by email address:
 
 ```bash
-php artisan giopages:owner someone@your-company.example
+php artisan bongotea:owner someone@your-company.example
 ```
 
 The user must already exist. It is safe to run twice, it reports clearly when

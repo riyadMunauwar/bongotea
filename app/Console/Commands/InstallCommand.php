@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  * adds what is missing, so it is safe to run again after a failed or
  * partial install, and nothing a Merchant has edited, renamed or deleted
  * since is put back (ADR-0030). It makes no User: an Owner is
- * `giopages:owner`'s job.
+ * `bongotea:owner`'s job.
  */
 class InstallCommand extends Command
 {
@@ -30,7 +30,7 @@ class InstallCommand extends Command
             $this->call('db:seed', ['--class' => $seeder, '--force' => true]);
         }
 
-        $this->components->info('Bongotea is installed. Make the first Owner with: php artisan giopages:owner {email}');
+        $this->components->info('Bongotea is installed. Make the first Owner with: php artisan bongotea:owner {email}');
 
         return self::SUCCESS;
     }

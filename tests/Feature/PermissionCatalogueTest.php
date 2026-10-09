@@ -114,7 +114,7 @@ it('grants a Permission that was never synced', function () {
 /**
  * A seeded installation has to be one somebody can open, which a role-less
  * User is not: the seeder mints an Owner and registers the catalogue, the
- * development counterpart of `giopages:owner` on a real installation.
+ * development counterpart of `bongotea:owner` on a real installation.
  */
 it('seeds the catalogue and an Owner who can reach the admin', function () {
     PermissionRow::query()->delete();

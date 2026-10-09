@@ -31,7 +31,7 @@ correct.
 - **The role is protected.** It cannot be deleted or renamed, and the last User holding it cannot be
   demoted, suspended or filed away — an installation with no Owner cannot be repaired from inside
   the panel, because the screen that would repair it is the one nobody can reach.
-- **`php artisan giopages:owner {email}` is the bootstrap and the only recovery.** A future installer
+- **`php artisan bongotea:owner {email}` is the bootstrap and the only recovery.** A future installer
   (GUI and terminal) creates the first Owner through it; until then it is how any installation gets
   its first one, and it is what answers "the only Owner has left the company" without a database
   client. It is the one route into the panel that does not go through the panel, and that is

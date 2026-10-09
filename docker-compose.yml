@@ -19,7 +19,7 @@
 #      healthy; the worker and scheduler wait for that.
 #   5. First deploy only, from Dokploy's terminal on the `app` container:
 #        php artisan make:filament-user
-#        php artisan giopages:owner you@example.com
+#        php artisan bongotea:owner you@example.com
 #
 # Data lives in two named volumes, `database` and `public-files` (Product
 # images: the public `local` disk, served at /storage). Both work with

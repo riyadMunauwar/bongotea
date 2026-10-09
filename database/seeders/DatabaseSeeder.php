@@ -18,7 +18,7 @@ class DatabaseSeeder extends Seeder
      * An Owner rather than a User, because a User holding no Role is refused
      * at the panel door: a seeded installation whose only account cannot open
      * the admin is not a usable one. This is the development counterpart of
-     * `php artisan giopages:owner`, which is how a real installation gets its
+     * `php artisan bongotea:owner`, which is how a real installation gets its
      * first one.
      */
     public function run(PermissionCatalogue $catalogue): void
