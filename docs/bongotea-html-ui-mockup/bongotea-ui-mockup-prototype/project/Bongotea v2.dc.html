@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#FFFFFF;color:#14201A;font-family:'Anek Bangla',system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#1C4F38}a:hover{color:#0E2E21}input,textarea,button{font-family:inherit}input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}</style>
+</helmet>
+<div style="background:{{ outerBg }};min-height:100vh">
+<div style="max-width:{{ frameW }};margin:0 auto;background:#FFFFFF;min-height:100vh;position:relative">
+
+<header style="position:sticky;top:0;z-index:40;background:{{ hdr.bg }};border-bottom:1px solid {{ hdr.line }};transition:background .3s,border-color .3s">
+  <div style="max-width:1280px;margin:0 auto;padding:0 clamp(18px,4vw,40px);height:72px;display:flex;align-items:center;justify-content:space-between;gap:20px">
+    <button onClick="{{ goHome }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;color:{{ hdr.fg }}">
+      <span style="width:22px;height:22px;border-radius:50% 0 50% 0;background:{{ hdr.mark }};display:block;transform:rotate(-8deg)"></span>
+      <span style="font-weight:600;font-size:19px;letter-spacing:.16em">BONGOTEA</span>
+    </button>
+    <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+      <nav style="display:flex;gap:34px;font-size:16px;font-weight:400">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
+          <button onClick="{{ n.onClick }}" style="all:unset;cursor:pointer;color:{{ hdr.fg }};opacity:.88" style-hover="opacity:1">{{ n.label }}</button>
+        </sc-for>
+      </nav>
+      <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;background:{{ hdr.btnBg }};color:{{ hdr.btnFg }};font-weight:500;font-size:16px;padding:11px 22px;border-radius:99px;transition:background .3s,color .3s">বাল্ক অর্ডার করুন</button>
+    </sc-if>
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;background:{{ hdr.btnBg }};color:{{ hdr.btnFg }};font-weight:500;font-size:15px;padding:9px 16px;border-radius:99px">অর্ডার করুন</button>
+        <button onClick="{{ toggleMenu }}" aria-label="মেনু" style="all:unset;cursor:pointer;width:44px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+          <span style="width:22px;height:1.5px;background:{{ hdr.fg }};display:block"></span>
+          <span style="width:22px;height:1.5px;background:{{ hdr.fg }};display:block"></span>
+        </button>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FFFFFF;border-top:1px solid #E3E8E4;padding:8px 20px 24px;display:flex;flex-direction:column">
+      <sc-for list="{{ navItems }}" as="n">
+        <button onClick="{{ n.onClick }}" style="all:unset;cursor:pointer;padding:16px 0;font-size:22px;font-weight:500;color:#14201A;border-bottom:1px solid #EEF1EE">{{ n.label }}</button>
+      </sc-for>
+      <span style="margin-top:18px;font-size:16px;color:#5E6A63">ফোনে অর্ডার: ০১৭০০-০০০০০০</span>
+    </div>
+  </sc-if>
+</header>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <section onTouchStart="{{ touchStart }}" onTouchEnd="{{ touchEnd }}" style="position:relative;margin-top:-73px;height:{{ heroH }};min-height:560px;overflow:hidden;background:#0E2E21">
+    <sc-for list="{{ slides }}" as="s" hint-placeholder-count="1">
+      <div style="position:absolute;inset:0;opacity:{{ s.opacity }};transition:opacity 1s ease;pointer-events:{{ s.pe }}">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,{{ s.c1 }} 0 16px,{{ s.c2 }} 16px 32px);transform:{{ s.zoom }};transition:transform 7s ease-out"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(8,26,18,.82) 0%,rgba(8,26,18,.35) 45%,rgba(8,26,18,.15) 100%)"></div>
+        <span style="position:absolute;top:96px;right:clamp(18px,4vw,40px);font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.04em;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);padding:5px 9px;border-radius:4px">{{ s.img }}</span>
+        <div style="position:absolute;left:0;right:0;bottom:0;max-width:1280px;margin:0 auto;padding:0 clamp(18px,4vw,40px) clamp(96px,12vh,128px);box-sizing:border-box;display:flex;flex-direction:column;gap:18px;color:#FFFFFF">
+          <span style="display:flex;align-items:center;gap:12px;font-size:15px;letter-spacing:.06em;color:#D9E6DC"><span style="width:28px;height:1px;background:#D9E6DC;display:block"></span>{{ s.eyebrow }}</span>
+          <h1 style="margin:0;font-weight:500;font-size:clamp(38px,6.4vw,84px);line-height:1.08;letter-spacing:-.01em;max-width:900px;text-wrap:balance">{{ s.title }}</h1>
+          <p style="margin:0;font-size:clamp(17px,1.5vw,20px);line-height:1.6;font-weight:300;max-width:560px;color:#E6EEE8;text-wrap:pretty">{{ s.text }}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px">
+            <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;background:#FFFFFF;color:#0E2E21;font-weight:500;font-size:18px;padding:15px 28px;border-radius:99px" style-hover="background:#E8F0EA">বাল্ক অর্ডার করুন</button>
+            <button onClick="{{ goPricing }}" style="all:unset;cursor:pointer;color:#FFFFFF;border:1px solid rgba(255,255,255,.55);font-weight:400;font-size:18px;padding:14px 26px;border-radius:99px" style-hover="background:rgba(255,255,255,.1)">চায়ের দাম দেখুন</button>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+    <div style="position:absolute;left:0;right:0;bottom:32px;max-width:1280px;margin:0 auto;padding:0 clamp(18px,4vw,40px);box-sizing:border-box;display:flex;align-items:center;gap:20px;color:#FFFFFF">
+      <span style="font-size:15px;font-weight:500;letter-spacing:.06em">{{ slideNum }}</span>
+      <div style="display:flex;gap:8px;flex:1;max-width:240px">
+        <sc-for list="{{ slides }}" as="s">
+          <button onClick="{{ s.go }}" aria-label="স্লাইড" style="all:unset;cursor:pointer;flex:1;padding:10px 0"><span style="display:block;height:2px;background:{{ s.bar }};transition:background .4s"></span></button>
+        </sc-for>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:10px">
+        <button onClick="{{ prevSlide }}" aria-label="আগের" style="all:unset;cursor:pointer;width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:20px" style-hover="background:rgba(255,255,255,.12)">←</button>
+        <button onClick="{{ nextSlide }}" aria-label="পরের" style="all:unset;cursor:pointer;width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:20px" style-hover="background:rgba(255,255,255,.12)">→</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" style="max-width:1280px;margin:0 auto;padding:clamp(64px,9vw,128px) clamp(18px,4vw,40px);display:flex;flex-direction:column;gap:clamp(36px,5vw,64px)">
+    <div style="display:grid;grid-template-columns:{{ twoCols }};gap:clamp(20px,4vw,64px);align-items:end">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <span style="font-size:15px;letter-spacing:.08em;color:#A9783F;font-weight:500">বাল্ক দাম</span>
+        <h2 style="margin:0;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.1;color:#0E2E21">বেশি নিলে দাম কম</h2>
+      </div>
+      <p style="margin:0;font-size:clamp(17px,1.4vw,19px);line-height:1.7;font-weight:300;color:#3E4B44;text-wrap:pretty">আপনি একাধিক ধরনের চা নিলেও সব মিলিয়ে মোট কত কেজি নিচ্ছেন তার ওপর প্রতি কেজির দাম নির্ধারণ হবে।</p>
+    </div>
+    <div style="display:grid;grid-template-columns:{{ tierCols }};border-top:1px solid #E3E8E4;border-left:1px solid #E3E8E4">
+      <sc-for list="{{ homeTiers }}" as="t" hint-placeholder-count="6">
+        <div style="padding:clamp(20px,2.4vw,32px) clamp(16px,2vw,28px);border-right:1px solid {{ t.line }};border-bottom:1px solid {{ t.line }};background:{{ t.bg }};color:{{ t.fg }};display:flex;flex-direction:column;gap:clamp(18px,3vw,40px);min-height:150px;box-sizing:border-box">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:16px;opacity:.85">{{ t.label }}<sc-if value="{{ t.best }}"><span style="font-size:12px;letter-spacing:.04em;color:#0E2E21;background:#E9D6B6;padding:2px 9px;border-radius:99px;white-space:nowrap">সবচেয়ে কম</span></sc-if></div>
+          <div style="display:flex;align-items:baseline;gap:4px"><span style="font-size:clamp(36px,3.6vw,52px);font-weight:400;line-height:1;letter-spacing:-.02em">{{ t.price }}</span><span style="font-size:15px;opacity:.7">/কেজি</span></div>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin:0;font-size:16px;color:#5E6A63">উদাহরণ: প্রিমিয়াম ৮ কেজি + স্ট্রং ৪ কেজি = মোট ১২ কেজি, তাই দুটো চা-ই ৳৪৯০/কেজি।</p>
+  </section>
+
+  <section id="products" style="background:#F4F7F4">
+    <div style="max-width:1280px;margin:0 auto;padding:clamp(64px,9vw,128px) clamp(18px,4vw,40px);display:flex;flex-direction:column;gap:clamp(32px,4vw,56px)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <span style="font-size:15px;letter-spacing:.08em;color:#A9783F;font-weight:500">আমাদের চা</span>
+          <h2 style="margin:0;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.1;color:#0E2E21">ছয় রকম চা, এক অর্ডারে</h2>
+        </div>
+        <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;font-size:17px;color:#1C4F38;border-bottom:1px solid #1C4F38;padding-bottom:3px">সব চা একসাথে অর্ডার করুন →</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:clamp(20px,2.4vw,32px) clamp(16px,2vw,24px)">
+        <sc-for list="{{ products }}" as="p" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <button onClick="{{ p.add }}" style="all:unset;cursor:pointer;aspect-ratio:4/5;border-radius:4px;overflow:hidden;background:repeating-linear-gradient(135deg,#E6ECE7 0 12px,#DDE5DF 12px 24px);display:flex;align-items:flex-end;padding:14px;box-sizing:border-box">
+              <span style="font:500 11px ui-monospace,Menlo,monospace;color:#3E4B44;background:rgba(255,255,255,.9);padding:4px 8px;border-radius:3px">ছবি: {{ p.name }} প্যাকেট</span>
+            </button>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                <h3 style="margin:0;font-size:22px;font-weight:500;color:#0E2E21">{{ p.name }}</h3>
+                <span style="font-size:16px;color:#5E6A63;white-space:nowrap"><b style="font-size:20px;font-weight:500;color:#0E2E21">৳৪৩০</b>/কেজি থেকে</span>
+              </div>
+              <p style="margin:0;font-size:16px;line-height:1.55;font-weight:300;color:#5E6A63">{{ p.desc }}</p>
+            </div>
+            <button onClick="{{ p.add }}" style="all:unset;cursor:pointer;align-self:flex-start;font-size:16px;font-weight:500;color:#1C4F38;border:1px solid #1C4F38;padding:10px 20px;border-radius:99px" style-hover="background:#1C4F38;color:#FFFFFF">অর্ডারে যোগ করুন</button>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" style="max-width:1280px;margin:0 auto;padding:clamp(64px,9vw,128px) clamp(18px,4vw,40px);display:flex;flex-direction:column;gap:clamp(36px,5vw,64px)">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span style="font-size:15px;letter-spacing:.08em;color:#A9783F;font-weight:500">কীভাবে অর্ডার করবেন</span>
+      <h2 style="margin:0;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.1;color:#0E2E21">তিন ধাপেই অর্ডার শেষ</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:clamp(28px,3vw,48px)">
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:14px;border-top:1px solid #0E2E21;padding-top:22px">
+          <span style="font-size:clamp(48px,5vw,72px);font-weight:300;line-height:1;color:#1C4F38">{{ s.n }}</span>
+          <b style="font-size:22px;font-weight:500;color:#0E2E21;margin-top:8px">{{ s.title }}</b>
+          <span style="font-size:17px;line-height:1.6;font-weight:300;color:#5E6A63">{{ s.text }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isOrder }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width:1280px;margin:0 auto;padding:clamp(32px,5vw,64px) clamp(18px,4vw,40px) 0">
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:clamp(24px,3vw,40px)">
+      <h1 style="margin:0;font-weight:500;font-size:clamp(32px,4.4vw,56px);line-height:1.1;color:#0E2E21">একসাথে চা অর্ডার করুন</h1>
+      <p style="margin:0;font-size:18px;line-height:1.6;font-weight:300;color:#3E4B44">যে যে চা লাগবে, শুধু কত কেজি লাগবে সেটি দিন। দাম নিজে থেকেই হিসাব হয়ে যাবে।</p>
+    </div>
+    <div style="display:grid;grid-template-columns:{{ orderCols }};gap:clamp(20px,3vw,40px);align-items:start;padding-bottom:48px">
+      <div style="display:flex;flex-direction:column;border-top:1px solid #E3E8E4">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+          <div id="{{ r.domId }}" style="border-bottom:1px solid #E3E8E4;background:{{ r.bg }};padding:18px 14px;margin:0 -14px;display:flex;flex-direction:column;gap:14px;transition:background .3s">
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+              <div style="flex:none;width:64px;height:76px;border-radius:3px;background:repeating-linear-gradient(135deg,#E6ECE7 0 6px,#DDE5DF 6px 12px)"></div>
+              <div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:2px">
+                <span style="display:flex;align-items:center;gap:8px"><b style="font-size:20px;font-weight:500;color:#0E2E21">{{ r.name }}</b><sc-if value="{{ r.has }}"><span style="width:7px;height:7px;border-radius:50%;background:#1C4F38;display:block"></span></sc-if></span>
+                <span style="font-size:15px;line-height:1.45;font-weight:300;color:#5E6A63">{{ r.desc }}</span>
+              </div>
+              <div style="display:flex;align-items:center;border:1px solid #C9D3CC;border-radius:99px;background:#FFFFFF">
+                <button onClick="{{ r.dec }}" aria-label="কমান" style="all:unset;cursor:pointer;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#1C4F38;border-radius:50%" style-active="background:#E8F0EA">−</button>
+                <label style="display:flex;align-items:center;gap:3px;height:48px">
+                  <input value="{{ r.qty }}" onChange="{{ r.onInput }}" inputMode="numeric" type="number" min="0" style="width:44px;border:0;outline:0;text-align:center;font-family:inherit;font-size:22px;font-weight:500;color:#0E2E21;background:transparent"/>
+                  <span style="font-size:14px;color:#5E6A63">কেজি</span>
+                </label>
+                <button onClick="{{ r.inc }}" aria-label="বাড়ান" style="all:unset;cursor:pointer;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#1C4F38;border-radius:50%" style-active="background:#E8F0EA">+</button>
+              </div>
+            </div>
+            <sc-if value="{{ showChips }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-left:80px">
+                <sc-for list="{{ r.chips }}" as="c">
+                  <button onClick="{{ c.onClick }}" style="all:unset;cursor:pointer;min-height:36px;padding:0 14px;display:flex;align-items:center;border-radius:99px;font-size:15px;font-weight:500;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.color }}">{{ c.label }}</button>
+                </sc-for>
+                <sc-if value="{{ r.has }}"><span style="margin-left:auto;font-size:16px;color:#0E2E21">{{ r.line }}</span></sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+        <aside style="position:sticky;top:96px;background:#F4F7F4;border-radius:6px;padding:28px;display:flex;flex-direction:column;gap:18px">
+          <span style="font-size:22px;font-weight:500;color:#0E2E21">অর্ডারের হিসাব</span>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;font-size:17px"><span style="color:#5E6A63">মোট পরিমাণ</span><b style="font-weight:500">{{ sum.kg }}</b></div>
+            <div style="display:flex;justify-content:space-between;font-size:17px"><span style="color:#5E6A63">প্রতি কেজি</span><b style="font-weight:500">{{ sum.rate }}</b></div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:16px;border-top:1px solid #D5DDD7"><span style="font-size:18px">মোট দাম</span><b style="font-size:36px;font-weight:500;color:#0E2E21;letter-spacing:-.01em">{{ sum.total }}</b></div>
+            <sc-if value="{{ sum.hasSave }}"><div style="font-size:15px;color:#1C4F38;text-align:right">{{ sum.save }}</div></sc-if>
+          </div>
+          <div style="padding:14px 16px;background:#FFFFFF;border-radius:4px;font-size:17px;line-height:1.5;color:#0E2E21;font-weight:500;border-left:0">{{ sum.nextText }}</div>
+          <sc-if value="{{ showTierList }}">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+              <sc-for list="{{ sum.tiers }}" as="t">
+                <div style="padding:8px 4px;border-radius:4px;text-align:center;font-size:13px;line-height:1.35;background:{{ t.bg }};color:{{ t.color }}">{{ t.label }}<br/><b style="font-size:16px;font-weight:500">{{ t.price }}</b></div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <button onClick="{{ goInfo }}" disabled="{{ sum.empty }}" style="all:unset;box-sizing:border-box;width:100%;text-align:center;cursor:pointer;background:{{ sum.btnBg }};color:#FFFFFF;font-weight:500;font-size:18px;padding:17px;border-radius:99px">পরের ধাপ: আপনার তথ্য দিন</button>
+        </aside>
+      </sc-if>
+    </div>
+  </div>
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <div style="position:sticky;bottom:0;z-index:20;background:#FFFFFF;border-top:1px solid #E3E8E4;box-shadow:0 -8px 24px rgba(14,46,33,.08);padding:12px 18px 14px;display:flex;flex-direction:column;gap:10px">
+      <div style="background:#F4F7F4;border-radius:4px;padding:8px 12px;font-size:15px;line-height:1.4;color:#0E2E21;font-weight:500">{{ sum.nextText }}</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;display:flex;flex-direction:column">
+          <span style="font-size:14px;color:#5E6A63">{{ sum.kg }} · {{ sum.rate }}/কেজি</span>
+          <b style="font-size:26px;font-weight:500;color:#0E2E21;line-height:1.2">{{ sum.total }}</b>
+        </div>
+        <button onClick="{{ goInfo }}" disabled="{{ sum.empty }}" style="all:unset;cursor:pointer;background:{{ sum.btnBg }};color:#FFFFFF;font-weight:500;font-size:17px;padding:14px 22px;border-radius:99px">পরের ধাপ →</button>
+      </div>
+    </div>
+  </sc-if>
+</sc-if>
+
+<sc-if value="{{ isInfo }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width:1280px;margin:0 auto;padding:clamp(32px,5vw,64px) clamp(18px,4vw,40px) 64px">
+    <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;color:#1C4F38;font-size:16px;padding:8px 0;margin-bottom:8px">← চা ও পরিমাণ বদলান</button>
+    <h1 style="margin:0 0 clamp(24px,3vw,40px);font-weight:500;font-size:clamp(32px,4.4vw,56px);line-height:1.1;color:#0E2E21">কোথায় পাঠাবো?</h1>
+    <div style="display:grid;grid-template-columns:{{ orderCols }};gap:clamp(20px,3vw,40px);align-items:start">
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <sc-for list="{{ fields }}" as="f" hint-placeholder-count="3">
+          <label style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:17px;font-weight:500">{{ f.label }}<sc-if value="{{ f.req }}"><span style="color:#B42318"> *</span></sc-if></span>
+            <sc-if value="{{ f.multi }}">
+              <textarea value="{{ f.value }}" onChange="{{ f.onChange }}" placeholder="{{ f.ph }}" rows="3" style="font-size:18px;padding:14px 16px;border:1px solid {{ f.border }};border-radius:6px;outline:none;resize:vertical;color:#14201A" style-focus="border-color:#1C4F38"></textarea>
+            </sc-if>
+            <sc-if value="{{ f.single }}">
+              <input value="{{ f.value }}" onChange="{{ f.onChange }}" placeholder="{{ f.ph }}" type="{{ f.type }}" inputMode="{{ f.mode }}" style="font-size:18px;height:56px;padding:0 16px;border:1px solid {{ f.border }};border-radius:6px;outline:none;color:#14201A" style-focus="border-color:#1C4F38"/>
+            </sc-if>
+          </label>
+        </sc-for>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-size:17px;font-weight:500">টাকা পরিশোধ</span>
+          <div style="display:flex;align-items:center;gap:14px;padding:16px;border:1px solid #1C4F38;background:#F4F7F4;border-radius:6px">
+            <span style="width:20px;height:20px;border-radius:50%;border:6px solid #1C4F38;box-sizing:border-box;background:#FFFFFF"></span>
+            <div style="display:flex;flex-direction:column"><b style="font-size:17px;font-weight:500">ক্যাশ অন ডেলিভারি</b><span style="font-size:15px;color:#5E6A63">চা হাতে পেয়ে টাকা দিন</span></div>
+          </div>
+        </div>
+        <sc-if value="{{ hasErr }}"><div style="padding:12px 14px;border-radius:6px;background:#FEF3F2;color:#B42318;font-size:16px">{{ err }}</div></sc-if>
+      </div>
+      <aside style="background:#F4F7F4;border-radius:6px;padding:28px;display:flex;flex-direction:column;gap:16px">
+        <span style="font-size:22px;font-weight:500;color:#0E2E21">অর্ডারের হিসাব</span>
+        <div style="display:flex;flex-direction:column;gap:10px;padding-bottom:16px;border-bottom:1px solid #D5DDD7">
+          <sc-for list="{{ lines }}" as="l">
+            <div style="display:flex;justify-content:space-between;gap:12px;font-size:16px"><span>{{ l.name }} <span style="color:#5E6A63">× {{ l.kg }}</span></span><span style="font-weight:500">{{ l.total }}</span></div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:16px"><span style="color:#5E6A63">মোট পরিমাণ</span><b style="font-weight:500">{{ sum.kg }}</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px"><span style="color:#5E6A63">প্রতি কেজি</span><b style="font-weight:500">{{ sum.rate }}</b></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:14px;border-top:1px solid #D5DDD7"><span style="font-size:18px">মোট দাম</span><b style="font-size:32px;font-weight:500;color:#0E2E21">{{ sum.total }}</b></div>
+        <span style="font-size:14px;color:#5E6A63">ডেলিভারি চার্জ ফোনে জানানো হবে</span>
+        <button onClick="{{ confirm }}" style="all:unset;box-sizing:border-box;width:100%;text-align:center;cursor:pointer;background:#1C4F38;color:#FFFFFF;font-weight:500;font-size:19px;padding:18px;border-radius:99px" style-hover="background:#0E2E21">অর্ডার নিশ্চিত করুন</button>
+      </aside>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width:600px;margin:0 auto;padding:clamp(48px,8vw,112px) clamp(18px,4vw,40px);display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px">
+    <div style="width:80px;height:80px;border-radius:50%;border:1px solid #1C4F38;display:flex;align-items:center;justify-content:center;font-size:34px;color:#1C4F38">✓</div>
+    <h1 style="margin:8px 0 0;font-weight:500;font-size:clamp(30px,4vw,48px);line-height:1.15;color:#0E2E21">ধন্যবাদ, আপনার অর্ডার পেয়েছি</h1>
+    <p style="margin:0;font-size:18px;line-height:1.65;font-weight:300;color:#3E4B44">আমাদের প্রতিনিধি শীঘ্রই {{ phoneBn }} নম্বরে ফোন করে অর্ডার নিশ্চিত করবেন।</p>
+    <div style="width:100%;margin-top:16px;background:#F4F7F4;border-radius:6px;padding:22px 24px;display:flex;flex-direction:column;gap:12px;text-align:left">
+      <div style="display:flex;justify-content:space-between;font-size:16px"><span style="color:#5E6A63">অর্ডার নম্বর</span><b style="font-weight:500">BT-২৪১০৫</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:16px"><span style="color:#5E6A63">মোট পরিমাণ</span><b style="font-weight:500">{{ sum.kg }}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:16px"><span style="color:#5E6A63">প্রতি কেজি</span><b style="font-weight:500">{{ sum.rate }}</b></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;border-top:1px solid #D5DDD7"><span style="font-size:17px">মোট দাম (ক্যাশ অন ডেলিভারি)</span><b style="font-size:26px;font-weight:500;color:#0E2E21">{{ sum.total }}</b></div>
+    </div>
+    <button onClick="{{ restart }}" style="all:unset;cursor:pointer;margin-top:12px;color:#1C4F38;border:1px solid #1C4F38;font-weight:500;font-size:17px;padding:13px 26px;border-radius:99px">হোমে ফিরে যান</button>
+  </div>
+</sc-if>
+
+<footer id="contact" style="background:#0E2E21;color:#C9D8CE">
+  <div style="max-width:1280px;margin:0 auto;padding:clamp(64px,8vw,112px) clamp(18px,4vw,40px) 0;display:flex;flex-direction:column;gap:clamp(48px,6vw,88px)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:28px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:640px">
+        <span style="font-size:15px;letter-spacing:.08em;color:#D7BC8F;font-weight:500">যোগাযোগ</span>
+        <h2 style="margin:0;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.1;color:#FFFFFF">ফোনে বা অনলাইনে, যেভাবে সুবিধা অর্ডার দিন</h2>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <button onClick="{{ goOrder }}" style="all:unset;cursor:pointer;background:#FFFFFF;color:#0E2E21;font-weight:500;font-size:18px;padding:15px 28px;border-radius:99px" style-hover="background:#E8F0EA">বাল্ক অর্ডার করুন</button>
+        <span style="color:#FFFFFF;border:1px solid rgba(255,255,255,.35);font-size:18px;padding:14px 26px;border-radius:99px">০১৭০০-০০০০০০</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:32px;padding-top:40px;border-top:1px solid rgba(255,255,255,.14)">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <span style="display:flex;align-items:center;gap:10px;color:#FFFFFF"><span style="width:20px;height:20px;border-radius:50% 0 50% 0;background:#FFFFFF;display:block;transform:rotate(-8deg)"></span><span style="font-weight:600;font-size:18px;letter-spacing:.16em">BONGOTEA</span></span>
+        <span style="font-size:16px;line-height:1.6;font-weight:300">ব্যবসার জন্য বাছাই করা চা, সরাসরি আপনার দোকানে।</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:16px">
+        <span style="color:#8FA89A;font-size:14px;margin-bottom:4px">পেজ</span>
+        <sc-for list="{{ navItems }}" as="n">
+          <button onClick="{{ n.onClick }}" style="all:unset;cursor:pointer;color:#C9D8CE" style-hover="color:#FFFFFF">{{ n.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:16px">
+        <span style="color:#8FA89A;font-size:14px;margin-bottom:4px">ফোন ও হোয়াটসঅ্যাপ</span>
+        <span>০১৭০০-০০০০০০</span>
+        <span>সকাল ৯টা – রাত ৯টা</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:16px">
+        <span style="color:#8FA89A;font-size:14px;margin-bottom:4px">ঠিকানা</span>
+        <span>শ্রীমঙ্গল, মৌলভীবাজার</span>
+        <span>hello@bongotea.com</span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:24px 0 32px;border-top:1px solid rgba(255,255,255,.14);font-size:14px;color:#8FA89A">
+      <span>© ২০২৬ Bongotea</span><span>bongotea.com</span>
+    </div>
+  </div>
+</footer>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;frame&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;fluid&quot;,&quot;mobile&quot;],&quot;default&quot;:&quot;fluid&quot;,&quot;tsType&quot;:&quot;'fluid'|'mobile'&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;quickChips&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Order page&quot;},&quot;showTierList&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Order page&quot;}}">
+const BN = '০১২৩৪৫৬৭৮৯';
+const bn = n => String(n).replace(/\d/g, d => BN[d]);
+const tk = n => '৳' + bn(Math.round(n).toLocaleString('en-IN'));
+const TIERS = [{min:1,max:5,p:550},{min:6,max:10,p:520},{min:11,max:15,p:490},{min:16,max:20,p:470},{min:21,max:50,p:450},{min:51,max:Infinity,p:430}];
+const tLabel = t => t.max === Infinity ? bn(t.min) + '+ কেজি' : bn(t.min) + '–' + bn(t.max) + ' কেজি';
+const PRODUCTS = [
+  {id:'premium', name:'বঙ্গোটি প্রিমিয়াম', desc:'দুধ চায়ের জন্য ঘন ও সুগন্ধি চা।'},
+  {id:'gold', name:'বঙ্গোটি গোল্ড', desc:'সোনালি লিকার, মোলায়েম স্বাদ। রং চা ও দুধ চা দুটোতেই ভালো।'},
+  {id:'strong', name:'বঙ্গোটি স্ট্রং', desc:'কড়া লিকার, দোকানের ব্যস্ত সময়ের জন্য।'},
+  {id:'regular', name:'বঙ্গোটি রেগুলার', desc:'প্রতিদিনের জন্য ভালো মানের সাশ্রয়ী চা।'},
+  {id:'special', name:'বঙ্গোটি স্পেশাল', desc:'রেস্টুরেন্ট ও অতিথি আপ্যায়নের জন্য বাছাই করা পাতা।'},
+  {id:'blend', name:'বঙ্গোটি ব্লেন্ড', desc:'কয়েক বাগানের পাতা মিশিয়ে ভারসাম্যপূর্ণ স্বাদ।'}
+];
+const SLIDES = [
+  {eyebrow:'চায়ের দোকান ও ব্যবসার জন্য', title:'আপনার ব্যবসার জন্য ভালো চা, সহজে অর্ডার করুন', text:'চায়ের দোকান, রেস্টুরেন্ট কিংবা ব্যবসার জন্য প্রয়োজন অনুযায়ী চা নিন। একসাথে বেশি নিলে প্রতি কেজির দাম আরও কম।', img:'ছবি: ভোরের চা বাগান, প্রশস্ত', c1:'#1F4535', c2:'#234B3A'},
+  {eyebrow:'বাল্ক দাম', title:'বেশি নিলে দাম কম', text:'সব চা মিলিয়ে ৫১ কেজির বেশি নিলে প্রতি কেজি মাত্র ৳৪৩০।', img:'ছবি: হাতে তোলা কচি চা পাতা', c1:'#2A4A33', c2:'#2E5038'},
+  {eyebrow:'সহজ অর্ডার', title:'কম বুঝলেও সহজে চায়ের অর্ডার', text:'কোন চা কত কেজি লাগবে দিন, বাকি হিসাব আমাদের।', img:'ছবি: চায়ের দোকানে ধোঁয়া ওঠা কাপ', c1:'#33402F', c2:'#384634'}
+];
+const FIELDS = [
+  {key:'name', label:'আপনার নাম', ph:'যেমন: রহিম উদ্দিন', req:true},
+  {key:'phone', label:'মোবাইল নম্বর', ph:'০১XXXXXXXXX', req:true, type:'tel', mode:'tel'},
+  {key:'address', label:'ডেলিভারির ঠিকানা', ph:'দোকানের নাম, রাস্তা, এলাকা, জেলা', req:true, multi:true}
+];
+const EMPTY = {name:'',phone:'',address:''};
+class Component extends DCLogic {
+  state = { page:'home', qty:{}, w: typeof window !== 'undefined' ? window.innerWidth : 1200, scrolled:false, menu:false, form:{...EMPTY}, err:'', tried:false, flash:null, slide:0 };
+  componentDidMount(){
+    this.onR = () => this.setState({w: window.innerWidth});
+    this.onS = () => { const sc = window.scrollY > 40; if (sc !== this.state.scrolled) this.setState({scrolled: sc}); };
+    window.addEventListener('resize', this.onR); window.addEventListener('scroll', this.onS, {passive:true});
+    this.startAuto();
+  }
+  componentWillUnmount(){ window.removeEventListener('resize', this.onR); window.removeEventListener('scroll', this.onS); clearInterval(this.auto); clearTimeout(this.ft); }
+  startAuto(){ clearInterval(this.auto); this.auto = setInterval(() => { if (this.state.page === 'home') this.setState(s => ({slide: (s.slide + 1) % SLIDES.length})); }, 6500); }
+  toSlide(i){ this.setState({slide: (i + SLIDES.length) % SLIDES.length}); this.startAuto(); }
+  go(page){ this.setState({page, menu:false}); window.scrollTo(0,0); }
+  goSection(id){
+    const doScroll = () => { const el = document.getElementById(id); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 72, behavior:'smooth'}); };
+    if (this.state.page !== 'home') { this.setState({page:'home', menu:false}); setTimeout(doScroll, 60); } else { this.setState({menu:false}); doScroll(); }
+  }
+  setQty(id, v){ v = Math.max(0, Math.min(999, Math.round(Number(v) || 0))); this.setState(s => ({qty: {...s.qty, [id]: v}})); }
+  addFromCard(id){
+    this.setState(s => ({page:'order', qty: {...s.qty, [id]: Math.max(s.qty[id] || 0, 1)}, flash:id}));
+    setTimeout(() => { const el = document.getElementById('row-' + id); window.scrollTo({top: el ? el.getBoundingClientRect().top + window.scrollY - 100 : 0}); }, 60);
+    clearTimeout(this.ft); this.ft = setTimeout(() => this.setState({flash:null}), 1600);
+  }
+  renderVals(){
+    const s = this.state, P = this.props;
+    const frameMobile = (P.frame ?? 'fluid') === 'mobile';
+    const isMobile = frameMobile || s.w < 860;
+    const isHome = s.page === 'home';
+    const clear = isHome && !s.scrolled && !s.menu;
+    const hdr = clear
+      ? {bg:'transparent', line:'transparent', fg:'#FFFFFF', mark:'#FFFFFF', btnBg:'#FFFFFF', btnFg:'#0E2E21'}
+      : {bg:'rgba(255,255,255,.97)', line:'#E3E8E4', fg:'#0E2E21', mark:'#1C4F38', btnBg:'#1C4F38', btnFg:'#FFFFFF'};
+    const total = PRODUCTS.reduce((a, p) => a + (s.qty[p.id] || 0), 0);
+    const ti = total === 0 ? 0 : TIERS.findIndex(t => total >= t.min && total <= t.max);
+    const rate = TIERS[ti].p, next = TIERS[ti + 1];
+    const nextText = total === 0 ? 'চা বেছে নিন। মোট কেজি বাড়লে প্রতি কেজির দাম কমবে।'
+      : next ? 'আর ' + bn(next.min - total) + ' কেজি নিলে ' + tk(next.p) + '/কেজি' : 'আপনি সবচেয়ে কম দামে পাচ্ছেন: ' + tk(rate) + '/কেজি';
+    const save = (550 - rate) * total;
+    const sum = {
+      kg: bn(total) + ' কেজি', rate: tk(rate), total: tk(rate * total), empty: total === 0,
+      btnBg: total === 0 ? '#A3AFA8' : '#1C4F38', nextText,
+      hasSave: save > 0, save: 'আপনার সাশ্রয় ' + tk(save),
+      tiers: TIERS.map((t, i) => { const on = total > 0 && i === ti; return {label: tLabel(t), price: tk(t.p), bg: on ? '#1C4F38' : '#FFFFFF', color: on ? '#FFFFFF' : '#3E4B44'}; })
+    };
+    const rows = PRODUCTS.map(p => {
+      const q = s.qty[p.id] || 0, fl = s.flash === p.id;
+      return {
+        ...p, domId: 'row-' + p.id, qty: q, has: q > 0, line: bn(q) + ' × ' + tk(rate) + ' = ' + tk(q * rate),
+        bg: fl ? '#E8F0EA' : q > 0 ? '#F7FAF7' : 'transparent',
+        inc: () => this.setQty(p.id, q + 1), dec: () => this.setQty(p.id, q - 1), onInput: e => this.setQty(p.id, e.target.value),
+        chips: [1, 5, 10, 20].map(n => ({label: bn(n) + ' কেজি', onClick: () => this.setQty(p.id, n), bg: q === n ? '#1C4F38' : '#FFFFFF', color: q === n ? '#FFFFFF' : '#1C4F38', border: q === n ? '#1C4F38' : '#C9D3CC'}))
+      };
+    });
+    const fields = FIELDS.map(f => {
+      const bad = s.tried && f.req && !s.form[f.key].trim();
+      return {...f, multi: !!f.multi, single: !f.multi, type: f.type || 'text', mode: f.mode || 'text', req: !!f.req, value: s.form[f.key],
+        border: bad ? '#F04438' : '#C9D3CC', onChange: e => { const v = e.target.value; this.setState(st => ({form: {...st.form, [f.key]: v}})); }};
+    });
+    return {
+      outerBg: frameMobile ? '#E9EEEA' : '#FFFFFF', frameW: frameMobile ? '390px' : 'none',
+      isMobile, isDesktop: !isMobile, menuOpen: isMobile && s.menu, hdr,
+      heroH: isMobile ? '86vh' : 'min(92vh, 860px)', twoCols: isMobile ? '1fr' : '1fr 1fr',
+      tierCols: 'repeat(' + (frameMobile || s.w < 600 ? 2 : s.w < 1100 ? 3 : 6) + ',minmax(0,1fr))', orderCols: isMobile ? '1fr' : 'minmax(0,1fr) 400px',
+      isHome, isOrder: s.page === 'order', isInfo: s.page === 'info', isDone: s.page === 'done',
+      slides: SLIDES.map((sl, i) => ({...sl, opacity: i === s.slide ? 1 : 0, pe: i === s.slide ? 'auto' : 'none', zoom: i === s.slide ? 'scale(1)' : 'scale(1.08)', bar: i === s.slide ? '#FFFFFF' : 'rgba(255,255,255,.3)', go: () => this.toSlide(i)})),
+      slideNum: bn('0' + (s.slide + 1)) + ' / ' + bn('0' + SLIDES.length),
+      prevSlide: () => this.toSlide(s.slide - 1), nextSlide: () => this.toSlide(s.slide + 1),
+      touchStart: e => { this.tx = e.touches[0].clientX; },
+      touchEnd: e => { const dx = e.changedTouches[0].clientX - (this.tx ?? 0); if (Math.abs(dx) > 40) this.toSlide(s.slide + (dx < 0 ? 1 : -1)); },
+      toggleMenu: () => this.setState(st => ({menu: !st.menu})),
+      goHome: () => this.go('home'), goOrder: () => this.go('order'), goPricing: () => this.goSection('pricing'),
+      goInfo: () => { if (total > 0) this.go('info'); },
+      navItems: [
+        {label:'হোম', onClick: () => this.go('home')},
+        {label:'আমাদের চা', onClick: () => this.goSection('products')},
+        {label:'কীভাবে অর্ডার করবেন', onClick: () => this.goSection('how')},
+        {label:'যোগাযোগ', onClick: () => this.goSection('contact')}
+      ],
+      homeTiers: TIERS.map((t, i) => { const best = i === TIERS.length - 1; return {label: tLabel(t), price: tk(t.p), best, bg: best ? '#1C4F38' : '#FFFFFF', fg: best ? '#FFFFFF' : '#0E2E21', line: best ? '#1C4F38' : '#E3E8E4'}; }),
+      products: PRODUCTS.map(p => ({...p, add: () => this.addFromCard(p.id)})),
+      steps: [
+        {n:'০১', title:'চা ও কেজি বেছে নিন', text:'কোন চা কত কেজি লাগবে দিন, দাম নিজে থেকেই হিসাব হবে।'},
+        {n:'০২', title:'নাম ও ঠিকানা দিন', text:'শুধু নাম, মোবাইল নম্বর আর ডেলিভারির ঠিকানা।'},
+        {n:'০৩', title:'আমরা ফোন করে পৌঁছে দেব', text:'অর্ডার নিশ্চিত করে চা পাঠাবো। টাকা দিন হাতে পেয়ে।'}
+      ],
+      rows, sum, showChips: P.quickChips ?? true, showTierList: P.showTierList ?? true, fields,
+      lines: rows.filter(r => r.has).map(r => ({name: r.name, kg: bn(r.qty) + ' কেজি', total: tk(r.qty * rate)})),
+      hasErr: !!s.err, err: s.err, phoneBn: bn(s.form.phone || ''),
+      confirm: () => {
+        const f = s.form;
+        if (!f.name.trim() || !f.phone.trim() || !f.address.trim()) return this.setState({tried:true, err:'লাল চিহ্নিত ঘরগুলো পূরণ করুন।'});
+        if (f.phone.replace(/\D/g,'').length < 11) return this.setState({tried:true, err:'সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন।'});
+        this.setState({err:'', tried:false}); this.go('done');
+      },
+      restart: () => { this.setState({qty:{}, form:{...EMPTY}}); this.go('home'); }
+    };
+  }
+}
+</script>
+</body>
+</html>
