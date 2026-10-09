@@ -200,6 +200,10 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('faq', ['heading' => 'সাধারণ প্রশ্ন', 'items' => [['question' => 'ডেলিভারি কতদিনে?', 'answer' => 'ঢাকায় ২৪–৪৮ ঘণ্টায়।'], ['question' => 'খালি?', 'answer' => '']]]),
         ['eyebrow' => null, 'heading' => 'সাধারণ প্রশ্ন', 'items' => [['question' => 'ডেলিভারি কতদিনে?', 'answer' => 'ঢাকায় ২৪–৪৮ ঘণ্টায়।']]],
     ],
+    'delivery chart, only its wording, since it draws the shared Delivery Bands' => [
+        pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
+        ['heading' => 'ডেলিভারি চার্জ', 'text' => null],
+    ],
 ]);
 
 it('points the header at the Bulk Order and My Orders System Pages by role', function () {

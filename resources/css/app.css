@@ -150,6 +150,10 @@
     /* The catalogue's: a product card and a category tile lifted on hover, the search dropdown. */
     --shadow-card: 0 10px 30px rgba(22, 38, 29, 0.08);
     --shadow-tile: 0 12px 28px rgba(22, 38, 29, 0.1);
+
+    /* The Cart's: Home's floating summary bar, and the Bulk Order bar pinned to a phone's bottom. */
+    --shadow-cart-bar: 0 12px 32px rgba(22, 38, 29, 0.25);
+    --shadow-bottom-bar: 0 -6px 20px rgba(22, 38, 29, 0.07);
 }
 
 @layer base {

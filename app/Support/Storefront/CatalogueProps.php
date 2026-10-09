@@ -54,6 +54,42 @@ class CatalogueProps
     }
 
     /**
+     * What the Cart prices a Product from: its own Tiers, and whether a buyer
+     * can have it now.
+     *
+     * @return array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}
+     */
+    public static function cartProduct(Product $product): array
+    {
+        return [
+            'id' => $product->id,
+            'isAvailable' => $product->is_available,
+            'tiers' => array_map(fn (Tier $tier): array => $tier->toArray(), $product->priceTiers()),
+        ];
+    }
+
+    /**
+     * Each Category that has a published Product, in the Merchant's order,
+     * with its cards: how the Cart's Blocks list every tea.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function stockedCategories(Catalogue $catalogue): array
+    {
+        $categories = [];
+
+        foreach ($catalogue->stocked() as ['category' => $category, 'products' => $products]) {
+            $categories[] = [
+                ...self::categoryReference($category),
+                'note' => self::text($category->note),
+                'products' => self::cards($products),
+            ];
+        }
+
+        return $categories;
+    }
+
+    /**
      * A Product as one line of the header search's live dropdown.
      *
      * @return array{name: string, href: string, imageUrl: ?string, categoryName: string, regularPrice: int}

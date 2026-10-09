@@ -5,7 +5,10 @@ namespace App\Support\Storefront;
 use App\Enums\PaymentMethod;
 use App\Enums\SystemPage;
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\PhoneNumber;
+use App\Support\Pricing\DeliveryBand;
+use App\Support\Pricing\PriceBook;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\MenuSettings;
 use App\Support\Settings\PaymentSettings;
@@ -31,6 +34,9 @@ class StorefrontShell
 
     public const MY_ORDERS_PATH = '/my-orders';
 
+    /** Where the Bulk Order form's continue button leads. */
+    public const CHECKOUT_PATH = '/checkout';
+
     /** Where the header's search form sends its query. */
     public const SEARCH_PATH = '/search';
 
@@ -42,6 +48,7 @@ class StorefrontShell
         private AnnouncementSettings $announcement,
         private MenuSettings $menus,
         private PaymentSettings $payments,
+        private Catalogue $catalogue,
     ) {}
 
     /**
@@ -102,11 +109,33 @@ class StorefrontShell
     }
 
     /**
+     * What the Cart, held in the browser (ADR-0029), is priced from on every
+     * page, since the header shows its total wherever the buyer is: every
+     * published Product's own Tiers and whether it can be had now, and the
+     * Delivery Bands. Prices and fees in minor units.
+     *
+     * @return array{deliveryBands: list<array{min: int, max: ?int, fee: int}>, products: list<array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}>}
+     */
+    public function pricing(): array
+    {
+        return [
+            'deliveryBands' => array_map(
+                fn (DeliveryBand $band): array => ['min' => $band->min, 'max' => $band->max, 'fee' => $band->fee],
+                PriceBook::current()->deliveryBands,
+            ),
+            'products' => $this->catalogue->products()
+                ->map(fn (Product $product): array => CatalogueProps::cartProduct($product))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
      * Bulk Order and My Orders are found by their role, so the buttons
      * follow a renamed slug; one not published leaves its button at the
      * installed slug.
      *
-     * @return array{bulkOrder: string, myOrders: string, search: string, searchSuggestions: string}
+     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string}
      */
     public function links(): array
     {
@@ -119,6 +148,7 @@ class StorefrontShell
         return [
             'bulkOrder' => $paths->get(SystemPage::BulkOrder->value, self::BULK_ORDER_PATH),
             'myOrders' => $paths->get(SystemPage::MyOrders->value, self::MY_ORDERS_PATH),
+            'checkout' => self::CHECKOUT_PATH,
             'search' => self::SEARCH_PATH,
             'searchSuggestions' => self::SEARCH_SUGGESTIONS_PATH,
         ];

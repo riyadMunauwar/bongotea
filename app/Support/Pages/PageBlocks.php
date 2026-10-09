@@ -3,16 +3,20 @@
 namespace App\Support\Pages;
 
 use App\Models\Page;
+use App\Support\Pages\Blocks\BulkOrderForm;
 use App\Support\Pages\Blocks\CallToActionBand;
 use App\Support\Pages\Blocks\CategoryPanels;
 use App\Support\Pages\Blocks\CategoryTiles;
 use App\Support\Pages\Blocks\ChipsRow;
 use App\Support\Pages\Blocks\ContactCards;
+use App\Support\Pages\Blocks\DeliveryChart;
 use App\Support\Pages\Blocks\Faq;
 use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
 use App\Support\Pages\Blocks\Journey;
 use App\Support\Pages\Blocks\MapAndAddress;
+use App\Support\Pages\Blocks\PriceCalculator;
+use App\Support\Pages\Blocks\PriceMatrix;
 use App\Support\Pages\Blocks\ProductRail;
 use App\Support\Pages\Blocks\PromiseStrip;
 use App\Support\Pages\Blocks\Story;
@@ -51,6 +55,10 @@ class PageBlocks
         CategoryTiles::class,
         CategoryPanels::class,
         ProductRail::class,
+        BulkOrderForm::class,
+        PriceCalculator::class,
+        PriceMatrix::class,
+        DeliveryChart::class,
     ];
 
     /**

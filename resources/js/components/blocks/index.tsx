@@ -1,16 +1,20 @@
 import type { ComponentType } from 'react';
 import { cn } from '@/lib/utils';
 import type { BlockPropsByType, PageBlock } from '@/types/blocks';
+import { BulkOrderForm } from './bulk-order-form';
 import { CallToActionBand } from './call-to-action-band';
 import { CategoryPanels } from './category-panels';
 import { CategoryTiles } from './category-tiles';
 import { ChipsRow } from './chips-row';
 import { ContactCards } from './contact-cards';
+import { DeliveryChart } from './delivery-chart';
 import { Faq } from './faq';
 import { HeroCarousel } from './hero-carousel';
 import { HowToOrder } from './how-to-order';
 import { Journey } from './journey';
 import { MapAndAddress } from './map-and-address';
+import { PriceCalculator } from './price-calculator';
+import { PriceMatrix } from './price-matrix';
 import { ProductRail } from './product-rail';
 import { PromiseStrip } from './promise-strip';
 import { Story } from './story';
@@ -36,6 +40,10 @@ const COMPONENTS: { [Type in keyof BlockPropsByType]: ComponentType<BlockPropsBy
     category_tiles: CategoryTiles,
     category_panels: CategoryPanels,
     product_rail: ProductRail,
+    bulk_order_form: BulkOrderForm,
+    price_calculator: PriceCalculator,
+    price_matrix: PriceMatrix,
+    delivery_chart: DeliveryChart,
 };
 
 /**

@@ -34,6 +34,17 @@ export function CartIcon({ size = 24, className }: IconProps) {
     );
 }
 
+export function TruckIcon({ size = 26, className }: IconProps) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+            <path d="M1 6h13v10H1z" />
+            <path d="M14 9h4l3 3v4h-7z" />
+            <circle cx="5.5" cy="18" r="1.8" />
+            <circle cx="17.5" cy="18" r="1.8" />
+        </svg>
+    );
+}
+
 export function ChevronDownIcon({ size = 12, strokeWidth = 2.4, className }: IconProps & { strokeWidth?: number }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>

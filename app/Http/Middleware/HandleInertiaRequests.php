@@ -11,7 +11,8 @@ use Inertia\Middleware;
 
 /**
  * The storefront's Inertia middleware: the root template, and the props
- * every storefront page shares — the header, drawer and footer, a default
+ * every storefront page shares — the header, drawer and footer, what the
+ * browser's Cart is priced from, a default
  * `seo` a page may replace with its own, and how many minor units make a
  * taka, since every price is sent in minor units.
  *
@@ -44,6 +45,7 @@ class HandleInertiaRequests extends Middleware
             'menus' => fn (): array => $shell()->menus($request->getHost()),
             'paymentMethods' => fn (): array => $shell()->paymentMethods(),
             'links' => fn (): array => $shell()->links(),
+            'pricing' => fn (): array => $shell()->pricing(),
             'seo' => fn (): array => Seo::forStore(app(StoreSettings::class), $request)->toArray(),
             'minorUnitsPerTaka' => fn (): int => Money::factor(),
         ];

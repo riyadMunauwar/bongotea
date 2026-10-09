@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Tag;
+use App\Support\Storefront\CatalogueProps;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -177,3 +178,60 @@ it('leaves a product rail empty when what it names is gone', function () {
 
     $this->get('/live')->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.products', []));
 });
+
+it('fills the bulk order form with every published Product by Category, with its switches on unless turned off', function () {
+    $premium = Category::factory()->create(['sort_order' => 0, 'note' => 'সেরা বাছাই পাতা']);
+    $silver = Category::factory()->create(['sort_order' => 1]);
+    Category::factory()->create(['sort_order' => 2]);
+
+    $royal = Product::factory()->for($premium)->create();
+    $strong = Product::factory()->for($silver)->unavailable()->create();
+    Product::factory()->for($silver)->draft()->create();
+
+    pageWithBlock('bulk_order_form', ['heading' => 'একসাথে চা অর্ডার করুন', 'text' => 'শুধু কত কেজি লাগবে সেটি দিন।']);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.type', 'bulk_order_form')
+            ->where('page.blocks.0.props', [
+                'heading' => 'একসাথে চা অর্ডার করুন',
+                'text' => 'শুধু কত কেজি লাগবে সেটি দিন।',
+                'quickChips' => true,
+                'showTierList' => true,
+                'categories' => [
+                    [...CatalogueProps::categoryReference($premium), 'note' => 'সেরা বাছাই পাতা', 'products' => [CatalogueProps::card($royal->fresh())]],
+                    [...CatalogueProps::categoryReference($silver), 'note' => $silver->note, 'products' => [CatalogueProps::card($strong->fresh())]],
+                ],
+            ])
+        );
+});
+
+it('turns the bulk order form\'s quick-set chips and price steps off', function () {
+    pageWithBlock('bulk_order_form', ['quick_chips' => false, 'show_tier_list' => false]);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.quickChips', false)
+            ->where('page.blocks.0.props.showTierList', false)
+        );
+});
+
+it('fills the price calculator and the price matrix with every published Product by Category', function (string $type) {
+    $gold = Category::factory()->create();
+    $classic = Product::factory()->for($gold)->create();
+    Product::factory()->for($gold)->draft()->create();
+
+    pageWithBlock($type, ['heading' => 'হিসাব করে দেখুন', 'text' => 'চা ও কেজি বেছে নিন']);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.type', $type)
+            ->where('page.blocks.0.props', [
+                'heading' => 'হিসাব করে দেখুন',
+                'text' => 'চা ও কেজি বেছে নিন',
+                'categories' => [
+                    [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($classic->fresh())]],
+                ],
+            ])
+        );
+})->with(['price_calculator', 'price_matrix']);

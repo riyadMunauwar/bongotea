@@ -1,13 +1,14 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { OtherTeas } from '@/components/catalogue/other-teas';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
 import { themeStyle } from '@/components/catalogue/theme';
 import { lowestPrice, regularPrice, tierRange } from '@/components/catalogue/tier-ladder';
-import { MenuAnchor } from '@/components/storefront/menu-anchor';
 import { bn } from '@/lang/bn';
 import { formatPhone, toBanglaDigits } from '@/lib/bangla';
+import { rowAnchor } from '@/lib/cart';
+import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
 import type { ProductCard, ProductDetail } from '@/types/catalogue';
@@ -26,6 +27,7 @@ export default function ProductPage() {
     const { product, others } = usePage<ProductPageProps>().props;
     const { links, store } = usePage().props;
     const taka = useTaka();
+    const cart = useCart();
 
     const regular = regularPrice(product.tiers);
     const lowest = lowestPrice(product.tiers);
@@ -121,12 +123,16 @@ export default function ProductPage() {
                             {bn.blocks.perKilogram}
                         </span>
                         {product.isAvailable ? (
-                            <MenuAnchor
-                                href={links.bulkOrder}
-                                className="rounded-[10px] bg-primary px-6 py-[14px] text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white"
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
+                                    router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
+                                }}
+                                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
                             >
                                 {bn.product.addToOrder}
-                            </MenuAnchor>
+                            </button>
                         ) : (
                             store.hotline && (
                                 <span className="text-[14px] leading-[1.6] text-muted">

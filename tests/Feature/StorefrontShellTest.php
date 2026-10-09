@@ -3,9 +3,11 @@
 use App\Enums\MenuLinkType;
 use App\Enums\SystemPage;
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\MenuSettings;
 use App\Support\Settings\PaymentSettings;
+use App\Support\Settings\PricingSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Event;
@@ -42,7 +44,7 @@ it('renders the home page inside the storefront shell, with the store, announcem
             ->where('store.address', 'শ্রীমঙ্গল, মৌলভীবাজার')
             ->where('store.hours', 'সকাল ৯টা – রাত ৯টা')
             ->where('announcement', ['pill' => 'অফার', 'message' => '৫১+ কেজিতে প্রতিটি চায়ে সর্বোচ্চ ছাড়'])
-            ->where('links', ['bulkOrder' => '/bulk-order', 'myOrders' => '/my-orders', 'search' => '/search', 'searchSuggestions' => '/search/suggestions'])
+            ->where('links', ['bulkOrder' => '/bulk-order', 'myOrders' => '/my-orders', 'checkout' => '/checkout', 'search' => '/search', 'searchSuggestions' => '/search/suggestions'])
         );
 });
 
@@ -204,4 +206,43 @@ it('draws what the SSR process rendered when it answers', function () {
         ->assertSee('<title>From SSR</title>', false)
         ->assertSee('<div data-server-rendered="true" id="app"><main>rendered</main></div>', false)
         ->assertDontSee('<div id="app"></div>', false);
+});
+
+it('shares every published Product\'s Tiers and availability, and the Delivery Bands, for the browser\'s Cart', function () {
+    app(PricingSettings::class)->with(['deliveryBands' => [
+        ['min' => 1, 'max' => 10, 'fee' => 15000],
+        ['min' => 11, 'max' => null, 'fee' => 0],
+    ]])->save();
+
+    $premium = Product::factory()->create(['tiers' => [
+        ['min' => 1, 'max' => 5, 'price' => 62000],
+        ['min' => 6, 'max' => null, 'price' => 58900],
+    ]]);
+    $unavailable = Product::factory()->unavailable()->create(['tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]]);
+    Product::factory()->draft()->create();
+    Product::factory()->create()->delete();
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pricing', [
+                'deliveryBands' => [
+                    ['min' => 1, 'max' => 10, 'fee' => 15000],
+                    ['min' => 11, 'max' => null, 'fee' => 0],
+                ],
+                'products' => [
+                    ['id' => $premium->id, 'isAvailable' => true, 'tiers' => [
+                        ['min' => 1, 'max' => 5, 'price' => 62000],
+                        ['min' => 6, 'max' => null, 'price' => 58900],
+                    ]],
+                    ['id' => $unavailable->id, 'isAvailable' => false, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
+                ],
+            ])
+        );
+});
+
+it('tells Home it is Home, so it draws the Cart\'s summary bar, and no other Page', function () {
+    Page::factory()->published()->create(['slug' => 'about']);
+
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('page.isHome', true));
+    $this->get('/about')->assertInertia(fn (Assert $page) => $page->where('page.isHome', false));
 });

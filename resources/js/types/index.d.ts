@@ -3,6 +3,9 @@
  * sends them.
  */
 
+import type { CartProduct } from '@/lib/cart';
+import type { DeliveryBand } from '@/lib/pricing';
+
 export type MenuLink = {
     label: string;
     href: string;
@@ -67,8 +70,15 @@ export type SharedProps = {
     links: {
         bulkOrder: string;
         myOrders: string;
+        checkout: string;
         search: string;
         searchSuggestions: string;
+    };
+    /** What the browser's Cart is priced from; prices and fees in minor units. */
+    pricing: {
+        deliveryBands: DeliveryBand[];
+        /** Every published Product, in catalogue order, the unavailable ones among them. */
+        products: CartProduct[];
     };
     seo: Seo;
     /** How many minor units make one taka; every price is sent in minor units. */

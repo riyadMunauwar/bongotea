@@ -46,6 +46,7 @@ class PageController extends Controller
         return Inertia::render('page', [
             'page' => [
                 'title' => $page->title,
+                'isHome' => $page->isHome(),
                 'blocks' => PageBlocks::forStorefront($page),
             ],
             'seo' => Seo::forPage($page, $store, $request)->toArray(),

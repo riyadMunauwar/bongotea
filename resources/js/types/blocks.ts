@@ -3,7 +3,7 @@
  * props are what its PHP definition's `props()` returns, key for key.
  */
 
-import type { CategoryDetail, CategoryTheme, ProductCard } from '@/types/catalogue';
+import type { CategoryDetail, CategoryReference, CategoryTheme, ProductCard } from '@/types/catalogue';
 
 export type BlockButton = { label: string; href: string };
 
@@ -133,6 +133,38 @@ export type ProductRailProps = {
     products: ProductCard[];
 };
 
+/** A Category with a published Product, and its cards, as the Cart's Blocks list every tea. */
+export type CartCategory = CategoryReference & {
+    note: string | null;
+    products: ProductCard[];
+};
+
+export type BulkOrderFormProps = {
+    heading: string | null;
+    text: string | null;
+    quickChips: boolean;
+    showTierList: boolean;
+    categories: CartCategory[];
+};
+
+export type PriceCalculatorProps = {
+    heading: string | null;
+    text: string | null;
+    categories: CartCategory[];
+};
+
+export type PriceMatrixProps = {
+    heading: string | null;
+    text: string | null;
+    categories: CartCategory[];
+};
+
+/** Only wording: the bands are the shared `pricing.deliveryBands`. */
+export type DeliveryChartProps = {
+    heading: string | null;
+    text: string | null;
+};
+
 export type BlockPropsByType = {
     hero_carousel: HeroCarouselProps;
     promise_strip: PromiseStripProps;
@@ -150,6 +182,10 @@ export type BlockPropsByType = {
     category_tiles: CategoryTilesProps;
     category_panels: CategoryPanelsProps;
     product_rail: ProductRailProps;
+    bulk_order_form: BulkOrderFormProps;
+    price_calculator: PriceCalculatorProps;
+    price_matrix: PriceMatrixProps;
+    delivery_chart: DeliveryChartProps;
 };
 
 export type BlockType = keyof BlockPropsByType;
@@ -167,6 +203,8 @@ export type PageBlock = {
 export type PageProps = {
     page: {
         title: string;
+        /** Home draws the Cart's summary bar while the Cart holds anything. */
+        isHome: boolean;
         blocks: PageBlock[];
     };
 };

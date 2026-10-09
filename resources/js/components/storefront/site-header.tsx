@@ -1,7 +1,9 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { bn } from '@/lang/bn';
-import { formatTaka } from '@/lib/bangla';
+import { toBanglaDigits } from '@/lib/bangla';
+import { useCart } from '@/lib/use-cart';
+import { useTaka } from '@/lib/use-taka';
 import { AnnouncementBar } from './announcement-bar';
 import { DesktopNav } from './desktop-nav';
 import { CartIcon, ParcelIcon } from './icons';
@@ -14,11 +16,14 @@ import { StoreLogo } from './store-logo';
  * The sticky header on every storefront page: the announcement bar, then
  * either the full two-row header (from 1024px) or the compact one with its
  * drawer. Which is drawn is decided in CSS, so the server draws both and the
- * first paint never jumps.
+ * first paint never jumps. The cart button shows the Cart's total Kilograms
+ * and what it all comes to, delivery included.
  */
 export function SiteHeader() {
     const { store, announcement, menus, links } = usePage().props;
     const [menuOpen, setMenuOpen] = useState(false);
+    const { priced } = useCart();
+    const taka = useTaka();
 
     useEffect(() => router.on('navigate', () => setMenuOpen(false)), []);
 
@@ -41,10 +46,11 @@ export function SiteHeader() {
                         <MenuAnchor href={links.bulkOrder} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
                             <span className="relative flex">
                                 <CartIcon />
+                                <CartBadge kilograms={priced.totalKilograms} />
                             </span>
                             <span className="flex flex-col leading-[1.25]">
                                 <span className="text-[11px] text-muted">{bn.header.cart}</span>
-                                <span className="text-[14px] font-bold">{formatTaka(0)}</span>
+                                <span className="text-[14px] font-bold">{taka(priced.total)}</span>
                             </span>
                         </MenuAnchor>
                     </div>
@@ -86,6 +92,7 @@ export function SiteHeader() {
                     <MenuAnchor href={links.bulkOrder} aria-label={bn.header.cart} className="flex size-11 items-center justify-center text-ink hover:text-ink">
                         <span className="relative flex">
                             <CartIcon />
+                            <CartBadge kilograms={priced.totalKilograms} />
                         </span>
                     </MenuAnchor>
                 </div>
@@ -94,5 +101,18 @@ export function SiteHeader() {
 
             {menuOpen && <MobileMenu items={menus.header} store={store} myOrdersHref={links.myOrders} />}
         </header>
+    );
+}
+
+/** The Cart's total Kilograms on the cart icon, once it holds any. */
+function CartBadge({ kilograms }: { kilograms: number }) {
+    if (kilograms === 0) {
+        return null;
+    }
+
+    return (
+        <span className="absolute -top-[6px] -right-2 box-border flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-cart-badge px-[5px] text-[11px] font-bold text-white">
+            {toBanglaDigits(kilograms)}
+        </span>
     );
 }

@@ -1,6 +1,10 @@
 import { Link } from '@inertiajs/react';
 import { Picture } from '@/components/blocks/shared';
+import { Stepper } from '@/components/cart/stepper';
+import { CartIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
+import { toBanglaDigits } from '@/lib/bangla';
+import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
 import type { ProductCard as ProductCardProps } from '@/types/catalogue';
@@ -18,6 +22,8 @@ import { lowestPrice, regularPrice, TierLadder } from './tier-ladder';
  */
 export function ProductCard({ product, className }: { product: ProductCardProps; className?: string }) {
     const taka = useTaka();
+    const cart = useCart();
+    const kilograms = cart.kilogramsOf(product.id);
     const regular = regularPrice(product.tiers);
     const maxSaving = regular - lowestPrice(product.tiers);
 
@@ -25,7 +31,8 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
         <article
             style={themeStyle(product.category.theme)}
             className={cn(
-                'flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-border bg-white transition-shadow hover:shadow-card md:rounded-[16px]',
+                'flex min-w-0 flex-col overflow-hidden rounded-[14px] border bg-white transition-[border-color,box-shadow] hover:shadow-card md:rounded-[16px]',
+                kilograms > 0 ? 'border-green-200' : 'border-border',
                 className,
             )}
         >
@@ -40,6 +47,11 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     {product.badge && (
                         <span className="absolute top-2 left-2 rounded-full bg-eyebrow px-[7px] py-[2px] text-[10px] font-semibold text-white md:top-3 md:left-3 md:px-[10px] md:py-1 md:text-[12px]">
                             {product.badge}
+                        </span>
+                    )}
+                    {kilograms > 0 && (
+                        <span className="absolute top-2 right-2 rounded-full bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white md:top-3 md:right-3 md:px-[10px] md:py-1 md:text-[12px]">
+                            {bn.cart.inCart(toBanglaDigits(kilograms))}
                         </span>
                     )}
                 </Picture>
@@ -81,22 +93,31 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
 
                 {product.tiers.length > 1 && (
                     <div className="mt-1 md:mt-[6px]">
-                        <TierLadder tiers={product.tiers} />
+                        <TierLadder tiers={product.tiers} cartKilograms={cart.priced.totalKilograms} />
                     </div>
                 )}
 
                 <div className="mt-auto pt-[6px] md:pt-[10px]">
-                    {product.isAvailable ? (
-                        <Link
-                            href={product.href}
-                            className="box-border flex w-full items-center justify-center rounded-[8px] border border-primary px-[6px] py-[10px] text-[13px] font-semibold text-primary no-underline hover:bg-green-50 hover:text-primary-dark md:rounded-[10px] md:p-3 md:text-[15px] md:font-bold"
-                        >
-                            {bn.catalogue.view}
-                        </Link>
-                    ) : (
+                    {!product.isAvailable ? (
                         <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-[6px] py-[10px] text-[13px] font-semibold text-muted md:rounded-[10px] md:p-3 md:text-[15px]">
                             {bn.catalogue.unavailable}
                         </span>
+                    ) : kilograms === 0 ? (
+                        <button
+                            type="button"
+                            onClick={() => cart.set(product.id, 1)}
+                            className="box-border flex w-full cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 bg-primary px-[6px] py-[10px] text-[13px] font-semibold text-white hover:bg-primary-dark md:rounded-[10px] md:p-3 md:text-[15px] md:font-bold"
+                        >
+                            <CartIcon size={18} className="max-md:hidden" />
+                            {bn.cart.add}
+                        </button>
+                    ) : (
+                        <Stepper
+                            kilograms={kilograms}
+                            onChange={(next) => cart.set(product.id, next)}
+                            className="rounded-[8px] border border-primary bg-green-50 text-[14px] text-primary-dark md:rounded-[10px] md:text-[16px]"
+                            buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
+                        />
                     )}
                 </div>
             </div>

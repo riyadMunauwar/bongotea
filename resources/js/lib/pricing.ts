@@ -99,7 +99,7 @@ export function tierFor(product: ProductPrices, totalKilograms: number): Tier {
 }
 
 /** The first Tier above the Cart's weight that is cheaper than the one it is in, or null where none is. */
-function nextDropAbove(product: ProductPrices, totalKilograms: number): Tier | null {
+export function nextDropAbove(product: ProductPrices, totalKilograms: number): Tier | null {
     const current = tierFor(product, totalKilograms);
 
     return product.tiers.find((tier) => tier.min > totalKilograms && tier.price < current.price) ?? null;
