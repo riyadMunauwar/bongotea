@@ -3,6 +3,10 @@
 namespace App\Filament\Resources\Pages\Schemas;
 
 use App\Enums\PageStatus;
+use App\Filament\Concerns\HasSeoFields;
+use App\Models\Page;
+use App\Support\Pages\PageBlocks;
+use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -11,13 +15,25 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
 
+/**
+ * A Page is its title, slug and status, the Blocks it is built from, and
+ * what it says to search engines.
+ *
+ * A System Page's role is never on the form: it is set when the store is
+ * installed and can never change, so the form only says which one this is.
+ */
 class PageForm
 {
+    use HasSeoFields;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
                 Section::make('Page')
+                    ->description(fn (?Page $record): ?string => $record?->isSystemPage()
+                        ? "This is the store's {$record->system_role->getLabel()} page. Its Blocks can change, but it can never be deleted or given another job."
+                        : null)
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
@@ -35,9 +51,13 @@ class PageForm
                             ->required()
                             ->maxLength(255)
                             ->unique(ignoreRecord: true)
-                            ->rule('regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/')
+                            ->rule('regex:/^'.Page::SLUG.'$/')
+                            ->notIn(Page::RESERVED_SLUGS)
+                            ->validationMessages(['not_in' => 'The store already answers at this address; choose another slug.'])
                             ->prefix(url('/').'/')
-                            ->helperText('Flat, lowercase, hyphen-separated.'),
+                            ->helperText(fn (?Page $record): string => $record?->isHome()
+                                ? 'Home is always served at the bare domain.'
+                                : 'Flat, lowercase, hyphen-separated.'),
 
                         Select::make('status')
                             ->options(PageStatus::class)
@@ -45,6 +65,20 @@ class PageForm
                             ->required()
                             ->helperText('Only a published page is reachable at its slug.'),
                     ]),
+
+                Section::make('Blocks')
+                    ->description('The page from top to bottom. Every Block can carry an anchor and be hidden on phones or wider screens.')
+                    ->columnSpanFull()
+                    ->schema([
+                        Builder::make('blocks')
+                            ->hiddenLabel()
+                            ->blocks(PageBlocks::builderBlocks())
+                            ->collapsible()
+                            ->cloneable()
+                            ->addActionLabel('Add a Block'),
+                    ]),
+
+                self::seoSection(),
             ]);
     }
 }

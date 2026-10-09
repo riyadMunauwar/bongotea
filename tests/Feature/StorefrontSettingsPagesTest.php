@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MenuLinkType;
+use App\Enums\SystemPage;
 use App\Filament\Clusters\Settings\Pages\Announcement;
 use App\Filament\Clusters\Settings\Pages\Menus;
 use App\Filament\Clusters\Settings\Pages\Store;
@@ -162,6 +163,8 @@ it('refuses a Menu URL that is not a path or a web, phone or mail address', func
 });
 
 it('reads a damaged Menus row as what it can, rather than failing every request', function () {
+    Page::factory()->system(SystemPage::Home)->create();
+
     Setting::query()->create(['key' => MenuSettings::key(), 'value' => [
         'header' => [
             'not an entry',

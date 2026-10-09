@@ -3,6 +3,8 @@
 namespace App\Support\Storefront;
 
 use App\Enums\PaymentMethod;
+use App\Enums\SystemPage;
+use App\Models\Page;
 use App\Support\PhoneNumber;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\MenuSettings;
@@ -22,8 +24,8 @@ use App\Support\Settings\StoreSettings;
 class StorefrontShell
 {
     /**
-     * Where the header's fixed buttons lead. Bulk Order and My Orders are
-     * System Pages; until Pages carry a role these are their seeded slugs.
+     * Where the header's fixed buttons lead when their System Page cannot be
+     * found: the slugs the store is installed with.
      */
     public const BULK_ORDER_PATH = '/bulk-order';
 
@@ -97,13 +99,23 @@ class StorefrontShell
     }
 
     /**
+     * Bulk Order and My Orders are found by their role, so the buttons
+     * follow a renamed slug; one not published leaves its button at the
+     * installed slug.
+     *
      * @return array{bulkOrder: string, myOrders: string, search: string}
      */
     public function links(): array
     {
+        $paths = Page::query()
+            ->published()
+            ->whereIn('system_role', [SystemPage::BulkOrder, SystemPage::MyOrders])
+            ->get(['slug', 'system_role'])
+            ->mapWithKeys(fn (Page $page): array => [$page->system_role->value => $page->path()]);
+
         return [
-            'bulkOrder' => self::BULK_ORDER_PATH,
-            'myOrders' => self::MY_ORDERS_PATH,
+            'bulkOrder' => $paths->get(SystemPage::BulkOrder->value, self::BULK_ORDER_PATH),
+            'myOrders' => $paths->get(SystemPage::MyOrders->value, self::MY_ORDERS_PATH),
             'search' => self::SEARCH_PATH,
         ];
     }

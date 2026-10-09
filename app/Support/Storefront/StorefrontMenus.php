@@ -29,15 +29,15 @@ class StorefrontMenus
     public const ALLOWED_URL = '#^(/|https?://|tel:|mailto:)#i';
 
     /**
-     * Published Pages' slugs by id, for every Page any entry names.
+     * Published Pages' paths by id, for every Page any entry names.
      *
      * @var Collection<int, string>
      */
-    private Collection $slugs;
+    private Collection $paths;
 
     public function __construct(private MenuSettings $menus, private string $host)
     {
-        $this->slugs = $this->publishedSlugs();
+        $this->paths = $this->publishedPaths();
     }
 
     /**
@@ -126,9 +126,7 @@ class StorefrontMenus
 
     private function pagePath(?int $pageId): ?string
     {
-        $slug = $pageId === null ? null : $this->slugs->get($pageId);
-
-        return $slug === null ? null : '/'.$slug;
+        return $pageId === null ? null : $this->paths->get($pageId);
     }
 
     /**
@@ -155,7 +153,7 @@ class StorefrontMenus
     /**
      * @return Collection<int, string>
      */
-    private function publishedSlugs(): Collection
+    private function publishedPaths(): Collection
     {
         $entries = [...$this->menus->header, ...$this->menus->footerBottomLinks];
 
@@ -173,6 +171,7 @@ class StorefrontMenus
             return collect();
         }
 
-        return Page::query()->published()->whereKey($ids)->pluck('slug', 'id');
+        return Page::query()->published()->whereKey($ids)->get(['id', 'slug', 'system_role'])
+            ->mapWithKeys(fn (Page $page): array => [$page->id => $page->path()]);
     }
 }

@@ -2,8 +2,11 @@
 
 namespace App\Support\Storefront;
 
+use App\Filament\Resources\Pages\Schemas\PageForm;
+use App\Models\Page;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * What one storefront response says about itself to search engines and to
@@ -39,6 +42,25 @@ final readonly class Seo
             canonical: $request->url(),
             siteName: $store->name,
             image: $store->shareImageUrl(),
+        );
+    }
+
+    /**
+     * A Page's own: what its SEO fields say, falling back to its title beside
+     * the store's name, the store's description and the store's share image.
+     * Home falls back to the store's own title, and its canonical address is
+     * the bare domain whatever was asked for.
+     */
+    public static function forPage(Page $page, StoreSettings $store, Request $request): self
+    {
+        $default = self::forStore($store, $request);
+
+        return new self(
+            title: filled($page->seo_title) ? $page->seo_title : ($page->isHome() ? $default->title : "{$page->title} — {$store->name}"),
+            description: filled($page->seo_description) ? $page->seo_description : $default->description,
+            canonical: url($page->path()),
+            siteName: $store->name,
+            image: filled($page->seo_image) ? url(Storage::disk(PageForm::SEO_IMAGE_DISK)->url($page->seo_image)) : $default->image,
         );
     }
 

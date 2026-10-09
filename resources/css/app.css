@@ -114,10 +114,37 @@
     --color-bkash: #e2136e;
     --color-nagad: #ec1c24;
 
+    /* Shades the content Blocks use beyond the README's table. */
+    --color-surface: #f6f7f5;
+    --color-eyebrow: #b07a3b;
+    --color-body: #3f4b44;
+    --color-step-line: #c9d6cc;
+    --color-step-chip-line: #dce6de;
+    --color-chip-line: #dce3dd;
+    --color-hero-eyebrow: #cfe0d3;
+    --color-star: #e0a100;
+    --color-gold-hover: #e2c291;
+    --color-mail-tint: #f3e7d5;
+    --color-mail-text: #8a5a22;
+    --color-whatsapp-text: #1e9e50;
+    --color-stripe-light: #ecefeb;
+    --color-stripe-light-alt: #e4e8e3;
+    --color-stripe-hero: #22402f;
+    --color-stripe-hero-alt: #264634;
+    --color-stripe-video: #2a4234;
+    --color-stripe-video-alt: #2f4a3a;
+    --color-stripe-banner-alt: #234030;
+    --color-scrim: rgba(10, 20, 14, 0.82);
+
     /* The mockup's three shadows: the sticky header, a dropdown panel, the green pill button. */
     --shadow-header: 0 1px 0 #e2e6e2, 0 4px 14px rgba(22, 38, 29, 0.05);
     --shadow-dropdown: 0 12px 32px rgba(22, 38, 29, 0.12);
     --shadow-pill: 0 4px 12px rgba(46, 107, 69, 0.3);
+
+    /* The content Blocks': a slider arrow, a video's play button, a card lifted over a banner. */
+    --shadow-arrow: 0 2px 8px rgba(22, 38, 29, 0.08);
+    --shadow-play: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --shadow-raised: 0 12px 30px rgba(18, 35, 26, 0.08);
 }
 
 @layer base {
@@ -156,4 +183,92 @@
     max-width: 1240px;
     margin-inline: auto;
     padding-inline: clamp(16px, 4vw, 32px);
+}
+
+/*
+ * The mockup's stand-ins for a photograph — diagonal stripes in two shades —
+ * drawn wherever a Block has no image yet, and the shades laid over a hero
+ * so its words stay readable on any picture.
+ */
+@utility stripes-light {
+    background: repeating-linear-gradient(135deg, var(--color-stripe-light) 0 12px, var(--color-stripe-light-alt) 12px 24px);
+}
+
+@utility stripes-hero {
+    background: repeating-linear-gradient(135deg, var(--color-stripe-hero) 0 16px, var(--color-stripe-hero-alt) 16px 32px);
+}
+
+@utility stripes-video {
+    background: repeating-linear-gradient(135deg, var(--color-stripe-video) 0 14px, var(--color-stripe-video-alt) 14px 28px);
+}
+
+@utility stripes-banner {
+    background: repeating-linear-gradient(135deg, var(--dark-panel) 0 16px, var(--color-stripe-banner-alt) 16px 32px);
+}
+
+@utility hero-shade {
+    background: linear-gradient(to top, rgba(14, 26, 19, 0.85) 0%, rgba(14, 26, 19, 0.35) 50%, rgba(14, 26, 19, 0.2) 100%);
+}
+
+@utility banner-shade {
+    background: linear-gradient(to right, rgba(14, 26, 19, 0.92) 0%, rgba(14, 26, 19, 0.6) 60%, rgba(14, 26, 19, 0.35) 100%);
+}
+
+@utility card-shade {
+    background: linear-gradient(to top, rgba(10, 20, 14, 0.92), rgba(10, 20, 14, 0));
+}
+
+/* A sideways row that scrolls by touch and snaps, its scrollbar hidden, bleeding to the screen edge. */
+@utility snap-row {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    margin-inline: calc(-1 * clamp(16px, 4vw, 32px));
+    padding: 0 clamp(16px, 4vw, 32px) 4px;
+    scroll-padding-left: clamp(16px, 4vw, 32px);
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* Rich text a Merchant wrote in a Story Block. */
+@utility prose-story {
+    font-size: clamp(15px, 1.3vw, 17px);
+    line-height: 1.9;
+    color: var(--color-body);
+
+    & p,
+    & ul,
+    & ol,
+    & blockquote {
+        margin: 0 0 16px;
+    }
+
+    & h2,
+    & h3 {
+        margin: 24px 0 10px;
+        color: var(--ink);
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    & ul,
+    & ol {
+        padding-left: 1.4em;
+    }
+
+    & blockquote {
+        border-left: 3px solid var(--gold-accent);
+        padding-left: 14px;
+    }
+
+    & > :last-child {
+        margin-bottom: 0;
+    }
 }

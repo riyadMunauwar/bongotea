@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\PageStatus;
+use App\Enums\SystemPage;
 use App\Models\Page;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -29,5 +30,25 @@ class PageFactory extends Factory
     public function published(): static
     {
         return $this->state(fn (): array => ['status' => PageStatus::Published]);
+    }
+
+    /**
+     * A published System Page at the slug the store opens with.
+     */
+    public function system(SystemPage $role): static
+    {
+        return $this->published()->state(fn (): array => [
+            'title' => $role->getLabel(),
+            'slug' => str_replace('_', '-', $role->value),
+            'system_role' => $role,
+        ]);
+    }
+
+    /**
+     * @param  list<array{type: string, data: array<string, mixed>}>  $blocks
+     */
+    public function withBlocks(array $blocks): static
+    {
+        return $this->state(fn (): array => ['blocks' => $blocks]);
     }
 }

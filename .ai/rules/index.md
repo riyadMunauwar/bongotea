@@ -16,6 +16,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | resources/js/** | .ai/rules/js.md |
 | app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
 | app/Filament/Resources/Orders/** | .ai/rules/orders.md |
+| app/Support/Pages/**, app/Models/Page.php, app/Http/Controllers/PageController.php, app/Filament/Resources/Pages/**, resources/js/components/blocks/**, resources/js/types/blocks.ts | .ai/rules/pages.md |
 | app/Support/Payments/**, app/Models/Payment.php, app/Http/Controllers/PaymentController.php, resources/views/checkout/processing.blade.php, tests/Fixtures/Payments/** | .ai/rules/payments.md |
 | app/Filament/Resources/** | .ai/rules/resources.md |
 | routes/*.php, app/Http/Controllers/TrackingController.php, app/Http/Controllers/CourierController.php | .ai/rules/routes.md |

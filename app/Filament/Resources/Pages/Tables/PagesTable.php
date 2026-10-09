@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Pages\Tables;
 
 use App\Enums\PageStatus;
 use App\Enums\Permission;
+use App\Models\Page;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -13,6 +14,9 @@ use Filament\Tables\Table;
 
 class PagesTable
 {
+    /**
+     * A System Page cannot be ticked, so a bulk delete never reaches one.
+     */
     public static function configure(Table $table): Table
     {
         return $table
@@ -22,9 +26,15 @@ class PagesTable
                     ->sortable(),
 
                 TextColumn::make('slug')
-                    ->prefix('/')
+                    ->formatStateUsing(fn (string $state, Page $record): string => $record->path())
                     ->searchable()
                     ->copyable(),
+
+                TextColumn::make('system_role')
+                    ->label('System Page')
+                    ->badge()
+                    ->color('info')
+                    ->placeholder('—'),
 
                 TextColumn::make('status')
                     ->badge()
@@ -41,6 +51,7 @@ class PagesTable
             ->filters([
                 SelectFilter::make('status')->options(PageStatus::class),
             ])
+            ->checkIfRecordIsSelectableUsing(fn (Page $record): bool => ! $record->isSystemPage())
             ->recordActions([
                 EditAction::make(),
             ])

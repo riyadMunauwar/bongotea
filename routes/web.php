@@ -4,8 +4,9 @@ use App\Enums\Courier;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CourierController;
+use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\StorefrontHomeController;
+use App\Models\Page;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
@@ -15,10 +16,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 /*
-| The storefront: Inertia pages inside the shared header and footer.
+| The storefront: Inertia pages inside the shared header and footer. Home,
+| the System Page, answers at the bare domain; every other Page answers at
+| its slug, registered last of all below.
 */
 
-Route::get('/', StorefrontHomeController::class)->name('home');
+Route::get('/', [PageController::class, 'home'])->name('home');
 
 /*
 | The Order Complete Page, addressed by order number.
@@ -97,3 +100,12 @@ Route::post('/courier/{courier}/notify', [CourierController::class, 'notify'])
     ->withoutMiddleware(PreventRequestForgery::class)
     ->middleware('throttle:courier-announcement')
     ->name('courier.notify');
+
+/*
+| A Page at its slug. Last, so that every fixed route above answers first;
+| the slugs those routes start with are reserved and no Page can hold one.
+*/
+
+Route::get('/{slug}', [PageController::class, 'show'])
+    ->where('slug', Page::SLUG)
+    ->name('page');

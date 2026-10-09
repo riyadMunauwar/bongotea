@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MenuLinkType;
+use App\Enums\SystemPage;
 use App\Models\Page;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\MenuSettings;
@@ -11,6 +12,13 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Inertia\Ssr\SsrRenderFailed;
 use Inertia\Testing\AssertableInertia as Assert;
+
+/**
+ * Home is a System Page, so the bare domain answers only once it exists.
+ */
+beforeEach(function (): void {
+    Page::factory()->system(SystemPage::Home)->create();
+});
 
 /**
  * @return array{label: string, type: string, page_id?: int|null, anchor?: string|null, url?: string|null, note?: string|null}
@@ -24,7 +32,7 @@ it('renders the home page inside the storefront shell, with the store, announcem
     $this->get('/')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('home')
+            ->component('page')
             ->where('store.name', 'Bongotea')
             ->where('store.tagline', 'ব্যবসার জন্য পাইকারি চা')
             ->where('store.logoUrl', null)
