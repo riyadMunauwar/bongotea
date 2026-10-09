@@ -34,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
     /** Codes one address may try in a minute before it is refused. */
     private const SIGN_INS_PER_MINUTE = 10;
 
+    /** Enquiries one address may send in an hour, whatever the numbers. */
+    private const ENQUIRIES_PER_HOUR = 20;
+
     /**
      * Register any application services.
      */
@@ -157,6 +160,16 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('sign-in', fn (Request $request): Limit => Limit::perMinute(
             self::SIGN_INS_PER_MINUTE,
+        )->by($request->ip()));
+
+        /**
+         * Every Enquiry texts the store's own numbers. A number is held to a
+         * few an hour by `EnquiryController`; this holds one address to a
+         * handful of numbers, set above what a carrier's shared address
+         * plausibly sends, as the checkout's is.
+         */
+        RateLimiter::for('enquiry', fn (Request $request): Limit => Limit::perHour(
+            self::ENQUIRIES_PER_HOUR,
         )->by($request->ip()));
 
         /**

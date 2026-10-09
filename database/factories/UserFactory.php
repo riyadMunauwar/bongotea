@@ -215,6 +215,15 @@ class UserFactory extends Factory
     }
 
     /**
+     * A User who calls back the people who asked: one holding a Role that
+     * carries `handle enquiries`, the floor the Enquiries screen sits behind.
+     */
+    public function handlingEnquiries(): static
+    {
+        return $this->holdingRole('Enquiry Handler', Permission::HandleEnquiries);
+    }
+
+    /**
      * A User holding no Role at all, which is what Suspended is: they keep
      * their name on everything they did and lose every way in.
      */

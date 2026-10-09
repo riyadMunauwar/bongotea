@@ -65,7 +65,8 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * `manage settings` because `SettingsCluster::canAccess()` otherwise hides the
  * last entry, `manage catalogue` because `ProductResource::canAccess()`
  * otherwise hides Products, `author pages` because `PageResource::canAccess()`
- * otherwise hides Pages, `count stock` because
+ * otherwise hides Pages, `handle enquiries` because
+ * `EnquiryResource::canAccess()` otherwise hides Enquiries, `count stock` because
  * `InventoryCluster::canAccess()` otherwise hides Inventory, and `view reports`
  * because `ReportsCluster::canAccess()` otherwise hides Reports; between them
  * they pin the gated entries for someone who can see them. As each working area
@@ -79,14 +80,14 @@ it('gives the sidebar 14rem, collapsing to a 3.5rem rail', function () {
  * clusters to what they draw.
  */
 it('draws the sidebar in the order the panel states', function () {
-    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingCatalogue()->authoringPages()->countingStock()->viewingReports()->create());
+    $this->actingAs(User::factory()->workingOrders()->managingSettings()->managingCatalogue()->authoringPages()->handlingEnquiries()->countingStock()->viewingReports()->create());
 
     $labels = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
         ->flatMap(fn ($group) => $group->getItems())
         ->map(fn ($item) => $item->getLabel())
         ->all();
 
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Inventory', 'Reports', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Enquiries', 'Inventory', 'Reports', 'Settings']);
 });
 
 /**

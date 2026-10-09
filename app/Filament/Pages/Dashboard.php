@@ -60,10 +60,10 @@ class Dashboard extends BaseDashboard
 
     /**
      * First, and every top-level entry says where it sits the same way: the
-     * sidebar reads Dashboard 0, Orders 1, Shipments 2, Products 3, Pages 4,
+     * sidebar reads Dashboard 0, Orders 1, Shipments 2, Products 3, Pages 4, Enquiries 5,
      * Reports 50, then Settings at 100 — the work, then the reading, then the
      * configuring. The two clusters sit in the tens and hundreds so that a
-     * category arriving later needs no renumbering of the five above them.
+     * category arriving later needs no renumbering of the six above them.
      * Filament reads an undeclared sort as `-1`, so a resource that leaves
      * this off does not land at the end — it lands above this line.
      */

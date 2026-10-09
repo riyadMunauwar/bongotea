@@ -42,6 +42,7 @@ enum Permission: string implements HasLabel
     case CountStock = 'count stock';
     case ViewReports = 'view reports';
     case ManageSettings = 'manage settings';
+    case HandleEnquiries = 'handle enquiries';
 
     case AbandonParcels = 'abandon parcels';
     case AnswerPartlyDelivered = 'answer partly delivered';
@@ -66,6 +67,7 @@ enum Permission: string implements HasLabel
             self::CountStock => 'Count stock',
             self::ViewReports => 'View reports',
             self::ManageSettings => 'Manage settings',
+            self::HandleEnquiries => 'Handle Enquiries',
             self::AbandonParcels => 'Abandon a parcel',
             self::AnswerPartlyDelivered => 'Answer a part-delivered parcel',
             self::SwitchToCashOnDelivery => 'Switch an Order to Cash on Delivery',
@@ -90,7 +92,8 @@ enum Permission: string implements HasLabel
             self::ManageCatalogue,
             self::CountStock,
             self::ViewReports,
-            self::ManageSettings => self::WORKING_AREAS,
+            self::ManageSettings,
+            self::HandleEnquiries => self::WORKING_AREAS,
             self::AbandonParcels,
             self::AnswerPartlyDelivered,
             self::SwitchToCashOnDelivery,

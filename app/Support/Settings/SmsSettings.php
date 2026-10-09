@@ -9,7 +9,7 @@ use App\Enums\SmsGateway;
  * What the store sends by text message, through which SMS Gateway, and to
  * whom on the Merchant's side.
  *
- * Every Order Text and the Staff Alert is a switch and a Bangla template. The
+ * Every Order Text and each Staff Alert is a switch and a Bangla template. The
  * Order Texts follow one naming rule — the kind's value, then `Enabled` or
  * `Template` — so nothing here lists them by hand. The gateway's own
  * properties follow the Courier rule: its name, then each credential.
@@ -56,6 +56,11 @@ class SmsSettings extends SettingsGroup
     public bool $newOrderAlertEnabled = true;
 
     public string $newOrderAlertTemplate = 'নতুন অর্ডার {order_number}: {name}, {kilograms} কেজি, {total}';
+
+    /** The Staff Alert for a new Enquiry. */
+    public bool $newEnquiryAlertEnabled = true;
+
+    public string $newEnquiryAlertTemplate = 'নতুন প্রশ্ন: {name}, {phone} ({topic})';
 
     public static function key(): string
     {

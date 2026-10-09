@@ -5,6 +5,7 @@ use App\Enums\PaymentMethod;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CourierController;
+use App\Http\Controllers\EnquiryController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
@@ -83,6 +84,15 @@ Route::post('/sign-in', [SigningInController::class, 'signIn'])
     ->name('sign-in');
 
 Route::post('/sign-out', [SigningInController::class, 'signOut'])->name('sign-out');
+
+/*
+| The contact form's question, kept as an Enquiry. Each one texts the store's
+| own numbers, so it is throttled by address as well as by number.
+*/
+
+Route::post('/enquiries', [EnquiryController::class, 'store'])
+    ->middleware('throttle:enquiry')
+    ->name('enquiry.store');
 
 /*
 | The Order Complete Page, addressed by order number.

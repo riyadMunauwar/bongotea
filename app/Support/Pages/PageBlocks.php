@@ -9,6 +9,7 @@ use App\Support\Pages\Blocks\CategoryPanels;
 use App\Support\Pages\Blocks\CategoryTiles;
 use App\Support\Pages\Blocks\ChipsRow;
 use App\Support\Pages\Blocks\ContactCards;
+use App\Support\Pages\Blocks\ContactForm;
 use App\Support\Pages\Blocks\DeliveryChart;
 use App\Support\Pages\Blocks\Faq;
 use App\Support\Pages\Blocks\HeroCarousel;
@@ -61,6 +62,7 @@ class PageBlocks
         PriceMatrix::class,
         DeliveryChart::class,
         MyOrders::class,
+        ContactForm::class,
     ];
 
     /**

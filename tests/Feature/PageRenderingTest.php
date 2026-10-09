@@ -200,6 +200,10 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('faq', ['heading' => 'সাধারণ প্রশ্ন', 'items' => [['question' => 'ডেলিভারি কতদিনে?', 'answer' => 'ঢাকায় ২৪–৪৮ ঘণ্টায়।'], ['question' => 'খালি?', 'answer' => '']]]),
         ['eyebrow' => null, 'heading' => 'সাধারণ প্রশ্ন', 'items' => [['question' => 'ডেলিভারি কতদিনে?', 'answer' => 'ঢাকায় ২৪–৪৮ ঘণ্টায়।']]],
     ],
+    'contact form, its topics trimmed with blanks and repeats left out' => [
+        pageBlock('contact_form', ['heading' => 'মেসেজ পাঠান', 'text' => '', 'topics' => ['অর্ডার', ' দাম ', '', 'অর্ডার', 'ডেলিভারি']]),
+        ['heading' => 'মেসেজ পাঠান', 'text' => null, 'topics' => ['অর্ডার', 'দাম', 'ডেলিভারি']],
+    ],
     'delivery chart, only its wording, since it draws the shared Delivery Bands' => [
         pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
         ['heading' => 'ডেলিভারি চার্জ', 'text' => null],

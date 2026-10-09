@@ -7,6 +7,7 @@ import { CategoryPanels } from './category-panels';
 import { CategoryTiles } from './category-tiles';
 import { ChipsRow } from './chips-row';
 import { ContactCards } from './contact-cards';
+import { ContactForm } from './contact-form';
 import { DeliveryChart } from './delivery-chart';
 import { Faq } from './faq';
 import { HeroCarousel } from './hero-carousel';
@@ -46,6 +47,7 @@ const COMPONENTS: { [Type in keyof BlockPropsByType]: ComponentType<BlockPropsBy
     price_matrix: PriceMatrix,
     delivery_chart: DeliveryChart,
     my_orders: MyOrders,
+    contact_form: ContactForm,
 };
 
 /**

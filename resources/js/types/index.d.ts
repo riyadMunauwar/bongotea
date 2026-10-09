@@ -76,6 +76,7 @@ export type SharedProps = {
         signInCode: string;
         signIn: string;
         signOut: string;
+        enquiry: string;
     };
     /** What the browser's Cart is priced from; prices and fees in minor units. */
     pricing: {

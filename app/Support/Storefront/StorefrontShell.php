@@ -50,6 +50,9 @@ class StorefrontShell
 
     public const SIGN_OUT_PATH = '/sign-out';
 
+    /** Where the Contact Form Block posts a question. */
+    public const ENQUIRY_PATH = '/enquiries';
+
     public function __construct(
         private StoreSettings $store,
         private AnnouncementSettings $announcement,
@@ -142,7 +145,7 @@ class StorefrontShell
      * follow a renamed slug; one not published leaves its button at the
      * installed slug.
      *
-     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string}
+     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string, enquiry: string}
      */
     public function links(): array
     {
@@ -161,6 +164,7 @@ class StorefrontShell
             'signInCode' => self::SIGN_IN_CODE_PATH,
             'signIn' => self::SIGN_IN_PATH,
             'signOut' => self::SIGN_OUT_PATH,
+            'enquiry' => self::ENQUIRY_PATH,
         ];
     }
 

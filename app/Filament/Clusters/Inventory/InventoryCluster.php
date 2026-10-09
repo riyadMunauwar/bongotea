@@ -60,11 +60,11 @@ class InventoryCluster extends Cluster
 
     /**
      * After the work and before the reading: Dashboard 0, Orders 1, Shipments
-     * 2, Products 3, Pages 4, Inventory 10, Reports 50, Settings 100.
+     * 2, Products 3, Pages 4, Enquiries 5, Inventory 10, Reports 50, Settings 100.
      *
      * 10 rather than 5 for the reason Reports is 50 and Settings is 100 — a
      * category arriving later has somewhere to go without renumbering the
-     * five resources above it. Above Reports because counting a shelf is work
+     * six resources above it. Above Reports because counting a shelf is work
      * rather than reading, and below Pages because none of it is on the
      * selling surface at all.
      */

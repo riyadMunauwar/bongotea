@@ -33,9 +33,27 @@ it('opens on the log-only gateway, every text switched on and worded in Bangla',
             'sentEnabled' => true,
             'cancelledEnabled' => true,
             'newOrderAlertEnabled' => true,
+            'newEnquiryAlertEnabled' => true,
             'staffNumbers' => [],
         ])
         ->assertSee('{order_number}');
+});
+
+it('switches the new-Enquiry Staff Alert off and words it, and refuses it switched on with no words', function () {
+    Livewire::test(Sms::class)
+        ->fillForm(['newEnquiryAlertEnabled' => true, 'newEnquiryAlertTemplate' => ''])
+        ->call('save')
+        ->assertHasFormErrors(['newEnquiryAlertTemplate'])
+        ->fillForm(['newEnquiryAlertEnabled' => false, 'newEnquiryAlertTemplate' => 'প্রশ্ন {name} {phone}'])
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertSee('{topic}');
+
+    app()->forgetInstance(SmsSettings::class);
+    $settings = app(SmsSettings::class);
+
+    expect($settings->newEnquiryAlertEnabled)->toBeFalse()
+        ->and($settings->newEnquiryAlertTemplate)->toBe('প্রশ্ন {name} {phone}');
 });
 
 it('chooses GioSMS with its token sealed, and saves the staff numbers and the Merchant\'s wording', function () {

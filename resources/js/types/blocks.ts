@@ -185,6 +185,13 @@ export type MyOrdersProps = {
     }[];
 };
 
+export type ContactFormProps = {
+    heading: string | null;
+    text: string | null;
+    /** The chips a question's topic is picked from; the first is picked to begin with. */
+    topics: string[];
+};
+
 export type BlockPropsByType = {
     hero_carousel: HeroCarouselProps;
     promise_strip: PromiseStripProps;
@@ -207,6 +214,7 @@ export type BlockPropsByType = {
     price_matrix: PriceMatrixProps;
     delivery_chart: DeliveryChartProps;
     my_orders: MyOrdersProps;
+    contact_form: ContactFormProps;
 };
 
 export type BlockType = keyof BlockPropsByType;

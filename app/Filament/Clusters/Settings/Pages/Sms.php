@@ -6,6 +6,7 @@ use App\Enums\OrderText;
 use App\Enums\SmsGateway;
 use App\Support\PhoneNumber;
 use App\Support\Settings\SmsSettings;
+use App\Support\Sms\EnquiryAlerts;
 use App\Support\Sms\OrderTexts;
 use BackedEnum;
 use Closure;
@@ -20,8 +21,8 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * What the store sends by text message: through which SMS Gateway, each
- * Order Text and the Staff Alert switched on or off and worded, and the
- * Merchant's own numbers the alert goes to.
+ * Order Text and Staff Alert switched on or off and worded, and the
+ * Merchant's own numbers the alerts go to.
  */
 class Sms extends SettingsPage
 {
@@ -76,8 +77,8 @@ class Sms extends SettingsPage
                     OrderText::cases(),
                 ))),
 
-            Section::make('Staff Alert')
-                ->description('Sent to the store\'s own numbers the moment a new Order is captured, and never to a Customer. '.self::placeholders())
+            Section::make('Staff Alerts')
+                ->description('Sent to the store\'s own numbers the moment a new Order is captured or a new Enquiry arrives, and never to a Customer.')
                 ->schema([
                     TagsInput::make('staffNumbers')
                         ->label('Staff numbers')
@@ -91,7 +92,9 @@ class Sms extends SettingsPage
                         })
                         ->helperText('Every number the alert goes to. Press Enter after each.'),
 
-                    ...self::text('newOrderAlert', 'New Order'),
+                    ...self::text('newOrderAlert', 'New Order', self::placeholders()),
+
+                    ...self::text('newEnquiryAlert', 'New Enquiry', 'The wording may use '.implode(', ', EnquiryAlerts::PLACEHOLDERS).'.'),
                 ]),
         ];
     }
@@ -101,7 +104,7 @@ class Sms extends SettingsPage
      *
      * @return array{Toggle, Textarea}
      */
-    private static function text(string $prefix, string $label): array
+    private static function text(string $prefix, string $label, ?string $helperText = null): array
     {
         return [
             Toggle::make("{$prefix}Enabled")
@@ -112,6 +115,7 @@ class Sms extends SettingsPage
                 ->hiddenLabel()
                 ->rows(2)
                 ->maxLength(1000)
+                ->helperText($helperText)
                 ->required(fn (Get $get): bool => (bool) $get("{$prefix}Enabled")),
         ];
     }
