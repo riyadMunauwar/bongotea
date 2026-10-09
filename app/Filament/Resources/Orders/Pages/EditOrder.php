@@ -10,11 +10,15 @@ use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Customer;
+use App\Models\Order;
+use App\Support\Orders\Repricing;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class EditOrder extends EditRecord
 {
@@ -110,6 +114,43 @@ class EditOrder extends EditRecord
         $data['customer_phone'] = $customer->phone;
 
         return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $data['lines'] = Repricing::stateOf($this->getRecord());
+
+        return $data;
+    }
+
+    /**
+     * The Order's details are saved as they are; its lines only when they
+     * changed, and then the whole Order is repriced at today's prices in the
+     * same transaction. Untouched lines keep what was agreed at Capture. An
+     * Order with a Shipment sends no lines at all — the form holds them shut —
+     * and `Repricing` refuses it besides.
+     *
+     * @param  Order  $record
+     * @param  array<string, mixed>  $data
+     */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        $lines = $data['lines'] ?? null;
+        unset($data['lines']);
+
+        return DB::transaction(function () use ($record, $data, $lines): Order {
+            $record->update($data);
+
+            if (is_array($lines) && Repricing::changes($record, $lines)) {
+                app(Repricing::class)->apply($record, $lines, auth()->user());
+            }
+
+            return $record;
+        });
     }
 
     protected function getRedirectUrl(): string

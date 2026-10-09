@@ -23,9 +23,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * same reason (ADR-0022): a Supply arriving next month must not rewrite what
  * this sale earned. Null is unknown rather than free — a Product nothing has
  * been recorded buying stamps none.
+ *
+ * `tier_min`/`tier_max` name which of its Product's Tiers the price came
+ * from, as the range stood when it was priced (ADR-0031). A line under a Price
+ * Override records no Tier: `price_override_reason` and `price_overridden_by`
+ * say why and who instead, and its `unit_price` is kept through any Repricing.
  */
 #[ObservedBy(OrderLineObserver::class)]
-#[Fillable(['product_id', 'product_name', 'unit_price', 'unit_cost', 'quantity'])]
+#[Fillable(['product_id', 'product_name', 'unit_price', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
 class OrderLine extends Model
 {
     /** @use HasFactory<OrderLineFactory> */
@@ -38,6 +43,8 @@ class OrderLine extends Model
             'unit_cost' => 'integer',
             'quantity' => 'integer',
             'line_total' => 'integer',
+            'tier_min' => 'integer',
+            'tier_max' => 'integer',
         ];
     }
 
@@ -64,5 +71,22 @@ class OrderLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    /**
+     * The User who set this line's Price Override, filed away or not, so the
+     * name stays on the record after they leave.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function priceOverriddenBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'price_overridden_by')->withTrashed();
+    }
+
+    /** Whether a User set this line's price by hand, which only an override's reason says. */
+    public function isPriceOverridden(): bool
+    {
+        return $this->price_override_reason !== null;
     }
 }

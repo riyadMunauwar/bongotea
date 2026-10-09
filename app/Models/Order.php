@@ -201,6 +201,16 @@ class Order extends Model
     }
 
     /**
+     * Whether any parcel was ever made for this Order, whatever became of it.
+     * Its lines are locked from then on: what the courier will collect has
+     * already been handed to them, so the Order is never repriced under it.
+     */
+    public function hasAnyShipment(): bool
+    {
+        return $this->shipments()->exists();
+    }
+
+    /**
      * Whether a parcel of this Order's ever got to the door — all of it, or
      * some of it.
      *

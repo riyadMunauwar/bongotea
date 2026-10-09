@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Pages;
 
 use App\Enums\OrderStatus;
 use App\Filament\Resources\Orders\OrderResource;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,11 +14,14 @@ class ListOrders extends ListRecords
     protected static string $resource = OrderResource::class;
 
     /**
-     * No create action: an Order exists because a visitor placed one.
+     * One way in by hand: an Order taken by phone.
      */
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            CreateAction::make()
+                ->label('Take a phone order'),
+        ];
     }
 
     /**

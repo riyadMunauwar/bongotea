@@ -3,13 +3,18 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
+use App\Enums\Permission;
 use App\Models\Order;
+use App\Models\Product;
 use App\Support\Money;
+use App\Support\Orders\Repricing;
 use App\Support\PhoneNumber;
+use App\Support\Pricing\PricedLine;
+use App\Support\Pricing\Tier;
 use App\Support\Settings\GeneralSettings;
 use Closure;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -20,10 +25,13 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Str;
+use Livewire\Component;
+use WeakMap;
 
 /**
- * What may be changed about an Order after Capture, in the shape of the
- * document it edits.
+ * An Order taken by phone, and what may be changed about one after Capture,
+ * in the shape of the document it edits.
  *
  * Block for block this is OrderInfolist, so opening the editor moves nothing on
  * screen except which cells accept typing. Everything fixed at Capture renders
@@ -31,11 +39,12 @@ use Filament\Support\Icons\Heroicon;
  * something you might be able to fix, and the whole point of this screen is
  * that most of it cannot be.
  *
- * Filament hands you full-field editing by default, so everything agreed at
- * Capture has to be *actively* held shut here rather than assumed immutable.
- * What was agreed is what gets collected at the door: a price edited after the
- * fact means a fulfiller asking for a figure the customer never accepted, and
- * in COD that is a refused parcel and a courier fee.
+ * No price is ever typed here except a Price Override. What an Order holds —
+ * which Products and how many Kilograms — may change until it has a Shipment,
+ * and every change reprices the whole Order through the pricing module
+ * (`Repricing`), showing the old total beside the new one before it is saved.
+ * What was agreed is what gets collected at the door, so the User reads the
+ * new figure to the Customer before committing it.
  */
 class OrderForm
 {
@@ -50,6 +59,13 @@ class OrderForm
      */
     private const RECOMPUTE_DEBOUNCE = 500;
 
+    /**
+     * The figures already worked out, per component and per set of rows.
+     *
+     * @var WeakMap<Component, array<string, array<string, mixed>>>|null
+     */
+    private static ?WeakMap $figures = null;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -62,10 +78,12 @@ class OrderForm
                             ->label('Order number')
                             ->state(fn (?Order $record): ?string => $record?->order_number)
                             ->copyable()
-                            ->weight('bold'),
+                            ->weight('bold')
+                            ->visibleOn('edit'),
 
                         Select::make('status')
                             ->options(OrderStatus::class)
+                            ->default(OrderStatus::New->value)
                             ->required()
                             ->native(false)
                             ->hintIcon(
@@ -76,9 +94,11 @@ class OrderForm
                         TextEntry::make('created_at')
                             ->label('Taken')
                             ->state(fn (?Order $record) => $record?->created_at)
-                            ->dateTime(),
+                            ->dateTime()
+                            ->visibleOn('edit'),
 
-                        OrderDocument::paymentMethod(),
+                        OrderDocument::paymentMethod()
+                            ->visibleOn('edit'),
                     ]),
 
                 /**
@@ -170,59 +190,91 @@ class OrderForm
 
                 ...OrderDocument::shipments(),
 
+                /**
+                 * The lines are priced by the pricing module and nothing else:
+                 * a User chooses Products and Kilograms, and every price on
+                 * screen and on the saved Order is today's Tier Price for the
+                 * whole Order's Kilograms. Changing any line reprices every
+                 * line (`Repricing`), which is why the figures follow the
+                 * form rather than the stored Order the moment a row moves.
+                 *
+                 * Not bound to the relationship: `Repricing` writes the lines,
+                 * so no figure on them is ever taken from what the form sent.
+                 */
                 Section::make('Items')
                     ->columnSpanFull()
+                    ->description(fn (?Order $record): ?string => $record?->hasAnyShipment()
+                        ? 'Locked: this order has been handed to a courier, so what it holds can no longer change.'
+                        : null)
                     ->schema([
                         Repeater::make('lines')
-                            ->relationship()
                             ->hiddenLabel()
-                            /** An Order's shape was fixed at Capture. Only its numbers move. */
-                            ->addable(false)
-                            ->deletable(false)
+                            ->required()
+                            ->minItems(1)
+                            ->defaultItems(1)
                             ->reorderable(false)
-                            ->table([
-                                TableColumn::make('Product'),
-                                TableColumn::make('Unit price')
-                                    ->alignment(Alignment::End),
-                                TableColumn::make('Qty')
-                                    ->alignment(Alignment::End)
-                                    ->markAsRequired(),
-                                TableColumn::make('Line total')
-                                    ->alignment(Alignment::End),
-                            ])
+                            ->addActionLabel('Add a tea')
+                            ->disabled(fn (?Order $record): bool => $record?->hasAnyShipment() ?? false)
+                            ->columns(4)
                             ->schema([
-                                TextEntry::make('product_name')
+                                Hidden::make('id'),
+
+                                Select::make('product_id')
                                     ->label('Product')
-                                    ->hintIcon(
-                                        Heroicon::OutlinedQuestionMarkCircle,
-                                        tooltip: 'As sold. The product may have been renamed or removed since, which is why the name is fixed here.',
-                                    ),
-
-                                TextEntry::make('unit_price')
-                                    ->label('Unit price')
-                                    ->alignment(Alignment::End)
-                                    ->formatStateUsing(fn (mixed $state): string => Money::format((int) $state))
-                                    ->hintIcon(
-                                        Heroicon::OutlinedLockClosed,
-                                        tooltip: 'The price agreed at Capture. Totals recompute from this, never from the price the product carries today.',
-                                    ),
-
-                                TextInput::make('quantity')
-                                    ->label('Qty')
+                                    ->options(fn (?Order $record): array => self::productOptions($record))
                                     ->required()
-                                    ->numeric()
+                                    ->searchable()
+                                    ->distinct()
+                                    ->live()
+                                    ->columnSpan(2),
+
+                                TextInput::make('kilograms')
+                                    ->label('Kilograms')
+                                    ->required()
+                                    ->integer()
                                     ->minValue(1)
                                     ->maxValue(fn (): int => app(GeneralSettings::class)->checkoutMaxQuantity)
+                                    ->suffix('kg')
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
-                                /** Recomputed from state, so it moves as the quantity beside it is typed. */
+                                TextEntry::make('price_per_kilogram')
+                                    ->label('Price per kg')
+                                    ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::linePrice(
+                                        self::figures($livewire, $get('../../lines'), $record)['lines'][self::itemKey($component)] ?? null,
+                                    )),
+
+                                /**
+                                 * A Price Override, for a User who may set one:
+                                 * a deal agreed with a buyer. Kept through any
+                                 * later Repricing, and still counted toward the
+                                 * Order's Kilograms. Hidden from everyone else,
+                                 * whose saves leave every override as it was.
+                                 */
+                                TextInput::make('override_price')
+                                    ->label('Price set by hand')
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
+                                    ->suffix('per kg')
+                                    ->visible(fn (): bool => self::canOverridePrices())
+                                    ->live(debounce: self::RECOMPUTE_DEBOUNCE)
+                                    ->hintIcon(
+                                        Heroicon::OutlinedQuestionMarkCircle,
+                                        tooltip: 'Leave blank to charge the price the store works out. A price set here stays through later changes to the order.',
+                                    ),
+
+                                TextInput::make('override_reason')
+                                    ->label('Why')
+                                    ->maxLength(500)
+                                    ->required(fn (Get $get): bool => filled($get('override_price')))
+                                    ->visible(fn (): bool => self::canOverridePrices())
+                                    ->columnSpan(2),
+
                                 TextEntry::make('line_total')
                                     ->label('Line total')
-                                    ->alignment(Alignment::End)
-                                    ->state(fn (Get $get): string => Money::format(self::lineTotal([
-                                        'unit_price' => $get('unit_price'),
-                                        'quantity' => $get('quantity'),
-                                    ]))),
+                                    ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::money(
+                                        self::figures($livewire, $get('../../lines'), $record)['lines'][self::itemKey($component)]['total'] ?? null,
+                                    )),
                             ]),
                     ]),
 
@@ -238,28 +290,18 @@ class OrderForm
                     ->schema([
                         TextEntry::make('subtotal')
                             ->alignment(Alignment::End)
-                            ->state(fn (Get $get): string => Money::format(self::subtotal($get))),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['subtotal'])),
 
                         /**
-                         * Hinted with the arrangement agreed at Capture, which
-                         * is fixed the way a Product's name is: the amount can
-                         * be corrected on the call, but what the Customer chose
-                         * is history.
+                         * Never typed: the Delivery Band the Order's total
+                         * Kilograms fall in decides it, read afresh whenever
+                         * the Order is repriced.
                          */
-                        TextInput::make('delivery_charge')
+                        TextEntry::make('delivery_charge')
                             ->label('Delivery')
-                            ->required()
-                            ->numeric()
-                            ->minValue(0)
-                            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
-                            ->hint(fn (?Order $record): ?string => $record?->delivery_label)
-                            ->live(debounce: self::RECOMPUTE_DEBOUNCE)
-                            ->hintIcon(
-                                Heroicon::OutlinedQuestionMarkCircle,
-                                tooltip: 'Editable, because what the courier charges is agreed on the call. The total follows automatically.',
-                            )
-                            ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::toMajorString($state))
-                            ->dehydrateStateUsing(fn (string $state): int => Money::toMinorUnits($state)),
+                            ->alignment(Alignment::End)
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['delivery']))
+                            ->hint(fn (Get $get, Component $livewire, ?Order $record): ?string => self::figures($livewire, $get('lines'), $record)['band']),
 
                         /** Includes delivery, so nobody does arithmetic against a cash payment. */
                         TextEntry::make('total')
@@ -267,8 +309,23 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->weight('bold')
                             ->size(TextSize::Large)
-                            ->state(fn (Get $get): string => Money::format(
-                                self::subtotal($get) + Money::toMinorUnits($get('delivery_charge') ?? 0)
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['total'])),
+
+                        /**
+                         * What a User reads out on the confirmation call
+                         * before saving, because the next thing they do is
+                         * tell the Customer.
+                         */
+                        TextEntry::make('repricing')
+                            ->label('Repriced')
+                            ->alignment(Alignment::End)
+                            ->color('warning')
+                            ->weight('bold')
+                            ->visible(fn (Get $get, Component $livewire, ?Order $record): bool => $record !== null && self::figures($livewire, $get('lines'), $record)['repriced'])
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): ?string => $record === null ? null : sprintf(
+                                'was %s → now %s',
+                                Money::format($record->total),
+                                self::money(self::figures($livewire, $get('lines'), $record)['total']),
                             )),
                     ]),
             ]);
@@ -286,38 +343,144 @@ class OrderForm
         return fn (?string $state): ?string => filled($state) ? $state : null;
     }
 
-    /**
-     * What one line costs, from the price snapshotted at Capture.
-     *
-     * Mirrors OrderLineObserver::saving so the figure on screen is the figure
-     * that will be stored — never the Product's current price, which is the bug
-     * the snapshot exists to close.
-     *
-     * @param  array{unit_price?: mixed, quantity?: mixed}  $line
-     */
-    private static function lineTotal(array $line): int
+    private static function canOverridePrices(): bool
     {
-        return (int) ($line['unit_price'] ?? 0) * (int) ($line['quantity'] ?? 0);
+        return auth()->user()?->can(Permission::OverridePrices) ?? false;
     }
 
     /**
-     * The subtotal as the form currently stands, before anything is saved.
+     * The Products a line may hold: what the storefront sells now, and
+     * whatever this Order's lines already hold, so a line whose Product has
+     * since been taken out of the catalogue still shows what it is.
      *
-     * Read from form state rather than from the Order, because the Order's
-     * stored subtotal is still the pre-edit figure until OrderLineObserver has
-     * run — which is only after a save this screen has not performed yet.
+     * @return array<int, string>
      */
-    private static function subtotal(Get $get): int
+    private static function productOptions(?Order $record): array
     {
-        $lines = $get('lines');
+        $onSale = Product::query()
+            ->published()
+            ->where('is_available', true)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
 
-        if (! is_array($lines)) {
-            return 0;
+        $held = $record === null ? [] : Product::withTrashed()
+            ->whereKey($record->lines()->pluck('product_id')->filter())
+            ->pluck('name', 'id')
+            ->all();
+
+        return $onSale + $held;
+    }
+
+    /**
+     * The figures the form shows, as it currently stands. An Order whose
+     * lines are untouched shows what was agreed at Capture, whatever its
+     * Products cost today; a new Order, or one whose lines have moved, shows
+     * the whole of it priced afresh — which is what saving will write.
+     *
+     * Asked by every figure on the screen, so it is worked out once per
+     * request for the rows as they stand: the component is a fresh object on
+     * every Livewire request, so nothing outlives the render it was for.
+     *
+     * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
+     */
+    private static function figures(Component $livewire, mixed $lines, ?Order $record): array
+    {
+        $lines = is_array($lines) ? $lines : [];
+        self::$figures ??= new WeakMap;
+        $worked = self::$figures[$livewire] ?? [];
+        $key = md5(serialize($lines));
+
+        if (! array_key_exists($key, $worked)) {
+            $worked[$key] = self::workOutFigures($lines, $record);
+            self::$figures[$livewire] = $worked;
         }
 
-        return array_sum(array_map(
-            fn (mixed $line): int => self::lineTotal(is_array($line) ? $line : []),
-            $lines,
-        ));
+        return $worked[$key];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $lines
+     * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
+     */
+    private static function workOutFigures(array $lines, ?Order $record): array
+    {
+        if ($record !== null && ! Repricing::changes($record, $lines)) {
+            $stored = $record->lines()->get()->keyBy('id');
+            $byKey = [];
+
+            foreach ($lines as $key => $row) {
+                $line = $stored->get($row['id'] ?? null);
+
+                if ($line !== null) {
+                    $byKey[$key] = [
+                        'price' => $line->unit_price,
+                        'total' => $line->line_total,
+                        'note' => self::lineNote($line->isPriceOverridden(), $line->tier_min === null ? null : new Tier($line->tier_min, $line->tier_max, $line->unit_price)),
+                    ];
+                }
+            }
+
+            return [
+                'repriced' => false,
+                'subtotal' => $record->subtotal,
+                'delivery' => $record->delivery_charge,
+                'band' => $record->delivery_label,
+                'total' => $record->total,
+                'lines' => $byKey,
+            ];
+        }
+
+        $preview = app(Repricing::class)->preview($lines);
+
+        if ($preview === null) {
+            return ['repriced' => true, 'subtotal' => null, 'delivery' => null, 'band' => null, 'total' => null, 'lines' => []];
+        }
+
+        return [
+            'repriced' => true,
+            'subtotal' => $preview['cart']->subtotal,
+            'delivery' => $preview['cart']->deliveryCharge,
+            'band' => $preview['cart']->deliveryBand?->label(),
+            'total' => $preview['cart']->total,
+            'lines' => array_map(fn (PricedLine $line): array => [
+                'price' => $line->tierPrice,
+                'total' => $line->lineTotal,
+                'note' => self::lineNote($line->overridden, $line->tier),
+            ], $preview['lines']),
+        ];
+    }
+
+    /** Where a line's price came from: the Tier it fell in, or a User's hand. */
+    private static function lineNote(bool $overridden, ?Tier $tier): ?string
+    {
+        return match (true) {
+            $overridden => 'set by hand',
+            $tier === null => null,
+            default => $tier->label().' tier',
+        };
+    }
+
+    /**
+     * @param  array{price: int, total: int, note: string|null}|null  $line
+     */
+    private static function linePrice(?array $line): string
+    {
+        if ($line === null) {
+            return '—';
+        }
+
+        return Money::format($line['price']).($line['note'] === null ? '' : " · {$line['note']}");
+    }
+
+    private static function money(?int $minorUnits): string
+    {
+        return $minorUnits === null ? '—' : Money::format($minorUnits);
+    }
+
+    /** The key a repeater row is held under, read off the row's own state path. */
+    private static function itemKey(TextEntry $component): string
+    {
+        return Str::afterLast($component->getContainer()->getStatePath(), '.');
     }
 }

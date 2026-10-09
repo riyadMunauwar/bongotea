@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -126,10 +127,14 @@ class OrderInfolist
                                         tooltip: 'As sold. The product may have been renamed or removed since.',
                                     ),
 
+                                /** A Price Override says so, with its reason and who gave it. */
                                 TextEntry::make('unit_price')
                                     ->label('Unit price')
                                     ->alignment(Alignment::End)
-                                    ->formatStateUsing(fn (int $state): string => Money::format($state)),
+                                    ->formatStateUsing(fn (int $state): string => Money::format($state))
+                                    ->helperText(fn (OrderLine $record): ?string => $record->isPriceOverridden()
+                                        ? 'Set by hand'.($record->priceOverriddenBy ? " by {$record->priceOverriddenBy->name}" : '').": {$record->price_override_reason}"
+                                        : null),
 
                                 TextEntry::make('quantity')
                                     ->label('Qty')

@@ -37,3 +37,8 @@ Its name is a constant rather than a literal because the Dashboard links straigh
 A trashed Order can be ticked (`OrderResource::getEloquentQuery()` drops the soft-delete scope), and `CourierBooker::write()` reads the Order back through the scope still on the model, so `BatchBooker` catches `ModelNotFoundException` and reports it rather than letting one deleted row unwind two hundred.
 
 Testing: `Livewire::test(ListOrders::class)->set('activeTab', 'all')->selectTableRecords($ids)->callAction(TestAction::make('bookBatchWithCourier')->table()->bulk(), data: [...])`. `Http::fake()` clears what has been recorded so far, so lay a second fake deliberately when a count is meant to be "since then".
+
+## Order lines are written by Repricing, never by the repeater
+OrderForm's `lines` repeater is not bound to the relationship: EditOrder/CreateOrder hand the rows to `App\Support\Orders\Repricing`, which prices them through PriceBook and writes the lines, Delivery Charge and band. EditOrder reprices only when `Repricing::changes()` says the rows differ — untouched lines keep the Capture prices. An Order with any Shipment (`Order::hasAnyShipment()`) has the repeater disabled and `apply()` throws. Override fields are hidden without `Permission::OverridePrices`, so their state is not dehydrated; `apply()` carries every existing override over for such a User rather than reading the absence as removal.
+
+Testing: `fillForm(['lines' => ...])` merges repeater rows (a removed row survives, a default empty row stays on create); use `->set('data.lines', [...])` to replace them.

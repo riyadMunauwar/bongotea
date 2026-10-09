@@ -49,6 +49,7 @@ enum Permission: string implements HasLabel
     case VoidSupplies = 'void supplies';
     case DeleteOrders = 'delete orders';
     case DeletePages = 'delete pages';
+    case OverridePrices = 'override prices';
 
     /** The heading a working area sits under on the Roles screen. */
     public const WORKING_AREAS = 'Working areas';
@@ -71,6 +72,7 @@ enum Permission: string implements HasLabel
             self::VoidSupplies => 'Void a Supply',
             self::DeleteOrders => 'Delete an Order',
             self::DeletePages => 'Delete a Page',
+            self::OverridePrices => 'Override a price on an Order',
         };
     }
 
@@ -94,7 +96,8 @@ enum Permission: string implements HasLabel
             self::SwitchToCashOnDelivery,
             self::VoidSupplies,
             self::DeleteOrders,
-            self::DeletePages => self::IRREVERSIBLE_ACTS,
+            self::DeletePages,
+            self::OverridePrices => self::IRREVERSIBLE_ACTS,
         };
     }
 

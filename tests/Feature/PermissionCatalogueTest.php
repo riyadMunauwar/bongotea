@@ -13,7 +13,7 @@ use Spatie\Permission\Models\Permission as PermissionRow;
  * that the sync moves in one direction: the enum says, the table follows.
  */
 it('names every Permission the product has, once each', function () {
-    expect(Permission::cases())->toHaveCount(12)
+    expect(Permission::cases())->toHaveCount(13)
         ->and(Permission::names())->toBe(array_unique(Permission::names()));
 });
 
@@ -33,11 +33,11 @@ it('gives every Permission a label and one of the two headings', function (Permi
         ->and($permission->group())->toBeIn([Permission::WORKING_AREAS, Permission::IRREVERSIBLE_ACTS]);
 })->with(Permission::cases());
 
-it('splits the catalogue into six working areas and six acts that cannot be undone', function () {
+it('splits the catalogue into six working areas and seven acts that cannot be undone', function () {
     $grouped = collect(Permission::cases())->groupBy(fn (Permission $permission) => $permission->group());
 
     expect($grouped[Permission::WORKING_AREAS])->toHaveCount(6)
-        ->and($grouped[Permission::IRREVERSIBLE_ACTS])->toHaveCount(6);
+        ->and($grouped[Permission::IRREVERSIBLE_ACTS])->toHaveCount(7);
 });
 
 it('writes a row for every case the installation has not got', function () {

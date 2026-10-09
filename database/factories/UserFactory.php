@@ -128,6 +128,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * A User who may also set a line's price by hand: they work Orders and
+     * hold `override prices` on top, because a price nobody can explain is a
+     * margin nobody can trust.
+     */
+    public function overridingPrices(): static
+    {
+        return $this->holdingRole('Price Negotiator', Permission::WorkOrders, Permission::OverridePrices);
+    }
+
+    /**
      * A User who may also delete, force-delete and restore an Order: they work
      * Orders and hold `delete orders` on top, so the queue cannot be tidied away
      * by whoever is merely working it.

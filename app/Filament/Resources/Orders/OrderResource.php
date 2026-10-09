@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders;
 
 use App\Enums\OrderStatus;
 use App\Enums\Permission;
+use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
@@ -22,10 +23,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 /**
  * The fulfilment surface.
  *
- * There is deliberately no create page: an Order comes into existence at
- * Capture, when a visitor submits a Checkout. An Order typed in here would have
- * no Page behind it and no Customer resolved from a phone number, so it would
- * be a different thing wearing the same name.
+ * An Order comes into existence at Capture: when a visitor submits the
+ * Checkout, or when a User saves an Order taken by phone on the create page,
+ * which prices it through the pricing module (`Repricing`).
  */
 class OrderResource extends Resource
 {
@@ -167,6 +167,7 @@ class OrderResource extends Resource
     {
         return [
             'index' => ListOrders::route('/'),
+            'create' => CreateOrder::route('/create'),
             'view' => ViewOrder::route('/{record}'),
             'edit' => EditOrder::route('/{record}/edit'),
         ];

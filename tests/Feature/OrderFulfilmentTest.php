@@ -70,15 +70,8 @@ it('opens the fulfilment screens', function (string $page) {
     'the queue' => '/admin/orders',
     'one order' => '/admin/orders/{record}',
     'working an order' => '/admin/orders/{record}/edit',
+    'taking a phone order' => '/admin/orders/create',
 ]);
-
-it('offers no way to type an order in by hand', function () {
-    /**
-     * An Order exists because a visitor placed one. One typed here would have
-     * no Page behind it and no Customer resolved from a phone number.
-     */
-    $this->get('/admin/orders/create')->assertNotFound();
-});
 
 it('answers a record address that is not an id without asking the database, because PostgreSQL raises on it', function () {
     expect(Route::getRoutes()->getByName('filament.admin.resources.orders.view')->wheres)
@@ -233,39 +226,40 @@ it('records the outcome of the confirmation call', function () {
     expect($order->refresh()->status)->toBe(OrderStatus::Confirmed);
 });
 
-it('recomputes the totals from the captured price when a quantity is corrected', function () {
+it('reprices at today\'s price when a quantity is corrected', function () {
     $order = capturedOrder(price: 99000);
 
     /**
-     * The product is repriced between Capture and the call. Editing the order
-     * must not notice.
+     * The product is repriced between Capture and the call. Correcting a
+     * quantity prices the whole Order again as if captured now (Repricing).
      */
     $order->lines()->sole()->product->update(['price' => 129000]);
 
-    editingLines($order, fn (array $line): array => [...$line, 'quantity' => 3]);
+    editingLines($order, fn (array $line): array => [...$line, 'kilograms' => 3]);
 
     $order->refresh();
 
-    expect($order->lines()->sole()->unit_price)->toBe(99000)
-        ->and($order->lines()->sole()->line_total)->toBe(297000)
-        ->and($order->subtotal)->toBe(297000)
-        ->and($order->total)->toBe(303000);
+    /** 3 kg sits in the ৳120 Delivery Band. */
+    expect($order->lines()->sole()->unit_price)->toBe(129000)
+        ->and($order->lines()->sole()->line_total)->toBe(387000)
+        ->and($order->subtotal)->toBe(387000)
+        ->and($order->total)->toBe(399000);
 });
 
-it('keeps the total including delivery when the delivery charge is edited', function () {
+it('never takes a typed delivery charge, which the Delivery Band decides', function () {
     $order = capturedOrder(price: 99000);
 
     Livewire::test(EditOrder::class, ['record' => $order->getKey()])
-        ->fillForm(['delivery_charge' => '120'])
+        ->fillForm(['delivery_charge' => '1'])
         ->call('save')
         ->assertHasNoFormErrors();
 
     $order->refresh();
 
     /** The figure the courier collects at the door always includes delivery. */
-    expect($order->delivery_charge)->toBe(12000)
+    expect($order->delivery_charge)->toBe(6000)
         ->and($order->subtotal)->toBe(99000)
-        ->and($order->total)->toBe(111000);
+        ->and($order->total)->toBe(105000);
 });
 
 it('refuses to let the captured price be edited away', function () {
@@ -316,24 +310,33 @@ it('shows what a corrected quantity will cost before anything is saved', functio
     $lines = [];
 
     foreach ($component->get('data.lines') as $key => $line) {
-        $lines[$key] = [...$line, 'quantity' => 3];
+        $lines[$key] = [...$line, 'kilograms' => 3];
     }
 
     $component->fillForm(['lines' => $lines])
         ->assertSeeText(Money::format(297000))
-        ->assertSeeText(Money::format(303000));
+        ->assertSeeText(Money::format(309000));
 
     /** Nothing was saved: those figures came from form state, not the Order. */
     expect($order->refresh()->subtotal)->toBe(99000)
         ->and($order->total)->toBe(105000);
 });
 
-it('shows what a corrected delivery charge will cost before anything is saved', function () {
+it('shows the delivery charge a corrected quantity moves into before anything is saved', function () {
     $order = capturedOrder(price: 99000);
 
-    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
-        ->fillForm(['delivery_charge' => '120'])
-        ->assertSeeText(Money::format(111000));
+    $component = Livewire::test(EditOrder::class, ['record' => $order->getKey()]);
+
+    $lines = [];
+
+    foreach ($component->get('data.lines') as $key => $line) {
+        $lines[$key] = [...$line, 'kilograms' => 6];
+    }
+
+    /** 6 kg is the 6–10 kg Delivery Band, ৳150. */
+    $component->fillForm(['lines' => $lines])
+        ->assertSeeText(Money::format(15000))
+        ->assertSeeText(Money::format(609000));
 
     expect($order->refresh()->total)->toBe(105000);
 });
@@ -468,14 +471,15 @@ it('refuses a corrected number no courier could call', function () {
 });
 
 /**
- * The two corrections a confirmation call actually produces, made together.
+ * A corrected quantity moves the subtotal and, through the Delivery Band, the
+ * Delivery Charge in one save.
  *
- * Filament saves the repeater's lines before it saves the Order, and the line
- * observer recalculates through its own `belongsTo` — a different instance from
- * the one being edited. The Order must not then write a total derived from the
+ * Repricing saves the lines before it saves the Order, and the line observer
+ * recalculates through its own `belongsTo` — a different instance from the one
+ * being edited. The Order must not then write a total derived from the
  * subtotal it was still holding.
  */
-it('keeps the total matching its parts when a quantity and the delivery charge are corrected together', function () {
+it('keeps the total matching its parts when a corrected quantity moves the delivery charge too', function () {
     $order = capturedOrder(price: 99000);
 
     $component = Livewire::test(EditOrder::class, ['record' => $order->getKey()]);
@@ -483,10 +487,10 @@ it('keeps the total matching its parts when a quantity and the delivery charge a
     $lines = [];
 
     foreach ($component->get('data.lines') as $key => $line) {
-        $lines[$key] = [...$line, 'quantity' => 3];
+        $lines[$key] = [...$line, 'kilograms' => 3];
     }
 
-    $component->fillForm(['lines' => $lines, 'delivery_charge' => '120'])
+    $component->fillForm(['lines' => $lines])
         ->call('save')
         ->assertHasNoFormErrors();
 
@@ -507,12 +511,12 @@ it('works an order that has been deleted without falling over', function () {
     $order = capturedOrder(price: 99000);
     $order->delete();
 
-    editingLines($order, fn (array $line): array => [...$line, 'quantity' => 2]);
+    editingLines($order, fn (array $line): array => [...$line, 'kilograms' => 2]);
 
     $order->refresh();
 
     expect($order->subtotal)->toBe(198000)
-        ->and($order->total)->toBe(204000);
+        ->and($order->total)->toBe(210000);
 });
 
 it('works an order that holds no name or address', function () {

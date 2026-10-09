@@ -27,6 +27,12 @@ final readonly class DeliveryBand
         return $this->fee === 0;
     }
 
+    /** The range as the admin writes it: "6–10 kg", "51+ kg". */
+    public function label(): string
+    {
+        return $this->max === null ? "{$this->min}+ kg" : "{$this->min}–{$this->max} kg";
+    }
+
     /**
      * @return array{min: int, max: int|null, fee: int}
      */
