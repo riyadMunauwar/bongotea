@@ -15,8 +15,10 @@ use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\StockMovement;
 use App\Models\TrackingContext;
+use App\Support\Customers\CustomerGuard;
 use App\Support\Inventory\StockLedger;
 use App\Support\Orders\OrderCapture;
+use App\Support\Sms\SendText;
 use App\Support\Tracking\MomentRecorder;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
@@ -28,6 +30,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -154,6 +157,43 @@ function orderAsCaptured(array $details = [], ?array $lines = null): Order
         'note' => null,
         'payment_method' => PaymentMethod::CashOnDelivery,
     ], $details));
+}
+
+/**
+ * Ask for a One-Time Code for the number and read it back out of the text
+ * it was sent in. Fakes the queue afresh, so the text read is this one.
+ */
+function codeSentTo(string $phone): string
+{
+    Queue::fake();
+
+    test()->postJson(route('sign-in.code'), ['phone' => $phone])->assertOk();
+
+    $sent = null;
+
+    Queue::assertPushed(SendText::class, function (SendText $text) use (&$sent): bool {
+        preg_match('/\b(\d{4})\b/', $text->message, $match);
+        $sent = $match[1] ?? null;
+
+        return true;
+    });
+
+    return $sent;
+}
+
+/**
+ * Sign the test's browser in as the number through a One-Time Code, and keep
+ * the cookie that says so for every later request.
+ */
+function signInAs(string $phone): void
+{
+    $code = codeSentTo($phone);
+
+    $cookie = test()->postJson(route('sign-in'), ['phone' => $phone, 'code' => $code])
+        ->assertOk()
+        ->getCookie(CustomerGuard::COOKIE);
+
+    test()->withCredentials()->withCookie(CustomerGuard::COOKIE, $cookie->getValue());
 }
 
 /**

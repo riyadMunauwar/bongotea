@@ -9,6 +9,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SigningInController;
 use App\Http\Controllers\SitemapController;
 use App\Models\Page;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -65,6 +66,23 @@ Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout')
 Route::post('/checkout', [CheckoutController::class, 'store'])
     ->middleware('throttle:checkout')
     ->name('checkout.store');
+
+/*
+| Signing in, for My Orders: a One-Time Code texted to a number, the code
+| traded for being signed in, and signing out. Each text is one the store
+| pays for and each code is four digits, so both are throttled by address
+| as well as by number.
+*/
+
+Route::post('/sign-in/code', [SigningInController::class, 'code'])
+    ->middleware('throttle:one-time-code')
+    ->name('sign-in.code');
+
+Route::post('/sign-in', [SigningInController::class, 'signIn'])
+    ->middleware('throttle:sign-in')
+    ->name('sign-in');
+
+Route::post('/sign-out', [SigningInController::class, 'signOut'])->name('sign-out');
 
 /*
 | The Order Complete Page, addressed by order number.

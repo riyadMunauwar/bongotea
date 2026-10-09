@@ -15,6 +15,8 @@ type CheckoutPageProps = {
     paymentMethods: string[];
     /** Every published tea's name, by Product id. */
     productNames: Record<number, string>;
+    /** The number this browser is Signed in as, typed in for the buyer; null when nobody is. */
+    signedInPhone: string | null;
 };
 
 type CheckoutForm = {
@@ -45,7 +47,7 @@ type Refusal = {
  * again having seen the new total.
  */
 export default function CheckoutPage() {
-    const { districts, paymentMethods, productNames } = usePage<CheckoutPageProps>().props;
+    const { districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
     const { links } = usePage().props;
     const cart = useCart();
     const taka = useTaka();
@@ -68,7 +70,7 @@ export default function CheckoutPage() {
 
     const form = useHttp<CheckoutForm, { redirect: string }>({
         name: '',
-        phone: '',
+        phone: signedInPhone ? toBanglaDigits(signedInPhone) : '',
         district: '',
         address: '',
         shop_name: '',

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Support\Customers\CustomerGuard;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\SettingsGroup;
 use App\Support\Settings\TrackingSettings;
@@ -10,6 +11,7 @@ use App\Support\Storefront\Catalogue;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +27,12 @@ class AppServiceProvider extends ServiceProvider
 
     /** Search suggestions one address may ask for in a minute before it is refused. */
     private const SUGGESTIONS_PER_MINUTE = 120;
+
+    /** One-Time Codes one address may ask for in an hour, whatever the numbers. */
+    private const CODES_PER_HOUR = 20;
+
+    /** Codes one address may try in a minute before it is refused. */
+    private const SIGN_INS_PER_MINUTE = 10;
 
     /**
      * Register any application services.
@@ -132,5 +140,36 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('search', fn (Request $request): Limit => Limit::perMinute(
             self::SUGGESTIONS_PER_MINUTE,
         )->by($request->ip()));
+
+        /**
+         * Every One-Time Code is a text the store pays for. A number is held
+         * to three an hour by `OneTimeCodes`; this holds one address to a
+         * handful of numbers, set above what a carrier's shared address
+         * plausibly asks for, as the checkout's is.
+         */
+        RateLimiter::for('one-time-code', fn (Request $request): Limit => Limit::perHour(
+            self::CODES_PER_HOUR,
+        )->by($request->ip()));
+
+        /**
+         * A code is four digits. Each one is thrown away after five wrong
+         * guesses; this keeps one address from guessing across many numbers.
+         */
+        RateLimiter::for('sign-in', fn (Request $request): Limit => Limit::perMinute(
+            self::SIGN_INS_PER_MINUTE,
+        )->by($request->ip()));
+
+        /**
+         * A Customer Signed in with a One-Time Code, beside the admin's Users
+         * and never mixed with them. Long-lived, so it reads each request
+         * afresh rather than the one it was made for.
+         */
+        Auth::extend('customer', function (Application $app): CustomerGuard {
+            $guard = new CustomerGuard($app->make('request'));
+
+            $app->refresh('request', $guard, 'setRequest');
+
+            return $guard;
+        });
     }
 }

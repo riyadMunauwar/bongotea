@@ -73,6 +73,9 @@ export type SharedProps = {
         checkout: string;
         search: string;
         searchSuggestions: string;
+        signInCode: string;
+        signIn: string;
+        signOut: string;
     };
     /** What the browser's Cart is priced from; prices and fees in minor units. */
     pricing: {

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Support\PhoneNumber;
 use Database\Factories\CustomerFactory;
+use Illuminate\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,10 +21,21 @@ use InvalidArgumentException;
  * three buyers is one identity bucket with three correctly-distinct Orders.
  */
 #[Fillable(['phone'])]
-class Customer extends Model
+class Customer extends Model implements AuthenticatableContract
 {
+    use Authenticatable;
+
     /** @use HasFactory<CustomerFactory> */
     use HasFactory;
+
+    /**
+     * What Signing in proves, and so what a signed-in Customer is known by:
+     * the number, which exists before any row does (`CustomerGuard`).
+     */
+    public function getAuthIdentifierName(): string
+    {
+        return 'phone';
+    }
 
     /**
      * The Customer for a number as typed, created if this is the first time

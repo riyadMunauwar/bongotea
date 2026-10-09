@@ -17,6 +17,12 @@ class Bangla
         return strtr($value, array_combine(range(0, 9), self::DIGITS));
     }
 
+    /** Every Bangla digit in the value as its ASCII digit, since a phone keyboard may type either. */
+    public static function latinDigits(string $value): string
+    {
+        return strtr($value, array_combine(self::DIGITS, array_map('strval', range(0, 9))));
+    }
+
     /** A whole number in Bangla digits with Indian grouping: ১২,৩৪,৫৬৭. */
     public static function number(int $value): string
     {

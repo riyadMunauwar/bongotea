@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\PaymentMethod;
 use App\Models\Product;
+use App\Support\Bangla;
 use App\Support\Orders\Quote;
 use App\Support\PhoneNumber;
 use App\Support\Settings\PaymentSettings;
@@ -21,9 +22,6 @@ use Illuminate\Validation\Rule;
  */
 class CheckoutRequest extends FormRequest
 {
-    /** Bangla digits to their English counterparts, since a phone keyboard may type either. */
-    private const BANGLA_DIGITS = ['০' => '0', '১' => '1', '২' => '2', '৩' => '3', '৪' => '4', '৫' => '5', '৬' => '6', '৭' => '7', '৮' => '8', '৯' => '9'];
-
     /** Whole Kilograms of one tea, as the Cart allows. */
     public const MAX_KILOGRAMS = 999;
 
@@ -36,7 +34,7 @@ class CheckoutRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('phone'))) {
-            $this->merge(['phone' => strtr(trim($this->input('phone')), self::BANGLA_DIGITS)]);
+            $this->merge(['phone' => Bangla::latinDigits(trim($this->input('phone')))]);
         }
     }
 

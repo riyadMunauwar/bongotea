@@ -137,6 +137,8 @@
     --color-stripe-video-alt: #2f4a3a;
     --color-stripe-banner-alt: #234030;
     --color-scrim: rgba(10, 20, 14, 0.82);
+    --color-faint: #9aa39d;
+    --color-progress-tint: #fbf3e8;
 
     /* The mockup's three shadows: the sticky header, a dropdown panel, the green pill button. */
     --shadow-header: 0 1px 0 #e2e6e2, 0 4px 14px rgba(22, 38, 29, 0.05);

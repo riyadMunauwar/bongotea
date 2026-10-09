@@ -43,6 +43,13 @@ class StorefrontShell
     /** Where the header's search asks for its live dropdown's matches. */
     public const SEARCH_SUGGESTIONS_PATH = '/search/suggestions';
 
+    /** Where the My Orders Block asks for a One-Time Code, trades it for Signing in, and signs out. */
+    public const SIGN_IN_CODE_PATH = '/sign-in/code';
+
+    public const SIGN_IN_PATH = '/sign-in';
+
+    public const SIGN_OUT_PATH = '/sign-out';
+
     public function __construct(
         private StoreSettings $store,
         private AnnouncementSettings $announcement,
@@ -135,7 +142,7 @@ class StorefrontShell
      * follow a renamed slug; one not published leaves its button at the
      * installed slug.
      *
-     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string}
+     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string}
      */
     public function links(): array
     {
@@ -151,6 +158,9 @@ class StorefrontShell
             'checkout' => self::CHECKOUT_PATH,
             'search' => self::SEARCH_PATH,
             'searchSuggestions' => self::SEARCH_SUGGESTIONS_PATH,
+            'signInCode' => self::SIGN_IN_CODE_PATH,
+            'signIn' => self::SIGN_IN_PATH,
+            'signOut' => self::SIGN_OUT_PATH,
         ];
     }
 

@@ -165,6 +165,26 @@ export type DeliveryChartProps = {
     text: string | null;
 };
 
+/** Where an Order stands as its Customer sees it, worked out by the server. */
+export type OrderProgress = 'received' | 'confirmed' | 'sent' | 'delivered' | 'cancelled';
+
+export type MyOrdersProps = {
+    heading: string | null;
+    text: string | null;
+    /** The number this browser is Signed in as, as dialled at home; null for a stranger. */
+    phone: string | null;
+    /** Newest first; empty for a stranger. Totals in minor units. */
+    orders: {
+        number: string;
+        /** The Merchant's day it was placed, as YYYY-MM-DD. */
+        placedOn: string;
+        lines: { name: string; kilograms: number }[];
+        kilograms: number;
+        total: number;
+        progress: OrderProgress;
+    }[];
+};
+
 export type BlockPropsByType = {
     hero_carousel: HeroCarouselProps;
     promise_strip: PromiseStripProps;
@@ -186,6 +206,7 @@ export type BlockPropsByType = {
     price_calculator: PriceCalculatorProps;
     price_matrix: PriceMatrixProps;
     delivery_chart: DeliveryChartProps;
+    my_orders: MyOrdersProps;
 };
 
 export type BlockType = keyof BlockPropsByType;

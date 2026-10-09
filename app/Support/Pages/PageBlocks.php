@@ -15,6 +15,7 @@ use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
 use App\Support\Pages\Blocks\Journey;
 use App\Support\Pages\Blocks\MapAndAddress;
+use App\Support\Pages\Blocks\MyOrders;
 use App\Support\Pages\Blocks\PriceCalculator;
 use App\Support\Pages\Blocks\PriceMatrix;
 use App\Support\Pages\Blocks\ProductRail;
@@ -59,6 +60,7 @@ class PageBlocks
         PriceCalculator::class,
         PriceMatrix::class,
         DeliveryChart::class,
+        MyOrders::class,
     ];
 
     /**

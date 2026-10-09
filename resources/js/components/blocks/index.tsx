@@ -13,6 +13,7 @@ import { HeroCarousel } from './hero-carousel';
 import { HowToOrder } from './how-to-order';
 import { Journey } from './journey';
 import { MapAndAddress } from './map-and-address';
+import { MyOrders } from './my-orders';
 import { PriceCalculator } from './price-calculator';
 import { PriceMatrix } from './price-matrix';
 import { ProductRail } from './product-rail';
@@ -44,6 +45,7 @@ const COMPONENTS: { [Type in keyof BlockPropsByType]: ComponentType<BlockPropsBy
     price_calculator: PriceCalculator,
     price_matrix: PriceMatrix,
     delivery_chart: DeliveryChart,
+    my_orders: MyOrders,
 };
 
 /**

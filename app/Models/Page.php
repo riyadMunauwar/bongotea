@@ -43,7 +43,7 @@ class Page extends Model
         'tea', 'category', 'search', 'checkout', 'order', 'pay', 'admin',
         'courier', 'tracking', 'storage', 'build', 'livewire', 'filament',
         'sitemap', 'robots', 'up', 'api',
-        'login', 'logout', 'account', 'cart',
+        'login', 'logout', 'account', 'cart', 'sign-in', 'sign-out',
     ];
 
     protected function casts(): array

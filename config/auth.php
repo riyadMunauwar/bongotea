@@ -42,6 +42,15 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        /*
+         * A Customer Signed in with a One-Time Code: a phone number kept in
+         * its own cookie for thirty days, never a User and never the admin's
+         * session. See App\Support\Customers\CustomerGuard.
+         */
+        'customer' => [
+            'driver' => 'customer',
+        ],
     ],
 
     /*

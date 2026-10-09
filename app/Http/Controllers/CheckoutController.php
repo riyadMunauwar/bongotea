@@ -13,6 +13,7 @@ use App\Support\Orders\OrderOwnership;
 use App\Support\Orders\QuoteRefused;
 use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
+use App\Support\PhoneNumber;
 use App\Support\Settings\PaymentSettings;
 use App\Support\Storefront\Catalogue;
 use App\Support\Storefront\StorefrontShell;
@@ -22,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
@@ -47,11 +49,15 @@ class CheckoutController extends Controller
      * it?". The Cart is the browser's (ADR-0029), so the page is sent what
      * the form asks from and the names of the teas it may list, and prices
      * the Cart itself from the shared `pricing` prop. A payment choice is
-     * drawn only where more than one method is offered.
+     * drawn only where more than one method is offered. A Customer Signed in
+     * finds their number already typed; nobody is asked to sign in.
      */
     public function create(Catalogue $catalogue, PaymentSettings $payments): InertiaResponse
     {
+        $signedIn = Auth::guard('customer')->user();
+
         return Inertia::render('checkout', [
+            'signedInPhone' => $signedIn === null ? null : PhoneNumber::asDialled($signedIn->phone),
             'districts' => config('giopages.districts'),
             'paymentMethods' => PaymentMethod::names($payments->offeredMethods()),
             'productNames' => $catalogue->products()
