@@ -67,7 +67,8 @@ it('reports the page load and the purchase from the order complete page of the b
     /** The Purchase carries what the server copy carries: the same money, the same basket, the same reference. */
     $purchase = $events[1];
 
-    expect($script->valueOf($purchase))->toBe(990.0)
+    /** The Order's total, the 1–5 kg band's Delivery Charge on top of the line. */
+    expect($script->valueOf($purchase))->toBe(1110.0)
         ->and($script->currencyOf($purchase))->toBe('BDT')
         ->and($script->orderReferenceOf($purchase))->toBe($order->order_number)
         ->and($script->contentsOf($purchase))->toBe([

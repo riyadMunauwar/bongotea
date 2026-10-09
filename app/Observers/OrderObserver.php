@@ -42,6 +42,11 @@ class OrderObserver
             $order->subtotal = (int) $order->lines()->sum('line_total');
         }
 
+        /** The weight is the lines' too, for the same reason. */
+        if ($order->exists && ! $order->isDirty('total_kilograms')) {
+            $order->total_kilograms = (int) $order->lines()->sum('quantity');
+        }
+
         $order->total = (int) $order->subtotal + (int) $order->delivery_charge;
     }
 }

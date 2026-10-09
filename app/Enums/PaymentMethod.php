@@ -99,6 +99,22 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
+     * What the buyer calls the method, for the one storefront page drawn on
+     * the server, the Order Complete Page. The same words as the storefront's
+     * `bn.paymentMethods`.
+     */
+    public function banglaLabel(): string
+    {
+        return match ($this) {
+            self::CashOnDelivery => 'ক্যাশ অন ডেলিভারি',
+            self::Bkash => 'বিকাশ',
+            self::SslCommerz => 'কার্ড ও মোবাইল ব্যাংকিং',
+            self::AamarPay => 'আমারপে',
+            self::PayStation => 'পেস্টেশন',
+        };
+    }
+
+    /**
      * The methods that send the Customer to a gateway: every case but Cash
      * on Delivery, in the enum's order. What the Processing Page routes are
      * registered for.

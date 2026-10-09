@@ -58,11 +58,18 @@ class Order extends Model
     private const NUMBER_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
     /**
-     * Eight characters of that alphabet is ~10^12 orders — sparse enough that
-     * the Order Complete Page cannot be found by walking the range, which is what
-     * lets the number address that page at all.
+     * What every order number starts with, so a number read out on the phone
+     * or found in a text message is recognisably the store's.
      */
-    private const NUMBER_LENGTH = 8;
+    private const NUMBER_PREFIX = 'BT-';
+
+    /**
+     * Six characters of that alphabet is ~10^9 orders — sparse enough that
+     * the Order Complete Page cannot be found by walking the range, which is
+     * what lets the number address that page at all, and short enough to
+     * read back over a phone line.
+     */
+    private const NUMBER_LENGTH = 6;
 
     /**
      * The attribute `withPaidFlag()` loads the answer to `isPaid()` under.
@@ -84,6 +91,7 @@ class Order extends Model
      */
     protected $attributes = [
         'subtotal' => 0,
+        'total_kilograms' => 0,
         'total' => 0,
         'status' => OrderStatus::New->value,
     ];
@@ -101,6 +109,7 @@ class Order extends Model
             'payment_method' => PaymentMethod::class,
 
             'subtotal' => 'integer',
+            'total_kilograms' => 'integer',
             'delivery_charge' => 'integer',
             'total' => 'integer',
         ];
@@ -116,7 +125,7 @@ class Order extends Model
     public static function generateNumber(): string
     {
         do {
-            $number = '';
+            $number = self::NUMBER_PREFIX;
 
             for ($i = 0; $i < self::NUMBER_LENGTH; $i++) {
                 $number .= self::NUMBER_ALPHABET[random_int(0, strlen(self::NUMBER_ALPHABET) - 1)];
@@ -476,19 +485,18 @@ class Order extends Model
     }
 
     /**
-     * The Payment Methods the Retry Page offers this Order: whatever the
-     * store can take payment by now, and Cash on Delivery alone where it can
-     * take nothing, because an Order is always owed a way to be settled.
+     * The Payment Methods the Retry Page offers this Order: the ones the
+     * Checkout offers now, so a method switched off since Capture is not.
      *
      * @return list<PaymentMethod>
      */
     public function retryPaymentMethods(): array
     {
-        return app(PaymentSettings::class)->usableMethods() ?: [PaymentMethod::CashOnDelivery];
+        return app(PaymentSettings::class)->offeredMethods();
     }
 
     /**
-     * Re-derive the subtotal from the lines.
+     * Re-derive the subtotal and the total Kilograms from the lines.
      *
      * Always from the lines' *snapshotted* figures — never from a Product's
      * current price, which would reintroduce the exact bug the snapshot closes.
@@ -498,6 +506,7 @@ class Order extends Model
     public function recalculateSubtotal(): void
     {
         $this->subtotal = (int) $this->lines()->sum('line_total');
+        $this->total_kilograms = (int) $this->lines()->sum('quantity');
 
         $this->save();
     }

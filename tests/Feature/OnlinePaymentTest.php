@@ -31,13 +31,13 @@ it('starts a pending payment for the order total, and sends the customer to the 
 
     /** The Order is captured whole first, and the Payment hangs off it for exactly its total (ADR-0013). */
     expect($order->payment_method)->toBe($gateway->method())
-        ->and($order->total)->toBe(105000)
+        ->and($order->total)->toBe(117000)
         ->and($order->status)->toBe(OrderStatus::New)
         ->and($order->isUnpaid())->toBeTrue()
         ->and($payment->order_id)->toBe($order->getKey())
         ->and($payment->method)->toBe($gateway->method())
         ->and($payment->state)->toBe(PaymentState::Pending)
-        ->and($payment->amount)->toBe(105000)
+        ->and($payment->amount)->toBe(117000)
         ->and($payment->currency)->toBe('BDT')
         ->and($payment->invoice_reference)->toBe($order->order_number.'-1')
         ->and($payment->gateway_reference)->toBeNull()
@@ -70,8 +70,8 @@ it('lands the browser that ordered on the full page after the gateway sends it b
     $this->withCookie(OrderOwnership::COOKIE, $ownership)
         ->get(route('checkout.order-complete', $payment->order->order_number))
         ->assertOk()
-        ->assertSee('Paid')
-        ->assertSee('Deliver to')
+        ->assertSee('পরিশোধিত')
+        ->assertSee('যেখানে পাঠানো হবে')
         ->assertSee('Rahim Uddin')
         ->assertSee('01712345678');
 })->with('online gateways');
@@ -169,11 +169,11 @@ it('verifies with the gateway, marks the payment paid, and sends the customer to
     /** An online Order's figure is a total, not something to pay at the door; and the page shows the Order, never the Customer. */
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
-        ->assertSee('Order placed')
-        ->assertSee('Paid')
-        ->assertSee($gateway->method()->getLabel())
-        ->assertSee('Total')
-        ->assertDontSee('Pay on delivery')
+        ->assertSee('ধন্যবাদ, আপনার অর্ডার পেয়েছি')
+        ->assertSee('পরিশোধিত')
+        ->assertSee($gateway->method()->banglaLabel())
+        ->assertSee('মোট দাম')
+        ->assertDontSee('মোট দাম (ক্যাশ অন ডেলিভারি)')
         ->assertDontSee('Rahim Uddin')
         ->assertDontSee(route('checkout.retry', $order->order_number));
 

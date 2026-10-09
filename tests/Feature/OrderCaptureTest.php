@@ -30,7 +30,9 @@ it('captures one line per product in the cart, priced from the product and snaps
         ['product_id' => $strong->getKey(), 'product_name' => 'Strong', 'unit_price' => 50000, 'quantity' => 4, 'line_total' => 200000],
     ])
         ->and($order->subtotal)->toBe(680000)
-        ->and($order->total)->toBe(680000)
+        ->and($order->total_kilograms)->toBe(12)
+        ->and($order->delivery_charge)->toBe(20000)
+        ->and($order->total)->toBe(700000)
         ->and($order->status)->toBe(OrderStatus::New);
 
     /** A later repricing of the Product never rewrites what was agreed. */
@@ -74,7 +76,7 @@ it('gives every order a number of its own', function () {
     $second = orderAsCaptured();
 
     expect($first->order_number)->not->toBe($second->order_number)
-        ->and($first->order_number)->toMatch('/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]+$/');
+        ->and($first->order_number)->toMatch('/^BT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/');
 });
 
 it('stamps each line with what its units cost at capture', function () {
@@ -113,6 +115,8 @@ it('refuses a cart it cannot sell as it stands, and writes nothing', function (C
 
         return [['product' => $retired, 'kilograms' => 1]];
     }, 'no longer sold'],
+    'a draft' => [fn (): array => [['product' => Product::factory()->draft()->create(), 'kilograms' => 1]], 'not published'],
+    'a product unavailable for now' => [fn (): array => [['product' => Product::factory()->unavailable()->create(), 'kilograms' => 1]], 'not available now'],
     'no kilograms' => [fn (): array => [['product' => Product::factory()->create(), 'kilograms' => 0]], 'no kilograms'],
     'a product twice' => [function (): array {
         $tea = Product::factory()->create();

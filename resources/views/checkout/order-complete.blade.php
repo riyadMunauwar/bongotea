@@ -1,7 +1,8 @@
 {{--
     The Order Complete Page: where a Customer lands once their Order is settled
-    as far as the Checkout is concerned. It draws that one state; the
-    controller sends an Unpaid Order to the Retry Page before this is reached.
+    as far as the Checkout is concerned — the mockup's Done screen. It draws
+    that one state; the controller sends an Unpaid Order to the Retry Page
+    before this is reached.
 
     This document is ours, so it carries its own styles inline: no stylesheet,
     font or picture from anywhere. A page carrying a Customer's details makes
@@ -15,73 +16,109 @@
     nothing; what does is the cookie handed to that browser, which the
     controller reads into `$placedByThisBrowser` (ADR-0014). Anyone else sees
     the Order and not the Customer: shown less, never refused.
+
+    Every figure is the Order's own, drawn in Bangla digits; the order number
+    stays Latin, because it is read out on the phone as it is printed.
 --}}
+@php
+    use App\Support\PhoneNumber;
+    use App\Support\Storefront\Bangla;
+
+    $payingOnDelivery = ! $order->isPaid() && ! $order->payment_method->isOnline();
+@endphp
 <!doctype html>
-<html lang="en">
+<html lang="bn">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>Order placed · Order {{ $order->order_number }}</title>
+    <title>অর্ডার পেয়েছি · {{ $order->order_number }}</title>
 @if ($snippet !== '')
 {!! $snippet !!}
 @endif
     <style>
         :root { color-scheme: light; }
-        body { margin: 0; padding: 3.5rem 1.5rem; background: #f7f8fa; color: #111318; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
-        .card { box-sizing: border-box; max-width: 32.5rem; margin: 0 auto; padding: 2.25rem 2rem; background: #fff; border: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 1.125rem; }
-        h1 { margin: 0; font-size: 1.75rem; text-align: center; }
-        .number { margin: 0; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-        .summary { margin: 0; padding: 1.125rem 0 0; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: .625rem; font-size: .875rem; }
-        .row { display: flex; justify-content: space-between; gap: .75rem; margin: 0; }
-        .total { padding: .625rem 0 0; border-top: 1px solid #e5e7eb; font-size: 1.05rem; font-weight: 700; }
-        .paid { margin-left: .5rem; padding: .125rem .5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .75em; font-weight: 600; }
-        .deliver-to { margin: 0; font-size: .875rem; }
-        .deliver-to p { margin: 0; }
-        .eyebrow { margin: 0 0 .25rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
-        .note { margin: 0; font-size: .875rem; opacity: .72; text-align: center; }
+        body { margin: 0; padding: clamp(40px, 7vw, 96px) 16px; background: #fff; color: #16261D; font-family: "Anek Bangla", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+        main { box-sizing: border-box; max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+        .tick { width: 64px; height: 64px; border-radius: 50%; background: #EDF3EE; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #2E6B45; }
+        h1 { margin: 8px 0 0; font-weight: 600; font-size: clamp(24px, 3.4vw, 36px); line-height: 1.4; }
+        .lead { margin: 0; font-size: 15px; line-height: 1.8; color: #5C6660; }
+        .card { box-sizing: border-box; width: 100%; margin-top: 12px; border: 1px solid #E2E6E2; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+        .row { display: flex; justify-content: space-between; gap: 12px; margin: 0; font-size: 14px; }
+        .row > span:first-child { color: #5C6660; }
+        .row b { font-weight: 600; }
+        .lines { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #EEF1EE; }
+        .lines .row > span:first-child { color: #16261D; }
+        .number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+        .free { color: #2E6B45; }
+        .paid { margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #EDF3EE; color: #1F4D31; font-size: 12px; font-weight: 600; }
+        .total { align-items: baseline; padding-top: 10px; border-top: 1px solid #EEF1EE; }
+        .total > span:first-child { color: #16261D; font-weight: 500; }
+        .total b { font-size: 22px; font-weight: 700; color: #1F4D31; }
+        .cod { margin: 0; font-size: 13px; color: #8A5A22; text-align: right; }
+        .deliver-to h2 { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: #5C6660; }
+        .deliver-to p { margin: 0; font-size: 14px; }
+        .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }
+        .button { display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 22px; border-radius: 10px; border: 1px solid #2E6B45; }
+        .primary { background: #2E6B45; color: #fff; }
+        .secondary { color: #2E6B45; }
     </style>
 </head>
 <body>
-    <main class="card">
-        <h1>Order placed</h1>
-        <p class="number">Order {{ $order->order_number }}</p>
+    <main>
+        <div class="tick" aria-hidden="true">✓</div>
+        <h1>ধন্যবাদ, আপনার অর্ডার পেয়েছি</h1>
+        <p class="lead">
+            @if ($placedByThisBrowser)
+                আমাদের প্রতিনিধি শীঘ্রই {{ Bangla::digits(PhoneNumber::asDialled($order->customer_phone) ?? $order->customer_phone) }} নম্বরে ফোন করে অর্ডার নিশ্চিত করবেন।
+            @else
+                আমাদের প্রতিনিধি শীঘ্রই ফোন করে অর্ডার নিশ্চিত করবেন।
+            @endif
+        </p>
 
         {{--
             Fixed labels nobody can change, so the page can never say
             something different from what the Order recorded.
         --}}
-        <div class="summary">
-            @foreach ($order->lines as $line)
-                <p class="row">
-                    <span>{{ $line->product_name }} × {{ $line->quantity }}</span>
-                    <span>{{ \App\Support\Money::format($line->line_total) }}</span>
-                </p>
-            @endforeach
+        <div class="card">
+            <p class="row"><span>অর্ডার নম্বর</span><b class="number">{{ $order->order_number }}</b></p>
+
+            <div class="lines">
+                @foreach ($order->lines as $line)
+                    <p class="row">
+                        <span>{{ $line->product_name }} × {{ Bangla::number($line->quantity) }} কেজি</span>
+                        <b>{{ Bangla::taka($line->line_total) }}</b>
+                    </p>
+                @endforeach
+            </div>
+
+            <p class="row"><span>মোট পরিমাণ</span><b>{{ Bangla::number($order->total_kilograms) }} কেজি</b></p>
+            <p class="row"><span>চায়ের দাম</span><b>{{ Bangla::taka($order->subtotal) }}</b></p>
             <p class="row">
-                <span>Subtotal</span>
-                <span>{{ \App\Support\Money::format($order->subtotal) }}</span>
+                <span>ডেলিভারি চার্জ</span>
+                @if ($order->delivery_charge === 0)
+                    <b class="free">ফ্রি</b>
+                @else
+                    <b>{{ Bangla::taka($order->delivery_charge) }}</b>
+                @endif
             </p>
-            @if ($order->delivery_label !== null || $order->delivery_charge > 0)
-                <p class="row">
-                    <span>{{ $order->delivery_label ?? 'Delivery' }}</span>
-                    <span>{{ \App\Support\Money::format($order->delivery_charge) }}</span>
-                </p>
-            @endif
             <p class="row">
-                <span>Payment</span>
-                <span>{{ $order->payment_method->getLabel() }}@if ($order->isPaid())<span class="paid">Paid</span>@endif</span>
+                <span>টাকা পরিশোধ</span>
+                <b>{{ $order->payment_method->banglaLabel() }}@if ($order->isPaid())<span class="paid">পরিশোধিত</span>@endif</b>
             </p>
             <p class="row total">
-                <span>{{ $order->payment_method->isOnline() ? 'Total' : 'Pay on delivery' }}</span>
-                <span>{{ \App\Support\Money::format($order->total) }}</span>
+                <span>{{ $payingOnDelivery ? 'মোট দাম (ক্যাশ অন ডেলিভারি)' : 'মোট দাম' }}</span>
+                <b>{{ Bangla::taka($order->total) }}</b>
             </p>
+            @if ($payingOnDelivery)
+                <p class="cod">চা হাতে পেয়ে টাকা দিন</p>
+            @endif
         </div>
 
         {{-- Where the Order is going, for the browser that placed it and nobody else. --}}
         @if ($placedByThisBrowser)
-            <section class="deliver-to" aria-labelledby="deliver-to">
-                <h2 id="deliver-to" class="eyebrow">Deliver to</h2>
+            <section class="card deliver-to" aria-labelledby="deliver-to">
+                <h2 id="deliver-to">যেখানে পাঠানো হবে</h2>
                 <p>{{ $order->customer_name }}</p>
                 <p>{{ $order->customer_phone }}</p>
                 @if (filled($order->shop_name))
@@ -92,12 +129,15 @@
                 @endif
                 <p>{{ $order->customer_district }}</p>
                 @if (($note = $order->deliveryNote()) !== null)
-                    <p>Note: {{ $note }}</p>
+                    <p>নোট: {{ $note }}</p>
                 @endif
             </section>
         @endif
 
-        <p class="note">A representative will call to confirm your order.</p>
+        <div class="actions">
+            <a class="button primary" href="{{ $myOrdersUrl }}">আমার অর্ডার দেখুন</a>
+            <a class="button secondary" href="{{ url('/') }}">হোমে ফিরে যান</a>
+        </div>
     </main>
 </body>
 </html>

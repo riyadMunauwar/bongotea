@@ -56,6 +56,17 @@ Route::get('/sitemap.xml', [SitemapController::class, 'sitemap'])->name('sitemap
 Route::get('/robots.txt', [SitemapController::class, 'robots'])->name('robots');
 
 /*
+| The Checkout: one fixed step for the whole store, and the Capture it posts
+| to — an unauthenticated write on paid traffic, and so throttled.
+*/
+
+Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout');
+
+Route::post('/checkout', [CheckoutController::class, 'store'])
+    ->middleware('throttle:checkout')
+    ->name('checkout.store');
+
+/*
 | The Order Complete Page, addressed by order number.
 */
 

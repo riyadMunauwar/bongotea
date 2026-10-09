@@ -117,6 +117,7 @@
 
     /* Shades the content Blocks use beyond the README's table. */
     --color-surface: #f6f7f5;
+    --color-error-soft: #fef3f2;
     --color-eyebrow: #b07a3b;
     --color-body: #3f4b44;
     --color-step-line: #c9d6cc;

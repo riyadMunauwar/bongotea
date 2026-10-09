@@ -2,19 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
+use App\Http\Requests\CheckoutRequest;
 use App\Http\Requests\RetryPaymentRequest;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\TrackingContext;
+use App\Support\Orders\OrderCapture;
 use App\Support\Orders\OrderOwnership;
+use App\Support\Orders\QuoteRefused;
 use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
+use App\Support\Settings\PaymentSettings;
+use App\Support\Storefront\Catalogue;
+use App\Support\Storefront\StorefrontShell;
+use App\Support\Tracking\MomentRecorder;
 use App\Support\Tracking\TrackingSnippet;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
+use Throwable;
 
 /**
- * The pages a Customer lands on once an Order exists.
+ * The Checkout, Capture, and the pages a Customer lands on once an Order
+ * exists.
  *
  * These run inside the `web` group with a session and request-forgery
  * protection, and are never cached — one hit per order.
@@ -23,8 +38,74 @@ class CheckoutController extends Controller
 {
     public function __construct(
         private readonly PaymentStarter $payments,
+        private readonly MomentRecorder $moments,
         private readonly TrackingSnippet $snippet,
     ) {}
+
+    /**
+     * The Checkout: one fixed step for the whole store, "where shall we send
+     * it?". The Cart is the browser's (ADR-0029), so the page is sent what
+     * the form asks from and the names of the teas it may list, and prices
+     * the Cart itself from the shared `pricing` prop. A payment choice is
+     * drawn only where more than one method is offered.
+     */
+    public function create(Catalogue $catalogue, PaymentSettings $payments): InertiaResponse
+    {
+        return Inertia::render('checkout', [
+            'districts' => config('giopages.districts'),
+            'paymentMethods' => PaymentMethod::names($payments->offeredMethods()),
+            'productNames' => $catalogue->products()
+                ->mapWithKeys(fn (Product $product): array => [$product->getKey() => $product->name])
+                ->all(),
+        ]);
+    }
+
+    /**
+     * Capture: the Cart and the Quote the buyer was shown, made an Order.
+     *
+     * Answers the checkout page's request in JSON: where to go next, or —
+     * where the Quote no longer agrees with the store — 409 with the figures
+     * as they are now and the Products the buyer can no longer have, so the
+     * page shows them before anything is placed (ADR-0029).
+     */
+    public function store(CheckoutRequest $request, OrderCapture $capture): JsonResponse
+    {
+        try {
+            $order = $capture->capture($request->cartLines(), $request->details(), $request->quote());
+        } catch (QuoteRefused $refusal) {
+            return response()->json([
+                'message' => 'দাম বা প্রাপ্যতা বদলেছে। নতুন হিসাব দেখে আবার নিশ্চিত করুন।',
+                'current' => $refusal->current->toArray(),
+                'unavailable' => $refusal->unavailableProductIds,
+            ], ResponseCode::HTTP_CONFLICT);
+        }
+
+        /**
+         * The Capture Moment. It writes rows and returns — nothing is sent to
+         * an ad platform from here, so submitting the Checkout is no slower
+         * for tracking being on and somebody else's outage is never the
+         * Customer's.
+         *
+         * Caught and reported rather than allowed to raise, because the Order
+         * is already committed by the time this runs: an exception here would
+         * show an error for an Order that exists, withhold the ownership
+         * cookie below, and invite the Customer to submit again.
+         */
+        try {
+            $this->moments->captured($order, TrackingContext::fromRequest($request, route('checkout')));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        /**
+         * The browser that placed the Order is handed ownership of it here,
+         * on the Capture response itself, so it is in hand before the browser
+         * leaves for a gateway (ADR-0014).
+         */
+        return response()
+            ->json(['redirect' => $this->payments->start($order) ?? $order->followingPageUrl()], ResponseCode::HTTP_CREATED)
+            ->withCookie(OrderOwnership::fromRequest($request)->placing($order->order_number)->cookie());
+    }
 
     /**
      * The Order Complete Page: where the Customer lands once the Order is
@@ -41,7 +122,7 @@ class CheckoutController extends Controller
      * any other request sees the Order and not the Customer. A stranger is
      * shown less, never refused.
      */
-    public function orderComplete(Request $request, Order $order): Response|RedirectResponse
+    public function orderComplete(Request $request, Order $order, StorefrontShell $shell): Response|RedirectResponse
     {
         if ($order->isUnpaid()) {
             return redirect()->route('checkout.retry', $order->order_number);
@@ -52,6 +133,9 @@ class CheckoutController extends Controller
         return $this->uncachedPage('checkout.order-complete', [
             'order' => $order->load('lines'),
             'placedByThisBrowser' => $placedByThisBrowser,
+
+            /** Where the buyer follows the Order from here, found by its System Page's role. */
+            'myOrdersUrl' => url($shell->links()['myOrders']),
 
             /**
              * The browser's copy of the Purchase the outbox already holds,

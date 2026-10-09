@@ -102,8 +102,8 @@ it('switches an unpaid order to cash on delivery, logs it, and lands on the orde
 
     $this->get(route('checkout.order-complete', $order->order_number))
         ->assertOk()
-        ->assertSee('Order placed')
-        ->assertSee('Pay on delivery')
+        ->assertSee('ধন্যবাদ, আপনার অর্ডার পেয়েছি')
+        ->assertSee('মোট দাম (ক্যাশ অন ডেলিভারি)')
         ->assertDontSee(route('checkout.retry', $order->order_number));
 });
 

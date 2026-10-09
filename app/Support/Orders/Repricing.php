@@ -210,6 +210,7 @@ class Repricing
             'product_id' => $line->productId,
             'product_name' => $sameProduct ? $kept->product_name : $product->name,
             'unit_price' => $priced->tierPrice,
+            'regular_price' => $priced->regularPrice,
 
             /**
              * What the units cost is stamped once, when the line first sells

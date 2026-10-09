@@ -47,5 +47,5 @@ cost. Both objections are answered rather than ignored:
 - A Product's Tiers are refused on save, by the form and by the model, unless they cover every
   kilogram once and never rise; the pricing module may assume both.
 - `products.price` is kept as the Regular Price — the first Tier's price, written by the model from
-  the Tiers — because tracking and reports read it. Order capture still stamps it as the unit price; until Capture prices through the pricing module and records each line's Tier range, a bulk Order captured is charged the Regular Price.
+  the Tiers — because tracking and reports read it. Capture prices every line through the pricing module, stamping the Tier Price, the Tier's range and the Regular Price on the Order Line.
 - Editing a Product's Tiers moves every Cart at once and no Order already captured.

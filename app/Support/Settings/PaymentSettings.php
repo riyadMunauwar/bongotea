@@ -180,6 +180,18 @@ class PaymentSettings extends SettingsGroup
     }
 
     /**
+     * The methods the Checkout and the Retry Page offer: whatever the store
+     * can take payment by now, and Cash on Delivery alone where it can take
+     * nothing, because an Order is always owed a way to be settled.
+     *
+     * @return non-empty-list<PaymentMethod>
+     */
+    public function offeredMethods(): array
+    {
+        return $this->usableMethods() ?: [PaymentMethod::CashOnDelivery];
+    }
+
+    /**
      * Whether a method has its settings here yet: an `Enabled` property by
      * the naming rule. A gateway still to come has none, which is how one is
      * held off without a list anywhere; every method has them now.

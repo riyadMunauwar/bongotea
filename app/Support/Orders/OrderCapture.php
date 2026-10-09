@@ -7,6 +7,11 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
 use App\Support\Inventory\StockLedger;
+use App\Support\Pricing\CartLine;
+use App\Support\Pricing\PriceBook;
+use App\Support\Pricing\PricedCart;
+use App\Support\Pricing\PricedLine;
+use App\Support\Pricing\ProductPrices;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,7 +21,14 @@ use Illuminate\Support\Facades\DB;
  * totals. The one rule this class exists to enforce is that *nothing priced
  * comes from the caller*: it hands over which Products and how many kilograms
  * of each, and the delivery details, and every figure on the resulting Order
- * is derived server-side from the Products themselves.
+ * is worked out by the pricing module (ADR-0031) — each line's Tier Price by
+ * the whole Cart's Kilograms, and the Delivery Charge by the same total.
+ *
+ * The Checkout also hands over the Quote the Customer was shown. It is
+ * compared, never believed: where the store's own figures differ, or a
+ * Product in the Cart can no longer be had, Capture refuses with the figures
+ * as they are now rather than placing an Order for a total the Customer did
+ * not agree to (ADR-0029).
  *
  * The same rule is why the cost stamp lives here. A line records what the
  * units cost as well as what they sold for, and the figure comes from the
@@ -30,22 +42,28 @@ class OrderCapture
     /**
      * @param  list<array{product: Product, kilograms: int}>  $lines  the Cart, one line per Product
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
+     * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
      *
+     * @throws QuoteRefused where a Product in the Cart cannot be had now, or the Quote disagrees with the store
      * @throws CheckoutUnavailable where the Cart or the details cannot become an Order
      */
-    public function capture(array $lines, array $details): Order
+    public function capture(array $lines, array $details, ?Quote $quote = null): Order
     {
         if (blank($details['district'] ?? null)) {
             throw new CheckoutUnavailable('An Order was captured with no District.');
         }
 
+        $this->refuseMalformed($lines);
+
         /**
-         * The lines are built before the transaction opens, so a Cart that
-         * cannot be sold as it stands stops the Capture rather than being
-         * quietly sold in part — a COD parcel holding less than the Customer
-         * agreed to is refused at the door, at the Merchant's expense.
+         * Priced before the transaction opens, so a Cart that cannot be sold
+         * as it stands stops the Capture rather than being quietly sold in
+         * part — a COD parcel holding less than the Customer agreed to is
+         * refused at the door, at the Merchant's expense.
          */
-        $lines = $this->lines($lines);
+        $priced = $this->price($lines, $quote);
+
+        $costs = $this->ledger->averageCostFor(array_map(fn (array $line): int => $line['product']->getKey(), $lines));
 
         /**
          * Resolved outside the transaction: firstOrCreate recovers from a
@@ -55,7 +73,7 @@ class OrderCapture
          */
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($customer, $details, $lines): Order {
+        return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
             $order = $customer->orders()->create([
                 'customer_name' => $details['name'],
 
@@ -72,6 +90,8 @@ class OrderCapture
                 'customer_district' => $details['district'],
                 'shop_name' => self::givenOrNull($details['shop_name'] ?? null),
                 'note' => self::givenOrNull($details['note'] ?? null),
+                'delivery_charge' => $priced->deliveryCharge,
+                'delivery_label' => $priced->deliveryBand?->label(),
 
                 /**
                  * How the Customer said they would pay, by name. Whether money
@@ -81,13 +101,104 @@ class OrderCapture
                 'payment_method' => $details['payment_method'],
             ]);
 
-            foreach ($lines as $line) {
-                $order->lines()->create($line);
+            foreach ($lines as $index => $line) {
+                $order->lines()->create($this->line($line['product'], $priced->lines[$index], $costs));
             }
 
             /** The lines' observer recomputed the totals; load them back. */
             return $order->refresh();
         });
+    }
+
+    /**
+     * The Cart priced by the store, or a refusal: a Product a buyer cannot
+     * have now refuses before any price is compared, and the Quote, where
+     * there is one, must agree with every figure.
+     *
+     * @param  list<array{product: Product, kilograms: int}>  $lines
+     */
+    private function price(array $lines, ?Quote $quote): PricedCart
+    {
+        $orderable = [];
+        $refusals = [];
+
+        foreach ($lines as $line) {
+            $why = self::whyUnorderable($line['product']);
+
+            if ($why === null) {
+                $orderable[] = $line;
+            } else {
+                $refusals[$line['product']->getKey()] = $why;
+            }
+        }
+
+        if ($refusals !== []) {
+            $first = array_key_first($refusals);
+
+            throw new QuoteRefused("Product [{$first}] {$refusals[$first]}.", self::priceOf($orderable), array_keys($refusals));
+        }
+
+        $priced = self::priceOf($lines);
+
+        if ($quote !== null && ! $quote->agreesWith($priced)) {
+            throw new QuoteRefused('The Quote no longer agrees with what the store charges.', $priced);
+        }
+
+        return $priced;
+    }
+
+    /**
+     * @param  list<array{product: Product, kilograms: int}>  $lines
+     */
+    private static function priceOf(array $lines): PricedCart
+    {
+        return PriceBook::current()->price(array_map(
+            fn (array $line): CartLine => new CartLine(ProductPrices::of($line['product']), $line['kilograms']),
+            $lines,
+        ));
+    }
+
+    /**
+     * Why a buyer cannot have the Product now, or null where they can. Three
+     * separate answers, as the catalogue keeps them: taken out for good, never
+     * or no longer published, and unavailable for now.
+     */
+    private static function whyUnorderable(Product $product): ?string
+    {
+        return match (true) {
+            $product->trashed() => 'is no longer sold',
+            ! $product->isPublished() => 'is not published',
+            ! $product->is_available => 'is not available now',
+            default => null,
+        };
+    }
+
+    /**
+     * @param  list<array{product: Product, kilograms: int}>  $lines
+     *
+     * @throws CheckoutUnavailable
+     */
+    private function refuseMalformed(array $lines): void
+    {
+        if ($lines === []) {
+            throw new CheckoutUnavailable('An Order was captured with an empty Cart.');
+        }
+
+        $seen = [];
+
+        foreach ($lines as $line) {
+            $product = $line['product'];
+
+            if ($line['kilograms'] < 1) {
+                throw new CheckoutUnavailable("Product [{$product->getKey()}] was captured with no kilograms.");
+            }
+
+            if (isset($seen[$product->getKey()])) {
+                throw new CheckoutUnavailable("Product [{$product->getKey()}] appears twice in one Cart.");
+            }
+
+            $seen[$product->getKey()] = true;
+        }
     }
 
     /**
@@ -100,54 +211,22 @@ class OrderCapture
     }
 
     /**
-     * One Order Line per Product in the Cart, snapshotted.
+     * One Order Line, snapshotted.
      *
      * `product_id` is kept as a reference for the admin, but the name and the
-     * price are copied because they are what gets quoted on the confirmation
+     * prices are copied because they are what gets quoted on the confirmation
      * call and collected at the door.
      *
-     * @param  list<array{product: Product, kilograms: int}>  $cart
-     * @return list<array{product_id: int, product_name: string, unit_price: int, unit_cost: int|null, quantity: int}>
+     * @param  array<int, int>  $costs  the whole Cart's average costs, read in one batch (#170)
+     * @return array{product_id: int, product_name: string, unit_price: int, regular_price: int, unit_cost: int|null, quantity: int, tier_min: int|null, tier_max: int|null}
      */
-    private function lines(array $cart): array
+    private function line(Product $product, PricedLine $priced, array $costs): array
     {
-        if ($cart === []) {
-            throw new CheckoutUnavailable('An Order was captured with an empty Cart.');
-        }
-
-        $seen = [];
-
-        foreach ($cart as $line) {
-            $product = $line['product'];
-
-            if ($product->trashed()) {
-                throw new CheckoutUnavailable("Product [{$product->getKey()}] is no longer sold.");
-            }
-
-            if ($line['kilograms'] < 1) {
-                throw new CheckoutUnavailable("Product [{$product->getKey()}] was captured with no kilograms.");
-            }
-
-            if (isset($seen[$product->getKey()])) {
-                throw new CheckoutUnavailable("Product [{$product->getKey()}] appears twice in one Cart.");
-            }
-
-            $seen[$product->getKey()] = true;
-        }
-
-        /**
-         * The whole Cart's cost in one batched read, the way the catalogue
-         * loads it for a list, rather than a correlated subquery per line
-         * (#170). A Product nothing has ever been recorded buying is absent
-         * from the map, which is read below as the same unknown a per-row
-         * `averageCost()` answers with.
-         */
-        $costs = $this->ledger->averageCostFor(array_keys($seen));
-
-        return array_map(fn (array $line): array => [
-            'product_id' => $line['product']->getKey(),
-            'product_name' => $line['product']->name,
-            'unit_price' => $line['product']->price,
+        return [
+            'product_id' => $product->getKey(),
+            'product_name' => $product->name,
+            'unit_price' => $priced->tierPrice,
+            'regular_price' => $priced->regularPrice,
 
             /**
              * What the units cost, read off the ledger at this instant and
@@ -156,9 +235,11 @@ class OrderCapture
              * set of Orders (ADR-0022). Null where nothing has ever been
              * recorded as bought, which is unknown and not free.
              */
-            'unit_cost' => $costs[$line['product']->getKey()] ?? null,
+            'unit_cost' => $costs[$product->getKey()] ?? null,
 
-            'quantity' => $line['kilograms'],
-        ], $cart);
+            'quantity' => $priced->kilograms,
+            'tier_min' => $priced->tier?->min,
+            'tier_max' => $priced->tier?->max,
+        ];
     }
 }
