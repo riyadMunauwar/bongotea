@@ -3,7 +3,9 @@
 namespace App\Support\Storefront;
 
 use App\Filament\Resources\Pages\Schemas\PageForm;
+use App\Models\Category;
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -60,8 +62,48 @@ final readonly class Seo
             description: filled($page->seo_description) ? $page->seo_description : $default->description,
             canonical: url($page->path()),
             siteName: $store->name,
-            image: filled($page->seo_image) ? url(Storage::disk(PageForm::SEO_IMAGE_DISK)->url($page->seo_image)) : $default->image,
+            image: self::imageUrl($page->seo_image) ?? $default->image,
         );
+    }
+
+    /**
+     * A Product's own: its SEO fields, else its name beside the store's, its
+     * short description and its cover picture.
+     */
+    public static function forProduct(Product $product, StoreSettings $store, Request $request): self
+    {
+        $default = self::forStore($store, $request);
+
+        return new self(
+            title: filled($product->seo_title) ? $product->seo_title : "{$product->name} — {$store->name}",
+            description: filled($product->seo_description) ? $product->seo_description : (filled($product->short_description) ? $product->short_description : $default->description),
+            canonical: url(CatalogueProps::productPath($product)),
+            siteName: $store->name,
+            image: self::imageUrl($product->seo_image) ?? $product->coverUrl() ?? $default->image,
+            type: 'product',
+        );
+    }
+
+    /**
+     * A Category's own: its SEO fields, else its name beside the store's and
+     * what it says about itself.
+     */
+    public static function forCategory(Category $category, StoreSettings $store, Request $request): self
+    {
+        $default = self::forStore($store, $request);
+
+        return new self(
+            title: filled($category->seo_title) ? $category->seo_title : "{$category->name} — {$store->name}",
+            description: filled($category->seo_description) ? $category->seo_description : (filled($category->about) ? $category->about : $default->description),
+            canonical: url(CatalogueProps::categoryPath($category)),
+            siteName: $store->name,
+            image: self::imageUrl($category->seo_image) ?? $default->image,
+        );
+    }
+
+    private static function imageUrl(?string $path): ?string
+    {
+        return filled($path) ? url(Storage::disk(PageForm::SEO_IMAGE_DISK)->url($path)) : null;
     }
 
     /**

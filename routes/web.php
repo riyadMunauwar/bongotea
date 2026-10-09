@@ -2,10 +2,14 @@
 
 use App\Enums\Courier;
 use App\Enums\PaymentMethod;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CourierController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SitemapController;
 use App\Models\Page;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
@@ -22,6 +26,34 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', [PageController::class, 'home'])->name('home');
+
+/*
+| The catalogue: a Product and a Category at their slugs, and search — the
+| page, and the live dropdown's suggestions, which are throttled because
+| they are asked for as the buyer types.
+*/
+
+Route::get('/tea/{slug}', [ProductController::class, 'show'])
+    ->where('slug', Page::SLUG)
+    ->name('product');
+
+Route::get('/category/{slug}', [CategoryController::class, 'show'])
+    ->where('slug', Page::SLUG)
+    ->name('category');
+
+Route::get('/search', [SearchController::class, 'index'])->name('search');
+
+Route::get('/search/suggestions', [SearchController::class, 'suggestions'])
+    ->middleware('throttle:search')
+    ->name('search.suggestions');
+
+/*
+| What search engines read: every public address, and where they may go.
+*/
+
+Route::get('/sitemap.xml', [SitemapController::class, 'sitemap'])->name('sitemap');
+
+Route::get('/robots.txt', [SitemapController::class, 'robots'])->name('robots');
 
 /*
 | The Order Complete Page, addressed by order number.

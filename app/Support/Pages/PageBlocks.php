@@ -4,6 +4,8 @@ namespace App\Support\Pages;
 
 use App\Models\Page;
 use App\Support\Pages\Blocks\CallToActionBand;
+use App\Support\Pages\Blocks\CategoryPanels;
+use App\Support\Pages\Blocks\CategoryTiles;
 use App\Support\Pages\Blocks\ChipsRow;
 use App\Support\Pages\Blocks\ContactCards;
 use App\Support\Pages\Blocks\Faq;
@@ -11,6 +13,7 @@ use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
 use App\Support\Pages\Blocks\Journey;
 use App\Support\Pages\Blocks\MapAndAddress;
+use App\Support\Pages\Blocks\ProductRail;
 use App\Support\Pages\Blocks\PromiseStrip;
 use App\Support\Pages\Blocks\Story;
 use App\Support\Pages\Blocks\TextReviews;
@@ -45,6 +48,9 @@ class PageBlocks
         ContactCards::class,
         MapAndAddress::class,
         Faq::class,
+        CategoryTiles::class,
+        CategoryPanels::class,
+        ProductRail::class,
     ];
 
     /**

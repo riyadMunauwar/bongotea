@@ -3,6 +3,8 @@
  * props are what its PHP definition's `props()` returns, key for key.
  */
 
+import type { CategoryDetail, CategoryTheme, ProductCard } from '@/types/catalogue';
+
 export type BlockButton = { label: string; href: string };
 
 export type HeroCarouselProps = {
@@ -100,6 +102,37 @@ export type FaqProps = {
     items: { question: string; answer: string }[];
 };
 
+export type CategoryTilesProps = {
+    heading: string | null;
+    allLink: BlockButton | null;
+    tiles: {
+        id: number;
+        name: string;
+        note: string | null;
+        href: string;
+        theme: CategoryTheme;
+        productCount: number;
+        /** The lowest price any of its Products reaches at its last Tier, in minor units. */
+        lowestPrice: number;
+    }[];
+};
+
+export type CategoryPanelsProps = {
+    eyebrow: string | null;
+    heading: string | null;
+    tags: { id: number; name: string }[];
+    /** Empty while only one Brand has published Products, so no Brand filter is drawn. */
+    brands: { id: number; name: string }[];
+    categories: (CategoryDetail & { products: ProductCard[] })[];
+};
+
+export type ProductRailProps = {
+    eyebrow: string | null;
+    heading: string | null;
+    link: BlockButton | null;
+    products: ProductCard[];
+};
+
 export type BlockPropsByType = {
     hero_carousel: HeroCarouselProps;
     promise_strip: PromiseStripProps;
@@ -114,6 +147,9 @@ export type BlockPropsByType = {
     contact_cards: ContactCardsProps;
     map: MapAndAddressProps;
     faq: FaqProps;
+    category_tiles: CategoryTilesProps;
+    category_panels: CategoryPanelsProps;
+    product_rail: ProductRailProps;
 };
 
 export type BlockType = keyof BlockPropsByType;

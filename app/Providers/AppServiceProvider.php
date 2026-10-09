@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\SettingsGroup;
 use App\Support\Settings\TrackingSettings;
+use App\Support\Storefront\Catalogue;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
@@ -21,6 +22,9 @@ class AppServiceProvider extends ServiceProvider
 
     /** Announcements one address may post in a minute before it is refused. */
     private const ANNOUNCEMENTS_PER_MINUTE = 60;
+
+    /** Search suggestions one address may ask for in a minute before it is refused. */
+    private const SUGGESTIONS_PER_MINUTE = 120;
 
     /**
      * Register any application services.
@@ -49,6 +53,9 @@ class AppServiceProvider extends ServiceProvider
          * panel's while its own provider boots, before this one does.
          */
         Route::pattern('record', '[0-9]+');
+
+        /** The catalogue every live Block on a Page reads, queried once per request. */
+        $this->app->scoped(Catalogue::class);
     }
 
     /**
@@ -116,6 +123,14 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('tracking', fn (Request $request): Limit => Limit::perMinute(
             $this->app->make(TrackingSettings::class)->beaconRateLimit,
+        )->by($request->ip()));
+
+        /**
+         * The search dropdown asks once per pause in typing, so a buyer
+         * never comes near this; a script hammering the catalogue query does.
+         */
+        RateLimiter::for('search', fn (Request $request): Limit => Limit::perMinute(
+            self::SUGGESTIONS_PER_MINUTE,
         )->by($request->ip()));
     }
 }

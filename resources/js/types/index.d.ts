@@ -68,8 +68,11 @@ export type SharedProps = {
         bulkOrder: string;
         myOrders: string;
         search: string;
+        searchSuggestions: string;
     };
     seo: Seo;
+    /** How many minor units make one taka; every price is sent in minor units. */
+    minorUnitsPerTaka: number;
 };
 
 declare module '@inertiajs/core' {

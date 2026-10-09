@@ -110,6 +110,7 @@
     --color-drawer-rule: #d3e2d7;
     --color-drawer-text: #2e3d34;
     --color-cart-badge: #c2410c;
+    --color-offer-tint: #fff1ea;
     --color-whatsapp: #25d366;
     --color-bkash: #e2136e;
     --color-nagad: #ec1c24;
@@ -145,6 +146,10 @@
     --shadow-arrow: 0 2px 8px rgba(22, 38, 29, 0.08);
     --shadow-play: 0 8px 24px rgba(0, 0, 0, 0.3);
     --shadow-raised: 0 12px 30px rgba(18, 35, 26, 0.08);
+
+    /* The catalogue's: a product card and a category tile lifted on hover, the search dropdown. */
+    --shadow-card: 0 10px 30px rgba(22, 38, 29, 0.08);
+    --shadow-tile: 0 12px 28px rgba(22, 38, 29, 0.1);
 }
 
 @layer base {

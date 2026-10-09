@@ -24,6 +24,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/Resources/Shipments/** | .ai/rules/shipments.md |
 | app/Support/Sms/**, app/Enums/SmsGateway.php, app/Enums/OrderText.php, app/Support/Settings/SmsSettings.php, app/Observers/OrderTextObserver.php, app/Observers/ShipmentTextObserver.php, app/Filament/Clusters/Settings/Pages/Sms.php, tests/Fixtures/Sms/** | .ai/rules/sms.md |
 | config/filesystems.php, config/livewire.php, app/Models/Product.php, app/Filament/Resources/Products/** | .ai/rules/storage.md |
+| app/Support/Storefront/** | .ai/rules/storefront.md |
 | app/Filament/Clusters/Inventory/Resources/Supplies/**, app/Filament/Clusters/Inventory/Resources/Suppliers/** | .ai/rules/supplies.md |
 | tests/** | .ai/rules/tests.md |
 | app/Support/Tracking/**, app/Models/Destination.php, app/Models/TrackingEvent.php, app/Models/TrackingContext.php, app/Observers/DestinationObserver.php, app/Enums/Tracking*.php, app/Console/Commands/*Tracking*.php, app/Filament/Resources/Destinations/**, tests/Fixtures/Tracking/** | .ai/rules/tracking.md |

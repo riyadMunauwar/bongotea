@@ -2,12 +2,12 @@ import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { bn } from '@/lang/bn';
 import { formatTaka } from '@/lib/bangla';
-import { cn } from '@/lib/utils';
 import { AnnouncementBar } from './announcement-bar';
 import { DesktopNav } from './desktop-nav';
-import { CartIcon, ParcelIcon, SearchIcon } from './icons';
+import { CartIcon, ParcelIcon } from './icons';
 import { MenuAnchor } from './menu-anchor';
 import { MobileMenu } from './mobile-menu';
+import { SearchBox } from './search-box';
 import { StoreLogo } from './store-logo';
 
 /**
@@ -29,7 +29,7 @@ export function SiteHeader() {
             <div className="hidden lg:block">
                 <div className="shell-container flex h-[76px] items-center gap-7">
                     <StoreLogo store={store} />
-                    <SearchForm action={links.search} className="h-[46px] max-w-[560px] flex-1" />
+                    <SearchBox className="h-[46px] max-w-[560px] flex-1" />
                     <div className="ml-auto flex flex-none items-center gap-[22px]">
                         <MenuAnchor href={links.myOrders} className="flex items-center gap-[9px] text-ink no-underline hover:text-ink">
                             <ParcelIcon />
@@ -89,32 +89,10 @@ export function SiteHeader() {
                         </span>
                     </MenuAnchor>
                 </div>
-                <SearchForm action={links.search} compact className="h-11 flex-none" />
+                <SearchBox compact className="h-11 flex-none" />
             </div>
 
             {menuOpen && <MobileMenu items={menus.header} store={store} myOrdersHref={links.myOrders} />}
         </header>
-    );
-}
-
-function SearchForm({ action, compact = false, className }: { action: string; compact?: boolean; className?: string }) {
-    return (
-        <form action={action} method="get" role="search" className={cn('m-0 flex min-w-0 items-center overflow-hidden rounded-[10px] border-[1.5px] border-primary bg-white', className)}>
-            <input
-                type="search"
-                name="q"
-                placeholder={bn.header.searchPlaceholder}
-                aria-label={bn.header.search}
-                className={cn('h-full min-w-0 flex-1 border-0 bg-transparent px-[14px] text-ink outline-0', compact ? 'text-[14px]' : 'text-[15px]')}
-            />
-            <button
-                type="submit"
-                aria-label={bn.header.search}
-                className={cn('flex h-full cursor-pointer items-center gap-[6px] border-0 bg-primary text-[14px] font-semibold text-white', compact ? 'px-[14px]' : 'px-[18px]')}
-            >
-                <SearchIcon />
-                {!compact && bn.header.search}
-            </button>
-        </form>
     );
 }

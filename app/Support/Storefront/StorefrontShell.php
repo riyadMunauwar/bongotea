@@ -34,6 +34,9 @@ class StorefrontShell
     /** Where the header's search form sends its query. */
     public const SEARCH_PATH = '/search';
 
+    /** Where the header's search asks for its live dropdown's matches. */
+    public const SEARCH_SUGGESTIONS_PATH = '/search/suggestions';
+
     public function __construct(
         private StoreSettings $store,
         private AnnouncementSettings $announcement,
@@ -103,7 +106,7 @@ class StorefrontShell
      * follow a renamed slug; one not published leaves its button at the
      * installed slug.
      *
-     * @return array{bulkOrder: string, myOrders: string, search: string}
+     * @return array{bulkOrder: string, myOrders: string, search: string, searchSuggestions: string}
      */
     public function links(): array
     {
@@ -117,6 +120,7 @@ class StorefrontShell
             'bulkOrder' => $paths->get(SystemPage::BulkOrder->value, self::BULK_ORDER_PATH),
             'myOrders' => $paths->get(SystemPage::MyOrders->value, self::MY_ORDERS_PATH),
             'search' => self::SEARCH_PATH,
+            'searchSuggestions' => self::SEARCH_SUGGESTIONS_PATH,
         ];
     }
 
