@@ -1,6 +1,8 @@
-# GioPages
+# Bongo Tea
 
-A performance-first landing-page ecommerce system. A merchant authors landing pages, attaches products to them, and takes orders from paid traffic, paid at the door or online.
+A wholesale tea store. Bongo Tea sells tea by the kilogram to businesses — tea stalls, restaurants, hotels, offices — and takes their orders online.
+
+> This glossary is being rewritten from GioPages, the landing-page system this codebase began as. Terms below not yet revisited still describe GioPages.
 
 This glossary is the shared vocabulary for that domain. It says what each term means, not how anything is built.
 
@@ -9,133 +11,137 @@ This glossary is the shared vocabulary for that domain. It says what each term m
 ### The selling surface
 
 **Page**:
-A publicly reachable landing page, authored as a complete HTML document and served at its own slug. A Page is either a draft or published; only a published Page is reachable.
-_Avoid_: post, article, template, funnel step
-
-**Slug**:
-The flat path a Page is served at, and its permanent public identity. A slug is claimed for good once used, because it may be baked into ad creatives that outlive the Page itself.
-_Avoid_: permalink, path, URL
-
-**Site Root**:
-The bare domain — the address a visitor reaches by typing the Merchant's domain and nothing else. It is not a Slug: nothing is authored at it, nothing claims it, and it never appears in an ad creative. What it serves is a Merchant's choice rather than a Page's identity, which is why it can be repointed and a Slug cannot.
-_Avoid_: home, index, empty slug, root slug
-
-**Front Page**:
-The one Page a Merchant has designated to answer the Site Root. A role a Page plays and never a kind of Page: a Front Page is an ordinary Page that keeps its Slug, its Checkout Config and its Products, and stays reachable at its Slug as it always was. Designating one is a decision about the installation, not about the Page, so a Page knows nothing about being one. Only a published Page answers there; a Front Page pulled back to draft or deleted is remembered, and the Site Root serves the Placeholder until it returns or another is chosen.
-_Avoid_: homepage, default page, index, landing root
-
-**Placeholder**:
-What the Site Root serves when no Front Page is designated: a document shipped with the system that says what GioPages is and that nothing has been chosen yet. A Placeholder is not a Page. It has no Slug, no Checkout, no Products and no Pixel; no Merchant authors it, edits it or takes an Order on it, and it is reachable at no address but the Site Root. It is the same document for everyone who sees it, and it asks not to be indexed — the same bytes stand on every installation that has not chosen yet, and the Merchant's domain would wear the cost of that.
-_Avoid_: default page, holding page, welcome page, landing page, coming soon
-
-**Went live**:
-The moment a Page first became reachable at its slug. A Page can be pulled back to draft and published again, but it went live only once — the date is what a Merchant matches a Page against ad spend, so it is the first one, never the most recent.
-_Avoid_: launched, activated, last published
-
-**Product**:
-Something a Customer can order, carrying a single price and no variations. Products have no public address of their own; they are only ever reached through a Page.
-_Avoid_: item, SKU, variant, listing
-
-**Checkout**:
-The form on a Page that captures an Order, and asks how it will be paid when the Page offers more than one way. There is no cart and no multi-step flow: a Checkout captures one Order in one submission; an online payment happens after Capture, never before it. Every Page has its own Checkout, defined by its own Checkout Config.
-_Avoid_: cart, basket, funnel
-
-**Checkout Config**:
-Everything one Page decides about its own Checkout: what it asks for, what it charges for delivery, which Products it offers, which Payment Methods it offers and in what order, and how it looks. A Config belongs to a single Page and is complete on its own, so changing it changes that Page and nothing else. Anything shared by every Page is a Setting, not part of a Config.
-_Avoid_: settings, preset, theme, template
-
-**Checkout Layout**:
-How a Checkout is arranged and how it looks: what it draws and where, and nothing about what it asks for or what it charges. Ten of them — Stacked, Split, Split reversed, Stepper, Accordion, Bento grid, Compact embed, Chips, Invoice and Dark panel. Every question, the Product List when it is shown, the delivery choice, the payment choice, the totals and the failure slots are drawn by all ten, in the same order, and every one captures the same complete Order. A layout may own a slot of its own — a numbered heading, a step label, a card title, an empty-state line — and only a Page arranged in that layout is asked what the slot says. Two layouts behave as well as arrange: Stepper shows one panel at a time and Accordion opens one section at a time, and without script both fall back to every panel in order, so what is captured never depends on the behaviour. Dark panel's navy is its own, the one colour on the form that is not the Page's. Half-width pairing of questions is refused by the narrow-column layouts, Compact embed and Split reversed.
-_Avoid_: template, theme, skin, variant, form-only, summary-first
-
-**Field Width**:
-How much of a row one Checkout Field takes: the whole of it, or half, so that two short questions sit side by side. A width is a choice between those two and never a figure, and it is a promise about wide screens only — below the breakpoint every Field fills the row, with nothing a Merchant can say to change it, because the traffic these Pages answer is overwhelmingly phone-sized. A narrow-column Checkout Layout fills the row at every width, because a Merchant choosing one has already said what they want the form to do and paired questions work against it. A width is kept either way, so a Page moved off a narrow-column layout asks its questions the way it always did.
-_Avoid_: column, span, size, grid
-
-**Style Token**:
-One thing about a Checkout a Merchant can restyle — a colour, a length, a typeface. Every token is set once for the whole Checkout and applies to every Checkout Layout alike; no single Checkout Field restyles itself, so a form is styled in exactly one place. Tokens belong to one Page's Checkout Config like everything else in it: nothing a Merchant sets reaches another Page.
-_Avoid_: theme, variable, style setting, CSS variable, field appearance
-
-**Container**:
-The two boxes a Checkout draws itself inside, and the per-Page concern that controls them. **The ground** is the band the design paints behind everything — the background fill and the padding around it — and **the card** is the one bordered panel a Customer reads inside it. A Merchant may dissolve the ground so the Checkout sits flush inside a wrapper they drew themselves; the card stays, styled by its own Style Tokens. Container is its own concern and not a Style Token: turning the ground off is structural, not a colour a rule reads, so it belongs to the Checkout Config beside the tokens rather than among them. Every setting keeps the design's current figure as its default, so a Page that says nothing about its Container draws the ground and the card exactly as before.
-_Avoid_: cart, panel, wrapper, frame, box
-
-**Checkout Words**:
-Everything a Checkout says in the Merchant's own words: the Order Button, the totals labels, each Payment Method's long and short label, and the slots a Checkout Layout owns. Every word has a default drawn from the designs, Bangla first and English second, so a Page that says nothing reads the way the design does. Words are copy and never figures, so none is in the Pricing Fingerprint. A word belonging to a layout the Page is not arranged in is kept unseen and comes back when the layout does.
-_Avoid_: labels, copy, content, microcopy, translations
-
-**Product List**:
-The part of a Checkout that draws the Page's Products with their pictures, quantities and line totals. Shown unless the Merchant hides it, on any Checkout Layout, for a Page whose own markup has already sold the Product above the fold. A Checkout whose Product List is hidden sells everything the Page sells, one of each, and captures the same complete Order; it can offer no Product Picker, because there is nothing drawn to pick between.
-_Avoid_: product panel, cart, form-only, summary
-
-**Order Button**:
-What a Checkout's button says, and the line beneath it, in the Merchant's own words. The wording may carry a total placeholder, filled in with what the courier will collect so the price sits on the button at the moment a Customer taps it. Both belong to one Page's Checkout Config; a Page that says nothing keeps the words the button has always had. Copy and not a figure, so neither is in the Pricing Fingerprint: a Merchant editing a word on a live Page never turns away an Order somebody has half-typed.
-_Avoid_: CTA, call to action, submit label, microcopy
-
-**Product Picker**:
-Said of a Checkout that asks the Customer which of its Page's Products to buy, rather than selling all of them together. What it opens with is the Page's Default Selection. A Page down to a single Product asks nothing and sells it: a choice of one is not a choice, and neither is one on a Checkout whose Product List is hidden.
-_Avoid_: cart, add-on, bundle, upsell toggle
-
-**Default Selection**:
-Which of a Page's Products its Product Picker opens ticked. None unless the Merchant says otherwise. One is a default the Customer sees a price from and then changes; several is a bundle the Merchant is asserting, and carries the risk the empty default exists to avoid — on a cash-on-delivery Page, an extra nobody chose is not a larger sale, it is a refused parcel. It settles nothing about what an Order costs; what was ticked at Capture does.
-_Avoid_: preselected, default cart, bundle, preset
-
-**Checkout Field**:
-One thing a Checkout asks a Customer for. Built-in fields, which the system knows by name, and the Merchant's own sit in one ordered list, presented and validated alike.
-_Avoid_: input, form field, custom field, attribute
-
-**Field Constraints**:
-What a Merchant has said an answer to one of their own Checkout Fields must be, chosen from a fixed vocabulary: a shortest and a longest for writing, a smallest and a largest for a number, whole numbers, and a shape picked from a named list. There is no rule a Merchant writes themselves anywhere, because a malformed one shows up as a conversion rate rather than as an error. One definition compiles into what the browser enforces and what the server checks, so the two can never disagree. A built-in field has none: what its column will hold is the built-in's to say.
-_Avoid_: validation rules, rule string, regex, pattern string, constraints list
-
-**Switched off**:
-Said of a Checkout Field its Page has stopped asking for. It is absent from the form and from what the server checks, and an Order taken without it records nothing rather than a blank. It keeps its wording and its rules meanwhile, so switching it back on restores the question as it was — switched off and not compulsory are separate things, and a compulsory field that is switched off is simply inert. Phone is the one field that cannot be switched off, because a Customer is their phone number.
-_Avoid_: disabled, hidden, removed, deleted, inactive, optional
-
-**Shortcode**:
-A placeholder a Merchant writes into a Page's HTML that the system replaces with generated content when the Page is rendered. It is the only way a Page gets content the Merchant did not type themselves.
-_Avoid_: tag, macro, snippet, token, embed
+A publicly reachable page of the store, made of Blocks arranged in the editor and served at its own Slug. A Page is either a draft or published; only a published Page is reachable. A Product, a Category, the Checkout and an Order are never Pages: what they show comes from the thing they are about, so nobody authors them.
+_Avoid_: post, article, template, landing page, screen
 
 **Block**:
-A Shortcode's content chosen from an editor rather than typed as text. A Block and a Shortcode are the same definition reached two ways, never two systems: whatever a Shortcode can produce, a Block produces identically.
-_Avoid_: widget, component, element, section
+One section of a Page, chosen from a fixed set of kinds and filled in from the editor — a hero carousel, a strip of promises, a row of reviews, the bulk order form, the price matrix. Some kinds only say what the Merchant typed; others do something, and those take only what to call things and what to show, never figures: Products, prices, Tiers and Delivery Bands are always read as they are now, so no Block can quote a price that has since changed. Any kind can be placed on any Page.
+_Avoid_: shortcode, widget, component, element, section
+
+**System Page**:
+A Page the store cannot do without — the home page, the bulk order page, the customer's orders page — created when the store is installed and known by the job it does rather than by its title or Slug. It is an ordinary Page in every other way, its Blocks rearranged and reworded like any other's, but it can be neither deleted nor given another job, so that whatever links to "the bulk order page" always finds one. There are three: the home page, which is what the bare domain serves; the bulk order page, which is where the Cart is seen and changed; and the orders page, where a Customer Signs in. Every other Page the store opens with — pricing, about, contact — is an ordinary one that happens to be written already.
+_Avoid_: core page, fixed page, default page, built-in page, front page
+
+**Slug**:
+The part of an address that names one Page, Product or Category, and its permanent public identity. A slug is claimed for good once used, because it may be baked into ads, posts and chats that outlive the thing itself; renaming changes what something is called, never where it is.
+_Avoid_: permalink, path, URL
+
+**Product**:
+Something a Customer can order, sold by the Kilogram, carrying a price in every Tier and no variations. Every Product has a public address of its own at its Slug, where it is described in full. A Product taken out of the catalogue keeps its address and says it is no longer sold there, because links to it in old posts and chats outlive it.
+_Avoid_: item, SKU, variant, listing
+
+**Available**:
+Said of a Product that can be ordered right now — a decision the Merchant makes by hand, and never one the stock ledger makes for them, because a shelf nobody has counted is not an empty one. An unavailable Product is still shown wherever it would be, greyed and saying it cannot be had at the moment, because a regular buyer looks for the tea they always buy. Not the same as taken out of the catalogue, which is for good; unavailable is for now.
+_Avoid_: in stock, out of stock, enabled, active, sold out
+
+**Category**:
+The one grade a Product is sold under — Premium, Gold, Silver — and the way the store is organised around it: what a Customer browses by, what the order form groups by, and what carries its own description and its own colours wherever it is drawn. Every Product is in exactly one, and Categories do not nest. Its colours are a Category Theme chosen for it, never colours typed in one by one. Each has a public address of its own at its Slug, listing its Products under its own description.
+_Avoid_: segment, grade, collection, department, type
+
+**Category Theme**:
+One designed set of colours a Category wears wherever it is drawn — its pill, its panel, its accent, its ticks — chosen by name from the few the store ships with, Premium, Gold and Silver among them. A theme is designed as a whole and never assembled colour by colour, so a Category can look only as the design meant one to; a new theme is a design decision, not a setting.
+_Avoid_: palette, colour scheme, skin, style, colours
+
+**Tag**:
+A use a Product is good for — milk tea, plain tea, strong liquor, hotels — that a Customer can filter by. A Product may carry any number, or none. A Tag says nothing about price, grouping or appearance; it only narrows a list. Not the "best for" phrases on a Product's own page, which are that Product's copy and narrow nothing.
+_Avoid_: label, attribute, use case, category, filter
+
+**Brand**:
+Whose tea a Product is — Bongo Tea's own, or another company's that Bongo Tea sells alongside it. Every Product has exactly one, Bongo Tea's own teas included, so that "no brand" never quietly means "ours". A Customer sees it on the Product wherever the Product is drawn, and can narrow a list by it once the store sells more than one. Not a Supplier: a Brand is whose name is on the tea, a Supplier is who Bongo Tea bought it from, and one Supplier may carry several Brands.
+_Avoid_: manufacturer, vendor, supplier, maker, label
+
+**Tier**:
+One of a Product's ranges of the cart's total Kilograms — across every Product in the cart — and the price that Product charges within it. Each Product has its own Tiers, covering every whole kilogram from one upwards without gap or overlap, so the same cart can fall in a different range for each Product: four kilograms of one tea and three of another are seven kilograms, and each tea charges whatever its own Tiers say for seven. It is always the whole cart's Kilograms that are measured, never one line's, because a buyer who mixes teas is buying in bulk. A Product may have a single Tier, which is a flat price, and no Tier may cost more per Kilogram than one before it, because a heavier cart is never charged more. There is no store-wide table of Tiers: a Product's ranges and its prices are set together, on the Product, and nowhere else. The Tiers owe nothing to the Delivery Bands.
+_Avoid_: slab, step, level, bracket, price break, quantity discount, default tiers
+
+**Regular Price**:
+What one Kilogram of a Product costs in its first Tier. It is the figure a Customer sees struck through once their cart has reached a cheaper Tier. There is no separate list price or MRP beside it.
+_Avoid_: MRP, base price, list price, compare-at price, original price
+
+**Tier Price**:
+What one Kilogram of a Product costs in one of its Tiers, typed by the Merchant in whole taka — never worked out from a discount, because wholesale tea is quoted as a price per kilogram at a weight, not as money off. The Tier Price in force at Capture is what the Order Line records, so a price changed afterwards moves no Order.
+_Avoid_: unit price (as a stored figure), bulk price, wholesale price, rate, tier discount
+
+**Checkout**:
+The step that turns a Cart into an Order: it asks where to send it — a name, a mobile number, a District and an address, and optionally a shop's name and a note — and how it will be paid, then captures it in one submission. There is one Checkout for the whole store and it is the same form for everybody; a Customer is never asked to sign in to use it. An online payment happens after Capture, never before it.
+_Avoid_: cart, basket, funnel, order form
 
 ### Orders
 
 **Order**:
-A Customer's committed request for products, captured on a Page at an agreed price. An Order records everything it needs to be fulfilled without consulting anything else.
+A Customer's committed request for Products, captured from their Cart at an agreed price. An Order records everything it needs to be fulfilled without consulting anything else. It is known by its order number — BT- and six characters drawn at random from ones that cannot be misheard or misread for each other — short enough to say down a phone and impossible to guess the next one of, because an order number alone is enough to open the Order Complete Page.
 _Avoid_: purchase, transaction, sale, lead
 
 **Order Line**:
-One Product's worth of an Order, recording what was sold, at what unit price, in what quantity and at what unit cost, as agreed at Capture. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
+One Product's worth of an Order, recording what was sold, at what unit price, in what quantity and at what unit cost, as agreed at Capture — and which of its Product's Tiers that price came from, as the range stood then, because the Product's ranges may move and "why did they pay that?" must still have an answer. A line under a Price Override records no Tier; its reason says why instead. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
 _Avoid_: line item, order item, cart item
 
-**Answer**:
-What a Customer said to one of the Checkout Fields a Merchant added of their own, as an Order records it: the field's key, the wording it was asked in, the control it was asked with, the value, and for a choice the wording of the option picked. A built-in field's answer is not this — it goes to the column that has always held it. A question asked and left alone is recorded with nothing for a value, which is a different thing from a question that was never asked.
-_Avoid_: custom field, meta, extra data, attribute
-
 **Capture**:
-The moment a visitor submits the Checkout and an Order comes into existence. What was agreed at Capture — the products, their prices, and the totals — is fixed from then on.
+The moment a visitor submits the Checkout, or a User saves a new Order taken by phone, and an Order comes into existence. What was agreed at Capture — the Products, their Tier Prices, and the totals — is fixed from then on, until a User changes what the Order holds.
 _Avoid_: conversion, submission
 
-**Pricing Fingerprint**:
-What a Checkout quoted, reduced to a value the rendered form carries and a Capture checks back: the Products the Page sells, their prices, and what each Delivery Option costs. A submission whose fingerprint is not the Page's current one is refused outright and the Customer told to reload, because a visitor may be holding a Page rendered days ago and the figures on their screen would otherwise not be the figures collected at the door. Nothing else about a Checkout is in it — a question added, reworded or restyled since leaves it alone, so editing those never turns away an Order somebody has half-typed.
-_Avoid_: hash, checksum, nonce, version, signature
+**Repricing**:
+What happens when a User changes what an unsent Order holds — a quantity, a line, a Product: the whole Order is priced again as if captured that moment, at today's Tier Prices, for its new total Kilograms, with its Delivery Charge read afresh. The User sees the old total beside the new one before saving, because the next thing they do is tell the Customer. An Order with any Shipment is not changed at all, because what the courier will collect has already been handed to them.
+_Avoid_: recalculation, update, edit, adjustment
+
+**Price Override**:
+A Tier Price a User sets by hand on one line of an Order — a deal agreed with a buyer — instead of the one the store works out. It needs a Permission of its own and a reason, and both the reason and who gave it stay on the record, because a price nobody can explain is a margin nobody can trust. A line overridden keeps its price through any later Repricing of the Order.
+_Avoid_: discount, manual price, custom price, negotiated price
+
+**Cart**:
+The Products and Kilograms a Customer is gathering before they order, kept by their own browser and nowhere else. It belongs to the browser and not to the Customer: signing in elsewhere does not bring it along, and nothing about it is known to the store until Capture. Every figure it shows is worked out afresh as it changes, so adding a Kilogram that crosses into another Tier reprices every line in it at once. There is only ever one: the bulk order form, the price calculator and every product card's stepper are views of the same Cart, never separate quantities that could disagree.
+_Avoid_: basket, bag, order (before Capture), quote
+
+**Quote**:
+The figures a Customer was shown when they placed an Order — each line's Tier Price, the Delivery Charge and the total — sent with it and checked at Capture against what the store works out itself. The store's own figures are the only ones that count; the Quote exists to be compared. One that disagrees — a price moved, or a Product no longer Available — is refused, never silently corrected, and the Customer shown the figures as they are now, because the total on their screen is the total the courier collects and a surprise at the door is a refused parcel.
+_Avoid_: pricing fingerprint, hash, checksum, estimate, preview
 
 **Customer**:
-A person identified by their phone number, and nothing else. A Customer holds no name and no address; those belong to each Order they placed, because a phone number is an identity, not a person.
+A person identified by their phone number, and nothing else. A Customer holds no name, no shop and no address; those belong to each Order they placed, because a phone number is an identity, not a person.
 _Avoid_: user, account, buyer, client, lead
 
+**Signing in**:
+A Customer proving, with a One-Time Code sent to their phone, that the number is theirs — and so seeing every Order ever placed with it, those placed before they first signed in among them. Nothing is created by it and nothing is kept on the Customer afterwards: there is no account beside the number, no profile, no saved address. It is never asked of anybody to order; it exists so a Customer can follow their Orders.
+_Avoid_: login, register, sign up, account, authentication
+
+**One-Time Code**:
+Four digits sent by SMS to a phone number, good once and only for a few minutes, whose only use is Signing in. How often one may be sent to a number is limited, because every one is a text message the store pays for.
+_Avoid_: OTP, PIN, password, verification code, token
+
+**SMS Gateway**:
+A company the store sends text messages through, known to the system by name — GioSMS to begin with. Like a Courier or a Payment Method, the Merchant supplies what it needs once in Settings, and one gateway at a time is the one that sends. Which one is sending is never something a Customer can tell.
+_Avoid_: SMS provider, driver, SMS service, messaging vendor
+
+**Order Progress**:
+Where an Order stands as its Customer sees it after Signing in: Received, Confirmed, Sent or Delivered — or Cancelled, drawn instead of the steps. Worked out from the Order and its Shipments and never kept or set by anybody, so it cannot disagree with them: an Active Shipment is Sent, a Delivered or Partly Delivered one is Delivered. A parcel that came back, or was Abandoned, reads as Confirmed again, because to the Customer the Order is waiting to be sent, and whether it will be is a question a User has not answered yet. It never names a Courier's Consignment.
+_Avoid_: order status, tracking, delivery status, timeline
+
+**Order Text**:
+A text message telling a Customer that something happened to their Order — it was placed, confirmed, sent with a Courier, or Cancelled. Each kind is switched on or off in Settings and worded there by the Merchant. One is sent after the fact and never on the way to it: a text that cannot go out never stops an Order being captured or moved along.
+_Avoid_: notification, SMS alert, message, update
+
+**Enquiry**:
+A question somebody sent through the contact form — a name, a phone number, what it is about and what they said — kept in the admin until a User has called them back and closed it. Not an Order and not a Customer: asking commits nobody to anything, and a caller who then orders has their Order taken by phone like anybody else's.
+_Avoid_: lead, ticket, message, contact, inquiry
+
+**Staff Alert**:
+A text message sent to the Merchant's own numbers, set in Settings, the moment a new Order is captured or a new Enquiry arrives, so that nobody has to watch the admin to know there is somebody to call. Switched on or off like an Order Text, and never sent to a Customer.
+_Avoid_: admin notification, new order alert, ping
+
 **District**:
-The delivery region agreed with the Customer at Capture, distinct from the free-text address that tells a courier where the door is. It is optional fulfilment data, captured because couriers want a structured region that cannot be recovered from an address afterwards, and it settles nothing about what an Order costs.
+The district an Order is delivered to, one of the country's sixty-four, chosen from a list at Capture and distinct from the free-text address that tells a courier where the door is. Every Order has one, because the store delivers nationwide and couriers want a structured region that cannot be recovered from an address afterwards. It settles nothing about what an Order costs.
 _Avoid_: zone, area, thana, city
 
-**Delivery Option**:
-One delivery arrangement a Page offers, named and priced by the Merchant — "Inside Dhaka", "Outside Dhaka", "Free" — with an optional detail line beneath the name, "1–2 days", that layouts with room draw and segmented ones leave out. A Page may offer none, one or several; which one is agreed at Capture is what a Delivery Charge comes from. The detail is copy, not a figure, and is outside the Pricing Fingerprint.
-_Avoid_: shipping method, delivery zone, tier, rate
+**Kilogram**:
+The one unit everything is sold in. Every quantity a Customer asks for is a whole number of kilograms of one Product, and every figure that depends on how much is bought — the Delivery Charge among them — is read from kilograms, never from a count of lines or parcels.
+_Avoid_: unit, piece, pack, item, quantity (as a unit)
+
+**Delivery Band**:
+A range of an Order's total kilograms and the Delivery Charge for it — 1–5 kg ৳120, 51 kg and over free. The bands cover every whole kilogram from one upwards without gap or overlap, are the same for the whole country, and are set in Settings. They are their own table and owe nothing to how Products are priced: where a band's edges fall says nothing about where a price changes.
+_Avoid_: delivery option, shipping tier, zone, rate, slab
 
 **Delivery Charge**:
-The amount added to an Order for getting the parcel to the door, taken from the Delivery Option agreed at Capture. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order.
+The amount added to an Order for getting the parcel to the door, taken from the Delivery Band its total kilograms fall in. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order. There is nothing for a Customer to choose: the weight decides it.
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
@@ -145,11 +151,11 @@ _Avoid_: rejected, void, failed, refunded
 ### Paying
 
 **Payment Method**:
-One of the named ways an Order can be paid, known to the system by name: Cash on Delivery and the online gateways. The Merchant switches each on for the installation and supplies what the gateway needs; a Page then chooses which of the switched-on ones it offers, and in what order. A method the installation has not switched on, or cannot reach, is offered nowhere, whatever a Page says. On a Checkout each method is drawn under a long label or a short one, both among the Page's Checkout Words; which one a Checkout Layout draws is the layout's decision.
+One of the named ways an Order can be paid, known to the system by name: Cash on Delivery and the online gateways. The Merchant switches each on for the whole store in Settings and supplies what the gateway needs; the Checkout offers every switched-on method it can reach, and asks the Customer to choose only when there is more than one. Nothing anywhere on the store advertises a method that is not switched on.
 _Avoid_: gateway, payment option, payment provider, driver
 
 **Cash on Delivery**:
-The Payment Method where the courier collects the total at the door. The one method every Page starts with, the one a Page falls back to when nothing else it lists can be offered, and the one that needs no Payment: an Order paid this way is simply due.
+The Payment Method where the courier collects the total at the door. The one method the store opened with, the one the Checkout falls back to when nothing else can be offered, and the one that needs no Payment: an Order paid this way is simply due.
 _Avoid_: COD-only, offline, manual
 
 **Payment**:
@@ -181,19 +187,11 @@ Where a gateway sends a Customer back. It says the Payment is being verified, ru
 _Avoid_: callback page, return URL, success page
 
 **Order Complete Page**:
-Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone. It shows the Order in full — the Customer's name, number and address included, and their note where the Page asked a question keyed `note` — only to the browser that placed it, for as long as that browser keeps what Capture handed it; anyone else holding the address sees the Order and not the Customer. The address itself unlocks nothing, so it may sit in history and Referer headers without giving anything away.
-_Avoid_: thank-you page, confirmation page, success page, receipt (as a name for the page; Receipt is one Order Complete Layout)
-
-**Order Complete Config**:
-Everything one Page decides about its own Order Complete Page: how it is arranged, and what it says in the Merchant's own words. It belongs to a single Page and is complete on its own, like a Checkout Config, and is not part of one: the Checkout captures the Order, and this is where the Customer lands afterwards. A Page that says nothing keeps the words the page has always had.
-_Avoid_: thank-you settings, success page settings, template, theme
-
-**Order Complete Layout**:
-How an Order Complete Page is arranged: what it draws, and nothing about what the Order contains. Every layout draws the order number, the Order's lines and totals, how it is paid, and where it is delivered when the browser is the one that placed it. A layout may draw a slot of its own — a status line above the headline, a row of steps, a set of tiles — and only a Page arranged in that layout is asked what the slot says. A layout rearranges by its own block of rules and never reorders the document: all ten — Centered classic, Split, Timeline, Receipt, Dark hero, Minimal, Cards grid, Editorial, Accent band and Compact — write the same parts in the same order and differ in where the rules put them. Timeline's slot is the four steps and the Order's capture time beside its number; Cards grid's is the three tiles; Receipt's is a Print button whose handler is the one line of script the page carries. Dark hero's band is a navy of its own, the one colour on the page that is not the Page's.
-_Avoid_: template, theme, skin, variant, design
+Where a Customer lands once their Order is settled as far as the Checkout is concerned: straight after a Cash on Delivery Capture, or once a Payment is Paid. Addressed by order number alone. It shows the Order in full — the Customer's name, number and address included, and their shop and their note where they gave them — only to the browser that placed it, for as long as that browser keeps what Capture handed it; anyone else holding the address sees the Order and not the Customer. The address itself unlocks nothing, so it may sit in history and Referer headers without giving anything away.
+_Avoid_: thank-you page, confirmation page, success page, receipt
 
 **Retry Page**:
-Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the Page no longer offers. It shows the Order and offers the Page's Payment Methods again, Cash on Delivery among them if the Page offers it. Addressed by order number alone, like the Order Complete Page.
+Where a Customer lands with an Unpaid Order: after a Failed, Cancelled or Expired Payment, or after a Capture that chose a method the store no longer offers. It shows the Order and offers the switched-on Payment Methods again, Cash on Delivery among them. Addressed by order number alone, like the Order Complete Page.
 _Avoid_: failure page, error page, payment page
 
 ### Delivering
@@ -327,12 +325,8 @@ The span of days every report figure is counted over, chosen once for a whole sc
 _Avoid_: date range, period, filter, timeframe
 
 **Report**:
-Figures a Merchant reads at length, on a screen of their own. A report is asked either of the whole installation — what the couriers did, what the Products sold, what is on the shelf — or of one record, which is what a Page Report is. Nearly every one is counted over a Reporting Window and obeys it, and every figure on such a report answers for the same span of days, which is what makes two of them worth reading side by side. The exception is a report whose question has no span behind it at all: what is held right now is a fact about this moment, so the Stock Report is drawn with no window control rather than one that changes nothing — a dead control is worse than none, because a Merchant who moves it reads the same figures as the answer to a different question. A to-do list is not a report either way: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
+Figures a Merchant reads at length, on a screen of their own. A report is asked either of the whole installation — what the couriers did, what the Products sold, what is on the shelf. Nearly every one is counted over a Reporting Window and obeys it, and every figure on such a report answers for the same span of days, which is what makes two of them worth reading side by side. The exception is a report whose question has no span behind it at all: what is held right now is a fact about this moment, so the Stock Report is drawn with no window control rather than one that changes nothing — a dead control is worse than none, because a Merchant who moves it reads the same figures as the answer to a different question. A to-do list is not a report either way: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
 _Avoid_: analytics, insights, metrics, stats, BI
-
-**Page Report**:
-Everything one Page's own figures say over a Reporting Window — its Orders, Sales, Cancellation Rate and Average Order Value, what became of its Orders, which of its Products carried it, and how it was paid and delivered — on a screen of its own. One Page's answer to the questions the Dashboard asks of every Page at once, which is why it is drawn by the Dashboard's own widgets counting that Page alone. A Page that never took an Order has one, reading as zeros; a retired Page keeps one, because what it earned before it was taken down is still worth reading.
-_Avoid_: analytics, stats, insights, page metrics
 
 **Orders (as a figure)**:
 How many Orders were captured in a Reporting Window, whatever became of them afterwards. It is the number ad spend is judged against: a Cancelled Order still cost a click.
@@ -341,6 +335,10 @@ _Avoid_: conversions, leads, sales
 **Sales**:
 The money side of a Reporting Window: the totals, Delivery Charge included, of every Order captured in it that is not Cancelled. Counted at Capture, not when it is paid or delivered, because a Cash on Delivery Order has no other moment. Orders and Sales are always shown side by side and never collapsed into one.
 _Avoid_: revenue, turnover, income, GMV
+
+**Kilograms Sold**:
+The weight side of a Reporting Window: the Kilograms on every Order counted in Sales, the same Orders and the same moment. Drawn beside Sales wherever Sales is drawn, because a wholesale tea business measures itself in kilograms as much as in taka, and the two move apart whenever the Tiers do their work.
+_Avoid_: volume, units sold, quantity, tonnage
 
 **Cancellation Rate**:
 Cancelled Orders as a share of Orders in a Reporting Window. Drawn as its own figure so that cancelling an Order moves a rate a Merchant watches rather than quietly shrinking a total.
@@ -355,11 +353,11 @@ The Orders, Payments, parcels and shelves an operator must act on regardless of 
 _Avoid_: alerts, exceptions, issues, anomalies
 
 **Visit**:
-One load of a published Page by a browser, counted per Page per day. Every load, not every browser, matching how an ad platform counts the same thing, so the two figures agree. Loads of the Order Complete Page and the Retry Page are not Visits: whoever is on them has already ordered, and counting them would dilute the Conversion Rate with people who converted. Counted only where the Merchant has switched Visit counting on, because counting is a database write on the path of every page load; what is stored is the count and never the load, so it holds nothing about anybody and is kept indefinitely.
+One load of a page of the store by a browser, counted for the whole store per day. Every load, not every browser, matching how an ad platform counts the same thing, so the two figures agree. Loads of the Order Complete Page and the Retry Page are not Visits: whoever is on them has already ordered, and counting them would dilute the Conversion Rate with people who converted. Counted only where the Merchant has switched Visit counting on, because counting is a database write on the path of every page load; what is stored is the count and never the load, so it holds nothing about anybody and is kept indefinitely.
 _Avoid_: page view, hit, session, traffic
 
 **Conversion Rate**:
-Orders as a share of Visits in a Reporting Window, drawn per Page on the Page leaderboard. Every Order counts towards it, Cancelled ones included, for the same reason `Orders` as a figure counts them: the Visit converted whatever became of the Order afterwards. It owes nothing to any ad platform — a Merchant who reports to none still has one — and it is unknown rather than zero where Visits are not counted.
+Orders as a share of Visits in a Reporting Window, for the whole store. Every Order counts towards it, Cancelled ones included, for the same reason `Orders` as a figure counts them: the Visit converted whatever became of the Order afterwards. It owes nothing to any ad platform — a Merchant who reports to none still has one — and it is unknown rather than zero where Visits are not counted.
 _Avoid_: CVR, conversion, close rate, win rate
 
 **Courier Report**:
@@ -389,19 +387,27 @@ _Avoid_: profit report, P&L, gross profit, contribution
 ### Tracking
 
 **Moment**:
-Something that happens in this domain and is worth reporting to an ad platform: a Visit, a Checkout Started, a Capture, a Paid. Tracking is organised around Moments rather than around any one platform's event names, so what the system reports is described in its own words and each Provider translates. A Moment produces zero, one or several provider events, and which ones is the Provider's answer.
+Something that happens in this domain and is worth reporting to an ad platform: a Visit, a Product Viewed, an Added to Cart, a Checkout Started, a Capture, a Paid. Which are reported, and where, is decided once for the whole store in Settings. Tracking is organised around Moments rather than around any one platform's event names, so what the system reports is described in its own words and each Provider translates. A Moment produces zero, one or several provider events, and which ones is the Provider's answer.
 _Avoid_: event, conversion, trigger, pixel event
 
 **Checkout Started**:
-The Moment a visitor first touches a Checkout Field on a page load. It says the visitor began filling the form, not that they submitted it; a Capture is a different Moment.
+The Moment a visitor opens the Checkout with something in their Cart. It says they set out to order, not that they did; a Capture is a different Moment.
 _Avoid_: begin checkout, add to cart, engagement
+
+**Product Viewed**:
+The Moment a Product's own page is opened. Seeing a Product in a list, a rail or the bulk order form is not it.
+_Avoid_: view content, impression, product view, page view
+
+**Added to Cart**:
+The Moment a Product goes from none to some in a Cart — once per Product per Cart, however many Kilograms follow it. Raising a quantity already there is not it. It happens in the browser, because that is where the Cart is.
+_Avoid_: add to basket, cart event, cart update
 
 **Provider**:
 An ad platform events can be reported to — Facebook first, TikTok and Google Ads later. A Provider owns everything platform-specific: which of its own events a Moment produces, how many may travel in one request, how long after the fact it still accepts them, and why a Destination cannot be delivered to.
 _Avoid_: channel, integration, vendor, network
 
 **Destination**:
-One configured place a Provider's events are sent: for Facebook, a dataset and the access token that writes to it, under a name the Merchant chose. A Merchant may hold several — separate brands, separate clients — and marks exactly one default per Provider, which is where a Page that has picked nothing reports. Switching a Destination off pauses reporting to it without deleting it.
+One configured place a Provider's events are sent: for Facebook, a dataset and the access token that writes to it, under a name the Merchant chose. A Merchant may hold several — separate brands, separate clients — and marks exactly one default per Provider, which is where the store reports. Switching a Destination off pauses reporting to it without deleting it.
 _Avoid_: pixel, account, connection, integration
 
 **Purchase**:
@@ -417,12 +423,9 @@ Where a Moment is written down, one row per Destination per provider event, so t
 _Avoid_: queue, event log, buffer
 
 **Tracking Context**:
-What the browser told us when an Order was captured — the click identifiers, the IP address, the User-Agent and the Page it was on — kept apart from the Order in a table of its own. It exists for the Moment that arrives with no browser present: an Order paid online reports its Purchase when a Verification says Paid, which happens from a sweep or a gateway's own notification. Kept only where such a Moment is still to come, because an Order reporting at Capture has already written the same things onto its outbox row. Not part of the Order: an Order records what it needs to be fulfilled and is kept indefinitely, and a browser identifier is neither.
+What the browser told us when an Order was captured — the click identifiers, the IP address, the User-Agent and the address it was on — kept apart from the Order in a table of its own. It exists for the Moment that arrives with no browser present: an Order paid online reports its Purchase when a Verification says Paid, which happens from a sweep or a gateway's own notification. Kept only where such a Moment is still to come, because an Order reporting at Capture has already written the same things onto its outbox row. Not part of the Order: an Order records what it needs to be fulfilled and is kept indefinitely, and a browser identifier is neither.
 _Avoid_: session, visitor record, attribution data, fingerprint
 
-**Tracking Config**:
-Everything one Page decides about its own tracking: which Destination it reports to, which of each Provider's events it fires there, and whether what it reports may name what was bought. It belongs to a single Page and is complete on its own, like a Checkout Config and an Order Complete Config, and is a third thing beside them. Every decision in it can be left unsaid: no Destination means the default for each Provider, and an event nobody has decided is whatever Settings says. Nothing in it is a figure, so it is not in the Pricing Fingerprint — switching an event off never turns away an Order somebody has half-typed.
-_Avoid_: pixel settings, tracking options, event config
 
 ### People
 
@@ -431,8 +434,8 @@ Someone who signs into the admin to do some part of the work — authoring Pages
 _Avoid_: admin, operator, staff
 
 **Merchant**:
-The business running an installation of GioPages. Relevant because the system is self-hosted by many merchants, so anything a merchant would reasonably differ on — currency, the list of Districts — belongs in configuration rather than baked into the system.
-_Avoid_: tenant, client, store owner
+Bongo Tea, the one business this system is built for. There is no other: what Bongo Tea would want to change without a developer belongs in Settings, and nothing is made configurable merely so that some other business could run it.
+_Avoid_: tenant, client, store owner, vendor
 
 **Permission**:
 One thing a User may do: a working area of the admin, or a single act that cannot be undone. The system knows every Permission by name and a Merchant never invents one — they arrive as features are built, and a Merchant's part is deciding which Roles carry them. A Permission is held through a Role and no other way, so what somebody may do has exactly one explanation.
@@ -457,5 +460,9 @@ _Avoid_: deleted, archived, removed, terminated, offboarded
 ### The installation
 
 **Settings**:
-The values a Merchant decides once for the whole installation rather than per Page: how the Merchant is reached by payment providers and couriers, and anything else that would be the same on every Page. A Setting is never part of a Checkout Config; if a Page could reasonably differ on it, it is not a Setting.
+The values a Merchant decides once for the whole store: how the store is reached and what it is called, the Menus, the Delivery Bands, and what payment gateways, couriers and SMS Gateways need. What appears on every page is a Setting and what appears on one is a Block; if a single Page could reasonably differ on it, it is not a Setting.
 _Avoid_: config, options, preferences, site settings, global settings
+
+**Menu**:
+The links a Customer finds on every page — the header's, with their dropdowns, and the footer's columns — set in Settings. A link points at a Page, a Category, a Product, a place on a page or an outside address, and points at the thing rather than at where it is, so renaming never breaks a Menu. A dropdown may be told to list every Category as it stands, rather than the ones somebody remembered to add.
+_Avoid_: navigation, nav, links, sitemap
