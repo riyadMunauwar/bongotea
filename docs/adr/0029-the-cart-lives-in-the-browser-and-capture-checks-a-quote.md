@@ -4,7 +4,7 @@ The **Cart** is kept by the Customer's browser and nowhere else — `{productId:
 `localStorage` — and the store knows nothing about it until Capture. The bulk order form, the price
 calculator, every product card's stepper and the header all read and write that one store, so there
 is never a second quantity that could disagree with it. Every figure the Cart shows is worked out in
-the browser from the Tiers, Delivery Bands and Product prices the page was sent (ADR-0028).
+the browser from the Delivery Bands and each Product's own Tiers the page was sent (ADR-0031).
 
 The Checkout submits the Cart together with its **Quote**: each line's Tier Price, the Tier, the
 Delivery Charge and the total the Customer was looking at. Capture prices the lines again with the

@@ -8,21 +8,17 @@ use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\PricingSettings;
 use BackedEnum;
 use Closure;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Str;
 
 /**
- * The Tiers and the Delivery Bands (ADR-0028).
- *
- * Each table is a list of kilogram ranges that must cover every whole
- * kilogram from one upwards without gap or overlap, the last open-ended; the
- * page refuses to save anything else, so every Cart weight has exactly one
- * price and one Delivery Charge. A Product's prices per Tier are set on the
- * Product; only the ranges are set here.
+ * The Delivery Bands (ADR-0031): a list of kilogram ranges that must cover
+ * every whole kilogram from one upwards without gap or overlap, the last
+ * open-ended; the page refuses to save anything else, so every Cart weight has
+ * exactly one Delivery Charge. Tiers are not set here: each Product owns its
+ * own, on the Product.
  */
 class Pricing extends SettingsPage
 {
@@ -39,31 +35,8 @@ class Pricing extends SettingsPage
     protected function formComponents(): array
     {
         return [
-            Section::make('Tiers')
-                ->description('The cart\'s total kilograms, across every tea in it, decide which Tier every line is priced from. Each Product sets its own discount per Tier.')
-                ->schema([
-                    Repeater::make('tiers')
-                        ->hiddenLabel()
-                        ->addActionLabel('Add a Tier')
-                        ->defaultItems(0)
-                        ->columns(2)
-                        ->rules([self::coversEveryKilogram('Tier')])
-                        ->schema([
-                            /**
-                             * What a Product's Tier Discounts are stored
-                             * against: a new Tier starts with none, so it
-                             * charges the Tier below's price until filled in.
-                             */
-                            Hidden::make('key')
-                                ->default(fn (): string => self::newTierKey())
-                                ->dehydrateStateUsing(fn (mixed $state): string => filled($state) ? (string) $state : self::newTierKey()),
-
-                            ...self::rangeFields(),
-                        ]),
-                ]),
-
             Section::make('Delivery Bands')
-                ->description('The Delivery Charge, by the same total kilograms, the same across the country. Where a band ends says nothing about where a price changes.')
+                ->description('The Delivery Charge, by the cart\'s total kilograms, the same across the country. Each Product sets its own Tiers; where a band ends says nothing about where a price changes.')
                 ->schema([
                     Repeater::make('deliveryBands')
                         ->hiddenLabel()
@@ -87,11 +60,6 @@ class Pricing extends SettingsPage
                         ]),
                 ]),
         ];
-    }
-
-    private static function newTierKey(): string
-    {
-        return Str::lower((string) Str::ulid());
     }
 
     /**

@@ -4,14 +4,14 @@ use App\Filament\Clusters\Settings\Pages\Pricing;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Pricing\PriceBook;
-use App\Support\Pricing\Tier;
 use App\Support\Settings\PricingSettings;
 use Livewire\Livewire;
 
 /**
- * The Tiers and Delivery Bands a Merchant edits, and the one rule both answer
- * to: every whole kilogram from one, once. What a Cart then costs is the
- * shared worked examples' business (`PricingExamplesTest`), not this file's.
+ * The Delivery Bands a Merchant edits, and the rule they answer to: every
+ * whole kilogram from one, once. Tiers belong to each Product (ADR-0031) and
+ * are not set here. What a Cart then costs is the shared worked examples'
+ * business (`PricingExamplesTest`), not this file's.
  */
 beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
@@ -27,20 +27,15 @@ it('sits after Menus in the Settings cluster, and is forbidden to a User who can
         ->assertForbidden();
 });
 
-it('opens on the mockup tables, with fees in whole taka', function () {
+it('opens on the mockup Delivery Bands, with fees in whole taka, and asks nothing about Tiers', function () {
     $component = Livewire::test(Pricing::class);
 
-    expect(array_values($component->get('data.tiers')))->toHaveCount(6)
-        ->and(array_values($component->get('data.tiers'))[5])->toMatchArray(['key' => 'tier-6', 'min' => 51, 'max' => null])
-        ->and(array_column(array_values($component->get('data.deliveryBands')), 'fee'))->toEqual([120, 150, 200, 250, 0]);
+    expect(array_column(array_values($component->get('data.deliveryBands')), 'fee'))->toEqual([120, 150, 200, 250, 0])
+        ->and($component->get('data.tiers'))->toBeNull();
 });
 
-it('saves new Tiers and Delivery Bands, which is what every Cart is then priced from', function () {
+it('saves new Delivery Bands, which is what every Cart is then charged by', function () {
     Livewire::test(Pricing::class)
-        ->set('data.tiers', [
-            ['key' => 'tier-1', 'min' => '1', 'max' => '9'],
-            ['key' => 'tier-2', 'min' => '10', 'max' => ''],
-        ])
         ->set('data.deliveryBands', [
             ['min' => '1', 'max' => '24', 'fee' => '180'],
             ['min' => '25', 'max' => '', 'fee' => '0'],
@@ -51,66 +46,31 @@ it('saves new Tiers and Delivery Bands, which is what every Cart is then priced 
     app()->forgetInstance(PricingSettings::class);
     $book = PriceBook::current();
 
-    expect(array_map(fn (Tier $tier): array => $tier->toArray(), $book->tiers))->toBe([
-        ['key' => 'tier-1', 'min' => 1, 'max' => 9],
-        ['key' => 'tier-2', 'min' => 10, 'max' => null],
-    ])
-        ->and($book->deliveryBands[0]->fee)->toBe(18000)
+    expect($book->deliveryBands[0]->fee)->toBe(18000)
         ->and($book->deliveryBands[1]->isFree())->toBeTrue();
 });
 
-it('gives a Tier added on the page a key of its own', function () {
+it('refuses a gap, an overlap, a closed last band and an open one in the middle', function (array $bands) {
     Livewire::test(Pricing::class)
-        ->set('data.tiers', [
-            ['key' => 'tier-1', 'min' => '1', 'max' => '5'],
-            ['min' => '6', 'max' => ''],
-        ])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    app()->forgetInstance(PricingSettings::class);
-    $keys = array_column(app(PricingSettings::class)->tiers, 'key');
-
-    expect($keys[0])->toBe('tier-1')
-        ->and($keys[1])->toBeString()->not->toBe('')->not->toBe('tier-1');
-});
-
-it('refuses a gap, an overlap, a closed last range and an open one in the middle', function (array $tiers) {
-    Livewire::test(Pricing::class)
-        ->set('data.tiers', $tiers)
-        ->call('save')
-        ->assertHasFormErrors(['tiers']);
-
-    expect(Setting::query()->find(PricingSettings::key()))->toBeNull();
-})->with([
-    'a gap' => [[['key' => 'a', 'min' => '1', 'max' => '5'], ['key' => 'b', 'min' => '7', 'max' => '']]],
-    'an overlap' => [[['key' => 'a', 'min' => '1', 'max' => '5'], ['key' => 'b', 'min' => '5', 'max' => '']]],
-    'not starting at one' => [[['key' => 'a', 'min' => '2', 'max' => '']]],
-    'a closed last range' => [[['key' => 'a', 'min' => '1', 'max' => '5'], ['key' => 'b', 'min' => '6', 'max' => '10']]],
-    'open in the middle' => [[['key' => 'a', 'min' => '1', 'max' => ''], ['key' => 'b', 'min' => '6', 'max' => '']]],
-    'nothing at all' => [[]],
-]);
-
-it('refuses Delivery Bands with a gap', function () {
-    Livewire::test(Pricing::class)
-        ->set('data.deliveryBands', [
-            ['min' => '1', 'max' => '5', 'fee' => '120'],
-            ['min' => '8', 'max' => '', 'fee' => '0'],
-        ])
+        ->set('data.deliveryBands', $bands)
         ->call('save')
         ->assertHasFormErrors(['deliveryBands']);
 
     expect(Setting::query()->find(PricingSettings::key()))->toBeNull();
-});
+})->with([
+    'a gap' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '7', 'max' => '', 'fee' => '0']]],
+    'an overlap' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '5', 'max' => '', 'fee' => '0']]],
+    'not starting at one' => [[['min' => '2', 'max' => '', 'fee' => '0']]],
+    'a closed last band' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '6', 'max' => '10', 'fee' => '0']]],
+    'open in the middle' => [[['min' => '1', 'max' => '', 'fee' => '120'], ['min' => '6', 'max' => '', 'fee' => '0']]],
+    'nothing at all' => [[]],
+]);
 
-it('reads a stored table that leaves a weight unpriced as the defaults, rather than pricing nothing', function () {
+it('reads a stored table that leaves a weight uncharged as the defaults, and ignores the Tiers a row still carries', function () {
     Setting::query()->create(['key' => PricingSettings::key(), 'value' => [
-        'tiers' => [['key' => 'a', 'min' => 1, 'max' => 5], ['key' => 'b', 'min' => 9, 'max' => null]],
+        'tiers' => [['key' => 'a', 'min' => 1, 'max' => 5], ['key' => 'b', 'min' => 6, 'max' => null]],
         'deliveryBands' => 'not a list',
     ]]);
 
-    $settings = app(PricingSettings::class);
-
-    expect(array_column($settings->tiers, 'key'))->toBe(['tier-1', 'tier-2', 'tier-3', 'tier-4', 'tier-5', 'tier-6'])
-        ->and($settings->deliveryBands)->toHaveCount(5);
+    expect(app(PricingSettings::class)->deliveryBands)->toHaveCount(5);
 });

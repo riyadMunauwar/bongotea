@@ -1,5 +1,7 @@
 # The Tier is chosen by the whole Cart's Kilograms, from one store-wide table
 
+> Its Tier half is superseded by ADR-0031: each Product now owns its Tiers. The Delivery Bands and the one pricing module stand.
+
 A Product's price per Kilogram falls as the **Cart** gets heavier, not as that Product's own
 quantity grows. The **Tiers** are one table for the whole store, kept in the Pricing settings group
 as an ordered list of `{min, max|null}` ranges covering every whole kilogram from one upwards

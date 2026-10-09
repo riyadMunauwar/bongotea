@@ -2,47 +2,41 @@
 
 namespace App\Support\Pricing;
 
-use App\Support\Money;
 use App\Support\Settings\PricingSettings;
 use InvalidArgumentException;
 use LogicException;
 
 /**
- * The pricing module: the one authority on what a Cart costs (ADR-0028).
+ * The pricing module: the one authority on what a Cart costs (ADR-0031).
  *
- * The Tier is chosen by the total Kilograms across every line, and every line
- * is priced from that same Tier; the Delivery Charge is read from its own
- * table by the same total. The Checkout's Capture, Repricing and an Order
- * taken by phone all ask this, and the storefront runs a TypeScript mirror of
- * the same arithmetic (`resources/js/lib/pricing.ts`) held to it by the shared
- * worked examples in `tests/Fixtures/Pricing/examples.json`.
+ * Each Product owns its Tiers, and every line is priced from the Tier of its
+ * own Product that the Cart's total Kilograms — across every line — fall in;
+ * the Delivery Charge is read from its own table by the same total. The
+ * Checkout's Capture, Repricing and an Order taken by phone all ask this, and
+ * the storefront runs a TypeScript mirror of the same arithmetic
+ * (`resources/js/lib/pricing.ts`) held to it by the shared worked examples in
+ * `tests/Fixtures/Pricing/examples.json`.
  *
- * Both tables are assumed to cover every whole kilogram from one without gap
- * or overlap, which the Pricing settings refuse to save otherwise.
+ * A Product's Tiers and the Delivery Bands are both assumed to cover every
+ * whole kilogram from one without gap or overlap, which the Product and the
+ * Pricing settings refuse to save otherwise.
  */
 final readonly class PriceBook
 {
     /**
-     * @param  list<Tier>  $tiers  In order, the first starting at one, the last open-ended.
      * @param  list<DeliveryBand>  $deliveryBands  In order, the first starting at one, the last open-ended.
-     * @param  int  $minorUnitsPerTaka  What a percentage discount rounds to.
      */
     public function __construct(
-        public array $tiers,
         public array $deliveryBands,
-        public int $minorUnitsPerTaka,
     ) {}
 
-    /** The Tiers and Delivery Bands as the Merchant has them in Settings. */
+    /** The Delivery Bands as the Merchant has them in Settings. */
     public static function current(): self
     {
-        $settings = app(PricingSettings::class);
-
-        return new self(
-            tiers: array_map(fn (array $tier): Tier => new Tier($tier['key'], $tier['min'], $tier['max']), $settings->tiers),
-            deliveryBands: array_map(fn (array $band): DeliveryBand => new DeliveryBand($band['min'], $band['max'], $band['fee']), $settings->deliveryBands),
-            minorUnitsPerTaka: Money::factor(),
-        );
+        return new self(array_map(
+            fn (array $band): DeliveryBand => new DeliveryBand($band['min'], $band['max'], $band['fee']),
+            app(PricingSettings::class)->deliveryBands,
+        ));
     }
 
     /**
@@ -64,48 +58,32 @@ final readonly class PriceBook
             $totalKilograms += $line->kilograms;
         }
 
-        $tierIndex = $this->tierIndexFor($totalKilograms);
-        $tier = $this->tiers[$tierIndex];
-        $nextTier = $this->tiers[$tierIndex + 1] ?? null;
-
         $pricedLines = [];
         $subtotal = 0;
         $regularTotal = 0;
-        $extraSaving = 0;
 
         foreach ($lines as $line) {
-            $ladder = $this->ladder($line->product);
-            $inTier = $ladder[$tierIndex];
-            $overridden = $line->overridePrice !== null;
-            $tierPrice = $overridden ? $line->overridePrice : $inTier->price;
-
-            $nextTierPrice = match (true) {
-                $nextTier === null => null,
-                $overridden => $tierPrice,
-                default => $ladder[$tierIndex + 1]->price,
-            };
+            $tier = $line->overridePrice === null ? $line->product->tierFor($totalKilograms) : null;
+            $tierPrice = $tier === null ? $line->overridePrice : $tier->price;
 
             $pricedLines[] = new PricedLine(
                 productId: $line->product->id,
                 kilograms: $line->kilograms,
-                regularPrice: $line->product->regularPrice,
+                regularPrice: $line->product->regularPrice(),
                 tierPrice: $tierPrice,
-                discount: $overridden ? null : $inTier->discount,
-                overridden: $overridden,
+                tier: $tier,
+                overridden: $tier === null,
                 lineTotal: $tierPrice * $line->kilograms,
-                nextTierPrice: $nextTierPrice,
             );
 
             $subtotal += $tierPrice * $line->kilograms;
-            $regularTotal += $line->product->regularPrice * $line->kilograms;
-            $extraSaving += $nextTierPrice === null ? 0 : ($tierPrice - $nextTierPrice) * $line->kilograms;
+            $regularTotal += $line->product->regularPrice() * $line->kilograms;
         }
 
         $band = $this->deliveryBandFor($totalKilograms);
         $deliveryCharge = $band->fee ?? 0;
 
         return new PricedCart(
-            tier: $tier,
             lines: $pricedLines,
             totalKilograms: $totalKilograms,
             subtotal: $subtotal,
@@ -114,52 +92,50 @@ final readonly class PriceBook
             deliveryBand: $band,
             total: $subtotal + $deliveryCharge,
             averagePerKilogram: $totalKilograms === 0 ? null : intdiv(2 * $subtotal + $totalKilograms, 2 * $totalKilograms),
-            nextTier: $nextTier === null ? null : new NextTier($nextTier, $nextTier->min - $totalKilograms, $extraSaving),
+            nextPriceDrop: $this->nextPriceDrop($lines, $totalKilograms),
             kilogramsToFreeDelivery: $this->kilogramsToFreeDelivery($totalKilograms, $band),
         );
     }
 
     /**
-     * A Product's price in every Tier, in Tier order: the first Tier is always
-     * the Regular Price, and a Tier the Product names no Discount for charges
-     * what the Tier below it charges.
+     * The nearest weight at which a line already holding Kilograms gets
+     * cheaper, with the saving at that weight across every line. An overridden
+     * line keeps its price there, and a line holding nothing would save
+     * nothing, so neither sets the weight.
      *
-     * @return list<TierPrice>
+     * @param  list<CartLine>  $lines
      */
-    public function ladder(ProductPrices $product): array
+    private function nextPriceDrop(array $lines, int $totalKilograms): ?PriceDrop
     {
-        $ladder = [];
-        $price = $product->regularPrice;
-        $discount = null;
+        $atKilograms = null;
 
-        foreach ($this->tiers as $index => $tier) {
-            $named = $index === 0 ? null : $product->discountFor($tier);
-
-            if ($named !== null) {
-                $price = $named->applyTo($product->regularPrice, $this->minorUnitsPerTaka);
-                $discount = $named->value === 0 ? null : $named;
+        foreach ($lines as $line) {
+            if ($line->overridePrice !== null || $line->kilograms === 0) {
+                continue;
             }
 
-            $ladder[] = new TierPrice($tier, $price, $discount);
-        }
+            $drop = $line->product->nextDropAbove($totalKilograms);
 
-        return $ladder;
-    }
-
-    /** An empty Cart sits in the first Tier, so it shows the Regular Prices. */
-    private function tierIndexFor(int $totalKilograms): int
-    {
-        if ($totalKilograms === 0) {
-            return 0;
-        }
-
-        foreach ($this->tiers as $index => $tier) {
-            if ($tier->contains($totalKilograms)) {
-                return $index;
+            if ($drop !== null && ($atKilograms === null || $drop->min < $atKilograms)) {
+                $atKilograms = $drop->min;
             }
         }
 
-        throw new LogicException("No Tier covers {$totalKilograms} kg; the Tiers must cover every whole kilogram from one.");
+        if ($atKilograms === null) {
+            return null;
+        }
+
+        $extraSaving = 0;
+
+        foreach ($lines as $line) {
+            if ($line->overridePrice === null) {
+                $priceNow = $line->product->tierFor($totalKilograms)->price;
+                $priceThen = $line->product->tierFor($atKilograms)->price;
+                $extraSaving += ($priceNow - $priceThen) * $line->kilograms;
+            }
+        }
+
+        return new PriceDrop($atKilograms, $atKilograms - $totalKilograms, $extraSaving);
     }
 
     /** Null for an empty Cart: no band starts below one kilogram. */

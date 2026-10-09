@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\CategoryTheme;
-use App\Enums\DiscountType;
 use App\Enums\ProductStatus;
 use App\Filament\Resources\Brands\BrandResource;
 use App\Filament\Resources\Brands\Pages\CreateBrand;
@@ -18,9 +17,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tag;
 use App\Models\User;
-use App\Support\Pricing\PriceBook;
 use App\Support\Pricing\ProductPrices;
-use App\Support\Pricing\TierPrice;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
@@ -212,7 +209,6 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
             'tags' => [$milk->getKey(), $hotel->getKey()],
             'short_description' => 'দুধ চায়ের জন্য ঘন ও সুগন্ধি চা।',
             'description' => '<p>বাগানের কচি পাতা।</p>',
-            'price' => '620',
             'strength' => 4,
             'liquor_colour' => 'গাঢ় লালচে বাদামি',
             'aroma' => 'তীব্র সুগন্ধ',
@@ -227,6 +223,7 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
             'is_available' => false,
             'seo_title' => 'Premium tea',
         ])
+        ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '620']])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -245,16 +242,16 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ->and($product->seo_title)->toBe('Premium tea');
 });
 
-it('publishes a Product with nothing but its name, slug, Category, Brand and price', function () {
+it('publishes a Product with nothing but its name, slug, Category, Brand and one Tier', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Bare',
             'slug' => 'bare',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
-            'price' => '500',
             'status' => ProductStatus::Published->value,
         ])
+        ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '500']])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -263,103 +260,116 @@ it('publishes a Product with nothing but its name, slug, Category, Brand and pri
 
 /*
 |--------------------------------------------------------------------------
-| Regular Price and Tier Discounts
+| The Product's own Tiers
 |--------------------------------------------------------------------------
 */
 
-it('stores a Regular Price in minor units and a percentage per Tier, leaving a blank Tier to charge the one below', function () {
+it('stores each Tier with its price in minor units, and the first Tier\'s price as the Regular Price', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Premium',
             'slug' => 'premium',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
-            'price' => '620',
-            'discount_type' => DiscountType::Percent->value,
-            'tier_discounts' => ['tier-2' => '5', 'tier-3' => '10', 'tier-4' => '', 'tier-5' => '16', 'tier-6' => '20'],
+        ])
+        ->set('data.tiers', [
+            ['min' => '1', 'max' => '3', 'price' => '620'],
+            ['min' => '4', 'max' => '20', 'price' => '589'],
+            ['min' => '21', 'max' => '', 'price' => '589'],
         ])
         ->call('create')
         ->assertHasNoFormErrors();
 
     $product = Product::query()->where('slug', 'premium')->sole();
 
-    expect($product->price)->toBe(62000)
-        ->and($product->discount_type)->toBe(DiscountType::Percent)
-        ->and($product->tier_discounts)->toBe(['tier-2' => 5, 'tier-3' => 10, 'tier-4' => null, 'tier-5' => 16, 'tier-6' => 20])
-        ->and(array_map(fn (TierPrice $step): int => $step->price, PriceBook::current()->ladder(ProductPrices::of($product))))
-        ->toBe([62000, 58900, 55800, 55800, 52100, 49600]);
+    expect($product->tiers)->toBe([
+        ['min' => 1, 'max' => 3, 'price' => 62000],
+        ['min' => 4, 'max' => 20, 'price' => 58900],
+        ['min' => 21, 'max' => null, 'price' => 58900],
+    ])
+        ->and($product->price)->toBe(62000)
+        ->and(ProductPrices::of($product)->tierFor(7)->price)->toBe(58900);
 });
 
-it('takes a fixed discount in whole taka, stores it in minor units and opens it in taka again', function () {
-    Livewire::test(CreateProduct::class)
-        ->fillForm([
-            'name' => 'Strong',
-            'slug' => 'strong',
-            'category_id' => $this->category->getKey(),
-            'brand_id' => $this->brand->getKey(),
-            'price' => '460',
-            'discount_type' => DiscountType::Fixed->value,
-            'tier_discounts' => ['tier-2' => '20', 'tier-3' => '40'],
-        ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+it('opens a new Product on one open-ended Tier, which is a flat price', function () {
+    $tiers = Livewire::test(CreateProduct::class)->get('data.tiers');
 
-    $product = Product::query()->where('slug', 'strong')->sole();
-
-    expect($product->tier_discounts)->toMatchArray(['tier-2' => 2000, 'tier-3' => 4000]);
-
-    Livewire::test(EditProduct::class, ['record' => $product->getKey()])
-        ->assertSchemaStateSet(['price' => 460, 'tier_discounts.tier-2' => 20, 'tier_discounts.tier-3' => 40]);
+    expect(array_values($tiers))->toBe([['min' => 1, 'max' => null, 'price' => null]]);
 });
 
-it('opens a Regular Price that is not whole taka with its decimals, so a save asks for it rather than dropping them', function () {
+it('opens a Product\'s Tiers in whole taka again', function () {
+    $product = Product::factory()->create(['tiers' => [
+        ['min' => 1, 'max' => 5, 'price' => 46000],
+        ['min' => 6, 'max' => null, 'price' => 44000],
+    ]]);
+
+    $tiers = Livewire::test(EditProduct::class, ['record' => $product->getKey()])->get('data.tiers');
+
+    expect(array_values($tiers))->toEqual([
+        ['min' => 1, 'max' => 5, 'price' => 460],
+        ['min' => 6, 'max' => null, 'price' => 440],
+    ]);
+});
+
+it('opens a Tier Price that is not whole taka with its decimals, so a save asks for it rather than dropping them', function () {
     $product = Product::factory()->create(['price' => 99050]);
 
-    Livewire::test(EditProduct::class, ['record' => $product->getKey()])
-        ->assertSchemaStateSet(['price' => '990.50'])
-        ->call('save')
-        ->assertHasFormErrors(['price']);
+    $component = Livewire::test(EditProduct::class, ['record' => $product->getKey()]);
+
+    expect(array_values($component->get('data.tiers'))[0]['price'])->toEqual(990.5);
+
+    $component->call('save')->assertHasFormErrors(['tiers']);
 
     expect($product->fresh()->price)->toBe(99050);
 });
 
-it('draws the Tier Prices the typed discounts come to', function () {
+it('refuses Tiers with a gap, a closed last range, or a heavier Tier dearer than the one before', function (array $tiers) {
     Livewire::test(CreateProduct::class)
         ->fillForm([
-            'price' => '650',
-            'discount_type' => DiscountType::Percent->value,
-            'tier_discounts' => ['tier-2' => '5', 'tier-3' => '8'],
+            'name' => 'Refused',
+            'slug' => 'refused',
+            'category_id' => $this->category->getKey(),
+            'brand_id' => $this->brand->getKey(),
         ])
-        ->assertSee('1–5 kg: ৳650.00')
-        ->assertSee('6–10 kg: ৳618.00')
-        ->assertSee('11–15 kg: ৳598.00')
-        ->assertSee('51+ kg: ৳598.00');
-});
-
-it('refuses a percentage over 100, a fixed discount above the Regular Price, and part of a taka', function () {
-    $product = [
-        'name' => 'Refused',
-        'slug' => 'refused',
-        'category_id' => $this->category->getKey(),
-        'brand_id' => $this->brand->getKey(),
-    ];
-
-    Livewire::test(CreateProduct::class)
-        ->fillForm([...$product, 'price' => '620.50', 'discount_type' => DiscountType::Percent->value, 'tier_discounts' => ['tier-2' => '101']])
+        ->set('data.tiers', $tiers)
         ->call('create')
-        ->assertHasFormErrors(['price', 'tier_discounts.tier-2']);
-
-    Livewire::test(CreateProduct::class)
-        ->fillForm([...$product, 'price' => '460', 'discount_type' => DiscountType::Fixed->value, 'tier_discounts' => ['tier-2' => '461']])
-        ->call('create')
-        ->assertHasFormErrors(['tier_discounts.tier-2']);
+        ->assertHasFormErrors(['tiers']);
 
     expect(Product::query()->where('slug', 'refused')->exists())->toBeFalse();
+})->with([
+    'a gap' => [[['min' => '1', 'max' => '5', 'price' => '500'], ['min' => '7', 'max' => '', 'price' => '480']]],
+    'a closed last range' => [[['min' => '1', 'max' => '5', 'price' => '500']]],
+    'a dearer heavier Tier' => [[['min' => '1', 'max' => '5', 'price' => '500'], ['min' => '6', 'max' => '', 'price' => '520']]],
+]);
+
+it('refuses a Product saved from anywhere with Tiers that do not cover every kilogram once or that rise', function (array $tiers) {
+    Product::factory()->create(['tiers' => $tiers]);
+})->with([
+    'a gap' => [[['min' => 1, 'max' => 5, 'price' => 500], ['min' => 7, 'max' => null, 'price' => 480]]],
+    'a rise' => [[['min' => 1, 'max' => 5, 'price' => 500], ['min' => 6, 'max' => null, 'price' => 520]]],
+])->throws(LogicException::class);
+
+it('keeps the Regular Price the first Tier\'s, and refuses a price set over Tiers it would contradict', function () {
+    $flat = Product::factory()->create(['price' => 50000]);
+
+    expect($flat->tiers)->toBe([['min' => 1, 'max' => null, 'price' => 50000]]);
+
+    $flat->update(['price' => 52000]);
+
+    expect($flat->fresh()->tiers)->toBe([['min' => 1, 'max' => null, 'price' => 52000]]);
+
+    $laddered = Product::factory()->create(['tiers' => [
+        ['min' => 1, 'max' => 5, 'price' => 50000],
+        ['min' => 6, 'max' => null, 'price' => 48000],
+    ]]);
+
+    expect($laddered->price)->toBe(50000)
+        ->and(fn () => $laddered->update(['price' => 1]))->toThrow(LogicException::class);
 });
 
 it('requires a Category and a Brand on every Product', function () {
     Livewire::test(CreateProduct::class)
-        ->fillForm(['name' => 'Orphan', 'slug' => 'orphan', 'price' => '500', 'category_id' => null, 'brand_id' => null])
+        ->fillForm(['name' => 'Orphan', 'slug' => 'orphan', 'category_id' => null, 'brand_id' => null])
         ->call('create')
         ->assertHasFormErrors(['category_id' => 'required', 'brand_id' => 'required']);
 });
@@ -371,7 +381,6 @@ it('refuses a strength outside 1 to 5 and a fourth business tip', function () {
             'slug' => 'too-much',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
-            'price' => '500',
             'strength' => 6,
             'business_tips' => [['tip' => 'one'], ['tip' => 'two'], ['tip' => 'three'], ['tip' => 'four']],
         ])
@@ -388,7 +397,6 @@ it('keeps the slug of a Product taken out of the catalogue claimed', function ()
             'slug' => 'old-tea',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
-            'price' => '500',
         ])
         ->call('create')
         ->assertHasFormErrors(['slug' => 'unique']);

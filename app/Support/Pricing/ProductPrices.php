@@ -2,41 +2,61 @@
 
 namespace App\Support\Pricing;
 
-use App\Enums\DiscountType;
 use App\Models\Product;
+use LogicException;
 
 /**
  * What the pricing module needs to know about a Product, and nothing else:
- * its Regular Price, its discount kind, and a Tier Discount per Tier key.
- * A Tier the Product says nothing about is simply absent here.
+ * its own Tiers, in order, the first starting at one and the last open-ended
+ * (ADR-0031). The Regular Price is the first Tier's.
  */
 final readonly class ProductPrices
 {
     /**
-     * @param  array<string, int|null>  $tierDiscounts  Keyed by Tier key; a percentage, or minor units per Kilogram.
+     * @param  non-empty-list<Tier>  $tiers
      */
     public function __construct(
         public int|string $id,
-        public int $regularPrice,
-        public DiscountType $discountType,
-        public array $tierDiscounts,
+        public array $tiers,
     ) {}
 
     public static function of(Product $product): self
     {
-        return new self(
-            id: $product->getKey(),
-            regularPrice: (int) $product->price,
-            discountType: $product->discount_type ?? DiscountType::Percent,
-            tierDiscounts: $product->tier_discounts ?? [],
-        );
+        return new self($product->getKey(), $product->priceTiers());
     }
 
-    /** The Discount this Product names for the Tier, or null where it names none. */
-    public function discountFor(Tier $tier): ?Discount
+    public function regularPrice(): int
     {
-        $value = $this->tierDiscounts[$tier->key] ?? null;
+        return $this->tiers[0]->price;
+    }
 
-        return $value === null ? null : new Discount($this->discountType, (int) $value);
+    /** An empty Cart sits in the first Tier, so it shows the Regular Price. */
+    public function tierFor(int $totalKilograms): Tier
+    {
+        if ($totalKilograms === 0) {
+            return $this->tiers[0];
+        }
+
+        foreach ($this->tiers as $tier) {
+            if ($tier->contains($totalKilograms)) {
+                return $tier;
+            }
+        }
+
+        throw new LogicException("No Tier of Product {$this->id} covers {$totalKilograms} kg; a Product's Tiers must cover every whole kilogram from one.");
+    }
+
+    /** The first Tier above the Cart's weight that is cheaper than the one it is in, or null where none is. */
+    public function nextDropAbove(int $totalKilograms): ?Tier
+    {
+        $current = $this->tierFor($totalKilograms);
+
+        foreach ($this->tiers as $tier) {
+            if ($tier->min > $totalKilograms && $tier->price < $current->price) {
+                return $tier;
+            }
+        }
+
+        return null;
     }
 }

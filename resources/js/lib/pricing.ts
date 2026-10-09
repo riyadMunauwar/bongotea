@@ -1,6 +1,6 @@
 /**
  * The storefront's mirror of the pricing module (`App\Support\Pricing\PriceBook`,
- * ADR-0028), so every figure the Cart shows is worked out as it changes.
+ * ADR-0031), so every figure the Cart shows is worked out as it changes.
  *
  * The server's figures are the only ones that count: this exists to display,
  * and Capture checks what it showed. The two are held to the same arithmetic
@@ -10,37 +10,26 @@
  * on the same taka.
  */
 
-export type DiscountType = 'percent' | 'fixed';
-
-export type Tier = {
-    key: string;
+export type KilogramRange = {
     min: number;
-    /** Null for the last Tier, which is open-ended. */
+    /** Null for the last range, which is open-ended. */
     max: number | null;
 };
 
-export type DeliveryBand = {
-    min: number;
-    /** Null for the last band, which is open-ended. */
-    max: number | null;
-    fee: number;
-};
+/** One of a Product's own ranges and the price it charges there. */
+export type Tier = KilogramRange & { price: number };
+
+export type DeliveryBand = KilogramRange & { fee: number };
 
 export type PriceBook = {
     /** In order, covering every whole kilogram from one without gap or overlap. */
-    tiers: Tier[];
-    /** In order, covering every whole kilogram from one without gap or overlap. */
     deliveryBands: DeliveryBand[];
-    /** What a percentage discount rounds to: one whole taka. */
-    minorUnitsPerTaka: number;
 };
 
 export type ProductPrices = {
     id: number;
-    regularPrice: number;
-    discountType: DiscountType;
-    /** Keyed by Tier key; a Tier the Product says nothing about is absent or null. */
-    tierDiscounts: Record<string, number | null>;
+    /** In order, covering every whole kilogram from one without gap or overlap, never rising in price. */
+    tiers: Tier[];
 };
 
 export type CartLine = {
@@ -50,33 +39,25 @@ export type CartLine = {
     overridePrice?: number | null;
 };
 
-export type Discount = {
-    type: DiscountType;
-    value: number;
-};
-
-export type TierPrice = {
-    tier: Tier;
-    price: number;
-    /** Null where the price is the Regular Price. */
-    discount: Discount | null;
-};
-
 export type PricedLine = {
     productId: number;
     kilograms: number;
     regularPrice: number;
     tierPrice: number;
-    /** Null where the line pays the Regular Price or was overridden. */
-    discount: Discount | null;
+    /** The range the price came from; null on an overridden line. */
+    tier: KilogramRange | null;
     overridden: boolean;
     lineTotal: number;
-    /** Null at the top Tier; an overridden line keeps its price there too. */
-    nextTierPrice: number | null;
+};
+
+export type PriceDrop = {
+    atKilograms: number;
+    kilogramsToGo: number;
+    /** Counts only the Kilograms already in the Cart. */
+    extraSaving: number;
 };
 
 export type PricedCart = {
-    tier: Tier;
     lines: PricedLine[];
     totalKilograms: number;
     subtotal: number;
@@ -87,13 +68,13 @@ export type PricedCart = {
     total: number;
     /** The subtotal per Kilogram, rounded half-up to the minor unit; null for an empty Cart. */
     averagePerKilogram: number | null;
-    /** Null at the top Tier. The saving counts only the Kilograms already in the Cart. */
-    nextTier: { tier: Tier; kilogramsToGo: number; extraSaving: number } | null;
+    /** The nearest weight at which a line already in the Cart gets cheaper; null where none does. */
+    nextPriceDrop: PriceDrop | null;
     /** Null once delivery is free, or where no free band lies ahead. */
     kilogramsToFreeDelivery: number | null;
 };
 
-function contains(range: { min: number; max: number | null }, kilograms: number): boolean {
+function contains(range: KilogramRange, kilograms: number): boolean {
     return kilograms >= range.min && (range.max === null || kilograms <= range.max);
 }
 
@@ -102,55 +83,58 @@ function divide(dividend: number, divisor: number): number {
     return Math.floor(dividend / divisor);
 }
 
-/**
- * The Regular Price less one Discount: a percentage rounds half-up to the
- * whole taka, a fixed amount is plain subtraction, neither below nothing.
- */
-function applyDiscount(discount: Discount, regularPrice: number, minorUnitsPerTaka: number): number {
-    if (discount.type === 'fixed') {
-        return Math.max(0, regularPrice - discount.value);
+/** The Product's Tier for the Cart's weight; an empty Cart sits in the first, so it shows the Regular Price. */
+export function tierFor(product: ProductPrices, totalKilograms: number): Tier {
+    if (totalKilograms === 0) {
+        return product.tiers[0];
     }
 
-    const hundredths = regularPrice * (100 - discount.value);
-    const hundredthsPerTaka = 100 * minorUnitsPerTaka;
+    const tier = product.tiers.find((candidate) => contains(candidate, totalKilograms));
 
-    return Math.max(0, divide(hundredths + divide(hundredthsPerTaka, 2), hundredthsPerTaka) * minorUnitsPerTaka);
+    if (tier === undefined) {
+        throw new Error(`No Tier of Product ${product.id} covers ${totalKilograms} kg.`);
+    }
+
+    return tier;
+}
+
+/** The first Tier above the Cart's weight that is cheaper than the one it is in, or null where none is. */
+function nextDropAbove(product: ProductPrices, totalKilograms: number): Tier | null {
+    const current = tierFor(product, totalKilograms);
+
+    return product.tiers.find((tier) => tier.min > totalKilograms && tier.price < current.price) ?? null;
 }
 
 /**
- * A Product's price in every Tier, in order: the first is always the Regular
- * Price, and a Tier the Product names no Discount for charges the Tier below's.
+ * The nearest weight at which a line already holding Kilograms gets cheaper,
+ * with the saving at that weight across every line. Overridden lines and
+ * empty lines set no weight.
  */
-export function ladder(book: PriceBook, product: ProductPrices): TierPrice[] {
-    let price = product.regularPrice;
-    let discount: Discount | null = null;
+function nextPriceDrop(lines: CartLine[], totalKilograms: number): PriceDrop | null {
+    let atKilograms: number | null = null;
 
-    return book.tiers.map((tier, index) => {
-        const value = index === 0 ? null : (product.tierDiscounts[tier.key] ?? null);
-
-        if (value !== null) {
-            const named: Discount = { type: product.discountType, value };
-            price = applyDiscount(named, product.regularPrice, book.minorUnitsPerTaka);
-            discount = value === 0 ? null : named;
+    for (const line of lines) {
+        if ((line.overridePrice ?? null) !== null || line.kilograms === 0) {
+            continue;
         }
 
-        return { tier, price, discount };
-    });
-}
+        const drop = nextDropAbove(line.product, totalKilograms);
 
-/** An empty Cart sits in the first Tier, so it shows the Regular Prices. */
-function tierIndexFor(book: PriceBook, totalKilograms: number): number {
-    if (totalKilograms === 0) {
-        return 0;
+        if (drop !== null && (atKilograms === null || drop.min < atKilograms)) {
+            atKilograms = drop.min;
+        }
     }
 
-    const index = book.tiers.findIndex((tier) => contains(tier, totalKilograms));
-
-    if (index === -1) {
-        throw new Error(`No Tier covers ${totalKilograms} kg.`);
+    if (atKilograms === null) {
+        return null;
     }
 
-    return index;
+    const at = atKilograms;
+    const extraSaving = lines
+        .filter((line) => (line.overridePrice ?? null) === null)
+        .reduce((sum, line) => sum + (tierFor(line.product, totalKilograms).price - tierFor(line.product, at).price) * line.kilograms, 0);
+
+    return { atKilograms: at, kilogramsToGo: at - totalKilograms, extraSaving };
 }
 
 function deliveryBandFor(book: PriceBook, totalKilograms: number): DeliveryBand | null {
@@ -177,7 +161,7 @@ function kilogramsToFreeDelivery(book: PriceBook, totalKilograms: number, band: 
     return free === undefined ? null : free.min - totalKilograms;
 }
 
-/** Every figure a Cart shows, priced by the one Tier its total Kilograms fall in. */
+/** Every figure a Cart shows, each line priced from its own Product's Tier for the whole Cart's Kilograms. */
 export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
     if (lines.some((line) => line.kilograms < 0)) {
         throw new Error('A line cannot hold fewer than no Kilograms.');
@@ -188,33 +172,27 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
     }
 
     const totalKilograms = lines.reduce((sum, line) => sum + line.kilograms, 0);
-    const tierIndex = tierIndexFor(book, totalKilograms);
-    const nextTier = book.tiers[tierIndex + 1] ?? null;
 
     let subtotal = 0;
     let regularTotal = 0;
-    let extraSaving = 0;
 
     const pricedLines = lines.map((line): PricedLine => {
-        const steps = ladder(book, line.product);
         const overridePrice = line.overridePrice ?? null;
-        const overridden = overridePrice !== null;
-        const tierPrice = overridePrice ?? steps[tierIndex].price;
-        const nextTierPrice = nextTier === null ? null : overridden ? tierPrice : steps[tierIndex + 1].price;
+        const tier = overridePrice === null ? tierFor(line.product, totalKilograms) : null;
+        const tierPrice = tier === null ? (overridePrice as number) : tier.price;
+        const regularPrice = line.product.tiers[0].price;
 
         subtotal += tierPrice * line.kilograms;
-        regularTotal += line.product.regularPrice * line.kilograms;
-        extraSaving += nextTierPrice === null ? 0 : (tierPrice - nextTierPrice) * line.kilograms;
+        regularTotal += regularPrice * line.kilograms;
 
         return {
             productId: line.product.id,
             kilograms: line.kilograms,
-            regularPrice: line.product.regularPrice,
+            regularPrice,
             tierPrice,
-            discount: overridden ? null : steps[tierIndex].discount,
-            overridden,
+            tier: tier === null ? null : { min: tier.min, max: tier.max },
+            overridden: tier === null,
             lineTotal: tierPrice * line.kilograms,
-            nextTierPrice,
         };
     });
 
@@ -222,7 +200,6 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
     const deliveryCharge = band?.fee ?? 0;
 
     return {
-        tier: book.tiers[tierIndex],
         lines: pricedLines,
         totalKilograms,
         subtotal,
@@ -231,7 +208,7 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
         deliveryBand: band,
         total: subtotal + deliveryCharge,
         averagePerKilogram: totalKilograms === 0 ? null : divide(2 * subtotal + totalKilograms, 2 * totalKilograms),
-        nextTier: nextTier === null ? null : { tier: nextTier, kilogramsToGo: nextTier.min - totalKilograms, extraSaving },
+        nextPriceDrop: nextPriceDrop(lines, totalKilograms),
         kilogramsToFreeDelivery: kilogramsToFreeDelivery(book, totalKilograms, band),
     };
 }

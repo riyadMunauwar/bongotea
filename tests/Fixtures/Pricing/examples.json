@@ -1,15 +1,6 @@
 {
-    "about": "Worked examples of the Tier pricing rules (ADR-0028), run by Pest against App\\Support\\Pricing\\PriceBook and by Vitest against resources/js/lib/pricing.ts. Money is in minor units; minorUnitsPerTaka says how many make a whole taka. An example names only what it changes from the defaults.",
+    "about": "Worked examples of the Tier pricing rules (ADR-0031), run by Pest against App\\Support\\Pricing\\PriceBook and by Vitest against resources/js/lib/pricing.ts. Each Product owns its Tiers; every line is priced from its own Product's Tier for the whole Cart's Kilograms. Money is in minor units. An example names only what it changes from the defaults.",
     "defaults": {
-        "minorUnitsPerTaka": 1,
-        "tiers": [
-            { "key": "t1", "min": 1, "max": 5 },
-            { "key": "t2", "min": 6, "max": 10 },
-            { "key": "t3", "min": 11, "max": 15 },
-            { "key": "t4", "min": 16, "max": 20 },
-            { "key": "t5", "min": 21, "max": 50 },
-            { "key": "t6", "min": 51, "max": null }
-        ],
         "deliveryBands": [
             { "min": 1, "max": 5, "fee": 120 },
             { "min": 6, "max": 10, "fee": 150 },
@@ -18,25 +9,36 @@
             { "min": 51, "max": null, "fee": 0 }
         ],
         "products": [
-            { "id": 1, "regularPrice": 620, "discountType": "percent", "tierDiscounts": { "t2": 5, "t3": 10, "t4": 13, "t5": 16, "t6": 20 } },
-            { "id": 2, "regularPrice": 460, "discountType": "fixed", "tierDiscounts": { "t2": 20, "t3": 40, "t4": 60, "t5": 75, "t6": 90 } },
-            { "id": 3, "regularPrice": 520, "discountType": "percent", "tierDiscounts": { "t2": 5, "t3": 9, "t4": 12, "t5": 15, "t6": 18 } },
-            { "id": 4, "regularPrice": 650, "discountType": "percent", "tierDiscounts": { "t2": 5, "t3": 8, "t4": 12, "t5": 15, "t6": 18 } },
-            { "id": 5, "regularPrice": 500, "discountType": "fixed", "tierDiscounts": { "t2": 25, "t4": 70 } }
+            { "id": 1, "tiers": [
+                { "min": 1, "max": 5, "price": 620 }, { "min": 6, "max": 10, "price": 589 }, { "min": 11, "max": 15, "price": 558 },
+                { "min": 16, "max": 20, "price": 539 }, { "min": 21, "max": 50, "price": 521 }, { "min": 51, "max": null, "price": 496 }
+            ] },
+            { "id": 2, "tiers": [
+                { "min": 1, "max": 5, "price": 460 }, { "min": 6, "max": 10, "price": 440 }, { "min": 11, "max": 15, "price": 420 },
+                { "min": 16, "max": 20, "price": 400 }, { "min": 21, "max": 50, "price": 385 }, { "min": 51, "max": null, "price": 370 }
+            ] },
+            { "id": 3, "tiers": [
+                { "min": 1, "max": 3, "price": 520 }, { "min": 4, "max": 20, "price": 495 }, { "min": 21, "max": null, "price": 470 }
+            ] },
+            { "id": 4, "tiers": [
+                { "min": 1, "max": null, "price": 650 }
+            ] },
+            { "id": 5, "tiers": [
+                { "min": 1, "max": 5, "price": 500 }, { "min": 6, "max": 10, "price": 475 }, { "min": 11, "max": 15, "price": 475 }, { "min": 16, "max": null, "price": 430 }
+            ] }
         ]
     },
     "examples": [
         {
-            "name": "the README case: Premium 8 kg and Strong 4 kg are a 12 kg cart in the 11–15 kg Tier",
+            "name": "the README case: Premium 8 kg and Strong 4 kg are a 12 kg cart, and both charge their 11–15 kg price",
             "lines": [
                 { "productId": 1, "kilograms": 8 },
                 { "productId": 2, "kilograms": 4 }
             ],
             "expected": {
-                "tier": { "key": "t3", "min": 11, "max": 15 },
                 "lines": [
-                    { "productId": 1, "kilograms": 8, "regularPrice": 620, "tierPrice": 558, "discount": { "type": "percent", "value": 10 }, "overridden": false, "lineTotal": 4464, "nextTierPrice": 539 },
-                    { "productId": 2, "kilograms": 4, "regularPrice": 460, "tierPrice": 420, "discount": { "type": "fixed", "value": 40 }, "overridden": false, "lineTotal": 1680, "nextTierPrice": 400 }
+                    { "productId": 1, "kilograms": 8, "regularPrice": 620, "tierPrice": 558, "tier": { "min": 11, "max": 15 }, "overridden": false, "lineTotal": 4464 },
+                    { "productId": 2, "kilograms": 4, "regularPrice": 460, "tierPrice": 420, "tier": { "min": 11, "max": 15 }, "overridden": false, "lineTotal": 1680 }
                 ],
                 "totalKilograms": 12,
                 "subtotal": 6144,
@@ -45,15 +47,36 @@
                 "deliveryBand": { "min": 11, "max": 20, "fee": 200 },
                 "total": 6344,
                 "averagePerKilogram": 512,
-                "nextTier": { "tier": { "key": "t4", "min": 16, "max": 20 }, "kilogramsToGo": 4, "extraSaving": 232 },
+                "nextPriceDrop": { "atKilograms": 16, "kilogramsToGo": 4, "extraSaving": 232 },
                 "kilogramsToFreeDelivery": 39
             }
         },
         {
-            "name": "an empty cart sits in the first Tier with no Delivery Charge",
+            "name": "teas with different ranges each look the whole cart's 7 kg up in their own Tiers, and the nudge names the nearest drop",
+            "lines": [
+                { "productId": 1, "kilograms": 4 },
+                { "productId": 3, "kilograms": 3 }
+            ],
+            "expected": {
+                "lines": [
+                    { "productId": 1, "kilograms": 4, "regularPrice": 620, "tierPrice": 589, "tier": { "min": 6, "max": 10 }, "overridden": false, "lineTotal": 2356 },
+                    { "productId": 3, "kilograms": 3, "regularPrice": 520, "tierPrice": 495, "tier": { "min": 4, "max": 20 }, "overridden": false, "lineTotal": 1485 }
+                ],
+                "totalKilograms": 7,
+                "subtotal": 3841,
+                "savings": 199,
+                "deliveryCharge": 150,
+                "deliveryBand": { "min": 6, "max": 10, "fee": 150 },
+                "total": 3991,
+                "averagePerKilogram": 549,
+                "nextPriceDrop": { "atKilograms": 11, "kilogramsToGo": 4, "extraSaving": 124 },
+                "kilogramsToFreeDelivery": 44
+            }
+        },
+        {
+            "name": "an empty cart has no Delivery Charge and no price drop to go for",
             "lines": [],
             "expected": {
-                "tier": { "key": "t1", "min": 1, "max": 5 },
                 "lines": [],
                 "totalKilograms": 0,
                 "subtotal": 0,
@@ -62,17 +85,18 @@
                 "deliveryBand": null,
                 "total": 0,
                 "averagePerKilogram": null,
-                "nextTier": { "tier": { "key": "t2", "min": 6, "max": 10 }, "kilogramsToGo": 6, "extraSaving": 0 },
+                "nextPriceDrop": null,
                 "kilogramsToFreeDelivery": 51
             }
         },
         {
             "name": "5 kg is the top of the first Tier and charges the Regular Price",
-            "lines": [{ "productId": 1, "kilograms": 5 }],
+            "lines": [
+                { "productId": 1, "kilograms": 5 }
+            ],
             "expected": {
-                "tier": { "key": "t1", "min": 1, "max": 5 },
                 "lines": [
-                    { "productId": 1, "kilograms": 5, "regularPrice": 620, "tierPrice": 620, "discount": null, "overridden": false, "lineTotal": 3100, "nextTierPrice": 589 }
+                    { "productId": 1, "kilograms": 5, "regularPrice": 620, "tierPrice": 620, "tier": { "min": 1, "max": 5 }, "overridden": false, "lineTotal": 3100 }
                 ],
                 "totalKilograms": 5,
                 "subtotal": 3100,
@@ -81,74 +105,58 @@
                 "deliveryBand": { "min": 1, "max": 5, "fee": 120 },
                 "total": 3220,
                 "averagePerKilogram": 620,
-                "nextTier": { "tier": { "key": "t2", "min": 6, "max": 10 }, "kilogramsToGo": 1, "extraSaving": 155 },
+                "nextPriceDrop": { "atKilograms": 6, "kilogramsToGo": 1, "extraSaving": 155 },
                 "kilogramsToFreeDelivery": 46
             }
         },
         {
-            "name": "6 kg crosses into the second Tier and the next Delivery Band",
-            "lines": [{ "productId": 1, "kilograms": 6 }],
+            "name": "a Product with a single Tier is a flat price with no drop to go for",
+            "lines": [
+                { "productId": 4, "kilograms": 7 }
+            ],
             "expected": {
-                "tier": { "key": "t2", "min": 6, "max": 10 },
                 "lines": [
-                    { "productId": 1, "kilograms": 6, "regularPrice": 620, "tierPrice": 589, "discount": { "type": "percent", "value": 5 }, "overridden": false, "lineTotal": 3534, "nextTierPrice": 558 }
-                ],
-                "totalKilograms": 6,
-                "subtotal": 3534,
-                "savings": 186,
-                "deliveryCharge": 150,
-                "deliveryBand": { "min": 6, "max": 10, "fee": 150 },
-                "total": 3684,
-                "averagePerKilogram": 589,
-                "nextTier": { "tier": { "key": "t3", "min": 11, "max": 15 }, "kilogramsToGo": 5, "extraSaving": 186 },
-                "kilogramsToFreeDelivery": 45
-            }
-        },
-        {
-            "name": "a percent discount landing on half a taka rounds up: 650 less 5% is 617.5, charged 618",
-            "lines": [{ "productId": 4, "kilograms": 7 }],
-            "expected": {
-                "tier": { "key": "t2", "min": 6, "max": 10 },
-                "lines": [
-                    { "productId": 4, "kilograms": 7, "regularPrice": 650, "tierPrice": 618, "discount": { "type": "percent", "value": 5 }, "overridden": false, "lineTotal": 4326, "nextTierPrice": 598 }
+                    { "productId": 4, "kilograms": 7, "regularPrice": 650, "tierPrice": 650, "tier": { "min": 1, "max": null }, "overridden": false, "lineTotal": 4550 }
                 ],
                 "totalKilograms": 7,
-                "subtotal": 4326,
-                "savings": 224,
+                "subtotal": 4550,
+                "savings": 0,
                 "deliveryCharge": 150,
                 "deliveryBand": { "min": 6, "max": 10, "fee": 150 },
-                "total": 4476,
-                "averagePerKilogram": 618,
-                "nextTier": { "tier": { "key": "t3", "min": 11, "max": 15 }, "kilogramsToGo": 4, "extraSaving": 140 },
+                "total": 4700,
+                "averagePerKilogram": 650,
+                "nextPriceDrop": null,
                 "kilogramsToFreeDelivery": 44
             }
         },
         {
-            "name": "a Tier the Product says nothing about charges the Tier below's price",
-            "lines": [{ "productId": 5, "kilograms": 12 }],
+            "name": "a Tier at the same price as the one before is no drop, so the nudge looks past it",
+            "lines": [
+                { "productId": 5, "kilograms": 7 }
+            ],
             "expected": {
-                "tier": { "key": "t3", "min": 11, "max": 15 },
                 "lines": [
-                    { "productId": 5, "kilograms": 12, "regularPrice": 500, "tierPrice": 475, "discount": { "type": "fixed", "value": 25 }, "overridden": false, "lineTotal": 5700, "nextTierPrice": 430 }
+                    { "productId": 5, "kilograms": 7, "regularPrice": 500, "tierPrice": 475, "tier": { "min": 6, "max": 10 }, "overridden": false, "lineTotal": 3325 }
                 ],
-                "totalKilograms": 12,
-                "subtotal": 5700,
-                "savings": 300,
-                "deliveryCharge": 200,
-                "deliveryBand": { "min": 11, "max": 20, "fee": 200 },
-                "total": 5900,
+                "totalKilograms": 7,
+                "subtotal": 3325,
+                "savings": 175,
+                "deliveryCharge": 150,
+                "deliveryBand": { "min": 6, "max": 10, "fee": 150 },
+                "total": 3475,
                 "averagePerKilogram": 475,
-                "nextTier": { "tier": { "key": "t4", "min": 16, "max": 20 }, "kilogramsToGo": 4, "extraSaving": 540 },
-                "kilogramsToFreeDelivery": 39
+                "nextPriceDrop": { "atKilograms": 16, "kilogramsToGo": 9, "extraSaving": 315 },
+                "kilogramsToFreeDelivery": 44
             }
         },
         {
             "name": "20 kg is the last of its Delivery Band",
-            "lines": [{ "productId": 2, "kilograms": 20 }],
+            "lines": [
+                { "productId": 2, "kilograms": 20 }
+            ],
             "expected": {
-                "tier": { "key": "t4", "min": 16, "max": 20 },
                 "lines": [
-                    { "productId": 2, "kilograms": 20, "regularPrice": 460, "tierPrice": 400, "discount": { "type": "fixed", "value": 60 }, "overridden": false, "lineTotal": 8000, "nextTierPrice": 385 }
+                    { "productId": 2, "kilograms": 20, "regularPrice": 460, "tierPrice": 400, "tier": { "min": 16, "max": 20 }, "overridden": false, "lineTotal": 8000 }
                 ],
                 "totalKilograms": 20,
                 "subtotal": 8000,
@@ -157,17 +165,18 @@
                 "deliveryBand": { "min": 11, "max": 20, "fee": 200 },
                 "total": 8200,
                 "averagePerKilogram": 400,
-                "nextTier": { "tier": { "key": "t5", "min": 21, "max": 50 }, "kilogramsToGo": 1, "extraSaving": 300 },
+                "nextPriceDrop": { "atKilograms": 21, "kilogramsToGo": 1, "extraSaving": 300 },
                 "kilogramsToFreeDelivery": 31
             }
         },
         {
             "name": "21 kg opens the next Delivery Band",
-            "lines": [{ "productId": 2, "kilograms": 21 }],
+            "lines": [
+                { "productId": 2, "kilograms": 21 }
+            ],
             "expected": {
-                "tier": { "key": "t5", "min": 21, "max": 50 },
                 "lines": [
-                    { "productId": 2, "kilograms": 21, "regularPrice": 460, "tierPrice": 385, "discount": { "type": "fixed", "value": 75 }, "overridden": false, "lineTotal": 8085, "nextTierPrice": 370 }
+                    { "productId": 2, "kilograms": 21, "regularPrice": 460, "tierPrice": 385, "tier": { "min": 21, "max": 50 }, "overridden": false, "lineTotal": 8085 }
                 ],
                 "totalKilograms": 21,
                 "subtotal": 8085,
@@ -176,44 +185,42 @@
                 "deliveryBand": { "min": 21, "max": 50, "fee": 250 },
                 "total": 8335,
                 "averagePerKilogram": 385,
-                "nextTier": { "tier": { "key": "t6", "min": 51, "max": null }, "kilogramsToGo": 30, "extraSaving": 315 },
+                "nextPriceDrop": { "atKilograms": 51, "kilogramsToGo": 30, "extraSaving": 315 },
                 "kilogramsToFreeDelivery": 30
             }
         },
         {
-            "name": "the top Tier has no next Tier, and the free Delivery Band leaves nothing to go for",
+            "name": "every line in its top Tier has no drop to go for, and the free Delivery Band leaves nothing to go for",
             "lines": [
                 { "productId": 1, "kilograms": 30 },
                 { "productId": 3, "kilograms": 25 }
             ],
             "expected": {
-                "tier": { "key": "t6", "min": 51, "max": null },
                 "lines": [
-                    { "productId": 1, "kilograms": 30, "regularPrice": 620, "tierPrice": 496, "discount": { "type": "percent", "value": 20 }, "overridden": false, "lineTotal": 14880, "nextTierPrice": null },
-                    { "productId": 3, "kilograms": 25, "regularPrice": 520, "tierPrice": 426, "discount": { "type": "percent", "value": 18 }, "overridden": false, "lineTotal": 10650, "nextTierPrice": null }
+                    { "productId": 1, "kilograms": 30, "regularPrice": 620, "tierPrice": 496, "tier": { "min": 51, "max": null }, "overridden": false, "lineTotal": 14880 },
+                    { "productId": 3, "kilograms": 25, "regularPrice": 520, "tierPrice": 470, "tier": { "min": 21, "max": null }, "overridden": false, "lineTotal": 11750 }
                 ],
                 "totalKilograms": 55,
-                "subtotal": 25530,
-                "savings": 6070,
+                "subtotal": 26630,
+                "savings": 4970,
                 "deliveryCharge": 0,
                 "deliveryBand": { "min": 51, "max": null, "fee": 0 },
-                "total": 25530,
-                "averagePerKilogram": 464,
-                "nextTier": null,
+                "total": 26630,
+                "averagePerKilogram": 484,
+                "nextPriceDrop": null,
                 "kilogramsToFreeDelivery": null
             }
         },
         {
-            "name": "an overridden line keeps its price, still counts toward the Tier, and adds nothing to the next Tier's saving",
+            "name": "an overridden line keeps its price, names no Tier, still counts toward the weight, and adds nothing to the next saving",
             "lines": [
                 { "productId": 1, "kilograms": 8 },
                 { "productId": 2, "kilograms": 4, "overridePrice": 400 }
             ],
             "expected": {
-                "tier": { "key": "t3", "min": 11, "max": 15 },
                 "lines": [
-                    { "productId": 1, "kilograms": 8, "regularPrice": 620, "tierPrice": 558, "discount": { "type": "percent", "value": 10 }, "overridden": false, "lineTotal": 4464, "nextTierPrice": 539 },
-                    { "productId": 2, "kilograms": 4, "regularPrice": 460, "tierPrice": 400, "discount": null, "overridden": true, "lineTotal": 1600, "nextTierPrice": 400 }
+                    { "productId": 1, "kilograms": 8, "regularPrice": 620, "tierPrice": 558, "tier": { "min": 11, "max": 15 }, "overridden": false, "lineTotal": 4464 },
+                    { "productId": 2, "kilograms": 4, "regularPrice": 460, "tierPrice": 400, "tier": null, "overridden": true, "lineTotal": 1600 }
                 ],
                 "totalKilograms": 12,
                 "subtotal": 6064,
@@ -222,7 +229,7 @@
                 "deliveryBand": { "min": 11, "max": 20, "fee": 200 },
                 "total": 6264,
                 "averagePerKilogram": 505,
-                "nextTier": { "tier": { "key": "t4", "min": 16, "max": 20 }, "kilogramsToGo": 4, "extraSaving": 152 },
+                "nextPriceDrop": { "atKilograms": 16, "kilogramsToGo": 4, "extraSaving": 152 },
                 "kilogramsToFreeDelivery": 39
             }
         },
@@ -233,10 +240,9 @@
                 { "productId": 2, "kilograms": 1, "overridePrice": 459 }
             ],
             "expected": {
-                "tier": { "key": "t1", "min": 1, "max": 5 },
                 "lines": [
-                    { "productId": 2, "kilograms": 1, "regularPrice": 460, "tierPrice": 460, "discount": null, "overridden": false, "lineTotal": 460, "nextTierPrice": 440 },
-                    { "productId": 2, "kilograms": 1, "regularPrice": 460, "tierPrice": 459, "discount": null, "overridden": true, "lineTotal": 459, "nextTierPrice": 459 }
+                    { "productId": 2, "kilograms": 1, "regularPrice": 460, "tierPrice": 460, "tier": { "min": 1, "max": 5 }, "overridden": false, "lineTotal": 460 },
+                    { "productId": 2, "kilograms": 1, "regularPrice": 460, "tierPrice": 459, "tier": null, "overridden": true, "lineTotal": 459 }
                 ],
                 "totalKilograms": 2,
                 "subtotal": 919,
@@ -245,38 +251,30 @@
                 "deliveryBand": { "min": 1, "max": 5, "fee": 120 },
                 "total": 1039,
                 "averagePerKilogram": 460,
-                "nextTier": { "tier": { "key": "t2", "min": 6, "max": 10 }, "kilogramsToGo": 4, "extraSaving": 20 },
+                "nextPriceDrop": { "atKilograms": 6, "kilogramsToGo": 4, "extraSaving": 20 },
                 "kilogramsToFreeDelivery": 49
             }
         },
         {
-            "name": "in minor units a percent discount still rounds to the whole taka: 620.00 less 13% is 539.40, charged 539.00",
-            "minorUnitsPerTaka": 100,
-            "deliveryBands": [
-                { "min": 1, "max": 5, "fee": 12000 },
-                { "min": 6, "max": 10, "fee": 15000 },
-                { "min": 11, "max": 20, "fee": 20000 },
-                { "min": 21, "max": 50, "fee": 25000 },
-                { "min": 51, "max": null, "fee": 0 }
+            "name": "a line holding no Kilograms is priced but sets no drop to go for, since it would save nothing",
+            "lines": [
+                { "productId": 3, "kilograms": 0 },
+                { "productId": 1, "kilograms": 2 }
             ],
-            "products": [
-                { "id": 1, "regularPrice": 62000, "discountType": "percent", "tierDiscounts": { "t2": 5, "t3": 10, "t4": 13, "t5": 16, "t6": 20 } }
-            ],
-            "lines": [{ "productId": 1, "kilograms": 16 }],
             "expected": {
-                "tier": { "key": "t4", "min": 16, "max": 20 },
                 "lines": [
-                    { "productId": 1, "kilograms": 16, "regularPrice": 62000, "tierPrice": 53900, "discount": { "type": "percent", "value": 13 }, "overridden": false, "lineTotal": 862400, "nextTierPrice": 52100 }
+                    { "productId": 3, "kilograms": 0, "regularPrice": 520, "tierPrice": 520, "tier": { "min": 1, "max": 3 }, "overridden": false, "lineTotal": 0 },
+                    { "productId": 1, "kilograms": 2, "regularPrice": 620, "tierPrice": 620, "tier": { "min": 1, "max": 5 }, "overridden": false, "lineTotal": 1240 }
                 ],
-                "totalKilograms": 16,
-                "subtotal": 862400,
-                "savings": 129600,
-                "deliveryCharge": 20000,
-                "deliveryBand": { "min": 11, "max": 20, "fee": 20000 },
-                "total": 882400,
-                "averagePerKilogram": 53900,
-                "nextTier": { "tier": { "key": "t5", "min": 21, "max": 50 }, "kilogramsToGo": 5, "extraSaving": 28800 },
-                "kilogramsToFreeDelivery": 35
+                "totalKilograms": 2,
+                "subtotal": 1240,
+                "savings": 0,
+                "deliveryCharge": 120,
+                "deliveryBand": { "min": 1, "max": 5, "fee": 120 },
+                "total": 1360,
+                "averagePerKilogram": 620,
+                "nextPriceDrop": { "atKilograms": 6, "kilogramsToGo": 4, "extraSaving": 62 },
+                "kilogramsToFreeDelivery": 49
             }
         }
     ]

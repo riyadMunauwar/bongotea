@@ -3,8 +3,9 @@
 namespace App\Support\Pricing;
 
 /**
- * One line as priced: what a Kilogram of it costs in the Cart's Tier, what it
- * would cost without a discount, and what it would cost one Tier up.
+ * One line as priced: what a Kilogram of it costs for the Cart's weight, what
+ * it would cost in its Product's first Tier, and which of that Product's
+ * Tiers the price came from.
  */
 final readonly class PricedLine
 {
@@ -14,17 +15,14 @@ final readonly class PricedLine
         public int $regularPrice,
         public int $tierPrice,
 
-        /** The Tier Discount in force, or null where the line pays the Regular Price or was overridden. */
-        public ?Discount $discount,
+        /** The Tier the price came from; null on an overridden line, whose reason says why instead. */
+        public ?Tier $tier,
         public bool $overridden,
         public int $lineTotal,
-
-        /** What a Kilogram would cost in the next Tier; an overridden line keeps its price there too. Null at the top Tier. */
-        public ?int $nextTierPrice,
     ) {}
 
     /**
-     * @return array{productId: int|string, kilograms: int, regularPrice: int, tierPrice: int, discount: array{type: string, value: int}|null, overridden: bool, lineTotal: int, nextTierPrice: int|null}
+     * @return array{productId: int|string, kilograms: int, regularPrice: int, tierPrice: int, tier: array{min: int, max: int|null}|null, overridden: bool, lineTotal: int}
      */
     public function toArray(): array
     {
@@ -33,10 +31,9 @@ final readonly class PricedLine
             'kilograms' => $this->kilograms,
             'regularPrice' => $this->regularPrice,
             'tierPrice' => $this->tierPrice,
-            'discount' => $this->discount?->toArray(),
+            'tier' => $this->tier?->range(),
             'overridden' => $this->overridden,
             'lineTotal' => $this->lineTotal,
-            'nextTierPrice' => $this->nextTierPrice,
         ];
     }
 }

@@ -3,11 +3,11 @@
 namespace App\Support\Pricing;
 
 /**
- * The one rule both pricing tables answer to: an ordered list of
- * `{min, max|null}` ranges covering every whole kilogram from one upwards
- * without gap or overlap, the last open-ended (ADR-0028). It is what lets the
- * pricing module assume every Cart weight has exactly one Tier and one
- * Delivery Charge.
+ * The one rule a Product's Tiers and the Delivery Bands both answer to: an
+ * ordered list of `{min, max|null}` ranges covering every whole kilogram from
+ * one upwards without gap or overlap, the last open-ended (ADR-0031). It is
+ * what lets the pricing module assume every Cart weight has exactly one Tier
+ * of each Product and one Delivery Charge.
  */
 class KilogramRanges
 {

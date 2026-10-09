@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import file from '../../../tests/Fixtures/Pricing/examples.json';
-import { type CartLine, type DiscountType, priceCart, type PriceBook, type ProductPrices } from './pricing';
-
-type ExampleProduct = { id: number; regularPrice: number; discountType: string; tierDiscounts: Record<string, number> };
+import { type CartLine, priceCart, type PriceBook, type ProductPrices } from './pricing';
 
 type ExampleLine = { productId: number; kilograms: number; overridePrice?: number };
 
@@ -16,18 +14,9 @@ describe('the shared pricing examples', () => {
         const merged = { ...file.defaults, ...example };
 
         it(example.name, () => {
-            const book: PriceBook = {
-                tiers: merged.tiers,
-                deliveryBands: merged.deliveryBands,
-                minorUnitsPerTaka: merged.minorUnitsPerTaka,
-            };
+            const book: PriceBook = { deliveryBands: merged.deliveryBands };
 
-            const products = new Map<number, ProductPrices>(
-                (merged.products as ExampleProduct[]).map((product) => [
-                    product.id,
-                    { ...product, discountType: product.discountType as DiscountType },
-                ]),
-            );
+            const products = new Map<number, ProductPrices>((merged.products as ProductPrices[]).map((product) => [product.id, product]));
 
             const lines: CartLine[] = (merged.lines as ExampleLine[]).map((line) => ({
                 product: products.get(line.productId)!,

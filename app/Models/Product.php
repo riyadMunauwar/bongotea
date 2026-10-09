@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use App\Enums\DiscountType;
 use App\Enums\ProductStatus;
+use App\Support\Pricing\ProductTiers;
+use App\Support\Pricing\Tier;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -29,14 +30,16 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * answering. Every characteristic is optional, so a Product can be published
  * bare and enriched later.
  *
- * `price` is the Regular Price: what a Kilogram costs in the first Tier, and
- * what every Tier Discount is taken off. The discounts are keyed by Tier key
- * (`PricingSettings`), and a Tier with none charges the Tier below's price;
- * what a Kilogram costs is only ever worked out by `PriceBook`.
+ * `tiers` are the Product's own Tiers (ADR-0031): `{min, max|null, price}`
+ * in minor units, covering every kilogram from one once and never rising in
+ * price, refused on save otherwise because the pricing module assumes it.
+ * `price` is the Regular Price — the first Tier's — kept beside them because
+ * Capture, tracking and reports read it; the model writes one from the other.
+ * What a Kilogram costs in a Cart is only ever worked out by `PriceBook`.
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price',
-    'discount_type', 'tier_discounts', 'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
+    'tiers', 'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
     'brewing_guide', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
     'seo_title', 'seo_description', 'seo_image',
 ])]
@@ -69,8 +72,7 @@ class Product extends Model implements HasMedia
     {
         return [
             'price' => 'integer',
-            'discount_type' => DiscountType::class,
-            'tier_discounts' => 'array',
+            'tiers' => 'array',
             'strength' => 'integer',
             'best_for' => 'array',
             'business_tips' => 'array',
@@ -96,7 +98,51 @@ class Product extends Model implements HasMedia
             if ($product->isPublished() && $product->first_published_at === null) {
                 $product->first_published_at = now();
             }
+
+            $product->settleRegularPrice();
         });
+    }
+
+    /**
+     * Keeps `price` the first Tier's. Tiers given decide the price; a price
+     * given alone is a flat Product's single Tier, and is refused over a
+     * ladder of Tiers it would silently flatten.
+     */
+    private function settleRegularPrice(): void
+    {
+        $tiers = $this->tiers;
+
+        if ($this->isDirty('tiers') || $tiers === null) {
+            $tiers ??= ProductTiers::flat((int) $this->price);
+            $problem = ProductTiers::problem($tiers);
+
+            if ($problem !== null) {
+                throw new LogicException("Product {$this->getKey()}'s Tiers cannot be saved: {$problem}");
+            }
+
+            $this->tiers = array_map(fn (Tier $tier): array => $tier->toArray(), ProductTiers::from($tiers));
+            $this->price = $this->tiers[0]['price'];
+
+            return;
+        }
+
+        if ($this->isDirty('price')) {
+            if (count($tiers) > 1) {
+                throw new LogicException("Product {$this->getKey()} has a ladder of Tiers; set its Tiers, not its price.");
+            }
+
+            $this->tiers = ProductTiers::flat((int) $this->price);
+        }
+    }
+
+    /**
+     * The Product's Tiers as the pricing module reads them.
+     *
+     * @return non-empty-list<Tier>
+     */
+    public function priceTiers(): array
+    {
+        return ProductTiers::from($this->tiers ?? ProductTiers::flat((int) $this->price));
     }
 
     public function isSlugLocked(): bool

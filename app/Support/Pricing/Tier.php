@@ -3,21 +3,17 @@
 namespace App\Support\Pricing;
 
 /**
- * One range of the Cart's total Kilograms, deciding which of its prices
- * every Product charges.
- *
- * The key is what a Product's Tier Discounts are stored against, so a Tier
- * keeps its Discounts when the Merchant moves its edges, and a Tier added in
- * Settings starts with none.
+ * One of a Product's ranges of the Cart's total Kilograms, and the Tier Price
+ * that Product charges within it, in minor units (ADR-0031).
  */
 final readonly class Tier
 {
     public function __construct(
-        public string $key,
         public int $min,
 
         /** Null for the last Tier, which is open-ended. */
         public ?int $max,
+        public int $price,
     ) {}
 
     public function contains(int $kilograms): bool
@@ -32,10 +28,20 @@ final readonly class Tier
     }
 
     /**
-     * @return array{key: string, min: int, max: int|null}
+     * The range alone, which is what a priced line names.
+     *
+     * @return array{min: int, max: int|null}
+     */
+    public function range(): array
+    {
+        return ['min' => $this->min, 'max' => $this->max];
+    }
+
+    /**
+     * @return array{min: int, max: int|null, price: int}
      */
     public function toArray(): array
     {
-        return ['key' => $this->key, 'min' => $this->min, 'max' => $this->max];
+        return [...$this->range(), 'price' => $this->price];
     }
 }

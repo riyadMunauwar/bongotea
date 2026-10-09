@@ -7,33 +7,19 @@ use App\Support\Pricing\KilogramRanges;
 use Illuminate\Support\Facades\Log;
 
 /**
- * The Tiers and the Delivery Bands: the two store-wide tables every Cart is
- * priced from (ADR-0028), read through `PriceBook::current()`.
+ * The Delivery Bands: the store-wide table every Cart's Delivery Charge is
+ * read from, through `PriceBook::current()`. Tiers are not here: each Product
+ * owns its own (ADR-0031), and a row saved before that still carrying a
+ * `tiers` key is simply not read.
  *
- * Both are ordered lists covering every whole kilogram from one without gap
- * or overlap, the last open-ended. The page refuses anything else, and so does
- * `with()` for a row that never came through the page, because the pricing
- * module assumes it. The defaults are the mockup's tables, like the other
- * storefront groups' content defaults.
+ * The bands are an ordered list covering every whole kilogram from one without
+ * gap or overlap, the last open-ended. The page refuses anything else, and so
+ * does `with()` for a row that never came through the page, because the
+ * pricing module assumes it. The defaults are the mockup's table, like the
+ * other storefront groups' content defaults.
  */
 class PricingSettings extends SettingsGroup
 {
-    /**
-     * A Tier's key is what a Product's Tier Discounts are stored against, so
-     * moving a Tier's edges keeps every Discount on it and a new Tier starts
-     * with none.
-     *
-     * @var list<array{key: string, min: int, max: int|null}>
-     */
-    public array $tiers = [
-        ['key' => 'tier-1', 'min' => 1, 'max' => 5],
-        ['key' => 'tier-2', 'min' => 6, 'max' => 10],
-        ['key' => 'tier-3', 'min' => 11, 'max' => 15],
-        ['key' => 'tier-4', 'min' => 16, 'max' => 20],
-        ['key' => 'tier-5', 'min' => 21, 'max' => 50],
-        ['key' => 'tier-6', 'min' => 51, 'max' => null],
-    ];
-
     /**
      * Fees in minor units.
      *
@@ -58,27 +44,15 @@ class PricingSettings extends SettingsGroup
     }
 
     /**
-     * Each table normalised to whole numbers before `parent::with()` assigns
-     * it, and a table that does not cover every kilogram once — or a Tier
-     * without a key, or two sharing one — read as the table this group
-     * already has. A row must never throw, and a gap here would leave a Cart
-     * with no price.
+     * The bands normalised to whole numbers before `parent::with()` assigns
+     * them, and a table that does not cover every kilogram once read as the
+     * table this group already has. A row must never throw, and a gap here
+     * would leave a Cart with no Delivery Charge.
      *
      * @param  array<string, mixed>  $values
      */
     public function with(array $values): static
     {
-        if (array_key_exists('tiers', $values)) {
-            $tiers = self::normaliseTiers($values['tiers']);
-
-            if ($tiers === null) {
-                self::warnKept('tiers');
-                unset($values['tiers']);
-            } else {
-                $values['tiers'] = $tiers;
-            }
-        }
-
         if (array_key_exists('deliveryBands', $values)) {
             $bands = self::normaliseBands($values['deliveryBands']);
 
@@ -103,32 +77,6 @@ class PricingSettings extends SettingsGroup
     }
 
     /**
-     * @return list<array{key: string, min: int, max: int|null}>|null
-     */
-    private static function normaliseTiers(mixed $tiers): ?array
-    {
-        if (! is_array($tiers) || KilogramRanges::problem(self::rows($tiers)) !== null) {
-            return null;
-        }
-
-        $normalised = [];
-
-        foreach (self::rows($tiers) as $tier) {
-            $key = $tier['key'] ?? null;
-
-            if (! is_string($key) || $key === '') {
-                return null;
-            }
-
-            $normalised[] = ['key' => $key, ...self::range($tier)];
-        }
-
-        $keys = array_column($normalised, 'key');
-
-        return count(array_unique($keys)) === count($keys) ? $normalised : null;
-    }
-
-    /**
      * @return list<array{min: int, max: int|null, fee: int}>|null
      */
     private static function normaliseBands(mixed $bands): ?array
@@ -146,7 +94,9 @@ class PricingSettings extends SettingsGroup
                 return null;
             }
 
-            $normalised[] = [...self::range($band), 'fee' => $fee];
+            $max = $band['max'] ?? null;
+
+            $normalised[] = ['min' => (int) $band['min'], 'max' => $max === null || $max === '' ? null : (int) $max, 'fee' => $fee];
         }
 
         return $normalised;
@@ -159,16 +109,5 @@ class PricingSettings extends SettingsGroup
     private static function rows(array $rows): array
     {
         return array_values(array_map(fn (mixed $row): array => is_array($row) ? $row : [], $rows));
-    }
-
-    /**
-     * @param  array<string, mixed>  $row
-     * @return array{min: int, max: int|null}
-     */
-    private static function range(array $row): array
-    {
-        $max = $row['max'] ?? null;
-
-        return ['min' => (int) $row['min'], 'max' => $max === null || $max === '' ? null : (int) $max];
     }
 }
