@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { OtherTeas } from '@/components/catalogue/other-teas';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
@@ -9,6 +9,7 @@ import { bn } from '@/lang/bn';
 import { formatPhone, toBanglaDigits } from '@/lib/bangla';
 import { rowAnchor } from '@/lib/cart';
 import { useCart } from '@/lib/use-cart';
+import { useMoments } from '@/lib/use-moments';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
 import type { ProductCard, ProductDetail } from '@/types/catalogue';
@@ -28,6 +29,12 @@ export default function ProductPage() {
     const { links, store } = usePage().props;
     const taka = useTaka();
     const cart = useCart();
+    const { productViewed } = useMoments();
+
+    /** Product Viewed, once each time a Product's page is opened — not again as the page redraws. */
+    useEffect(() => {
+        productViewed({ id: product.id, tiers: product.tiers });
+    }, [product.id]);
 
     const regular = regularPrice(product.tiers);
     const lowest = lowestPrice(product.tiers);

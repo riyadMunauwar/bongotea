@@ -2,11 +2,12 @@ import { usePage } from '@inertiajs/react';
 import { useMemo, useSyncExternalStore } from 'react';
 import { cartLines, EMPTY_CART, onlyOrderable, priceSteps, readCart, subscribeToCart, withKilograms, writeCart, type CartProduct, type PriceStep } from './cart';
 import { priceCart, type PricedCart } from './pricing';
+import { useMoments } from './use-moments';
 
 export type UseCart = {
     /** The Kilograms of a Product in the Cart; nought for one a buyer cannot have now. */
     kilogramsOf: (productId: number) => number;
-    /** Sets a Product's Kilograms, clamped to 0–999; refused for a Product a buyer cannot have now. */
+    /** Sets a Product's Kilograms, clamped to 0–999; refused for a Product a buyer cannot have now. From none to some is an Added to Cart. */
     set: (productId: number, kilograms: number) => void;
     clear: () => void;
     /** Every figure the Cart shows, worked out afresh as it changes. */
@@ -28,6 +29,7 @@ export type UseCart = {
 export function useCart(): UseCart {
     const { pricing } = usePage().props;
     const cart = useSyncExternalStore(subscribeToCart, readCart, () => EMPTY_CART);
+    const moments = useMoments();
 
     return useMemo(() => {
         const lines = cartLines(cart, pricing.products);
@@ -38,8 +40,21 @@ export function useCart(): UseCart {
         return {
             kilogramsOf: (productId: number) => held.get(productId) ?? 0,
             set: (productId: number, kilograms: number) => {
-                if (available.has(productId)) {
-                    writeCart(withKilograms(onlyOrderable(readCart(), pricing.products), productId, kilograms));
+                if (!available.has(productId)) {
+                    return;
+                }
+
+                const before = onlyOrderable(readCart(), pricing.products);
+                const after = withKilograms(before, productId, kilograms);
+
+                writeCart(after);
+
+                if ((before[productId] ?? 0) === 0 && (after[productId] ?? 0) > 0) {
+                    const product = orderable.find((candidate) => candidate.id === productId);
+
+                    if (product !== undefined) {
+                        moments.addedToCart(product, after[productId], Object.keys(before).length === 0);
+                    }
                 }
             },
             clear: () => writeCart(EMPTY_CART),
@@ -51,5 +66,5 @@ export function useCart(): UseCart {
             ),
             products: pricing.products,
         };
-    }, [cart, pricing]);
+    }, [cart, pricing, moments]);
 }

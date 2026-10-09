@@ -8,14 +8,19 @@
     layout's `<Head>` instead, which renders the same tags under the same
     keys; the `data-inertia` keys are what let a later client-side visit
     replace these rather than stack beside them.
+
+    The Pixel is injected here, once per document, never authored into a
+    page (ADR-0017): the storefront calls into it as each Moment happens.
 --}}
 @php($seo = $page['props']['seo'] ?? [])
+@inject('trackingSnippet', 'App\Support\Tracking\TrackingSnippet')
 <!doctype html>
 <html lang="bn">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#2E6B45">
+    {!! $trackingSnippet->forStorefront() !!}
     @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/app.tsx'])
     <x-inertia::head>

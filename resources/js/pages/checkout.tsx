@@ -1,10 +1,11 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { deliveryNote, feeText } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
 import { useCart } from '@/lib/use-cart';
+import { useMoments } from '@/lib/use-moments';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 
@@ -79,6 +80,21 @@ export default function CheckoutPage() {
     });
 
     const { priced, isEmpty } = cart;
+    const { checkoutStarted } = useMoments();
+    const startReported = useRef(false);
+
+    /**
+     * Checkout Started, once per opening and only with something in the
+     * Cart. Waits for the stored Cart rather than firing on mount, because
+     * the first draw is the server's empty one.
+     */
+    useEffect(() => {
+        if (!isEmpty && !startReported.current) {
+            startReported.current = true;
+            checkoutStarted(priced);
+        }
+    }, [isEmpty, priced, checkoutStarted]);
+
     const nameOf = (productId: number) => productNames[productId] ?? '';
 
     function submit(event: React.FormEvent) {

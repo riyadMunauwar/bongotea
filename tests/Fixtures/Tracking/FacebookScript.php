@@ -71,14 +71,27 @@ class FacebookScript extends ProviderScript
     }
 
     /**
-     * Meta wants both for a storefront page: the page view its base code
-     * makes, and the look at the product the page is selling.
-     *
      * @return list<string>
      */
     public function visitEvents(): array
     {
-        return [$this->pageViewEvent(), 'ViewContent'];
+        return [$this->pageViewEvent()];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function productViewedEvents(): array
+    {
+        return ['ViewContent'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function addedToCartEvents(): array
+    {
+        return ['AddToCart'];
     }
 
     /**

@@ -88,9 +88,10 @@ final class BrowserEvent
      * a basket the document cannot know, so both the deduplication id and the
      * parameters are JavaScript naming what the browser worked out.
      *
-     * Deduplicated on the identifier the browser made up for this page load,
-     * like the load itself — a Moment that happens once per load is counted
-     * once per load, and the copy the beacon writes carries the same string.
+     * Deduplicated on the identifier the browser made up for the Moment — one
+     * per opening for Product Viewed and Checkout Started, one per Product per
+     * Cart for Added to Cart — and the copy the beacon writes carries the same
+     * string.
      *
      * @param  string  $identifier  JavaScript naming the identifier, not the identifier
      * @param  string  $selection  JavaScript naming the Selection, not the Selection

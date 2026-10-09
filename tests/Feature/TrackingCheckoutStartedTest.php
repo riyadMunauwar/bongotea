@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TrackingMoment;
+use App\Http\Requests\CheckoutRequest;
 use App\Models\Product;
 use App\Models\TrackingEvent;
 use App\Support\Settings\TrackingSettings;
@@ -76,6 +77,36 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     /**
+     * The Cart's whole weight is what moves each Product down its own ladder,
+     * so four kilograms of one tea and two of another are both priced at the
+     * Tier six kilograms reach — the figure the Checkout's summary showed.
+     */
+    it('prices each product at the tier the whole cart\'s kilograms reach', function (ProviderScript $script) {
+        $script->makeDestination();
+        $gold = Product::factory()->create(['tiers' => [
+            ['min' => 1, 'max' => 5, 'price' => 55000],
+            ['min' => 6, 'max' => null, 'price' => 43000],
+        ]]);
+        $green = Product::factory()->create(['tiers' => [
+            ['min' => 1, 'max' => 5, 'price' => 45000],
+            ['min' => 6, 'max' => null, 'price' => 40000],
+        ]]);
+
+        reportStart($gold->getKey().':4,'.$green->getKey().':2')->assertNoContent();
+
+        $script->fakeAccepted();
+        $this->artisan('tracking:sweep')->assertSuccessful();
+
+        $sent = $script->sentEvents()[0];
+
+        expect($script->valueOf($sent))->toBe(2520.0)
+            ->and($script->contentsOf($sent))->toBe([
+                ['id' => (string) $gold->getKey(), 'quantity' => 4, 'price' => 430.0],
+                ['id' => (string) $green->getKey(), 'quantity' => 2, 'price' => 400.0],
+            ]);
+    })->with('tracking providers');
+
+    /**
      * The prices are the catalogue's and nothing that arrives may say
      * otherwise. A Product that does not exist adds no line and no money
      * however loudly it is named.
@@ -103,14 +134,14 @@ describe('the beacon', function () {
         $script->makeDestination();
         $jacket = Product::factory()->create(['price' => 99000]);
 
-        reportStart($jacket->getKey().':9999')->assertNoContent();
+        reportStart($jacket->getKey().':99999')->assertNoContent();
 
         $script->fakeAccepted();
         $this->artisan('tracking:sweep')->assertSuccessful();
 
         $contents = $script->contentsOf($script->sentEvents()[0]);
 
-        expect($contents[0]['quantity'])->toBe(config('giopages.checkout.max_quantity'));
+        expect($contents[0]['quantity'])->toBe(CheckoutRequest::MAX_KILOGRAMS);
     })->with('tracking providers');
 
     it('reports no money where the browser named nothing', function (ProviderScript $script) {

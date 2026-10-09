@@ -104,8 +104,7 @@ class Facebook implements Provider
     }
 
     /**
-     * A Visit is two events, because Meta wants a page view and a product
-     * view and a storefront page can be both at once. Capture and Paid each produce
+     * One of Meta's standard events per Moment. Capture and Paid each produce
      * a `Purchase`; which of the two an Order goes through is decided by how
      * it is being paid and not here — a Cash on Delivery Order has no later
      * moment, and an online one has no earlier certainty.
@@ -115,7 +114,9 @@ class Facebook implements Provider
     public function eventsFor(TrackingMoment $moment): array
     {
         return match ($moment) {
-            TrackingMoment::Visit => [self::PAGE_VIEW, 'ViewContent'],
+            TrackingMoment::Visit => [self::PAGE_VIEW],
+            TrackingMoment::ProductViewed => ['ViewContent'],
+            TrackingMoment::AddedToCart => ['AddToCart'],
             TrackingMoment::CheckoutStarted => ['InitiateCheckout'],
             TrackingMoment::Capture, TrackingMoment::Paid => ['Purchase'],
         };

@@ -120,7 +120,8 @@ const listeners = new Set<() => void>();
 /** The Cart as last read or written; null when it must be read from storage again. */
 let current: Cart | null = null;
 
-function storage(): Storage | null {
+/** This browser's localStorage, or null where it cannot be had. */
+export function storage(): Storage | null {
     try {
         return typeof window === 'undefined' ? null : window.localStorage;
     } catch {

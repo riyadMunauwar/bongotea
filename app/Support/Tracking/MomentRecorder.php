@@ -32,7 +32,8 @@ class MomentRecorder
 
     /**
      * A Moment the browser is the only witness to: a storefront page was
-     * loaded, or a visitor started the checkout.
+     * loaded, a Product's page opened, a Product added to the Cart, or the
+     * Checkout opened.
      *
      * The deduplication id is the browser's own, made up for that page load
      * and carried here by the beacon, because the copy the Pixel fired
@@ -51,7 +52,7 @@ class MomentRecorder
      * Provider's event, the first platform added would bend it.
      *
      * What was being bought comes in from the caller rather than from an
-     * Order, because a visitor who has started filling the Checkout has not
+     * Order, because a visitor looking at a Product or filling a Cart has not
      * placed one yet. It is frozen onto the row for the reason the content
      * detail is: the sweep runs later, and a Product may be repriced or in the
      * bin by then. A page load is about no Products at all and carries none.

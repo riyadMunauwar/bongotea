@@ -5,16 +5,20 @@ namespace App\Support\Tracking;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Product;
+use App\Support\Pricing\CartLine;
+use App\Support\Pricing\PriceBook;
+use App\Support\Pricing\PricedLine;
+use App\Support\Pricing\ProductPrices;
 use Illuminate\Support\Collection;
 
 /**
  * What a Moment says was being bought, and what it is worth.
  *
- * There is no cart in this domain, so this is not one: it is the reading every
- * Provider needs to report money — a line per Product with its quantity and
- * its price, and the one figure the event carries as its value. An Order
- * answers it from what was captured; a visitor who has only started filling
- * the Checkout answers it from what is ticked in front of them.
+ * Not the Cart, which lives in the browser: it is the reading every Provider
+ * needs to report money — a line per Product with its quantity and its price,
+ * and the one figure the event carries as its value. An Order answers it from
+ * what was captured; a Moment the browser reports answers it from the
+ * Products and Kilograms the browser named.
  *
  * Written in our own terms and never a platform's. A driver turns it into
  * `contents` or into whatever its own platform calls the same thing, and
@@ -66,7 +70,8 @@ final class Selection
 
     /**
      * What a visitor has in front of them: the Products named, each at the
-     * quantity given, priced from the Products themselves.
+     * Kilograms given, priced by the pricing module as if they were a Cart of
+     * their own — so each line is at the Tier the Kilograms named reach.
      *
      * Prices are read here and never accepted from whoever named the
      * Products, exactly as every figure on an Order is derived at Capture —
@@ -77,25 +82,29 @@ final class Selection
      * Charge. The Charge is what it costs to bring the parcel rather than
      * part of what was chosen, and it enters a reported value at the Purchase,
      * where the figure has to agree with the Merchant's own Sales. So this is
-     * deliberately smaller than the Total the form shows, which is what the
-     * courier collects.
+     * deliberately smaller than the Total the Checkout shows, which is what
+     * the courier collects.
      *
-     * Nothing chosen is a Selection worth nothing, not a Selection of
-     * everything: a Product Picker whose Default Selection is empty opens on
-     * an empty form, and that is what the visitor is looking at.
+     * Nothing named is a Selection worth nothing, not a Selection of
+     * everything.
      *
      * @param  Collection<int, Product>  $products
-     * @param  array<int, int>  $quantities  how many of each, keyed by Product id
+     * @param  array<int, int>  $kilograms  how many of each, keyed by Product id
      */
-    public static function forProducts(Collection $products, array $quantities): self
+    public static function forProducts(Collection $products, array $kilograms): self
     {
-        $lines = $products->map(fn (Product $product): array => [
-            'id' => self::identify($product->getKey(), $product->name),
-            'quantity' => max(1, (int) ($quantities[$product->getKey()] ?? 1)),
-            'unit_price' => (int) $product->price,
-        ])->values()->all();
+        $priced = PriceBook::current()->price($products->map(fn (Product $product): CartLine => new CartLine(
+            ProductPrices::of($product),
+            max(1, (int) ($kilograms[$product->getKey()] ?? 1)),
+        ))->values()->all());
 
-        return new self($lines, self::sum($lines));
+        $lines = array_map(fn (PricedLine $line): array => [
+            'id' => self::identify($line->productId, null),
+            'quantity' => $line->kilograms,
+            'unit_price' => $line->tierPrice,
+        ], $priced->lines);
+
+        return new self($lines, $priced->subtotal);
     }
 
     /**

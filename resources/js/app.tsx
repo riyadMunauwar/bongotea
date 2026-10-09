@@ -1,6 +1,9 @@
 import { createInertiaApp } from '@inertiajs/react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
+import { reportVisits } from '@/lib/tracking';
 import { resolvePage } from '@/resolve-page';
+
+reportVisits();
 
 /**
  * Hydrates what the SSR process drew; when it drew nothing — the process is

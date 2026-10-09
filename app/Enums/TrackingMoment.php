@@ -5,22 +5,25 @@ namespace App\Enums;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Something that happens in the GioPages domain and is worth reporting.
+ * Something that happens in the Bongo Tea domain and is worth reporting.
  *
  * The whole tracking subsystem is organised around these rather than around
  * any one ad platform's event names, so that a second platform is a Provider
  * class and nothing else. A Moment maps to zero, one or several provider
  * events, and which ones is the Provider's answer, never a caller's.
- *
- * Visit, Capture and Paid are already the glossary's words; Checkout Started
- * is the one this subsystem adds.
  */
 enum TrackingMoment: string implements HasLabel
 {
     /** One load of a storefront page. */
     case Visit = 'visit';
 
-    /** A visitor starting the checkout. */
+    /** A Product's own page was opened. */
+    case ProductViewed = 'product_viewed';
+
+    /** A Product went from none to some in a Cart. */
+    case AddedToCart = 'added_to_cart';
+
+    /** A visitor opened the Checkout with something in their Cart. */
     case CheckoutStarted = 'checkout_started';
 
     /** A visitor submitted the Checkout and an Order came into existence. */
@@ -32,18 +35,17 @@ enum TrackingMoment: string implements HasLabel
     /**
      * The Moments a browser is allowed to report for itself.
      *
-     * Visit and Checkout Started happen in a browser and are witnessed
-     * nowhere else, so the beacon is the only thing that can say they
-     * happened. Capture and Paid are deliberately absent: the beacon is
-     * unauthenticated by design — it answers a document served as a file
-     * with no session and no token — and a Purchase anyone holding a Page's
-     * slug could post is reported revenue the Merchant does not have.
+     * These happen in a browser and are witnessed nowhere else, so the
+     * beacon is the only thing that can say they happened. Capture and Paid
+     * are deliberately absent: the beacon is unauthenticated by design, and a
+     * Purchase anyone could post is reported revenue the Merchant does not
+     * have.
      *
      * @return list<self>
      */
     public static function reportableByBrowser(): array
     {
-        return [self::Visit, self::CheckoutStarted];
+        return [self::Visit, self::ProductViewed, self::AddedToCart, self::CheckoutStarted];
     }
 
     /**
@@ -58,10 +60,21 @@ enum TrackingMoment: string implements HasLabel
         return in_array($moment, self::reportableByBrowser(), true) ? $moment : null;
     }
 
+    /**
+     * Whether this Moment is about Products the browser names — and so
+     * carries a Selection — rather than about a page load or an Order.
+     */
+    public function isAboutProductsNamed(): bool
+    {
+        return in_array($this, [self::ProductViewed, self::AddedToCart, self::CheckoutStarted], true);
+    }
+
     public function getLabel(): string
     {
         return match ($this) {
             self::Visit => 'Visit',
+            self::ProductViewed => 'Product Viewed',
+            self::AddedToCart => 'Added to Cart',
             self::CheckoutStarted => 'Checkout Started',
             self::Capture => 'Capture',
             self::Paid => 'Paid',

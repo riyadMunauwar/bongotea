@@ -2,6 +2,7 @@
 
 namespace App\Support\Tracking;
 
+use App\Enums\TrackingMoment;
 use App\Models\Destination;
 use App\Models\Order;
 
@@ -35,7 +36,123 @@ class TrackingSnippet
      */
     public const CONSENT_HOOK = 'gioTrackingConsent';
 
-    public function __construct(private readonly TrackingPlans $plans) {}
+    /**
+     * The global the storefront's Pixel is reached through: one function per
+     * Moment the browser reports, keyed by the Moment, each taking the
+     * deduplication id and the Selection the storefront worked out.
+     */
+    public const MOMENTS = 'bongoteaMoments';
+
+    /** What a storefront Moment's function calls its deduplication id and its Selection. */
+    private const IDENTIFIER = 'id';
+
+    private const SELECTION = 'selection';
+
+    public function __construct(
+        private readonly TrackingPlans $plans,
+        private readonly VisitCounter $visits,
+    ) {}
+
+    /**
+     * The Pixel every storefront page carries, written into the Inertia root
+     * document: each Destination's base code, and one function per Moment the
+     * browser reports for the storefront to call as each one happens.
+     *
+     * The load is not reported by the base code. The storefront is one
+     * document across every visit a browser makes inside it, so it reports a
+     * Visit itself on each one, under an identifier the beacon carries too —
+     * a bare `PageView` from the base code would be a second, undeduplicated
+     * copy of the first.
+     *
+     * Every Moment here is about something only the browser knows when it
+     * happens, so its deduplication id and its Selection are the arguments
+     * the storefront passes in, never values written into the document.
+     */
+    public function forStorefront(): string
+    {
+        $plan = $this->plans->current();
+
+        $scripts = [];
+        $calls = [];
+
+        foreach ($plan->destinations() as $destination) {
+            $driver = $destination->driver();
+            $script = $driver->script($destination, [], reportsLoad: false);
+
+            if ($script === '') {
+                continue;
+            }
+
+            $scripts[] = $script;
+
+            foreach (TrackingMoment::reportableByBrowser() as $moment) {
+                $call = $driver->calls($destination, $this->storefrontEvents($plan, $destination, $moment));
+
+                if ($call !== '') {
+                    $calls[$moment->value][] = $call;
+                }
+            }
+        }
+
+        if ($scripts === []) {
+            return '';
+        }
+
+        return $this->element([...$scripts, $this->momentsGlobal($calls)]);
+    }
+
+    /**
+     * Where the storefront posts the server's copy of a Moment, or null where
+     * a beacon would write nothing: the store reports nowhere and counts no
+     * Visits. The beacon costs a request on every load, and a store asking
+     * for neither is not made to pay it.
+     */
+    public function beacon(): ?string
+    {
+        return $this->plans->current()->reportsNowhere() && ! $this->visits->isCounting()
+            ? null
+            : route('tracking.report');
+    }
+
+    /**
+     * The events this Destination reports for one storefront Moment, less the
+     * ones the store has switched off.
+     *
+     * @return list<BrowserEvent>
+     */
+    private function storefrontEvents(TrackingPlan $plan, Destination $destination, TrackingMoment $moment): array
+    {
+        return array_map(
+            fn (string $event): BrowserEvent => $moment->isAboutProductsNamed()
+                ? BrowserEvent::forSelection($event, self::IDENTIFIER, self::SELECTION, $plan->sendsContentDetail())
+                : BrowserEvent::forLoad($event, self::IDENTIFIER),
+            $plan->eventsFor($destination, $moment),
+        );
+    }
+
+    /**
+     * The global the storefront calls into: a function per Moment that has
+     * anything to report, each running every Destination's calls for it.
+     *
+     * @param  array<string, list<string>>  $calls  by Moment
+     */
+    private function momentsGlobal(array $calls): string
+    {
+        $functions = [];
+
+        foreach ($calls as $moment => $bodies) {
+            $body = implode("\n", array_map(fn (string $line): string => '        '.$line, explode("\n", implode("\n", $bodies))));
+            $parameters = self::IDENTIFIER.', '.self::SELECTION;
+
+            $functions[] = "    \"{$moment}\": function ({$parameters}) {\n{$body}\n    }";
+        }
+
+        $global = self::MOMENTS;
+
+        return $functions === []
+            ? "window.{$global} = {};"
+            : "window.{$global} = {\n".implode(",\n", $functions)."\n};";
+    }
 
     /**
      * The Pixel a page about one Order carries: the base code, which reports

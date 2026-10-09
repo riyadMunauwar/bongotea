@@ -87,6 +87,11 @@ export type SharedProps = {
     seo: Seo;
     /** How many minor units make one taka; every price is sent in minor units. */
     minorUnitsPerTaka: number;
+    /** Where Moments are reported (`lib/tracking.ts`): the beacon, null where it would write nothing, and the Pixel's global. */
+    tracking: {
+        beacon: string | null;
+        moments: string;
+    };
 };
 
 declare module '@inertiajs/core' {

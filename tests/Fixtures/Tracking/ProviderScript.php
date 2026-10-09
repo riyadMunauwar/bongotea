@@ -52,12 +52,26 @@ abstract class ProviderScript
 
     /**
      * Everything this Provider is told when a page is loaded, in the order
-     * it is reported — the load itself among them, since a storefront page
-     * is a page view and a look at the thing being sold at once.
+     * it is reported.
      *
      * @return list<string>
      */
     abstract public function visitEvents(): array;
+
+    /**
+     * Everything this Provider is told when a Product's own page is opened.
+     *
+     * @return list<string>
+     */
+    abstract public function productViewedEvents(): array;
+
+    /**
+     * Everything this Provider is told when a Product goes from none to some
+     * in a Cart.
+     *
+     * @return list<string>
+     */
+    abstract public function addedToCartEvents(): array;
 
     /**
      * The click identifiers this Provider matches an Order back to an ad

@@ -6,6 +6,7 @@ use App\Support\Money;
 use App\Support\Settings\StoreSettings;
 use App\Support\Storefront\Seo;
 use App\Support\Storefront\StorefrontShell;
+use App\Support\Tracking\TrackingSnippet;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -14,7 +15,8 @@ use Inertia\Middleware;
  * every storefront page shares — the header, drawer and footer, what the
  * browser's Cart is priced from, a default
  * `seo` a page may replace with its own, and how many minor units make a
- * taka, since every price is sent in minor units.
+ * taka, since every price is sent in minor units, and where the Pixel and
+ * the beacon are reached.
  *
  * Every shared prop is a closure, so a request this middleware passes that
  * renders no Inertia page — a payment callback, the Order Complete Page —
@@ -48,6 +50,10 @@ class HandleInertiaRequests extends Middleware
             'pricing' => fn (): array => $shell()->pricing(),
             'seo' => fn (): array => Seo::forStore(app(StoreSettings::class), $request)->toArray(),
             'minorUnitsPerTaka' => fn (): int => Money::factor(),
+            'tracking' => fn (): array => [
+                'beacon' => app(TrackingSnippet::class)->beacon(),
+                'moments' => TrackingSnippet::MOMENTS,
+            ],
         ];
     }
 }

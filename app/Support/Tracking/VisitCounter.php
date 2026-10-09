@@ -44,11 +44,21 @@ class VisitCounter
      */
     public function count(): void
     {
-        if (! $this->settings->countsVisits) {
+        if (! $this->isCounting()) {
             return;
         }
 
         $this->add(CarbonImmutable::now(app(GeneralSettings::class)->timezone)->toDateString());
+    }
+
+    /**
+     * Whether a load is counted at all — the one place that decides it, asked
+     * by `count()` and by the storefront deciding whether a load is worth a
+     * beacon.
+     */
+    public function isCounting(): bool
+    {
+        return $this->settings->countsVisits;
     }
 
     /**

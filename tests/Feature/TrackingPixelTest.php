@@ -5,7 +5,9 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\TrackingEvent;
 use App\Support\Orders\OrderOwnership;
+use App\Support\Settings\TrackingSettings;
 use App\Support\Tracking\TrackingSnippet;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Fixtures\Payments\SslCommerzScript;
 use Tests\Fixtures\Tracking\FacebookScript;
 use Tests\Fixtures\Tracking\ProviderScript;
@@ -199,4 +201,119 @@ it('counts the processing page and the retry page as no visits', function () {
     $this->get(route('checkout.retry', $payment->order->order_number))->assertOk();
 
     expect(TrackingEvent::count())->toBe(0);
+});
+
+/**
+ * A storefront page as a browser's first visit receives it: the whole root
+ * document, not the Inertia answer a later visit gets.
+ */
+function storefrontDocument(?string $address = null): string
+{
+    $address ??= route('product', Product::factory()->create()->slug);
+
+    return test()->get($address)->assertOk()->getContent();
+}
+
+/**
+ * Every storefront page is one Inertia root document, so that is where the
+ * Pixel goes: the base code once, and one function per Moment the storefront
+ * reports from the browser, which it calls as each one happens — a load on
+ * every visit, a Product's own page, a Product going from none to some in the
+ * Cart, and the Checkout opened with something in it.
+ */
+describe('the storefront', function () {
+    it('carries the pixel and the moments the browser reports on every storefront page', function (ProviderScript $script, string $address) {
+        $destination = $script->makeDestination();
+
+        $html = storefrontDocument($address);
+
+        expect($script->carriesBaseCodeFor($destination, $html))->toBeTrue()
+            ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([
+                ...$script->visitEvents(),
+                ...$script->productViewedEvents(),
+                ...$script->addedToCartEvents(),
+                ...$script->checkoutStartedEvents(),
+            ]);
+    })->with('tracking providers')->with([
+        'a product page' => fn (): string => route('product', Product::factory()->create()->slug),
+        'the checkout' => fn (): string => route('checkout'),
+    ]);
+
+    /**
+     * One document is served to everyone, so the deduplication id and what
+     * was being bought are both the browser's to supply when the Moment
+     * happens — and the load is reported once, with its id, rather than by a
+     * bare base code no beacon can deduplicate against.
+     */
+    it('leaves the deduplication id and the basket to the browser', function (ProviderScript $script) {
+        $script->makeDestination();
+
+        $events = $script->browserEventsIn(storefrontDocument());
+        $load = array_shift($events);
+
+        expect($script->deduplicationIdOf($load))->not->toBeNull()
+            ->and($script->reportsLiveSelection($load))->toBeFalse();
+
+        foreach ($events as $event) {
+            expect($script->deduplicationIdOf($event))->toBe($script->deduplicationIdOf($load))
+                ->and($script->reportsLiveSelection($event))->toBeTrue()
+                ->and($script->namesWhatWasBought($event))->toBeTrue();
+        }
+    })->with('tracking providers');
+
+    it('leaves out an event the store has switched off', function (ProviderScript $script) {
+        $script->makeDestination();
+
+        app(TrackingSettings::class)->with([
+            'eventDefaults' => [$script->provider()->value => array_fill_keys($script->addedToCartEvents(), false)],
+        ])->save();
+
+        $names = array_map($script->eventNameOf(...), $script->browserEventsIn(storefrontDocument()));
+
+        expect($names)->not->toContain(...$script->addedToCartEvents())
+            ->and($names)->toContain(...$script->productViewedEvents());
+    })->with('tracking providers');
+
+    it('names no products from the browser where the store does not name them', function (ProviderScript $script) {
+        $script->makeDestination();
+
+        app(TrackingSettings::class)->with(['namesProducts' => false])->save();
+
+        $aboutProducts = array_slice($script->browserEventsIn(storefrontDocument()), 1);
+
+        foreach ($aboutProducts as $event) {
+            expect($script->namesWhatWasBought($event))->toBeFalse();
+        }
+    })->with('tracking providers');
+
+    it('carries no pixel where the store reports nowhere', function (ProviderScript $script) {
+        $script->makeDestination()->update(['enabled' => false]);
+
+        $html = storefrontDocument();
+
+        expect($html)->not->toContain(TrackingSnippet::CONSENT_HOOK)
+            ->and($html)->not->toContain('window.'.TrackingSnippet::MOMENTS)
+            ->and($script->browserEventsIn($html))->toBe([]);
+    })->with('tracking providers');
+
+    /**
+     * The beacon costs a request on every load, so the storefront is told
+     * where it is only where something would be written: a Destination to
+     * report to, or the Merchant's own Visit count.
+     */
+    it('tells the storefront where the beacon is only where it would write something', function (bool $reports, bool $counts, bool $told) {
+        if ($reports) {
+            (new FacebookScript)->makeDestination();
+        }
+
+        app(TrackingSettings::class)->with(['countsVisits' => $counts])->save();
+
+        test()->get(route('checkout'))->assertInertia(fn (Assert $page) => $page
+            ->where('tracking.beacon', $told ? route('tracking.report') : null)
+            ->where('tracking.moments', TrackingSnippet::MOMENTS));
+    })->with([
+        'reporting somewhere' => [true, false, true],
+        'counting visits' => [false, true, true],
+        'neither' => [false, false, false],
+    ]);
 });

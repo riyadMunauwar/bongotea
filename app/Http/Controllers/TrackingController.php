@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\TrackingMoment;
+use App\Http\Requests\CheckoutRequest;
 use App\Models\Product;
 use App\Models\TrackingContext;
-use App\Support\Settings\GeneralSettings;
 use App\Support\Tracking\MomentRecorder;
 use App\Support\Tracking\Selection;
 use Illuminate\Http\Request;
@@ -22,7 +22,8 @@ use Symfony\Component\HttpFoundation\Response as ResponseCode;
  * It is unauthenticated and it must stay cheap, which is the whole of why it
  * is hardened the way it is rather than with a token.
  *
- * What it can write is Visit and Checkout Started and nothing else. Capture
+ * What it can write is the Moments a browser alone witnesses — Visit,
+ * Product Viewed, Added to Cart and Checkout Started — and nothing else. Capture
  * and Paid are written by the code that captures and verifies, so no
  * Purchase can be forged through here.
  */
@@ -92,7 +93,7 @@ class TrackingController extends Controller
              */
             TrackingContext::fromRequest($request, $request->headers->get('referer')),
 
-            $moment === TrackingMoment::CheckoutStarted ? $this->selection($request) : null,
+            $moment->isAboutProductsNamed() ? $this->selection($request) : null,
         );
 
         return $this->taken();
@@ -127,12 +128,13 @@ class TrackingController extends Controller
     }
 
     /**
-     * What the visitor had in their Cart when they started the checkout.
+     * The Products a Moment is about: the one whose page was opened, the one
+     * added to the Cart, or the Cart the Checkout was opened with.
      *
-     * The browser names Products and counts, and the prices come from the
+     * The browser names Products and Kilograms, and the prices come from the
      * catalogue. Nothing that arrives may say what anything costs, so a
      * hand-made post can name a hundred things and still report only what
-     * the store charges for the ones it actually sells.
+     * the store charges for the published ones it actually sells.
      */
     private function selection(Request $request): Selection
     {
@@ -142,35 +144,34 @@ class TrackingController extends Controller
             return Selection::forProducts(collect(), []);
         }
 
-        $quantities = $this->quantities($items);
+        $kilograms = $this->kilograms($items);
 
-        return Selection::forProducts(Product::query()->findMany(array_keys($quantities)), $quantities);
+        return Selection::forProducts(Product::query()->published()->findMany(array_keys($kilograms)), $kilograms);
     }
 
     /**
-     * The `id:quantity` pairs the browser posted, read forgivingly: a pair
-     * that is not two numbers is dropped, and a quantity outside what a
-     * checkout would take is brought back inside it. A Moment reported with
-     * one Product's count corrected is still the Moment that happened.
+     * The `id:kilograms` pairs the browser posted, read forgivingly: a pair
+     * that is not two numbers is dropped, and Kilograms outside what a Cart
+     * holds are brought back inside it. A Moment reported with one Product's
+     * count corrected is still the Moment that happened.
      *
      * @return array<int, int>
      */
-    private function quantities(string $items): array
+    private function kilograms(string $items): array
     {
-        $maximum = app(GeneralSettings::class)->checkoutMaxQuantity;
-        $quantities = [];
+        $kilograms = [];
 
         foreach (array_slice(array_filter(explode(',', $items)), 0, self::MAX_SELECTION_ITEMS) as $item) {
-            [$product, $quantity] = array_pad(explode(':', $item, 2), 2, '1');
+            [$product, $weight] = array_pad(explode(':', $item, 2), 2, '1');
 
             if (! ctype_digit($product) || $product === '0') {
                 continue;
             }
 
-            $quantities[(int) $product] = max(1, min($maximum, ctype_digit($quantity) ? (int) $quantity : 1));
+            $kilograms[(int) $product] = max(1, min(CheckoutRequest::MAX_KILOGRAMS, ctype_digit($weight) ? (int) $weight : 1));
         }
 
-        return $quantities;
+        return $kilograms;
     }
 
     private function looksLikeABot(Request $request): bool
