@@ -206,13 +206,6 @@ return [
 
     'checkout' => [
         /**
-         * Upper bound on a single line's quantity. Not a stock check — stock
-         * does not exist yet — but a COD order for 10,000 units is a mistake
-         * or an abuse, and either way it should not reach the fulfilment queue.
-         */
-        'max_quantity' => (int) env('GIOPAGES_CHECKOUT_MAX_QUANTITY', 100),
-
-        /**
          * Captures allowed per minute from one IP.
          *
          * Keyed on IP alone, which is the trade-off worth naming: mobile

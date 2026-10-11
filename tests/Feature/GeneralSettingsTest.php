@@ -22,14 +22,13 @@ it('answers every general setting from config when nothing has been saved', func
         ->and($general->phoneTrunkPrefix)->toBe((string) config('giopages.phone.trunk_prefix'))
         ->and($general->phoneNationalLengthMin)->toBe((int) config('giopages.phone.national_length.min'))
         ->and($general->phoneNationalLengthMax)->toBe((int) config('giopages.phone.national_length.max'))
-        ->and($general->checkoutMaxQuantity)->toBe((int) config('giopages.checkout.max_quantity'))
         ->and($general->checkoutRateLimit)->toBe((int) config('giopages.checkout.rate_limit'));
 });
 
 it('lets a saved row win over config, one property at a time', function () {
     $general = app(GeneralSettings::class);
     $general->currencySymbol = '$';
-    $general->checkoutMaxQuantity = 5;
+    $general->checkoutRateLimit = 5;
     $general->save();
 
     $this->app->forgetInstance(GeneralSettings::class);
@@ -38,7 +37,7 @@ it('lets a saved row win over config, one property at a time', function () {
 
     expect($reloaded)->not->toBe($general)
         ->and($reloaded->currencySymbol)->toBe('$')
-        ->and($reloaded->checkoutMaxQuantity)->toBe(5)
+        ->and($reloaded->checkoutRateLimit)->toBe(5)
         /** A key the row never mentioned keeps its config default. */
         ->and($reloaded->currencyCode)->toBe(config('giopages.currency.code'))
         ->and($reloaded->phoneCountryCode)->toBe((string) config('giopages.phone.country_code'));
@@ -70,14 +69,27 @@ it('reads a null in the row as the empty value of the property, never as an erro
      */
     Setting::query()->create([
         'key' => GeneralSettings::key(),
-        'value' => ['currencySymbol' => null, 'phoneTrunkPrefix' => null, 'checkoutMaxQuantity' => null],
+        'value' => ['currencySymbol' => null, 'phoneTrunkPrefix' => null, 'checkoutRateLimit' => null],
     ]);
 
     $general = app(GeneralSettings::class);
 
     expect($general->currencySymbol)->toBe('')
         ->and($general->phoneTrunkPrefix)->toBe('')
-        ->and($general->checkoutMaxQuantity)->toBe(0);
+        ->and($general->checkoutRateLimit)->toBe(0);
+});
+
+it('has forgotten the maximum quantity per line, and still loads a row that holds one', function () {
+    Setting::query()->create([
+        'key' => GeneralSettings::key(),
+        'value' => ['currencySymbol' => '£', 'checkoutMaxQuantity' => 20],
+    ]);
+
+    $general = app(GeneralSettings::class);
+
+    expect($general->currencySymbol)->toBe('£')
+        ->and(property_exists($general, 'checkoutMaxQuantity'))->toBeFalse()
+        ->and(config()->has('giopages.checkout.max_quantity'))->toBeFalse();
 });
 
 it('queries a group once per request, and not at all when nothing asks for it', function () {

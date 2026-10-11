@@ -42,10 +42,17 @@ it('loads the current General values, from config when nothing has been saved', 
             'phoneTrunkPrefix' => (string) config('giopages.phone.trunk_prefix'),
             'phoneNationalLengthMin' => (int) config('giopages.phone.national_length.min'),
             'phoneNationalLengthMax' => (int) config('giopages.phone.national_length.max'),
-            'checkoutMaxQuantity' => (int) config('giopages.checkout.max_quantity'),
             'checkoutRateLimit' => (int) config('giopages.checkout.rate_limit'),
             'timezone' => config('giopages.timezone'),
         ]);
+});
+
+it('offers no maximum quantity per line', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(General::class)
+        ->assertFormFieldDoesNotExist('checkoutMaxQuantity')
+        ->assertDontSeeText('Maximum quantity per line');
 });
 
 it('saves the General page as one row, says so, and shows the saved values on reopening', function () {
@@ -60,7 +67,6 @@ it('saves the General page as one row, says so, and shows the saved values on re
             'phoneTrunkPrefix' => '0',
             'phoneNationalLengthMin' => 10,
             'phoneNationalLengthMax' => 10,
-            'checkoutMaxQuantity' => 20,
             'checkoutRateLimit' => 10,
             'timezone' => 'Europe/London',
         ])
@@ -80,7 +86,6 @@ it('saves the General page as one row, says so, and shows the saved values on re
             'phoneTrunkPrefix' => '0',
             'phoneNationalLengthMin' => 10,
             'phoneNationalLengthMax' => 10,
-            'checkoutMaxQuantity' => 20,
             'checkoutRateLimit' => 10,
             'timezone' => 'Europe/London',
         ]);
@@ -138,11 +143,11 @@ it('refuses invalid input with field errors and saves nothing', function () {
     Livewire::test(General::class)
         ->fillForm([
             'phoneNationalLengthMin' => 'ten',
-            'checkoutMaxQuantity' => 0,
+            'checkoutRateLimit' => 0,
             'timezone' => 'Mars/Olympus_Mons',
         ])
         ->call('save')
-        ->assertHasFormErrors(['phoneNationalLengthMin', 'checkoutMaxQuantity', 'timezone']);
+        ->assertHasFormErrors(['phoneNationalLengthMin', 'checkoutRateLimit', 'timezone']);
 
     expect(Setting::count())->toBe(0);
 });

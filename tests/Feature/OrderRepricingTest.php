@@ -6,6 +6,7 @@ use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Product;
@@ -235,6 +236,22 @@ it('sets a price by hand with a reason, naming who gave it on the order\'s trail
 
     Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
         ->assertSeeText("Set by hand by {$negotiator->name}: Agreed with the hotel for the season");
+});
+
+it('takes a line as heavy as Checkout takes and refuses one a kilogram heavier', function () {
+    $order = orderAgreedAt([['product' => teaBreakingAtSix(), 'kilograms' => 2, 'price' => 50000]]);
+
+    changingLines($order, fn (array $row): array => [...$row, 'kilograms' => CheckoutRequest::MAX_KILOGRAMS])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($order->refresh()->lines()->sole()->quantity)->toBe(CheckoutRequest::MAX_KILOGRAMS);
+
+    $component = changingLines($order, fn (array $row): array => [...$row, 'kilograms' => CheckoutRequest::MAX_KILOGRAMS + 1])
+        ->call('save');
+
+    $key = array_key_first($component->get('data.lines'));
+    $component->assertHasFormErrors(["lines.{$key}.kilograms"]);
 });
 
 it('refuses a price set by hand with no reason', function () {

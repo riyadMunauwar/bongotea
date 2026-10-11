@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
 use App\Enums\Permission;
+use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
 use App\Models\Product;
 use App\Support\Money;
@@ -233,7 +234,7 @@ class OrderForm
                                     ->required()
                                     ->integer()
                                     ->minValue(1)
-                                    ->maxValue(fn (): int => app(GeneralSettings::class)->checkoutMaxQuantity)
+                                    ->maxValue(CheckoutRequest::MAX_KILOGRAMS)
                                     ->suffix('kg')
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 

@@ -13,9 +13,9 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * The values the app read from environment variables before Settings
- * existed: currency, timezone, phone rules and the checkout limits. The fields validate the way the schemas that consume
+ * existed: currency, timezone, phone rules and the checkout rate limit. The fields validate the way the schemas that consume
  * these values already do — money is numeric and never negative, a
- * quantity is a whole number with a floor — so nothing saved here is a
+ * count is a whole number with a floor — so nothing saved here is a
  * value checkout would refuse.
  */
 class General extends SettingsPage
@@ -136,13 +136,6 @@ class General extends SettingsPage
                 ->description('Abuse protection, tuned to your traffic.')
                 ->columns(2)
                 ->schema([
-                    TextInput::make('checkoutMaxQuantity')
-                        ->label('Maximum quantity per line')
-                        ->required()
-                        ->integer()
-                        ->minValue(1)
-                        ->helperText('Not a stock check; a cash-on-delivery order for thousands of units is a mistake or an abuse.'),
-
                     TextInput::make('checkoutRateLimit')
                         ->label('Orders per minute from one address')
                         ->required()

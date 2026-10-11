@@ -4,7 +4,7 @@ namespace App\Support\Settings;
 
 /**
  * The installation-wide values the app read from config before Settings
- * existed: currency, timezone, phone rules and the checkout limits.
+ * existed: currency, timezone, phone rules and the checkout rate limit.
  *
  * Every default is the config value, which in turn reads the `GIOPAGES_*`
  * environment variables — so an installation with no saved row, and the
@@ -35,9 +35,6 @@ class GeneralSettings extends SettingsGroup
     /** Most digits a national number may have once the prefixes are stripped. */
     public int $phoneNationalLengthMax;
 
-    /** Upper bound on a single line's quantity. */
-    public int $checkoutMaxQuantity;
-
     /** Captures allowed per minute from one IP. */
     public int $checkoutRateLimit;
 
@@ -57,7 +54,6 @@ class GeneralSettings extends SettingsGroup
         $this->phoneTrunkPrefix = (string) config('giopages.phone.trunk_prefix');
         $this->phoneNationalLengthMin = (int) config('giopages.phone.national_length.min');
         $this->phoneNationalLengthMax = (int) config('giopages.phone.national_length.max');
-        $this->checkoutMaxQuantity = (int) config('giopages.checkout.max_quantity');
         $this->checkoutRateLimit = (int) config('giopages.checkout.rate_limit');
         $this->timezone = (string) config('giopages.timezone');
     }
