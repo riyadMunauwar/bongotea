@@ -13,6 +13,7 @@ use App\Models\MenuItem;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Menus\MenuTree;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use Filament\Facades\Filament;
@@ -132,8 +133,8 @@ it('saves Category, Product and All Categories links chosen in the slide-over, e
         ->set('tree', [node('গোল্ড', MenuLinkType::Url, ['url' => '/'])])
         ->callAction('editItem', data: ['label' => 'গোল্ড', 'type' => MenuLinkType::Category->value, 'target_id' => $gold->id], arguments: ['key' => 'গোল্ড'])
         ->assertHasNoFormErrors()
-        ->callAction('addItem', data: ['label' => 'দার্জিলিং', 'type' => MenuLinkType::Product->value, 'target_id' => $darjeeling->id])
-        ->callAction('addItem', data: ['label' => 'সব চা', 'type' => MenuLinkType::AllCategories->value, 'target_id' => $gold->id])
+        ->callAction('addLinks', data: ['products' => [$darjeeling->id]])
+        ->callAction('addCustomLink', data: ['label' => 'সব চা', 'type' => MenuLinkType::AllCategories->value, 'target_id' => $gold->id])
         ->assertSet('tree.2.target_id', null)
         ->call('save')
         ->assertHasNoFormErrors();
@@ -151,13 +152,121 @@ it('offers Categories and Products in searchable target selects', function () {
     Product::factory()->create(['name' => 'Darjeeling']);
 
     Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
-        ->mountAction('addItem')
+        ->set('tree', [node('হোম', MenuLinkType::Url, ['url' => '/'])])
+        ->mountAction('editItem', ['key' => 'হোম'])
         ->fillForm(['type' => MenuLinkType::Category->value])
         ->assertFormFieldExists('target_id', fn (Select $select): bool => $select->isSearchable() && in_array('Gold', $select->getOptions(), true))
         ->fillForm(['type' => MenuLinkType::Product->value])
         ->assertFormFieldExists('target_id', fn (Select $select): bool => $select->isSearchable() && in_array('Darjeeling', $select->getOptions(), true))
         ->fillForm(['type' => MenuLinkType::AllCategories->value])
         ->assertFormFieldHidden('target_id');
+});
+
+it('appends every ticked Page, Category and Product in one action, each named after its target', function () {
+    $about = Page::factory()->published()->create(['title' => 'About us']);
+    $contact = Page::factory()->published()->create(['title' => 'Contact']);
+    $gold = Category::factory()->create(['name' => 'Gold']);
+    $darjeeling = Product::factory()->create(['name' => 'Darjeeling']);
+
+    $builder = Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
+        ->set('tree', [node('হোম', MenuLinkType::Url, ['url' => '/'])])
+        ->callAction('addLinks', data: ['pages' => [$about->id, $contact->id], 'categories' => [$gold->id], 'products' => [$darjeeling->id]])
+        ->assertHasNoFormErrors()
+        ->assertSet('hasUnsavedChanges', true);
+
+    expect(collect($builder->get('tree'))->map(fn (array $node): array => [$node['label'], $node['type'], $node['target_id']])->all())
+        ->toBe([
+            ['হোম', MenuLinkType::Url->value, null],
+            ['About us', MenuLinkType::Page->value, $about->id],
+            ['Contact', MenuLinkType::Page->value, $contact->id],
+            ['Gold', MenuLinkType::Category->value, $gold->id],
+            ['Darjeeling', MenuLinkType::Product->value, $darjeeling->id],
+        ]);
+});
+
+it('shortens a ticked target whose name is longer than a label may be', function () {
+    $product = Product::factory()->create(['name' => str_repeat('দার্জিলিং ', 10)]);
+
+    Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
+        ->callAction('addLinks', data: ['products' => [$product->id]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(mb_strlen(MenuItem::query()->sole()->label))->toBeLessThanOrEqual(MenuTree::MAX_LABEL);
+});
+
+it('adds a place on a page, an outside address or a heading from the custom-link form', function () {
+    $builder = Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
+        ->callAction('addCustomLink', data: ['label' => 'কীভাবে', 'type' => MenuLinkType::Anchor->value, 'anchor' => 'how'])
+        ->callAction('addCustomLink', data: ['label' => 'ফোন', 'type' => MenuLinkType::Url->value, 'url' => 'tel:+8801700000000'])
+        ->callAction('addCustomLink', data: ['label' => 'আরও', 'type' => MenuLinkType::Heading->value])
+        ->assertHasNoFormErrors()
+        ->mountAction('addCustomLink')
+        ->assertFormFieldExists('type', fn (Select $select): bool => array_keys($select->getOptions()) === [
+            MenuLinkType::Anchor->value, MenuLinkType::Url->value, MenuLinkType::Heading->value, MenuLinkType::AllCategories->value,
+        ]);
+
+    expect(collect($builder->get('tree'))->map(fn (array $node): array => [$node['label'], $node['type'], $node['anchor'], $node['url']])->all())
+        ->toBe([
+            ['কীভাবে', MenuLinkType::Anchor->value, 'how', null],
+            ['ফোন', MenuLinkType::Url->value, null, 'tel:+8801700000000'],
+            ['আরও', MenuLinkType::Heading->value, null, null],
+        ]);
+});
+
+it('shows each row\'s type and target, and marks a link the storefront would drop with the reason', function () {
+    $live = Page::factory()->published()->create(['title' => 'About us']);
+    $draftPage = Page::factory()->create(['title' => 'Coming soon']);
+    $draftProduct = Product::factory()->draft()->create(['name' => 'Darjeeling']);
+
+    Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
+        ->set('tree', [
+            node('সম্পর্কে', MenuLinkType::Page, ['target_id' => $live->id]),
+            node('শীঘ্রই', MenuLinkType::Page, ['target_id' => $draftPage->id]),
+            node('দার্জিলিং', MenuLinkType::Product, ['target_id' => $draftProduct->id]),
+            node('গায়েব', MenuLinkType::Category, ['target_id' => 999999]),
+            node('ফোন', MenuLinkType::Url, ['url' => 'tel:1']),
+        ])
+        ->assertSeeInOrder([
+            'Page', 'About us',
+            'Page', 'Coming soon', 'Page not published: hidden on the storefront',
+            'Product', 'Darjeeling', 'Product not published: hidden on the storefront',
+            'Category deleted',
+            'Address', 'tel:1',
+        ]);
+});
+
+it('discards unsaved changes back to the saved name and tree', function () {
+    $menu = Menu::factory()->create(['name' => 'Main menu']);
+    MenuItem::factory()->for($menu)->create(['label' => 'আগের']);
+
+    Livewire::test(EditMenu::class, ['record' => $menu->getKey()])
+        ->assertActionHidden('discard')
+        ->fillForm(['name' => 'Renamed'])
+        ->callAction('addCustomLink', data: ['label' => 'নতুন', 'type' => MenuLinkType::Heading->value])
+        ->assertActionVisible('discard')
+        ->callAction('discard')
+        ->assertCount('tree', 1)
+        ->assertSet('hasUnsavedChanges', false)
+        ->assertSet('tree.0.label', 'আগের')
+        ->assertSchemaStateSet(['name' => 'Main menu']);
+});
+
+it('says a Menu assigned to a footer place is drawn one level deep there', function () {
+    $column = Menu::factory()->create();
+    $bottom = Menu::factory()->create();
+    $header = Menu::factory()->create();
+    app(FooterSettings::class)->with(['columns' => [['heading' => 'অর্ডার', 'menuId' => $column->id]], 'bottomMenuId' => $bottom->id])->save();
+    app(HeaderSettings::class)->with(['menuId' => $header->id])->save();
+
+    Livewire::test(EditMenu::class, ['record' => $column->getKey()])
+        ->assertSee('The footer draws only the top level');
+
+    Livewire::test(EditMenu::class, ['record' => $bottom->getKey()])
+        ->assertSee('The footer draws only the top level');
+
+    Livewire::test(EditMenu::class, ['record' => $header->getKey()])
+        ->assertDontSee('The footer draws only the top level');
 });
 
 it('replaces the tree whole on every Save', function () {

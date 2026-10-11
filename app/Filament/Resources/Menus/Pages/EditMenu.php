@@ -11,15 +11,19 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Menus\MenuTree;
 use App\Support\Menus\MenuTreeRefused;
+use App\Support\Settings\FooterSettings;
 use App\Support\Storefront\StorefrontMenus;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
@@ -89,9 +93,12 @@ class EditMenu extends EditRecord
                 ->label('Discard changes')
                 ->color('gray')
                 ->requiresConfirmation()
-                ->modalDescription('The links go back to how they were last saved.')
+                ->modalDescription('The name and links go back to how they were last saved.')
                 ->visible(fn (): bool => $this->hasUnsavedChanges)
-                ->action(fn () => $this->loadTree()),
+                ->action(function (): void {
+                    $this->fillForm();
+                    $this->loadTree();
+                }),
 
             MenuResource::refuseDeletingAssigned(DeleteAction::make()),
         ];
@@ -161,19 +168,67 @@ class EditMenu extends EditRecord
         $this->hasUnsavedChanges = true;
     }
 
-    public function addItemAction(): Action
+    /**
+     * The "Add links" panel: tick any number of Pages, Categories and
+     * Products and they join the end of the tree at once, each labelled with
+     * its target's name (cut to a label's length) for editing afterwards.
+     */
+    public function addLinksAction(): Action
     {
-        return Action::make('addItem')
-            ->label('Add a link')
+        $tickList = fn (string $name, array $options): CheckboxList => CheckboxList::make($name)
+            ->hiddenLabel()
+            ->options($options)
+            ->searchable()
+            ->bulkToggleable()
+            ->noSearchResultsMessage('Nothing matches.');
+
+        return Action::make('addLinks')
+            ->label('Add links')
             ->icon(Heroicon::OutlinedPlus)
             ->slideOver()
-            ->modalHeading('Add a link')
-            ->modalSubmitActionLabel('Add')
-            ->schema(self::itemFields())
+            ->modalHeading('Add links')
+            ->modalDescription('Tick what to add. Each joins the end of the Menu under its own name, which you can change after.')
+            ->modalSubmitActionLabel('Add to Menu')
+            ->schema(fn (): array => [
+                Tabs::make()->tabs([
+                    Tab::make('Pages')->schema([$tickList('pages', Page::query()->orderBy('title')->pluck('title', 'id')->all())]),
+                    Tab::make('Categories')->schema([$tickList('categories', Category::query()->orderBy('sort_order')->orderBy('name')->pluck('name', 'id')->all())]),
+                    Tab::make('Products')->schema([$tickList('products', Product::query()->orderBy('name')->pluck('name', 'id')->all())]),
+                ]),
+            ])
             ->action(function (array $data): void {
-                $this->tree[] = [...self::item($data), 'key' => (string) Str::uuid(), 'children' => []];
-                $this->hasUnsavedChanges = true;
+                $ticked = [
+                    MenuLinkType::Page->value => [$data['pages'] ?? [], $this->pages],
+                    MenuLinkType::Category->value => [$data['categories'] ?? [], $this->categories],
+                    MenuLinkType::Product->value => [$data['products'] ?? [], $this->products],
+                ];
+
+                foreach ($ticked as $type => [$ids, $known]) {
+                    foreach ($ids as $id) {
+                        if (isset($known[(int) $id])) {
+                            $this->append(['label' => self::labelFrom($known[(int) $id]['title']), 'type' => $type, 'target_id' => (int) $id]);
+                        }
+                    }
+                }
             });
+    }
+
+    /**
+     * The panel's custom link: a place on a page, an outside address, a
+     * heading, or All Categories — the links that name no single target to
+     * tick.
+     */
+    public function addCustomLinkAction(): Action
+    {
+        return Action::make('addCustomLink')
+            ->label('Custom link')
+            ->icon(Heroicon::OutlinedLink)
+            ->color('gray')
+            ->slideOver()
+            ->modalHeading('Add a custom link')
+            ->modalSubmitActionLabel('Add')
+            ->schema(self::itemFields([MenuLinkType::Anchor, MenuLinkType::Url, MenuLinkType::Heading, MenuLinkType::AllCategories]))
+            ->action(fn (array $data) => $this->append($data));
     }
 
     public function editItemAction(): Action
@@ -306,6 +361,41 @@ class EditMenu extends EditRecord
             ->all();
     }
 
+    /**
+     * The footer places this Menu is assigned to, which draw only its top
+     * level, so the builder can say so.
+     *
+     * @return list<string>
+     */
+    #[Computed]
+    public function footerPlaces(): array
+    {
+        return app(FooterSettings::class)->placesOf($this->record->id);
+    }
+
+    /**
+     * A target's name as a link's label, cut to the length a label may be.
+     */
+    private static function labelFrom(string $title): string
+    {
+        $title = trim($title);
+
+        return mb_strlen($title) > MenuTree::MAX_LABEL
+            ? rtrim(mb_substr($title, 0, MenuTree::MAX_LABEL - 1)).'…'
+            : $title;
+    }
+
+    /**
+     * Adds a link at the end of the top level.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function append(array $data): void
+    {
+        $this->tree[] = [...self::item($data), 'key' => (string) Str::uuid(), 'children' => []];
+        $this->hasUnsavedChanges = true;
+    }
+
     private function loadTree(): void
     {
         $this->tree = self::withKeys(MenuTree::of($this->record));
@@ -314,10 +404,14 @@ class EditMenu extends EditRecord
     }
 
     /**
+     * A link's fields, offering the given types (every type when editing).
+     *
+     * @param  list<MenuLinkType>|null  $types
      * @return list<Component>
      */
-    private static function itemFields(): array
+    private static function itemFields(?array $types = null): array
     {
+        $types ??= MenuLinkType::cases();
         $typeIs = fn (MenuLinkType ...$types): Closure => fn (Get $get): bool => in_array($get('type'), array_map(fn (MenuLinkType $type): string => $type->value, $types), true);
 
         return [
@@ -328,8 +422,8 @@ class EditMenu extends EditRecord
 
             Select::make('type')
                 ->label('Points at')
-                ->options(collect(MenuLinkType::cases())->mapWithKeys(fn (MenuLinkType $type): array => [$type->value => $type->getLabel()])->all())
-                ->default(MenuLinkType::Page->value)
+                ->options(collect($types)->mapWithKeys(fn (MenuLinkType $type): array => [$type->value => $type->getLabel()])->all())
+                ->default($types[0]->value)
                 ->required()
                 ->live()
                 ->afterStateUpdated(fn (Set $set): mixed => $set('target_id', null)),
