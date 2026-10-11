@@ -2,7 +2,7 @@
 
 namespace App\Support\Pricing;
 
-use App\Support\Settings\PricingSettings;
+use App\Support\Settings\DeliveryChargeSettings;
 use InvalidArgumentException;
 use LogicException;
 
@@ -19,7 +19,7 @@ use LogicException;
  *
  * A Product's Tiers and the Delivery Bands are both assumed to cover every
  * whole kilogram from one without gap or overlap, which the Product and the
- * Pricing settings refuse to save otherwise.
+ * Delivery Charges settings refuse to save otherwise.
  */
 final readonly class PriceBook
 {
@@ -35,7 +35,7 @@ final readonly class PriceBook
     {
         return new self(array_map(
             fn (array $band): DeliveryBand => new DeliveryBand($band['min'], $band['max'], $band['fee']),
-            app(PricingSettings::class)->deliveryBands,
+            app(DeliveryChargeSettings::class)->deliveryBands,
         ));
     }
 

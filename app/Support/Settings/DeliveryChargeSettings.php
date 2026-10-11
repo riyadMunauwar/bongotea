@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Log;
  * pricing module assumes it. The defaults are the mockup's table, like the
  * other storefront groups' content defaults.
  */
-class PricingSettings extends SettingsGroup
+class DeliveryChargeSettings extends SettingsGroup
 {
     /**
      * Fees in minor units.
@@ -38,6 +38,11 @@ class PricingSettings extends SettingsGroup
         ];
     }
 
+    /**
+     * Still `pricing`, the name this group had while it also held the Tiers:
+     * the row is found by this key, so changing it would read every Merchant's
+     * saved Delivery Bands as never saved.
+     */
     public static function key(): string
     {
         return 'pricing';

@@ -5,9 +5,9 @@ use App\Enums\SystemPage;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Settings\AnnouncementSettings;
+use App\Support\Settings\DeliveryChargeSettings;
 use App\Support\Settings\MenuSettings;
 use App\Support\Settings\PaymentSettings;
-use App\Support\Settings\PricingSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Event;
@@ -209,7 +209,7 @@ it('draws what the SSR process rendered when it answers', function () {
 });
 
 it('shares every published Product\'s Tiers and availability, and the Delivery Bands, for the browser\'s Cart', function () {
-    app(PricingSettings::class)->with(['deliveryBands' => [
+    app(DeliveryChargeSettings::class)->with(['deliveryBands' => [
         ['min' => 1, 'max' => 10, 'fee' => 15000],
         ['min' => 11, 'max' => null, 'fee' => 0],
     ]])->save();

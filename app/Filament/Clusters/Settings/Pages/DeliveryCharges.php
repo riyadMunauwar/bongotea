@@ -4,8 +4,8 @@ namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Support\Money;
 use App\Support\Pricing\KilogramRanges;
+use App\Support\Settings\DeliveryChargeSettings;
 use App\Support\Settings\GeneralSettings;
-use App\Support\Settings\PricingSettings;
 use BackedEnum;
 use Closure;
 use Filament\Forms\Components\Repeater;
@@ -20,11 +20,11 @@ use Filament\Support\Icons\Heroicon;
  * exactly one Delivery Charge. Tiers are not set here: each Product owns its
  * own, on the Product.
  */
-class Pricing extends SettingsPage
+class DeliveryCharges extends SettingsPage
 {
-    protected static string $group = PricingSettings::class;
+    protected static string $group = DeliveryChargeSettings::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyBangladeshi;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedScale;
 
     /** After Menus: the last of the storefront's groups. */
     protected static ?int $navigationSort = 4;

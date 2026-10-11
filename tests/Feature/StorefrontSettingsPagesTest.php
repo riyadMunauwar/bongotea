@@ -27,7 +27,7 @@ it('lists the storefront pages right after General in the Settings cluster', fun
         ->values()
         ->all();
 
-    expect($order)->toBe(['General', 'Store', 'Announcement', 'Menus', 'Pricing', 'Payment Methods', 'Tracking', 'Couriers', 'SMS', 'Inventory', 'Users', 'Roles']);
+    expect($order)->toBe(['General', 'Store', 'Announcement', 'Menus', 'Delivery Charges', 'Payment Methods', 'Tracking', 'Couriers', 'SMS', 'Inventory', 'Users', 'Roles']);
 
     foreach ([Store::class, Announcement::class, Menus::class] as $page) {
         $this->get($page::getUrl())->assertOk()->assertSeeLivewire($page);
