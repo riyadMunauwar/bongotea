@@ -13,7 +13,7 @@ beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
-it('lists Store right after General in the Settings cluster, numbered with no gaps', function () {
+it('lists the Settings pages General to Roles, numbered with no gaps', function () {
     $components = collect(SettingsCluster::getClusteredComponents())
         ->sortBy(fn (string $component): int => $component::getNavigationSort())
         ->values();
