@@ -3,11 +3,15 @@
 namespace App\Support\Storefront;
 
 use App\Enums\MenuLinkType;
+use App\Models\Category;
 use App\Models\MenuItem;
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\Menus\MenuTree;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
 /**
@@ -17,10 +21,14 @@ use Illuminate\Support\Collection;
  * Each place draws the Menu its settings group assigns: the header up to
  * three levels, the footer's columns and bottom line one level. Every
  * assigned Menu is read in one query and built into its tree in memory. A
- * Page target is looked up by id, so the address follows a renamed slug,
- * and a link whose Page is unpublished or gone disappears — with anything
- * beneath it — instead of linking to a 404. A Heading left with no children
- * disappears too, which at one level deep is every Heading. A typed URL is
+ * Page, Category or Product target is looked up by id, so the address
+ * follows a renamed slug, and a link whose target the storefront would not
+ * show — an unpublished Page or Product, a Product taken out of the
+ * catalogue, anything deleted — disappears with anything beneath it instead
+ * of linking to a 404. An All Categories item is given every Category as it
+ * stands as its children, at the moment it is drawn. A Heading or All
+ * Categories item left with no children disappears too, which at one level
+ * deep is every one of them. A typed URL is
  * kept only when it is a path or an http(s), tel: or mailto: address, so a
  * hand-edited row cannot put `javascript:` into the storefront.
  *
@@ -41,11 +49,12 @@ class StorefrontMenus
     private Collection $items;
 
     /**
-     * Published Pages' paths by id, for every Page any link names.
+     * The paths of the Pages and Products any link names and the storefront
+     * shows, by morph class and then id.
      *
-     * @var Collection<int, string>
+     * @var array<string, array<int, string>>
      */
-    private Collection $paths;
+    private array $paths;
 
     public function __construct(private HeaderSettings $header, private FooterSettings $footer, private string $host)
     {
@@ -124,7 +133,11 @@ class StorefrontMenus
         foreach ($this->items->get($menuId, collect())->get($parentId, collect()) as $item) {
             $children = $this->branch($menuId, $item->id, $depth + 1, $maxDepth);
 
-            if ($item->type === MenuLinkType::Heading) {
+            if ($item->type === MenuLinkType::AllCategories) {
+                $children = $depth < $maxDepth ? $this->everyCategory() : [];
+            }
+
+            if ($item->type === MenuLinkType::Heading || $item->type === MenuLinkType::AllCategories) {
                 if ($children !== []) {
                     $nodes[] = ['label' => $item->label, 'href' => null, 'external' => false, 'note' => $item->note, 'children' => $children];
                 }
@@ -145,16 +158,55 @@ class StorefrontMenus
     private function href(MenuItem $item): ?string
     {
         return match ($item->type) {
-            MenuLinkType::Page => $this->pagePath($this->pageIdOf($item)),
-            MenuLinkType::Anchor => $this->anchorPath($this->pageIdOf($item), $item->anchor),
+            MenuLinkType::Page => $this->pagePath($this->idOf($item, Page::class)),
+            MenuLinkType::Category => $this->categoryPath($this->idOf($item, Category::class)),
+            MenuLinkType::Product => $this->productPath($this->idOf($item, Product::class)),
+            MenuLinkType::Anchor => $this->anchorPath($this->idOf($item, Page::class), $item->anchor),
             MenuLinkType::Url => filled($item->url) && preg_match(self::ALLOWED_URL, $item->url) ? $item->url : null,
-            MenuLinkType::Heading => null,
+            MenuLinkType::Heading, MenuLinkType::AllCategories => null,
         };
     }
 
     private function pagePath(?int $pageId): ?string
     {
-        return $pageId === null ? null : $this->paths->get($pageId);
+        return $pageId === null ? null : $this->paths[(new Page)->getMorphClass()][$pageId] ?? null;
+    }
+
+    private function productPath(?int $productId): ?string
+    {
+        return $productId === null ? null : $this->paths[(new Product)->getMorphClass()][$productId] ?? null;
+    }
+
+    private function categoryPath(?int $categoryId): ?string
+    {
+        $category = $categoryId === null ? null : $this->categories()->firstWhere('id', $categoryId);
+
+        return $category === null ? null : CatalogueProps::categoryPath($category);
+    }
+
+    /**
+     * An All Categories item's children: every Category as it stands, in the
+     * Merchant's order.
+     *
+     * @return list<ResolvedNode>
+     */
+    private function everyCategory(): array
+    {
+        return $this->categories()
+            ->map(fn (Category $category): array => ['label' => $category->name, 'href' => CatalogueProps::categoryPath($category), 'external' => false, 'note' => null, 'children' => []])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The Categories the storefront shows, read through the request's
+     * Catalogue so a Page's Blocks and the Menus share one query.
+     *
+     * @return EloquentCollection<int, Category>
+     */
+    private function categories(): EloquentCollection
+    {
+        return app(Catalogue::class)->categories();
     }
 
     /**
@@ -178,23 +230,34 @@ class StorefrontMenus
         return preg_match('#^https?://#i', $href) === 1 && is_string($host) && strcasecmp($host, $this->host) !== 0;
     }
 
-    private function pageIdOf(MenuItem $item): ?int
+    /**
+     * The id of the item's target when it is of the given model, else null.
+     *
+     * @param  class-string<Model>  $model
+     */
+    private function idOf(MenuItem $item, string $model): ?int
     {
-        return $item->linkable_type === (new Page)->getMorphClass() ? $item->linkable_id : null;
+        return $item->linkable_type === (new $model)->getMorphClass() ? $item->linkable_id : null;
     }
 
     /**
-     * @return Collection<int, string>
+     * @return array<string, array<int, string>>
      */
-    private function publishedPaths(): Collection
+    private function publishedPaths(): array
     {
-        $ids = $this->items->flatten(2)->map($this->pageIdOf(...))->filter()->unique()->values()->all();
+        $items = $this->items->flatten(2);
+        $ids = fn (string $model): array => $items->map(fn (MenuItem $item): ?int => $this->idOf($item, $model))->filter()->unique()->values()->all();
 
-        if ($ids === []) {
-            return collect();
-        }
+        $pageIds = $ids(Page::class);
+        $productIds = $ids(Product::class);
 
-        return Page::query()->published()->whereKey($ids)->get(['id', 'slug', 'system_role'])
-            ->mapWithKeys(fn (Page $page): array => [$page->id => $page->path()]);
+        return [
+            (new Page)->getMorphClass() => $pageIds === [] ? [] : Page::query()->published()->whereKey($pageIds)->get(['id', 'slug', 'system_role'])
+                ->mapWithKeys(fn (Page $page): array => [$page->id => $page->path()])
+                ->all(),
+            (new Product)->getMorphClass() => $productIds === [] ? [] : Product::query()->published()->whereKey($productIds)->get(['id', 'slug'])
+                ->mapWithKeys(fn (Product $product): array => [$product->id => CatalogueProps::productPath($product)])
+                ->all(),
+        ];
     }
 }

@@ -5,8 +5,10 @@ namespace App\Filament\Resources\Menus\Pages;
 use App\Enums\MenuLinkType;
 use App\Enums\PageStatus;
 use App\Filament\Resources\Menus\MenuResource;
+use App\Models\Category;
 use App\Models\Menu;
 use App\Models\Page;
+use App\Models\Product;
 use App\Support\Menus\MenuTree;
 use App\Support\Menus\MenuTreeRefused;
 use App\Support\Storefront\StorefrontMenus;
@@ -19,6 +21,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Exceptions\Halt;
@@ -125,13 +128,20 @@ class EditMenu extends EditRecord
     /**
      * Where a drag dropped a link: under `$parentKey` (null for the top
      * level) at `$index` among its new siblings. A move that would take the
-     * branch past three levels, or into itself, is refused and nothing moves.
+     * branch past three levels, into itself, or under All Categories (which
+     * lists its own) is refused and nothing moves.
      */
     public function moveItem(string $key, ?string $parentKey, int $index): void
     {
         $node = $this->find($this->tree, $key);
 
         if ($node === null || ($parentKey !== null && ($parentKey === $key || $this->find($node['children'], $parentKey) !== null))) {
+            return;
+        }
+
+        $parent = $parentKey === null ? null : $this->find($this->tree, $parentKey);
+
+        if ($parent !== null && $parent['type'] === MenuLinkType::AllCategories->value) {
             return;
         }
 
@@ -210,19 +220,27 @@ class EditMenu extends EditRecord
     public function describe(array $node): array
     {
         $type = MenuLinkType::tryFrom($node['type']);
-        $page = $node['target_id'] === null ? null : ($this->pages[$node['target_id']] ?? null);
+        $known = match ($type) {
+            MenuLinkType::Category, MenuLinkType::AllCategories => $this->categories,
+            MenuLinkType::Product => $this->products,
+            default => $this->pages,
+        };
+        $noun = $type === MenuLinkType::Category || $type === MenuLinkType::Product ? $type->getLabel() : 'Page';
+        $linked = $node['target_id'] === null ? null : ($known[$node['target_id']] ?? null);
 
         $target = match ($type) {
-            MenuLinkType::Page => $page['title'] ?? null,
-            MenuLinkType::Anchor => ($page['title'] ?? 'Home').' #'.$node['anchor'],
+            MenuLinkType::Page, MenuLinkType::Category, MenuLinkType::Product => $linked['title'] ?? null,
+            MenuLinkType::Anchor => ($linked['title'] ?? 'Home').' #'.$node['anchor'],
             MenuLinkType::Url => $node['url'],
+            MenuLinkType::AllCategories => 'Every Category, as it stands',
             default => null,
         };
 
         $warning = match (true) {
-            $node['target_id'] !== null && $page === null => 'Page deleted',
-            $page !== null && ! $page['published'] => 'Page not published: hidden on the storefront',
+            $node['target_id'] !== null && $linked === null => $noun.' deleted',
+            $linked !== null && ! $linked['published'] => $noun.' not published: hidden on the storefront',
             $type === MenuLinkType::Heading && $node['children'] === [] => 'No links beneath: hidden on the storefront',
+            $type === MenuLinkType::AllCategories && $known === [] => 'No Categories yet: hidden on the storefront',
             default => null,
         };
 
@@ -231,13 +249,14 @@ class EditMenu extends EditRecord
 
     /**
      * The tallest branch below and including this node, so the browser can
-     * refuse a drop that would take it past three levels.
+     * refuse a drop that would take it past three levels. All Categories
+     * counts its Categories as the level beneath it.
      *
-     * @param  array{children: list<mixed>}  $node
+     * @param  array{type?: string, children: list<mixed>}  $node
      */
     public static function height(array $node): int
     {
-        $tallest = 0;
+        $tallest = ($node['type'] ?? null) === MenuLinkType::AllCategories->value ? 1 : 0;
 
         foreach ($node['children'] as $child) {
             $tallest = max($tallest, self::height($child));
@@ -256,6 +275,34 @@ class EditMenu extends EditRecord
     {
         return Page::query()->get(['id', 'title', 'status'])
             ->mapWithKeys(fn (Page $page): array => [$page->id => ['title' => $page->title, 'published' => $page->status === PageStatus::Published]])
+            ->all();
+    }
+
+    /**
+     * Every Category a link may name, by id. A Category is always shown.
+     *
+     * @return array<int, array{title: string, published: bool}>
+     */
+    #[Computed]
+    public function categories(): array
+    {
+        return Category::query()->get(['id', 'name'])
+            ->mapWithKeys(fn (Category $category): array => [$category->id => ['title' => $category->name, 'published' => true]])
+            ->all();
+    }
+
+    /**
+     * Every Product a link may name, by id: its name and whether it is
+     * published. One taken out of the catalogue is not here, so it reads as
+     * deleted.
+     *
+     * @return array<int, array{title: string, published: bool}>
+     */
+    #[Computed]
+    public function products(): array
+    {
+        return Product::query()->get(['id', 'name', 'status'])
+            ->mapWithKeys(fn (Product $product): array => [$product->id => ['title' => $product->name, 'published' => $product->isPublished()]])
             ->all();
     }
 
@@ -284,15 +331,30 @@ class EditMenu extends EditRecord
                 ->options(collect(MenuLinkType::cases())->mapWithKeys(fn (MenuLinkType $type): array => [$type->value => $type->getLabel()])->all())
                 ->default(MenuLinkType::Page->value)
                 ->required()
-                ->live(),
+                ->live()
+                ->afterStateUpdated(fn (Set $set): mixed => $set('target_id', null)),
 
             Select::make('target_id')
-                ->label(fn (Get $get): string => $get('type') === MenuLinkType::Anchor->value ? 'On page' : 'Page')
-                ->options(fn (): array => Page::query()->orderBy('title')->pluck('title', 'id')->all())
+                ->label(fn (Get $get): string => match (MenuLinkType::tryFrom((string) $get('type'))) {
+                    MenuLinkType::Anchor => 'On page',
+                    MenuLinkType::Category => 'Category',
+                    MenuLinkType::Product => 'Product',
+                    default => 'Page',
+                })
+                ->options(fn (Get $get): array => match (MenuLinkType::tryFrom((string) $get('type'))) {
+                    MenuLinkType::Category => Category::query()->orderBy('sort_order')->orderBy('name')->pluck('name', 'id')->all(),
+                    MenuLinkType::Product => Product::query()->orderBy('name')->pluck('name', 'id')->all(),
+                    default => Page::query()->orderBy('title')->pluck('title', 'id')->all(),
+                })
                 ->searchable()
-                ->visible($typeIs(MenuLinkType::Page, MenuLinkType::Anchor))
-                ->required($typeIs(MenuLinkType::Page))
-                ->helperText(fn (Get $get): ?string => $get('type') === MenuLinkType::Anchor->value ? 'Leave empty for the home page.' : 'Hidden on the storefront while the page is a draft.'),
+                ->visible($typeIs(MenuLinkType::Page, MenuLinkType::Anchor, MenuLinkType::Category, MenuLinkType::Product))
+                ->required($typeIs(MenuLinkType::Page, MenuLinkType::Category, MenuLinkType::Product))
+                ->helperText(fn (Get $get): ?string => match (MenuLinkType::tryFrom((string) $get('type'))) {
+                    MenuLinkType::Anchor => 'Leave empty for the home page.',
+                    MenuLinkType::Product => 'Hidden on the storefront while the product is a draft.',
+                    MenuLinkType::Category => null,
+                    default => 'Hidden on the storefront while the page is a draft.',
+                }),
 
             TextInput::make('anchor')
                 ->label('Anchor')
@@ -333,7 +395,7 @@ class EditMenu extends EditRecord
             'label' => (string) ($data['label'] ?? ''),
             'type' => $type->value ?? (string) ($data['type'] ?? ''),
             'note' => filled($data['note'] ?? null) ? (string) $data['note'] : null,
-            'target_id' => in_array($type, [MenuLinkType::Page, MenuLinkType::Anchor], true) && is_numeric($data['target_id'] ?? null) ? (int) $data['target_id'] : null,
+            'target_id' => in_array($type, [MenuLinkType::Page, MenuLinkType::Anchor, MenuLinkType::Category, MenuLinkType::Product], true) && is_numeric($data['target_id'] ?? null) ? (int) $data['target_id'] : null,
             'anchor' => $type === MenuLinkType::Anchor ? ltrim((string) ($data['anchor'] ?? ''), '#') : null,
             'url' => $type === MenuLinkType::Url ? (string) ($data['url'] ?? '') : null,
         ];

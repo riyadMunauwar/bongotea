@@ -16,9 +16,10 @@ be sanitised as a whole on every request.
 
 **The tree is validated whole and replaced in one transaction.** The builder holds the tree in the
 browser and submits all of it on Save. `MenuTree::save()` checks the whole tree — depth, each
-item's target against its type, that every Page exists, that every address is one the storefront
-draws — and refuses it pointing at the first offending item, writing nothing. Otherwise it deletes
-the old items and inserts the new inside one transaction and writes one activity entry. Partial
+item's target against its type, that every Page, Category and Product exists, that every address
+is one the storefront draws — and refuses it pointing at the first offending item, writing
+nothing. Otherwise it deletes the old items and inserts the new inside one transaction and writes
+one activity entry. Partial
 writes (move this item, rename that one) were rejected: they would make the storefront draw a
 half-finished rearrangement and the history read as every drag.
 

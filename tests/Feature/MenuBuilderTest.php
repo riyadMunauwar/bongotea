@@ -7,13 +7,16 @@ use App\Filament\Resources\Menus\MenuResource;
 use App\Filament\Resources\Menus\Pages\CreateMenu;
 use App\Filament\Resources\Menus\Pages\EditMenu;
 use App\Filament\Resources\Menus\Pages\ListMenus;
+use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuItem;
 use App\Models\Page;
+use App\Models\Product;
 use App\Models\User;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 use Illuminate\Contracts\Support\Arrayable;
@@ -120,6 +123,43 @@ it('saves a submitted nested tree in order, three levels deep, with one activity
         ->and(Activity::query()->where('event', 'menu_saved')->sole()->subject->is($menu))->toBeTrue();
 });
 
+it('saves Category, Product and All Categories links chosen in the slide-over, each held by reference', function () {
+    $gold = Category::factory()->create(['name' => 'Gold']);
+    $darjeeling = Product::factory()->for($gold)->create(['name' => 'Darjeeling']);
+    $menu = Menu::factory()->create();
+
+    Livewire::test(EditMenu::class, ['record' => $menu->getKey()])
+        ->set('tree', [node('গোল্ড', MenuLinkType::Url, ['url' => '/'])])
+        ->callAction('editItem', data: ['label' => 'গোল্ড', 'type' => MenuLinkType::Category->value, 'target_id' => $gold->id], arguments: ['key' => 'গোল্ড'])
+        ->assertHasNoFormErrors()
+        ->callAction('addItem', data: ['label' => 'দার্জিলিং', 'type' => MenuLinkType::Product->value, 'target_id' => $darjeeling->id])
+        ->callAction('addItem', data: ['label' => 'সব চা', 'type' => MenuLinkType::AllCategories->value, 'target_id' => $gold->id])
+        ->assertSet('tree.2.target_id', null)
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $items = MenuItem::query()->orderBy('position')->get();
+
+    expect($items->pluck('type')->all())->toBe([MenuLinkType::Category, MenuLinkType::Product, MenuLinkType::AllCategories])
+        ->and($items[0]->linkable->is($gold))->toBeTrue()
+        ->and($items[1]->linkable->is($darjeeling))->toBeTrue()
+        ->and($items[2]->linkable_id)->toBeNull();
+});
+
+it('offers Categories and Products in searchable target selects', function () {
+    Category::factory()->create(['name' => 'Gold']);
+    Product::factory()->create(['name' => 'Darjeeling']);
+
+    Livewire::test(EditMenu::class, ['record' => Menu::factory()->create()->getKey()])
+        ->mountAction('addItem')
+        ->fillForm(['type' => MenuLinkType::Category->value])
+        ->assertFormFieldExists('target_id', fn (Select $select): bool => $select->isSearchable() && in_array('Gold', $select->getOptions(), true))
+        ->fillForm(['type' => MenuLinkType::Product->value])
+        ->assertFormFieldExists('target_id', fn (Select $select): bool => $select->isSearchable() && in_array('Darjeeling', $select->getOptions(), true))
+        ->fillForm(['type' => MenuLinkType::AllCategories->value])
+        ->assertFormFieldHidden('target_id');
+});
+
 it('replaces the tree whole on every Save', function () {
     $menu = Menu::factory()->create();
     MenuItem::factory()->for($menu)->count(3)->create();
@@ -157,25 +197,36 @@ it('refuses a Save that breaks a rule, marking the link and writing nothing', fu
     'a Page link with no Page' => [fn (): array => [node('পাতা', MenuLinkType::Page, ['url' => '/about'])], 'পাতা'],
     'a missing Page' => [fn (): array => [node('গায়েব', MenuLinkType::Page, ['target_id' => 999999])], 'গায়েব'],
     'a bad URL' => [fn (): array => [node('খারাপ', MenuLinkType::Url, ['url' => 'javascript:alert(1)'])], 'খারাপ'],
+    'a Category link with no Category' => [fn (): array => [node('ধরন', MenuLinkType::Category)], 'ধরন'],
+    'a missing Category' => [fn (): array => [node('নেই', MenuLinkType::Category, ['target_id' => 999999])], 'নেই'],
+    'a missing Product' => [fn (): array => [node('উধাও', MenuLinkType::Product, ['target_id' => 999999])], 'উধাও'],
+    'a Page id given as a Product' => [fn (): array => [node('ভুল', MenuLinkType::Product, ['target_id' => Page::factory()->create(['id' => 424242])->id])], 'ভুল'],
+    'All Categories holding links' => [fn (): array => [node('সব', MenuLinkType::AllCategories, children: [node('ভেতরে', MenuLinkType::Url, ['url' => '/x'])])], 'সব'],
+    'All Categories on the third level' => [fn (): array => [
+        node('এক', MenuLinkType::Heading, children: [node('দুই', MenuLinkType::Heading, children: [node('সবগুলো', MenuLinkType::AllCategories)])]),
+    ], 'সবগুলো'],
 ]);
 
-it('moves a branch with its children, and refuses a move past three levels', function () {
+it('moves a branch with its children, and refuses a move past three levels or under All Categories', function () {
     $menu = Menu::factory()->create();
 
     $builder = Livewire::test(EditMenu::class, ['record' => $menu->getKey()])
         ->set('tree', [
             node('এক', MenuLinkType::Heading, children: [node('দুই', MenuLinkType::Heading, children: [node('তিন', MenuLinkType::Url, ['url' => '/'])])]),
             node('বাইরে', MenuLinkType::Heading, children: [node('ভেতরে', MenuLinkType::Url, ['url' => '/x'])]),
+            node('সব', MenuLinkType::AllCategories),
         ])
+        ->call('moveItem', 'ভেতরে', 'সব', 0)
+        ->assertSet('tree.2.children', [])
         ->call('moveItem', 'দুই', null, 0);
 
-    expect(collect($builder->get('tree'))->pluck('label')->all())->toBe(['দুই', 'এক', 'বাইরে'])
+    expect(collect($builder->get('tree'))->pluck('label')->all())->toBe(['দুই', 'এক', 'বাইরে', 'সব'])
         ->and($builder->get('tree.0.children.0.label'))->toBe('তিন')
         ->and($builder->get('hasUnsavedChanges'))->toBeTrue();
 
     $builder->call('moveItem', 'বাইরে', 'তিন', 0);
 
-    expect(collect($builder->get('tree'))->pluck('label')->all())->toBe(['দুই', 'এক', 'বাইরে']);
+    expect(collect($builder->get('tree'))->pluck('label')->all())->toBe(['দুই', 'এক', 'বাইরে', 'সব']);
 });
 
 it('edits a link in the slide-over and removes one with its children', function () {

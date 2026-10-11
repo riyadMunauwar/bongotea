@@ -3,9 +3,11 @@
 namespace Database\Factories;
 
 use App\Enums\MenuLinkType;
+use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuItem;
 use App\Models\Page;
+use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -47,6 +49,31 @@ class MenuItemFactory extends Factory
             'linkable_id' => $page->id,
             'url' => null,
         ]);
+    }
+
+    public function category(Category $category): static
+    {
+        return $this->state(fn (): array => [
+            'type' => MenuLinkType::Category,
+            'linkable_type' => $category->getMorphClass(),
+            'linkable_id' => $category->id,
+            'url' => null,
+        ]);
+    }
+
+    public function product(Product $product): static
+    {
+        return $this->state(fn (): array => [
+            'type' => MenuLinkType::Product,
+            'linkable_type' => $product->getMorphClass(),
+            'linkable_id' => $product->id,
+            'url' => null,
+        ]);
+    }
+
+    public function allCategories(): static
+    {
+        return $this->state(fn (): array => ['type' => MenuLinkType::AllCategories, 'url' => null]);
     }
 
     public function anchor(string $anchor, ?Page $page = null): static

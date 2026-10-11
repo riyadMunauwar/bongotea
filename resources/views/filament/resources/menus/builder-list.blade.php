@@ -1,6 +1,7 @@
 {{--
     One level of the Menu builder: its links, each with the level beneath it
-    while there is room for one. `data-depth` and `data-height` are what the
+    while there is room for one (never under All Categories, which lists its
+    own). `data-depth` and `data-height` are what the
     drag reads to refuse a drop past three levels.
 --}}
 <ul
@@ -87,7 +88,7 @@
                 />
             </div>
 
-            @if ($depth < \App\Support\Menus\MenuTree::MAX_DEPTH)
+            @if ($depth < \App\Support\Menus\MenuTree::MAX_DEPTH && $item['type'] !== \App\Enums\MenuLinkType::AllCategories->value)
                 @include('filament.resources.menus.builder-list', [
                     'builder' => $builder,
                     'items' => $item['children'],

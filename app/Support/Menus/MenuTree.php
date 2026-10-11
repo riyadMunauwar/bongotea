@@ -8,6 +8,7 @@ use App\Models\MenuItem;
 use App\Models\Page;
 use App\Support\Storefront\StorefrontMenus;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,13 +19,16 @@ use Illuminate\Support\Facades\DB;
  * so this is the guard and the builder's own depth limit is a convenience.
  * A tree is refused — pointing at the first offending item, and writing
  * nothing — when it is deeper than three levels, when an item's target does
- * not fit its type, when a Page it names does not exist, or when a URL is
- * not one the storefront would draw. Otherwise the old items are deleted
+ * not fit its type, when a Page, Category or Product it names does not
+ * exist, when a URL is not one the storefront would draw, or when an All
+ * Categories item holds links of its own or sits where its Categories would
+ * be a fourth level. Otherwise the old items are deleted
  * and the new ones inserted inside one transaction, and one activity entry
  * says the Menu was saved: the history reads as Saves, not as every drag.
  *
  * @phpstan-type SubmittedItem array{label?: mixed, type?: mixed, note?: mixed, target_id?: mixed, anchor?: mixed, url?: mixed, children?: mixed}
- * @phpstan-type CleanItem array{label: string, type: MenuLinkType, note: ?string, page_id: ?int, anchor: ?string, url: ?string, children: list<mixed>}
+ * @phpstan-type CleanItem array{label: string, type: MenuLinkType, note: ?string, linkable_type: ?string, linkable_id: ?int, anchor: ?string, url: ?string, children: list<mixed>}
+ * @phpstan-type Existing array<class-string<Model>, list<int>>
  */
 class MenuTree
 {
@@ -47,8 +51,7 @@ class MenuTree
      */
     public static function save(Menu $menu, array $tree, ?Authenticatable $by = null): void
     {
-        $pages = Page::query()->whereKey(self::pageIds($tree))->pluck('id')->all();
-        $clean = self::clean($tree, $pages, []);
+        $clean = self::clean($tree, self::existing(self::targetIds($tree)), []);
 
         DB::transaction(function () use ($menu, $clean, $by): void {
             MenuItem::query()->where('menu_id', $menu->id)->delete();
@@ -97,11 +100,11 @@ class MenuTree
 
     /**
      * @param  list<mixed>  $items
-     * @param  list<int>  $pages  the ids of the Pages that exist
+     * @param  Existing  $existing  which of the ids the tree names exist, by model
      * @param  list<int>  $path  where `$items` sits
      * @return list<CleanItem>
      */
-    private static function clean(array $items, array $pages, array $path): array
+    private static function clean(array $items, array $existing, array $path): array
     {
         $clean = [];
 
@@ -138,14 +141,22 @@ class MenuTree
                 throw new MenuTreeRefused($here, $label, 'a note may be at most '.self::MAX_NOTE.' characters.');
             }
 
-            $children = $item['children'] ?? [];
+            $children = is_array($item['children'] ?? null) ? $item['children'] : [];
+
+            if ($type === MenuLinkType::AllCategories && $children !== []) {
+                throw new MenuTreeRefused($here, $label, 'All Categories lists the Categories itself; move the links beneath it elsewhere.');
+            }
+
+            if ($type === MenuLinkType::AllCategories && count($here) >= self::MAX_DEPTH) {
+                throw new MenuTreeRefused($here, $label, 'All Categories needs the level beneath it for its Categories, so it cannot sit on level '.self::MAX_DEPTH.'.');
+            }
 
             $clean[] = [
                 'label' => $label,
                 'type' => $type,
                 'note' => $note,
-                ...self::target($type, $item, $pages, $here, $label),
-                'children' => self::clean(is_array($children) ? $children : [], $pages, $here),
+                ...self::target($type, $item, $existing, $here, $label),
+                'children' => self::clean($children, $existing, $here),
             ];
         }
 
@@ -156,32 +167,33 @@ class MenuTree
      * The one target field this type reads, the others blank.
      *
      * @param  array<string, mixed>  $item
-     * @param  list<int>  $pages
+     * @param  Existing  $existing
      * @param  list<int>  $path
-     * @return array{page_id: ?int, anchor: ?string, url: ?string}
+     * @return array{linkable_type: ?string, linkable_id: ?int, anchor: ?string, url: ?string}
      */
-    private static function target(MenuLinkType $type, array $item, array $pages, array $path, string $label): array
+    private static function target(MenuLinkType $type, array $item, array $existing, array $path, string $label): array
     {
-        $none = ['page_id' => null, 'anchor' => null, 'url' => null];
-        $pageId = is_numeric($item['target_id'] ?? null) ? (int) $item['target_id'] : null;
+        $none = ['linkable_type' => null, 'linkable_id' => null, 'anchor' => null, 'url' => null];
+        $targetId = is_numeric($item['target_id'] ?? null) ? (int) $item['target_id'] : null;
         $anchor = is_scalar($item['anchor'] ?? null) ? trim((string) $item['anchor']) : '';
         $url = is_scalar($item['url'] ?? null) ? trim((string) $item['url']) : '';
 
-        $pageExists = fn (): bool => $pageId !== null && in_array($pageId, $pages, true);
+        $exists = fn (string $model): bool => $targetId !== null && in_array($targetId, $existing[$model] ?? [], true);
+        $linking = fn (string $model): array => [...$none, 'linkable_type' => (new $model)->getMorphClass(), 'linkable_id' => $targetId];
 
         return match ($type) {
-            MenuLinkType::Page => $pageExists()
-                ? [...$none, 'page_id' => $pageId]
-                : throw new MenuTreeRefused($path, $label, $pageId === null ? 'choose a Page.' : 'that Page no longer exists.'),
+            MenuLinkType::Page, MenuLinkType::Category, MenuLinkType::Product => $exists($type->linkable())
+                ? $linking($type->linkable())
+                : throw new MenuTreeRefused($path, $label, $targetId === null ? 'choose a '.$type->getLabel().'.' : 'that '.$type->getLabel().' no longer exists.'),
             MenuLinkType::Anchor => match (true) {
                 preg_match(self::ANCHOR, $anchor) !== 1 => throw new MenuTreeRefused($path, $label, 'an anchor is letters, digits, hyphens and underscores.'),
-                $pageId !== null && ! $pageExists() => throw new MenuTreeRefused($path, $label, 'that Page no longer exists.'),
-                default => [...$none, 'page_id' => $pageId, 'anchor' => ltrim($anchor, '#')],
+                $targetId !== null && ! $exists(Page::class) => throw new MenuTreeRefused($path, $label, 'that Page no longer exists.'),
+                default => [...($targetId === null ? $none : $linking(Page::class)), 'anchor' => ltrim($anchor, '#')],
             },
             MenuLinkType::Url => preg_match(StorefrontMenus::ALLOWED_URL, $url) === 1 && mb_strlen($url) <= self::MAX_URL
                 ? [...$none, 'url' => $url]
                 : throw new MenuTreeRefused($path, $label, 'an address starts with / for this site, or https://, tel: or mailto:.'),
-            MenuLinkType::Heading => $none,
+            MenuLinkType::Heading, MenuLinkType::AllCategories => $none,
         };
     }
 
@@ -200,8 +212,8 @@ class MenuTree
                 'label' => $item['label'],
                 'type' => $item['type'],
                 'note' => $item['note'],
-                'linkable_type' => $item['page_id'] === null ? null : (new Page)->getMorphClass(),
-                'linkable_id' => $item['page_id'],
+                'linkable_type' => $item['linkable_type'],
+                'linkable_id' => $item['linkable_id'],
                 'anchor' => $item['anchor'],
                 'url' => $item['url'],
             ]);
@@ -216,13 +228,33 @@ class MenuTree
     }
 
     /**
-     * Every Page id the tree names, at any depth, so they are looked up in
-     * one query.
+     * Which of the ids the tree names exist: one query per model the tree
+     * names any of, whatever the tree's size. A Product taken out of the
+     * catalogue is not among them.
+     *
+     * @param  Existing  $ids  the ids the tree names, by model
+     * @return Existing
+     */
+    private static function existing(array $ids): array
+    {
+        $existing = [];
+
+        foreach ($ids as $model => $modelIds) {
+            $existing[$model] = $model::query()->whereKey($modelIds)->pluck('id')->map(fn (mixed $id): int => (int) $id)->all();
+        }
+
+        return $existing;
+    }
+
+    /**
+     * Every target id the tree names, at any depth, by the model its type
+     * links (an Anchor's optional target is a Page), so they are looked up
+     * together.
      *
      * @param  array<mixed>  $items
-     * @return list<int>
+     * @return Existing
      */
-    private static function pageIds(array $items): array
+    private static function targetIds(array $items): array
     {
         $ids = [];
 
@@ -231,15 +263,18 @@ class MenuTree
                 continue;
             }
 
-            if (is_numeric($item['target_id'] ?? null)) {
-                $ids[] = (int) $item['target_id'];
+            $type = MenuLinkType::tryFrom(is_scalar($item['type'] ?? null) ? (string) $item['type'] : '');
+            $model = $type === MenuLinkType::Anchor ? Page::class : $type?->linkable();
+
+            if ($model !== null && is_numeric($item['target_id'] ?? null)) {
+                $ids[$model][] = (int) $item['target_id'];
             }
 
             if (is_array($item['children'] ?? null)) {
-                $ids = [...$ids, ...self::pageIds($item['children'])];
+                $ids = array_merge_recursive($ids, self::targetIds($item['children']));
             }
         }
 
-        return array_values(array_unique($ids));
+        return array_map(fn (array $modelIds): array => array_values(array_unique($modelIds)), $ids);
     }
 }

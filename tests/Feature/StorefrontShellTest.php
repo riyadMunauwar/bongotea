@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\SystemPage;
+use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuItem;
 use App\Models\Page;
@@ -177,7 +178,7 @@ it('carries three levels: a Heading, its dropdown and a flyout', function () {
         );
 });
 
-it('drops links to unpublished or deleted Pages, bad URLs, and Headings left childless', function () {
+it('drops links to unpublished or deleted Pages, bad URLs, and Headings or All Categories left childless', function () {
     $draft = Page::factory()->create();
     $gone = Page::factory()->published()->create();
     $menu = headerMenu();
@@ -188,6 +189,7 @@ it('drops links to unpublished or deleted Pages, bad URLs, and Headings left chi
     $empty = MenuItem::factory()->for($menu)->heading()->create(['label' => 'খালি']);
     MenuItem::factory()->under($empty)->page($draft)->create(['label' => 'ঈদ']);
     MenuItem::factory()->for($menu)->heading()->create(['label' => 'শুধু শিরোনাম']);
+    MenuItem::factory()->for($menu)->allCategories()->create(['label' => 'কোনো ধরন নেই']);
     MenuItem::factory()->for($menu)->create(['label' => 'থাকে', 'url' => '/ok']);
 
     $gone->delete();
@@ -196,6 +198,53 @@ it('drops links to unpublished or deleted Pages, bad URLs, and Headings left chi
         ->assertInertia(fn (Assert $page) => $page
             ->where('menus.header', [
                 ['label' => 'থাকে', 'href' => '/ok', 'external' => false, 'note' => null, 'children' => []],
+            ])
+        );
+});
+
+it('resolves Category and Product links by reference, and drops hidden or deleted ones', function () {
+    $gold = Category::factory()->create(['slug' => 'gold']);
+    $gone = Category::factory()->create();
+    $darjeeling = Product::factory()->for($gold)->create(['slug' => 'darjeeling']);
+    $draft = Product::factory()->for($gold)->draft()->create();
+    $withdrawn = Product::factory()->for($gold)->create();
+    $menu = headerMenu();
+
+    MenuItem::factory()->for($menu)->category($gold)->create(['label' => 'গোল্ড', 'position' => 0]);
+    MenuItem::factory()->for($menu)->product($darjeeling)->create(['label' => 'দার্জিলিং', 'position' => 1]);
+    MenuItem::factory()->for($menu)->category($gone)->create(['label' => 'গায়েব', 'position' => 2]);
+    MenuItem::factory()->for($menu)->product($draft)->create(['label' => 'খসড়া', 'position' => 3]);
+    MenuItem::factory()->for($menu)->product($withdrawn)->create(['label' => 'তুলে নেওয়া', 'position' => 4]);
+
+    $gold->update(['slug' => 'gold-grade']);
+    $gone->delete();
+    $withdrawn->delete();
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('menus.header', [
+                ['label' => 'গোল্ড', 'href' => '/category/gold-grade', 'external' => false, 'note' => null, 'children' => []],
+                ['label' => 'দার্জিলিং', 'href' => '/tea/darjeeling', 'external' => false, 'note' => null, 'children' => []],
+            ])
+        );
+});
+
+it('fills an All Categories link with every Category in display order when drawn', function () {
+    $menu = headerMenu();
+    MenuItem::factory()->for($menu)->allCategories()->create(['label' => 'সব চা', 'note' => 'সব ধরন']);
+
+    Category::factory()->create(['name' => 'Silver', 'slug' => 'silver', 'sort_order' => 2]);
+    Category::factory()->create(['name' => 'Premium', 'slug' => 'premium', 'sort_order' => 0]);
+    Category::factory()->create(['name' => 'Gold', 'slug' => 'gold', 'sort_order' => 1]);
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('menus.header', [
+                ['label' => 'সব চা', 'href' => null, 'external' => false, 'note' => 'সব ধরন', 'children' => [
+                    ['label' => 'Premium', 'href' => '/category/premium', 'external' => false, 'note' => null, 'children' => []],
+                    ['label' => 'Gold', 'href' => '/category/gold', 'external' => false, 'note' => null, 'children' => []],
+                    ['label' => 'Silver', 'href' => '/category/silver', 'external' => false, 'note' => null, 'children' => []],
+                ]],
             ])
         );
 });
