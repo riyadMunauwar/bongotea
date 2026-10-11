@@ -1,11 +1,12 @@
+import { discountLabel } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { type KilogramRange, type Tier, tierFor } from '@/lib/pricing';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 
-/** What a Kilogram costs in the first Tier: the Regular Price. */
-export function regularPrice(tiers: Tier[]): number {
+/** What a Kilogram costs in the first Tier: the most a Product charges. */
+export function firstTierPrice(tiers: Tier[]): number {
     return tiers[0].price;
 }
 
@@ -21,20 +22,19 @@ export function tierRange(range: KilogramRange): string {
 
 /**
  * A card's price ladder: one cell per Tier of the Product's own, three to a
- * row, each with its range, its price and what it saves on the Regular Price.
- * Once the Cart holds anything, the Tier its total puts this Product in is
- * filled in and the note says so.
+ * row, each with its range, its price and what it takes off the MRP. Once the
+ * Cart holds anything, the Tier its total puts this Product in is filled in
+ * and the note says so.
  */
-export function TierLadder({ tiers, cartKilograms = 0 }: { tiers: Tier[]; cartKilograms?: number }) {
+export function TierLadder({ mrp, tiers, cartKilograms = 0 }: { mrp: number; tiers: Tier[]; cartKilograms?: number }) {
     const taka = useTaka();
-    const regular = regularPrice(tiers);
-    const current = cartKilograms > 0 ? tierFor({ id: 0, tiers }, cartKilograms) : null;
+    const current = cartKilograms > 0 ? tierFor({ id: 0, mrp, tiers }, cartKilograms) : null;
 
     return (
         <div className="flex flex-col gap-1 md:gap-[6px]">
             <div className="grid grid-cols-3 gap-1">
                 {tiers.map((tier) => {
-                    const saving = regular - tier.price;
+                    const off = discountLabel(mrp, tier.price, taka);
                     const isCurrent = tier === current;
 
                     return (
@@ -48,7 +48,7 @@ export function TierLadder({ tiers, cartKilograms = 0 }: { tiers: Tier[]; cartKi
                             <span className={cn('text-[10px] whitespace-nowrap md:text-[11px]', isCurrent ? 'text-white/85' : 'text-muted')}>{tierRange(tier)}</span>
                             <b className={cn('text-[13px] font-bold md:text-[14px]', isCurrent ? 'text-white' : 'text-ink')}>{taka(tier.price)}</b>
                             <span className={cn('hidden text-[10px] whitespace-nowrap md:block', isCurrent ? 'text-white/85' : 'text-muted')}>
-                                {saving > 0 ? bn.catalogue.offPerKilogram(taka(saving)) : bn.catalogue.regular}
+                                {off ?? bn.catalogue.mrp}
                             </span>
                         </div>
                     );

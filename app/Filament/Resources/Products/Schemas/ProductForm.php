@@ -19,6 +19,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 /**
@@ -174,20 +175,31 @@ class ProductForm
     }
 
     /**
-     * The Product's own Tiers (ADR-0031): each range of the whole Cart's
-     * Kilograms and what a Kilogram of this tea costs in it. Refused as a
-     * whole unless they cover every kilogram from one once and never rise in
-     * price, raised on the list because a gap is between two rows and belongs
-     * to neither. Money is typed in whole taka and stored in minor units,
-     * converted here at the boundary; the model writes the Regular Price from
-     * the first row.
+     * The Product's MRP and its own Tiers (ADR-0031): each range of the whole
+     * Cart's Kilograms and what a Kilogram of this tea costs in it. The Tiers
+     * are refused as a whole unless they cover every kilogram from one once
+     * and never rise in price, raised on the list because a gap is between two
+     * rows and belongs to neither; a Tier above the MRP is raised on the MRP.
+     * Money is typed in whole taka and stored in minor units, converted here
+     * at the boundary.
      */
     private static function pricesSection(): Section
     {
         return Section::make('Prices')
-            ->description('What a kilogram of this tea costs at each weight of the whole cart, across every tea in it. The first row is the Regular Price; one row alone is a flat price.')
+            ->description('What a kilogram of this tea costs at each weight of the whole cart, across every tea in it. One row alone is a flat price. Every discount a buyer sees is measured from the MRP.')
             ->columnSpanFull()
             ->schema([
+                TextInput::make('mrp')
+                    ->label(fn (): string => 'MRP ('.app(GeneralSettings::class)->currencyCode.' per kg)')
+                    ->helperText('The maximum retail price of a kilogram. No row below may cost more.')
+                    ->required()
+                    ->integer()
+                    ->minValue(1)
+                    ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
+                    ->rules([self::mrpCanBeSaved()])
+                    ->formatStateUsing(fn (mixed $state): mixed => is_numeric($state) ? Money::toWholeMajorString((int) $state) : $state)
+                    ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
+
                 Repeater::make('tiers')
                     ->hiddenLabel()
                     ->addActionLabel('Add a Tier')
@@ -220,6 +232,19 @@ class ProductForm
                             ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
                     ]),
             ]);
+    }
+
+    /** Both are still in whole taka here, as typed, so they compare directly. */
+    private static function mrpCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            $tiers = $get('tiers');
+            $problem = ProductTiers::mrpProblem(is_array($tiers) ? $tiers : [], $value);
+
+            if ($problem !== null) {
+                $fail($problem);
+            }
+        };
     }
 
     private static function tiersCanBeSaved(): Closure

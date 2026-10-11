@@ -22,14 +22,15 @@ use Tests\Fixtures\Payments\SslCommerzScript;
  * with the figures as they are now, and nothing is written (ADR-0029).
  *
  * The Cart throughout: Premium, 600.00 a kilogram up to five and 550.00 from
- * six, and Strong at a flat 500.00. Four of one and three of the other are
- * seven kilograms, so Premium charges 550.00, and the Delivery Charge is the
- * 6–10 kg band's 150.00.
+ * six against an MRP of 650.00, and Strong at a flat 500.00, its MRP. Four of
+ * one and three of the other are seven kilograms, so Premium charges 550.00,
+ * the Saving is 400.00, and the Delivery Charge is the 6–10 kg band's 150.00.
  */
 function premium(array $attributes = []): Product
 {
     return Product::factory()->create([
         'name' => 'Premium',
+        'mrp' => 65000,
         'tiers' => [['min' => 1, 'max' => 5, 'price' => 60000], ['min' => 6, 'max' => null, 'price' => 55000]],
         ...$attributes,
     ]);
@@ -130,10 +131,39 @@ it('captures the cart priced by the store, and hands the placing browser the ord
         ->and($order->delivery_label)->not->toBeNull()
         ->and($order->total)->toBe(385000);
 
-    expect($order->lines()->orderBy('id')->get()->map->only(['product_id', 'product_name', 'quantity', 'unit_price', 'regular_price', 'unit_cost', 'tier_min', 'tier_max', 'line_total'])->all())->toBe([
-        ['product_id' => $premium->getKey(), 'product_name' => 'Premium', 'quantity' => 4, 'unit_price' => 55000, 'regular_price' => 60000, 'unit_cost' => 40000, 'tier_min' => 6, 'tier_max' => null, 'line_total' => 220000],
-        ['product_id' => $strong->getKey(), 'product_name' => 'Strong', 'quantity' => 3, 'unit_price' => 50000, 'regular_price' => 50000, 'unit_cost' => null, 'tier_min' => 1, 'tier_max' => null, 'line_total' => 150000],
+    expect($order->lines()->orderBy('id')->get()->map->only(['product_id', 'product_name', 'quantity', 'unit_price', 'mrp', 'unit_cost', 'tier_min', 'tier_max', 'line_total'])->all())->toBe([
+        ['product_id' => $premium->getKey(), 'product_name' => 'Premium', 'quantity' => 4, 'unit_price' => 55000, 'mrp' => 65000, 'unit_cost' => 40000, 'tier_min' => 6, 'tier_max' => null, 'line_total' => 220000],
+        ['product_id' => $strong->getKey(), 'product_name' => 'Strong', 'quantity' => 3, 'unit_price' => 50000, 'mrp' => 50000, 'unit_cost' => null, 'tier_min' => 1, 'tier_max' => null, 'line_total' => 150000],
     ]);
+});
+
+it('records the MRP as it stands at Capture, rather than refusing a quote over an MRP that moved', function () {
+    $premium = premium();
+    $strong = strong();
+
+    $premium->update(['mrp' => 70000]);
+
+    $this->postJson(route('checkout.store'), sevenKilograms($premium, $strong))->assertCreated();
+
+    expect(Order::sole()->lines()->where('product_id', $premium->getKey())->value('mrp'))->toBe(70000);
+});
+
+it('shows the Saving recorded at Capture on the order\'s page, and none where nothing was saved', function () {
+    $this->postJson(route('checkout.store'), sevenKilograms(premium(), strong()));
+    $saved = Order::sole();
+
+    $this->get(route('checkout.order-complete', $saved->order_number))
+        ->assertOk()
+        ->assertSee('আপনার সাশ্রয়')
+        ->assertSee('৳৪০০');
+
+    $flat = strong(['name' => 'Flat']);
+    $this->postJson(route('checkout.store'), checkoutOf([[$flat, 2, 50000]], 12000, 112000));
+    $unsaved = Order::query()->whereKeyNot($saved->getKey())->sole();
+
+    $this->get(route('checkout.order-complete', $unsaved->order_number))
+        ->assertOk()
+        ->assertDontSee('আপনার সাশ্রয়');
 });
 
 it('numbers every order BT- and six characters nobody can mishear', function () {

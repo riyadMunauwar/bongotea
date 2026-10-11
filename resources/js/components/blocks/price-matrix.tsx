@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
-import { discountLabel } from '@/components/cart/figures';
-import { lowestPrice, regularPrice, tierRange } from '@/components/catalogue/tier-ladder';
+import { discountPercent } from '@/components/cart/figures';
+import { lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { tierFor } from '@/lib/pricing';
@@ -14,15 +14,17 @@ import { SectionHeading } from './shared';
  * "কোন চায়ে কত ছাড়": every published Product by Category against its own
  * Tiers. Each Product owns its ranges (ADR-0031), so a row is that Product's
  * ladder, each cell naming its own range; once the Cart holds anything, the
- * Tier its total puts each Product in is highlighted. Scrolls sideways on a
- * narrow screen with the names held in place.
+ * Tier its total puts each Product in is highlighted. The MRP is named once
+ * per row, in a column of its own, so each cell need only say what share of
+ * it the Tier takes off. Scrolls sideways on a narrow screen with the names
+ * held in place.
  */
 export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
     const taka = useTaka();
     const cart = useCart();
     const total = cart.priced.totalKilograms;
     const columns = Math.max(1, ...categories.flatMap((category) => category.products.map((product) => product.tiers.length)));
-    const gridTemplateColumns = `var(--matrix-name) repeat(${columns}, minmax(104px, 1fr))`;
+    const gridTemplateColumns = `var(--matrix-name) minmax(88px, auto) repeat(${columns}, minmax(104px, 1fr))`;
 
     if (categories.length === 0) {
         return null;
@@ -38,6 +40,7 @@ export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
                 <div className="flex min-w-max flex-col">
                     <div className="grid bg-surface text-[12px] font-semibold text-muted" style={{ gridTemplateColumns }}>
                         <span className="sticky left-0 bg-surface px-4 py-3">{bn.matrix.tea}</span>
+                        <span className="px-[10px] py-3 text-center">{bn.catalogue.mrp}</span>
                         <span className="px-[10px] py-3" style={{ gridColumn: `span ${columns}` }}>
                             {bn.matrix.ladder}
                         </span>
@@ -51,9 +54,8 @@ export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
                                 </div>
                             </div>
                             {category.products.map((product) => {
-                                const regular = regularPrice(product.tiers);
                                 const current = total > 0 ? tierFor(product, total) : null;
-                                const maxSaving = regular - lowestPrice(product.tiers);
+                                const maxSaving = product.mrp - lowestPrice(product.tiers);
 
                                 return (
                                     <div key={product.id} className="grid border-t border-divider" style={{ gridTemplateColumns }}>
@@ -64,6 +66,9 @@ export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
                                             <b className="text-[15px] font-semibold text-ink">{product.name}</b>
                                             <span className="text-[11px] text-muted">{maxSaving > 0 ? bn.catalogue.upToOff(taka(maxSaving)) : bn.matrix.flat}</span>
                                         </Link>
+                                        <span className="flex items-center justify-center bg-white px-2 py-[10px] text-[14px] text-muted shadow-[inset_0_-2px_0_var(--color-divider)]">
+                                            {taka(product.mrp)}
+                                        </span>
                                         {product.tiers.map((tier) => (
                                             <div
                                                 key={tier.min}
@@ -75,7 +80,7 @@ export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
                                                 <span className="text-[11px] whitespace-nowrap text-muted">{tierRange(tier)}</span>
                                                 <b className="text-[16px] font-bold text-ink">{taka(tier.price)}</b>
                                                 <span className="text-[11px] font-semibold whitespace-nowrap text-(--cat-text)">
-                                                    {tier.price < regular ? discountLabel(regular, tier.price, taka) : bn.catalogue.regular}
+                                                    {bn.matrix.percentOff(discountPercent(product.mrp, tier.price))}
                                                 </span>
                                             </div>
                                         ))}

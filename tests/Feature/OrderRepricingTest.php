@@ -267,6 +267,81 @@ it('refuses a price set by hand with no reason', function () {
     expect($order->refresh()->lines()->sole()->unit_price)->toBe(50000);
 });
 
+it('refuses a price set by hand above the tea\'s MRP', function () {
+    $this->actingAs(User::factory()->overridingPrices()->create());
+    $order = orderAgreedAt([['product' => teaBreakingAtSix(), 'kilograms' => 2, 'price' => 50000]]);
+
+    $component = changingLines($order, fn (array $row): array => [...$row, 'override_price' => '501', 'override_reason' => 'Special blend'])
+        ->call('save');
+
+    $key = array_key_first($component->get('data.lines'));
+    $component->assertHasFormErrors(["lines.{$key}.override_price"]);
+
+    expect($order->refresh()->lines()->sole()->isPriceOverridden())->toBeFalse();
+});
+
+it('flags a price set by hand that the MRP has since dropped below, rather than repricing over it', function (Closure $actingAs, string $flagged) {
+    $this->actingAs(User::factory()->overridingPrices()->create());
+
+    $premium = teaBreakingAtSix();
+    $house = teaBreakingAtSix('House');
+    $order = orderAgreedAt([
+        ['product' => $premium, 'kilograms' => 3, 'price' => 50000],
+        ['product' => $house, 'kilograms' => 2, 'price' => 50000],
+    ]);
+
+    changingLines($order, fn (array $row, OrderLine $line): array => $line->product_id === $premium->getKey()
+        ? [...$row, 'override_price' => '480', 'override_reason' => 'Regular since 2019']
+        : $row)->call('save')->assertHasNoFormErrors();
+
+    $premium->update(['mrp' => 47000, 'tiers' => [['min' => 1, 'max' => 5, 'price' => 47000], ['min' => 6, 'max' => null, 'price' => 45000]]]);
+
+    $this->actingAs($actingAs());
+
+    $component = changingLines($order, fn (array $row, OrderLine $line): array => $line->product_id === $house->getKey()
+        ? [...$row, 'kilograms' => 3]
+        : $row)->call('save');
+
+    $premiumKey = collect($component->get('data.lines'))->search(fn (array $row): bool => (int) $row['product_id'] === $premium->getKey());
+    $component->assertHasFormErrors(["lines.{$premiumKey}.{$flagged}"]);
+
+    expect($order->refresh()->lines()->where('product_id', $house->getKey())->sole()->quantity)->toBe(2);
+})->with([
+    'by a User who may set prices' => [fn () => User::factory()->overridingPrices()->create(), 'override_price'],
+    'by a User who may not' => [fn () => User::factory()->workingOrders()->create(), 'product_id'],
+]);
+
+it('saves the details of an order whose price set by hand the MRP has since dropped below', function () {
+    $this->actingAs(User::factory()->overridingPrices()->create());
+
+    $premium = teaBreakingAtSix();
+    $order = orderAgreedAt([['product' => $premium, 'kilograms' => 3, 'price' => 50000]]);
+
+    changingLines($order, fn (array $row): array => [...$row, 'override_price' => '480', 'override_reason' => 'Regular since 2019'])
+        ->call('save')->assertHasNoFormErrors();
+
+    $premium->update(['mrp' => 47000, 'tiers' => [['min' => 1, 'max' => null, 'price' => 47000]]]);
+
+    Livewire::test(EditOrder::class, ['record' => $order->getKey()])
+        ->fillForm(['customer_address' => 'House 9, Road 1'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($order->refresh()->customer_address)->toBe('House 9, Road 1')
+        ->and($order->lines()->sole()->unit_price)->toBe(48000);
+});
+
+it('shows the Saving each line recorded against its MRP', function () {
+    $order = orderAgreedAt([['product' => teaBreakingAtSix(), 'kilograms' => 3, 'price' => 45000]]);
+    $order->lines()->sole()->update(['mrp' => 52000]);
+
+    expect($order->refresh()->savingShown())->toBe(21000);
+
+    Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+        ->assertSeeText('Saving')
+        ->assertSeeText(Money::format(21000));
+});
+
 it('gives no way to set a price by hand without the Permission', function () {
     $order = orderAgreedAt([['product' => teaBreakingAtSix(), 'kilograms' => 2, 'price' => 50000]]);
 

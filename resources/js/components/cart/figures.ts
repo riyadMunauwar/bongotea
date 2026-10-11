@@ -41,14 +41,27 @@ export function deliveryNote(priced: PricedCart): string | null {
     return priced.kilogramsToFreeDelivery === null ? null : bn.bulkOrder.toFreeDelivery(toBanglaDigits(priced.kilogramsToFreeDelivery));
 }
 
-/** What a Tier Price takes off the Regular Price, per Kilogram: "৳৬০ ছাড়". */
-export function discountLabel(regularPrice: number, tierPrice: number, taka: Taka): string {
-    return bn.catalogue.offPerKilogram(taka(regularPrice - tierPrice));
+/**
+ * What a Tier Price takes off the MRP, per Kilogram: "৳৮০ ছাড় (১৬%)". The share
+ * is rounded down so it never claims more than is taken off, and left out when
+ * that leaves nothing. Null for a price at the MRP, which takes nothing off.
+ */
+export function discountLabel(mrp: number, tierPrice: number, taka: Taka): string | null {
+    const off = mrp - tierPrice;
+
+    return off <= 0 ? null : bn.catalogue.offMrp(taka(off), discountPercent(mrp, tierPrice));
 }
 
-/** A price step's name in the ladder of weights: the first is the Regular Price, then ধাপ ২, ধাপ ৩… */
+/** The share of the MRP a Tier Price takes off, rounded down, in Bangla digits; null when that is nothing. */
+export function discountPercent(mrp: number, tierPrice: number): string | null {
+    const percent = mrp > 0 ? Math.floor(((mrp - tierPrice) * 100) / mrp) : 0;
+
+    return percent <= 0 ? null : toBanglaDigits(percent);
+}
+
+/** A price step's name in the ladder of weights: ধাপ ১, ধাপ ২, ধাপ ৩… */
 export function stepName(index: number): string {
-    return index === 0 ? bn.cart.stepRegular : bn.cart.step(toBanglaDigits(index + 1));
+    return bn.cart.step(toBanglaDigits(index + 1));
 }
 
 /** The step the Cart is in, as a range, or null for an empty Cart. */

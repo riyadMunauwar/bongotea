@@ -140,7 +140,7 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
     Tag::query()->where('slug', 'hotel')->sole()->delete();
 
     $premium = Product::query()->where('name', 'বঙ্গোটি প্রিমিয়াম')->sole();
-    $premium->update(['name' => 'প্রিমিয়াম ২০২৭', 'tiers' => [['min' => 1, 'max' => null, 'price' => 70000]]]);
+    $premium->update(['name' => 'প্রিমিয়াম ২০২৭', 'mrp' => 70000, 'tiers' => [['min' => 1, 'max' => null, 'price' => 70000]]]);
     $premium->tags()->detach();
     Product::query()->where('name', 'বঙ্গোটি সেভার')->sole()->delete();
 

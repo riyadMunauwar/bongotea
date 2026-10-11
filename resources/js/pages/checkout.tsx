@@ -1,6 +1,6 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { deliveryNote, feeText } from '@/components/cart/figures';
+import { deliveryNote, discountLabel, feeText } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
@@ -294,6 +294,12 @@ export default function CheckoutPage() {
                                 <span>
                                     {nameOf(line.productId)}{' '}
                                     <span className="text-muted">{bn.checkout.lineAt(toBanglaDigits(line.kilograms), taka(line.tierPrice))}</span>
+                                    {line.tierPrice < line.mrp && (
+                                        <>
+                                            <s className="ml-1 text-muted opacity-75">{taka(line.mrp)}</s>
+                                            <span className="ml-1 text-[12px] font-semibold text-primary">{discountLabel(line.mrp, line.tierPrice, taka)}</span>
+                                        </>
+                                    )}
                                 </span>
                                 <span className="font-semibold">{taka(line.lineTotal)}</span>
                             </div>
@@ -309,6 +315,7 @@ export default function CheckoutPage() {
                         <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
                     </div>
                     <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
+                    {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.bulkOrder.saving(taka(priced.savings))}</span>}
                     <button
                         type="submit"
                         disabled={form.processing || repricing}

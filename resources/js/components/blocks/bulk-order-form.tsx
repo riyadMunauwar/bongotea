@@ -2,7 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { deliveryNote, discountLabel, feeText, nextDropText, stepName } from '@/components/cart/figures';
 import { Stepper } from '@/components/cart/stepper';
-import { regularPrice, tierRange } from '@/components/catalogue/tier-ladder';
+import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
@@ -23,8 +23,8 @@ const FLASH_MILLISECONDS = 1600;
 
 /**
  * The Cart as a form: every published Product by Category, each row with its
- * price now — the Regular Price struck through and what is off once a
- * cheaper Tier applies — what it will cost at its next cheaper Tier, −/+, a
+ * price now — the MRP struck through and what is off it whenever the price
+ * is below it — what it will cost at its next cheaper Tier, −/+, a
  * typed quantity and quick-set chips, and its line total. Beside it (below
  * on a phone, as a bar at the bottom) the summary of the whole Cart. A row
  * named in the address (`#tea-12`, from a Product page's add button) is
@@ -101,7 +101,6 @@ function Row({ product, cart, quickChips, flashed }: { product: ProductCard; car
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
     const total = cart.priced.totalKilograms;
-    const regular = regularPrice(product.tiers);
     const tier = tierFor(product, total);
     const next = product.tiers.length > 1 ? nextDropAbove(product, total) : null;
     const set = (value: number) => cart.set(product.id, value);
@@ -132,18 +131,18 @@ function Row({ product, cart, quickChips, flashed }: { product: ProductCard; car
                             {taka(tier.price)}
                             {bn.blocks.perKilogram}
                         </b>
-                        {tier.price < regular && (
+                        {tier.price < product.mrp && (
                             <>
-                                <span className="text-muted line-through opacity-75">{taka(regular)}</span>
+                                <span className="text-muted line-through opacity-75">{taka(product.mrp)}</span>
                                 <span className="rounded-full bg-eyebrow px-[7px] py-px text-[11px] font-bold whitespace-nowrap text-white">
-                                    {discountLabel(regular, tier.price, taka)}
+                                    {discountLabel(product.mrp, tier.price, taka)}
                                 </span>
                             </>
                         )}
                     </span>
                     {product.isAvailable && next !== null && (
                         <span className="text-[12px] leading-[1.45] text-(--cat-text)">
-                            {bn.bulkOrder.rowNext(toBanglaDigits(next.min - total), discountLabel(regular, next.price, taka), taka(next.price))}
+                            {bn.bulkOrder.rowNext(toBanglaDigits(next.min - total), discountLabel(product.mrp, next.price, taka) ?? '', taka(next.price))}
                         </span>
                     )}
                     {product.isAvailable && next === null && product.tiers.length > 1 && total > 0 && (

@@ -316,13 +316,13 @@ it('draws what the SSR process rendered when it answers', function () {
         ->assertDontSee('<div id="app"></div>', false);
 });
 
-it('shares every published Product\'s Tiers and availability, and the Delivery Bands, for the browser\'s Cart', function () {
+it('shares every published Product\'s MRP, Tiers and availability, and the Delivery Bands, for the browser\'s Cart', function () {
     app(DeliveryChargeSettings::class)->with(['deliveryBands' => [
         ['min' => 1, 'max' => 10, 'fee' => 15000],
         ['min' => 11, 'max' => null, 'fee' => 0],
     ]])->save();
 
-    $premium = Product::factory()->create(['tiers' => [
+    $premium = Product::factory()->create(['mrp' => 65000, 'tiers' => [
         ['min' => 1, 'max' => 5, 'price' => 62000],
         ['min' => 6, 'max' => null, 'price' => 58900],
     ]]);
@@ -338,11 +338,11 @@ it('shares every published Product\'s Tiers and availability, and the Delivery B
                     ['min' => 11, 'max' => null, 'fee' => 0],
                 ],
                 'products' => [
-                    ['id' => $premium->id, 'isAvailable' => true, 'tiers' => [
+                    ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'tiers' => [
                         ['min' => 1, 'max' => 5, 'price' => 62000],
                         ['min' => 6, 'max' => null, 'price' => 58900],
                     ]],
-                    ['id' => $unavailable->id, 'isAvailable' => false, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
+                    ['id' => $unavailable->id, 'isAvailable' => false, 'mrp' => 46000, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
                 ],
             ])
         );

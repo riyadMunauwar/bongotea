@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use App\Support\Money;
 use App\Support\Orders\Repricing;
 use App\Support\PhoneNumber;
@@ -227,6 +228,7 @@ class OrderForm
                                     ->searchable()
                                     ->distinct()
                                     ->live()
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
                                     ->columnSpan(2),
 
                                 TextInput::make('kilograms')
@@ -258,6 +260,7 @@ class OrderForm
                                     ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
                                     ->suffix('per kg')
                                     ->visible(fn (): bool => self::canOverridePrices())
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE)
                                     ->hintIcon(
                                         Heroicon::OutlinedQuestionMarkCircle,
@@ -347,6 +350,44 @@ class OrderForm
     private static function canOverridePrices(): bool
     {
         return auth()->user()?->can(Permission::OverridePrices) ?? false;
+    }
+
+    /**
+     * Refuses a row whose price set by hand would be above its tea's MRP,
+     * since nothing is sold above it. Raised on the override for a User who
+     * may set one, and on the Product for everyone else, who cannot see the
+     * override a dropped MRP has left above it. Only asked of a save that
+     * reprices: one that changes only the Order's details writes no price.
+     */
+    private static function overrideWithinMrp(Get $get, ?Order $record): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
+            $user = auth()->user();
+            $lines = $get('../../lines');
+            $isOverrideField = str_ends_with($attribute, '.override_price');
+
+            if (! $user instanceof User || $isOverrideField !== self::canOverridePrices()) {
+                return;
+            }
+
+            if ($record !== null && ! Repricing::changes($record, is_array($lines) ? $lines : [])) {
+                return;
+            }
+
+            $row = ['id' => $get('id'), 'product_id' => $get('product_id'), 'kilograms' => $get('kilograms')];
+
+            if ($isOverrideField) {
+                $row += ['override_price' => $value, 'override_reason' => $get('override_reason')];
+            }
+
+            $above = Repricing::overrideAboveMrp($record, $row, $user);
+
+            if ($above !== null) {
+                $fail($isOverrideField
+                    ? 'Above this tea\'s MRP of '.Money::format($above['mrp']).'; nothing is sold above it.'
+                    : 'Its price set by hand, '.Money::format($above['override']).', is above the MRP of '.Money::format($above['mrp']).'. Someone who may set prices must change it first.');
+            }
+        };
     }
 
     /**

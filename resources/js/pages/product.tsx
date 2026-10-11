@@ -1,10 +1,11 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { Picture } from '@/components/blocks/shared';
+import { discountLabel } from '@/components/cart/figures';
 import { OtherTeas } from '@/components/catalogue/other-teas';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
 import { themeStyle } from '@/components/catalogue/theme';
-import { lowestPrice, regularPrice, tierRange } from '@/components/catalogue/tier-ladder';
+import { firstTierPrice, lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
 import { bn } from '@/lang/bn';
 import { formatPhone, toBanglaDigits } from '@/lib/bangla';
 import { rowAnchor } from '@/lib/cart';
@@ -33,10 +34,10 @@ export default function ProductPage() {
 
     /** Product Viewed, once each time a Product's page is opened — not again as the page redraws. */
     useEffect(() => {
-        productViewed({ id: product.id, tiers: product.tiers });
+        productViewed({ id: product.id, mrp: product.mrp, tiers: product.tiers });
     }, [product.id]);
 
-    const regular = regularPrice(product.tiers);
+    const first = firstTierPrice(product.tiers);
     const lowest = lowestPrice(product.tiers);
 
     const characteristics = (
@@ -125,9 +126,16 @@ export default function ProductPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-[6px]">
                         <span className="text-[15px] text-muted">
                             <b className="text-[24px] font-bold text-primary-dark">
-                                {lowest < regular ? `${taka(lowest)}–${taka(regular)}` : taka(regular)}
+                                {lowest < first ? `${taka(lowest)}–${taka(first)}` : taka(first)}
                             </b>
                             {bn.blocks.perKilogram}
+                            {first < product.mrp && (
+                                <>
+                                    {' '}
+                                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s>{' '}
+                                    <span className="font-semibold text-primary">{discountLabel(product.mrp, first, taka)}</span>
+                                </>
+                            )}
                         </span>
                         {product.isAvailable ? (
                             <button
@@ -219,14 +227,14 @@ function Gallery({ product }: { product: ProductDetail }) {
 
 /**
  * The Product's own Tiers as a table: each range, its price, and what it
- * takes off the Regular Price, with a bar that grows as the saving does.
+ * takes off the MRP, with a bar that grows as the saving does. Not drawn for
+ * a flat price at the MRP, which has nothing to compare.
  */
 function PriceLadder({ product }: { product: ProductDetail }) {
     const taka = useTaka();
-    const regular = regularPrice(product.tiers);
-    const maxSaving = regular - lowestPrice(product.tiers);
+    const maxSaving = product.mrp - lowestPrice(product.tiers);
 
-    if (product.tiers.length < 2) {
+    if (product.tiers.length < 2 && maxSaving === 0) {
         return null;
     }
 
@@ -239,7 +247,7 @@ function PriceLadder({ product }: { product: ProductDetail }) {
             </div>
             <div className="flex flex-col overflow-hidden rounded-[14px] border border-border">
                 {product.tiers.map((tier, index) => {
-                    const saving = regular - tier.price;
+                    const saving = product.mrp - tier.price;
 
                     return (
                         <div key={tier.min} className={cn('grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-[6px] px-4 py-3 md:grid-cols-[160px_1fr_auto]', index > 0 && 'border-t border-divider')}>
@@ -248,7 +256,7 @@ function PriceLadder({ product }: { product: ProductDetail }) {
                                 <span className="h-[6px] flex-1 overflow-hidden rounded-full bg-divider">
                                     <span className="block h-full rounded-full bg-gold-accent" style={{ width: maxSaving > 0 ? `${(saving / maxSaving) * 100}%` : '0%' }} />
                                 </span>
-                                <span className="min-w-[110px] text-[13px] text-muted">{saving > 0 ? bn.catalogue.lessPerKilogram(taka(saving)) : bn.catalogue.regularPrice}</span>
+                                <span className="min-w-[110px] text-[13px] text-muted">{discountLabel(product.mrp, tier.price, taka) ?? bn.catalogue.mrp}</span>
                             </span>
                             <b className="text-right text-[17px] font-bold text-primary-dark">
                                 {taka(tier.price)}

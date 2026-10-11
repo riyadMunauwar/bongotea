@@ -10,9 +10,9 @@ return new class extends Migration
      * The catalogue: Categories, Brands, Tags and the Products sold under
      * them.
      *
-     * A Product's price is in minor units. A soft delete takes a Product out
-     * of the catalogue while its slug stays claimed — the unique index covers
-     * trashed rows — and every Order Line that sold it keeps its own
+     * A Product's price and MRP are in minor units. A soft delete takes a
+     * Product out of the catalogue while its slug stays claimed — the unique
+     * index covers trashed rows — and every Order Line that sold it keeps its own
      * snapshot. Categories and Brands are restricted rather than cascading:
      * neither can be removed from under a Product that names it.
      */
@@ -59,6 +59,7 @@ return new class extends Migration
             $table->text('short_description')->nullable();
             $table->longText('description')->nullable();
             $table->unsignedBigInteger('price');
+            $table->unsignedBigInteger('mrp');
             $table->unsignedTinyInteger('strength')->nullable();
             $table->string('liquor_colour')->nullable();
             $table->string('aroma')->nullable();

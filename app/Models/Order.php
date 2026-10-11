@@ -496,6 +496,16 @@ class Order extends Model
     }
 
     /**
+     * The Saving the Customer was shown: each line's MRP less what it charges,
+     * times its Kilograms, as both were stamped when it was priced — never
+     * today's MRP. A line stamped with no MRP saves nothing.
+     */
+    public function savingShown(): int
+    {
+        return (int) $this->lines->sum(fn (OrderLine $line): int => $line->mrp === null ? 0 : max(0, $line->mrp - $line->unit_price) * $line->quantity);
+    }
+
+    /**
      * Re-derive the subtotal and the total Kilograms from the lines.
      *
      * Always from the lines' *snapshotted* figures — never from a Product's

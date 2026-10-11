@@ -95,7 +95,7 @@ it('suggests up to five matches for the live dropdown', function () {
             'href' => '/tea/gold-leaf',
             'imageUrl' => null,
             'categoryName' => 'গোল্ড',
-            'regularPrice' => 55000,
+            'firstTierPrice' => 55000,
         ]);
 });
 

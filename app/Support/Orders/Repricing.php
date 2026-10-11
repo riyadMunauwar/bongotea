@@ -108,9 +108,54 @@ class Repricing
             return null;
         }
 
-        $cart = $this->price($requested, $products);
+        /**
+         * A row may hold a price set by hand above its tea's MRP — typed a
+         * moment ago, or carried onto another tea in the form — which the
+         * pricing module refuses. Nothing is shown for it until the save,
+         * which says why.
+         */
+        try {
+            $cart = $this->price($requested, $products);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
 
         return ['cart' => $cart, 'lines' => array_combine(array_keys($requested), $cart->lines)];
+    }
+
+    /**
+     * The override a form row would be written with, where it is above its
+     * tea's MRP — so the form can refuse it on the row before the pricing
+     * module does — or null where it is not. Settled exactly as `apply()`
+     * settles it, so an override a User without the Permission cannot see,
+     * kept from before the MRP dropped, is caught too.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{override: int, mrp: int}|null
+     */
+    public static function overrideAboveMrp(?Order $order, array $row, User $by): ?array
+    {
+        $line = RequestedLine::fromState($row);
+
+        if ($line === null) {
+            return null;
+        }
+
+        $kept = $line->id === null || $order === null ? null : $order->lines()->find($line->id);
+
+        try {
+            $settled = self::withSettledOverride($line, $kept, $by->can(Permission::OverridePrices));
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        $product = $settled->isOverridden() ? Product::withTrashed()->find($settled->productId) : null;
+
+        if ($product === null || $settled->overridePrice <= $product->mrp) {
+            return null;
+        }
+
+        return ['override' => $settled->overridePrice, 'mrp' => $product->mrp];
     }
 
     /**
@@ -210,7 +255,7 @@ class Repricing
             'product_id' => $line->productId,
             'product_name' => $sameProduct ? $kept->product_name : $product->name,
             'unit_price' => $priced->tierPrice,
-            'regular_price' => $priced->regularPrice,
+            'mrp' => $priced->mrp,
 
             /**
              * What the units cost is stamped once, when the line first sells

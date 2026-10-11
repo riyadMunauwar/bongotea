@@ -181,6 +181,14 @@ class OrderInfolist
                             ->weight('bold')
                             ->size(TextSize::Large)
                             ->formatStateUsing(fn (int $state): string => Money::format($state)),
+
+                        /** What the Customer was told they save against the MRP, so the call can repeat it. */
+                        TextEntry::make('saving')
+                            ->alignment(Alignment::End)
+                            ->color('success')
+                            ->state(fn (Order $record): int => $record->savingShown())
+                            ->visible(fn (Order $record): bool => $record->savingShown() > 0)
+                            ->formatStateUsing(fn (int $state): string => Money::format($state)),
                     ]),
             ]);
     }

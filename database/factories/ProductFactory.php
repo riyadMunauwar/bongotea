@@ -32,6 +32,9 @@ class ProductFactory extends Factory
 
             /** Minor units: 990.00 is stored as 99000. A flat Product's single Tier, written by the model. */
             'price' => fake()->numberBetween(10, 500) * 10000,
+
+            /** At the first Tier's price, so it saves nothing unless a test says otherwise. */
+            'mrp' => fn (array $attributes): int => $attributes['tiers'][0]['price'] ?? $attributes['price'],
             'status' => ProductStatus::Published,
             'is_available' => true,
         ];

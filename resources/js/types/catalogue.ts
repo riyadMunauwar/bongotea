@@ -41,7 +41,9 @@ export type ProductCard = {
     brand: { id: number; name: string };
     category: CategoryReference;
     tagIds: number[];
-    /** The Product's own Tiers, in order; the first's price is the Regular Price. */
+    /** What every discount shown is measured from; no Tier Price exceeds it. */
+    mrp: number;
+    /** The Product's own Tiers, in order; the first's price is the most it charges. */
     tiers: Tier[];
 };
 
@@ -64,7 +66,7 @@ export type CategoryDetail = CategoryReference & {
     about: string | null;
     whyPoints: string[];
     productCount: number;
-    /** From the cheapest last Tier to the dearest Regular Price; null with no Products. */
+    /** From the cheapest last Tier to the dearest first Tier; null with no Products. */
     priceRange: { low: number; high: number } | null;
 };
 
@@ -74,5 +76,5 @@ export type SearchSuggestion = {
     href: string;
     imageUrl: string | null;
     categoryName: string;
-    regularPrice: number;
+    firstTierPrice: number;
 };

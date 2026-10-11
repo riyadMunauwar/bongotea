@@ -2,7 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { currentStepRange, discountLabel, feeText } from '@/components/cart/figures';
 import { Stepper } from '@/components/cart/stepper';
-import { regularPrice, tierRange } from '@/components/catalogue/tier-ladder';
+import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
@@ -94,7 +94,6 @@ function ClearAll({ cart }: { cart: UseCart }) {
 function Row({ product, cart }: { product: ProductCard; cart: UseCart }) {
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
-    const regular = regularPrice(product.tiers);
     const price = tierFor(product, cart.priced.totalKilograms).price;
 
     return (
@@ -112,10 +111,10 @@ function Row({ product, cart }: { product: ProductCard; cart: UseCart }) {
                         {taka(price)}
                         {bn.blocks.perKilogram}
                     </b>
-                    {price < regular && (
+                    {price < product.mrp && (
                         <>
-                            <span className="text-muted line-through opacity-75">{taka(regular)}</span>
-                            <span className="rounded-full bg-eyebrow px-[7px] py-px text-[11px] font-bold text-white">{discountLabel(regular, price, taka)}</span>
+                            <span className="text-muted line-through opacity-75">{taka(product.mrp)}</span>
+                            <span className="rounded-full bg-eyebrow px-[7px] py-px text-[11px] font-bold text-white">{discountLabel(product.mrp, price, taka)}</span>
                         </>
                     )}
                 </span>
@@ -134,7 +133,7 @@ function Row({ product, cart }: { product: ProductCard; cart: UseCart }) {
                 <div className="col-span-full flex items-baseline justify-between gap-2 border-t border-dashed border-border pt-2 text-[13px] text-muted">
                     <span>
                         {bn.cart.kilogramsOf(toBanglaDigits(kilograms))} × {taka(price)}
-                        {price < regular && <span className="font-semibold text-primary"> · {bn.calculator.lineSaving(taka((regular - price) * kilograms))}</span>}
+                        {price < product.mrp && <span className="font-semibold text-primary"> · {bn.calculator.lineSaving(taka((product.mrp - price) * kilograms))}</span>}
                     </span>
                     <b className="text-[16px] font-bold text-ink">{taka(price * kilograms)}</b>
                 </div>
@@ -196,11 +195,11 @@ function Panel({ cart, products }: { cart: UseCart; products: ProductCard[] }) {
                 {priced.savings > 0 && (
                     <>
                         <div className="flex justify-between text-[14px] text-night-muted">
-                            <span>{bn.calculator.regularPrice}</span>
+                            <span>{bn.calculator.atMrp}</span>
                             <span className="line-through">{taka(priced.subtotal + priced.savings)}</span>
                         </div>
                         <div className="flex justify-between text-[14px] font-semibold text-gold-accent">
-                            <span>{bn.calculator.bulkDiscount}</span>
+                            <span>{bn.calculator.saving}</span>
                             <span>− {taka(priced.savings)}</span>
                         </div>
                     </>

@@ -51,6 +51,7 @@
         .lines .row > span:first-child { color: #16261D; }
         .number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
         .free { color: #2E6B45; }
+        .saving b { color: #2E6B45; }
         .paid { margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #EDF3EE; color: #1F4D31; font-size: 12px; font-weight: 600; }
         .total { align-items: baseline; padding-top: 10px; border-top: 1px solid #EEF1EE; }
         .total > span:first-child { color: #16261D; font-weight: 500; }
@@ -110,6 +111,9 @@
                 <span>{{ $payingOnDelivery ? 'মোট দাম (ক্যাশ অন ডেলিভারি)' : 'মোট দাম' }}</span>
                 <b>{{ Bangla::taka($order->total) }}</b>
             </p>
+            @if (($saving = $order->savingShown()) > 0)
+                <p class="row saving"><span>আপনার সাশ্রয়</span><b>{{ Bangla::taka($saving) }}</b></p>
+            @endif
             @if ($payingOnDelivery)
                 <p class="cod">চা হাতে পেয়ে টাকা দিন</p>
             @endif

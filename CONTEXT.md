@@ -54,9 +54,13 @@ _Avoid_: manufacturer, vendor, supplier, maker, label
 One of a Product's ranges of the cart's total Kilograms — across every Product in the cart — and the price that Product charges within it. Each Product has its own Tiers, covering every whole kilogram from one upwards without gap or overlap, so the same cart can fall in a different range for each Product: four kilograms of one tea and three of another are seven kilograms, and each tea charges whatever its own Tiers say for seven. It is always the whole cart's Kilograms that are measured, never one line's, because a buyer who mixes teas is buying in bulk. A Product may have a single Tier, which is a flat price, and no Tier may cost more per Kilogram than one before it, because a heavier cart is never charged more. There is no store-wide table of Tiers: a Product's ranges and its prices are set together, on the Product, and nowhere else. The Tiers owe nothing to the Delivery Bands.
 _Avoid_: slab, step, level, bracket, price break, quantity discount, default tiers
 
-**Regular Price**:
-What one Kilogram of a Product costs in its first Tier. It is the figure a Customer sees struck through once their cart has reached a cheaper Tier. There is no separate list price or MRP beside it.
-_Avoid_: MRP, base price, list price, compare-at price, original price
+**MRP**:
+A Product's maximum retail price for one Kilogram — the figure a shopkeeper knows from the pack — that every discount a Customer is shown is measured against. Every Product has one, and no Tier Price may exceed it; a first Tier priced at the MRP simply offers nothing off until a cheaper Tier is reached. It is not a price anything is charged at; the Tier Prices are. A discount is only ever read off the two — the MRP less a Tier Price — and never typed or kept, so moving the MRP changes what a Customer is told they save, never what they pay.
+_Avoid_: Regular Price, base price, list price, compare-at price, original price
+
+**Saving**:
+What a Customer is told they save: for each line, the MRP less the Tier Price in force, times its Kilograms, added up. Always measured from the MRP, so even a one-kilogram Cart has one when its first Tier sits below the MRP. Not the amount more Kilograms would knock off, which compares one Tier with the next.
+_Avoid_: discount total, bulk saving, you-save, markdown
 
 **Tier Price**:
 What one Kilogram of a Product costs in one of its Tiers, typed by the Merchant in whole taka — never worked out from a discount, because wholesale tea is quoted as a price per kilogram at a weight, not as money off. The Tier Price in force at Capture is what the Order Line records, so a price changed afterwards moves no Order.
@@ -73,11 +77,11 @@ A Customer's committed request for Products, captured from their Cart at an agre
 _Avoid_: purchase, transaction, sale, lead
 
 **Order Line**:
-One Product's worth of an Order, recording what was sold, at what unit price, in what quantity and at what unit cost, as agreed at Capture — and which of its Product's Tiers that price came from, as the range stood then, because the Product's ranges may move and "why did they pay that?" must still have an answer. A line under a Price Override records no Tier; its reason says why instead. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
+One Product's worth of an Order, recording what was sold, at what unit price, against what MRP, in what quantity and at what unit cost, as agreed at Capture — and which of its Product's Tiers that price came from, as the range stood then, because the Product's ranges may move and "why did they pay that?" must still have an answer. A line under a Price Override records no Tier; its reason says why instead. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
 _Avoid_: line item, order item, cart item
 
 **Capture**:
-The moment a visitor submits the Checkout, or a User saves a new Order taken by phone, and an Order comes into existence. What was agreed at Capture — the Products, their Tier Prices, and the totals — is fixed from then on, until a User changes what the Order holds.
+The moment a visitor submits the Checkout, or a User saves a new Order taken by phone, and an Order comes into existence. What was agreed at Capture — the Products, their Tier Prices and MRPs, the Saving, and the totals — is fixed from then on, until a User changes what the Order holds.
 _Avoid_: conversion, submission
 
 **Repricing**:
@@ -85,7 +89,7 @@ What happens when a User changes what an unsent Order holds — a quantity, a li
 _Avoid_: recalculation, update, edit, adjustment
 
 **Price Override**:
-A Tier Price a User sets by hand on one line of an Order — a deal agreed with a buyer — instead of the one the store works out. It needs a Permission of its own and a reason, and both the reason and who gave it stay on the record, because a price nobody can explain is a margin nobody can trust. A line overridden keeps its price through any later Repricing of the Order.
+A Tier Price a User sets by hand on one line of an Order — a deal agreed with a buyer — instead of the one the store works out. It needs a Permission of its own and a reason, and both the reason and who gave it stay on the record, because a price nobody can explain is a margin nobody can trust. A line overridden keeps its price through any later Repricing of the Order. It may never exceed the line's MRP, for the same reason no Tier Price may: nothing is sold above it, whoever sets the price.
 _Avoid_: discount, manual price, custom price, negotiated price
 
 **Cart**:
@@ -93,7 +97,7 @@ The Products and Kilograms a Customer is gathering before they order, kept by th
 _Avoid_: basket, bag, order (before Capture), quote
 
 **Quote**:
-The figures a Customer was shown when they placed an Order — each line's Tier Price, the Delivery Charge and the total — sent with it and checked at Capture against what the store works out itself. The store's own figures are the only ones that count; the Quote exists to be compared. One that disagrees — a price moved, or a Product no longer Available — is refused, never silently corrected, and the Customer shown the figures as they are now, because the total on their screen is the total the courier collects and a surprise at the door is a refused parcel.
+The figures a Customer was shown when they placed an Order — each line's Tier Price, the Delivery Charge and the total — sent with it and checked at Capture against what the store works out itself. The store's own figures are the only ones that count; the Quote exists to be compared. The MRP is no part of it: it moves nothing the Customer owes, so a Saving that shifted while they checked out is recorded as it stands at Capture rather than refused over. One that disagrees — a price moved, or a Product no longer Available — is refused, never silently corrected, and the Customer shown the figures as they are now, because the total on their screen is the total the courier collects and a surprise at the door is a refused parcel.
 _Avoid_: pricing fingerprint, hash, checksum, estimate, preview
 
 **Customer**:

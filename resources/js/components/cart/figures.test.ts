@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest';
+import { formatTaka } from '@/lib/bangla';
+import { discountLabel, discountPercent } from './figures';
+
+const taka = (minorUnits: number) => formatTaka(minorUnits / 100);
+
+describe('discountLabel', () => {
+    it('names what a Tier Price takes off the MRP, in taka and as a share of it', () => {
+        expect(discountLabel(50000, 42000, taka)).toBe('৳৮০ ছাড় (১৬%)');
+    });
+
+    it('rounds the share down, so it never claims more than is taken off', () => {
+        expect(discountLabel(48000, 40500, taka)).toBe('৳৭৫ ছাড় (১৫%)');
+    });
+
+    it('leaves the share out when it rounds down to nothing', () => {
+        expect(discountLabel(100000, 99900, taka)).toBe('৳১ ছাড়');
+    });
+
+    it('says nothing for a price at the MRP', () => {
+        expect(discountLabel(50000, 50000, taka)).toBeNull();
+    });
+});
+
+describe('discountPercent', () => {
+    it('is the share alone, rounded down, and nothing at the MRP', () => {
+        expect(discountPercent(48000, 40500)).toBe('১৫');
+        expect(discountPercent(50000, 50000)).toBeNull();
+    });
+});

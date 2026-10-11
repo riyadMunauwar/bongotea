@@ -41,9 +41,9 @@ function sortedByKey(array $value): array
     return array_map(fn (mixed $item): mixed => is_array($item) ? sortedByKey($item) : $item, $value);
 }
 
-function flatPrices(int $price): ProductPrices
+function flatPrices(int $price, ?int $mrp = null): ProductPrices
 {
-    return new ProductPrices(1, [new Tier(1, null, $price)]);
+    return new ProductPrices(1, $mrp ?? $price, [new Tier(1, null, $price)]);
 }
 
 it('prices every worked example as the shared file expects', function (array $example) {
@@ -56,6 +56,7 @@ it('prices every worked example as the shared file expects', function (array $ex
     foreach ($example['products'] as $product) {
         $products[$product['id']] = new ProductPrices(
             id: $product['id'],
+            mrp: $product['mrp'],
             tiers: array_map(fn (array $tier): Tier => new Tier($tier['min'], $tier['max'], $tier['price']), $product['tiers']),
         );
     }
@@ -77,3 +78,14 @@ it('refuses a negative quantity rather than pricing it', function () {
 it('refuses a Price Override below nothing', function () {
     (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500), 1, -1)]);
 })->throws(InvalidArgumentException::class);
+
+it('refuses a Price Override above the MRP, since nothing is sold above it', function () {
+    (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500, mrp: 550), 1, 551)]);
+})->throws(InvalidArgumentException::class);
+
+it('takes a Price Override at the MRP, which saves nothing', function () {
+    $priced = (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500, mrp: 550), 2, 550)]);
+
+    expect($priced->subtotal)->toBe(1100)
+        ->and($priced->savings)->toBe(0);
+});

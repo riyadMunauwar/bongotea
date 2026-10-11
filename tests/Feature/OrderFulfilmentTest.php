@@ -233,7 +233,7 @@ it('reprices at today\'s price when a quantity is corrected', function () {
      * The product is repriced between Capture and the call. Correcting a
      * quantity prices the whole Order again as if captured now (Repricing).
      */
-    $order->lines()->sole()->product->update(['price' => 129000]);
+    $order->lines()->sole()->product->update(['price' => 129000, 'mrp' => 129000]);
 
     editingLines($order, fn (array $line): array => [...$line, 'kilograms' => 3]);
 

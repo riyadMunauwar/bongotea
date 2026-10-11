@@ -24,6 +24,7 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
         'short_description' => 'গাঢ় লিকার, তীব্র ঘ্রাণ।',
         'description' => '<p>বাগানের <strong>কচি</strong> পাতা।</p><script>alert(1)</script>',
         'badge' => 'সবচেয়ে জনপ্রিয়',
+        'mrp' => 65000,
         'tiers' => [
             ['min' => 1, 'max' => 5, 'price' => 62000],
             ['min' => 6, 'max' => null, 'price' => 55800],
@@ -54,6 +55,7 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
             ->where('product.category.name', 'প্রিমিয়াম')
             ->where('product.category.href', '/category/premium')
             ->where('product.category.theme', CategoryTheme::Premium->tokens())
+            ->where('product.mrp', 65000)
             ->where('product.tiers', [
                 ['min' => 1, 'max' => 5, 'price' => 62000],
                 ['min' => 6, 'max' => null, 'price' => 55800],

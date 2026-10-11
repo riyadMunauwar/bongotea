@@ -14,12 +14,12 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  *
  * Every key is mapped by hand, so nothing stored reaches a page unread. A
  * characteristic the Merchant left blank goes as null (or an empty list), so
- * the component draws no empty box for it. Prices go as a Product's own
+ * the component draws no empty box for it. Prices go as a Product's MRP and own
  * Tiers in minor units, exactly as the pricing module reads them, so the
  * Cart's mirror of the arithmetic can price straight from a card.
  *
  * @phpstan-type ThemeTokens array{text: string, tint: string, panel: string, panelText: string, panelSubtext: string, accent: string, pillBackground: string, pillText: string, tickBackground: string, line: string}
- * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: ?int, isAvailable: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, tiers: list<array{min: int, max: ?int, price: int}>}
+ * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: ?int, isAvailable: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>}
  */
 class CatalogueProps
 {
@@ -40,6 +40,7 @@ class CatalogueProps
             'brand' => ['id' => $product->brand->id, 'name' => $product->brand->name],
             'category' => self::categoryReference($product->category),
             'tagIds' => $product->tags->pluck('id')->sort()->values()->all(),
+            'mrp' => $product->mrp,
             'tiers' => array_map(fn (Tier $tier): array => $tier->toArray(), $product->priceTiers()),
         ];
     }
@@ -54,16 +55,17 @@ class CatalogueProps
     }
 
     /**
-     * What the Cart prices a Product from: its own Tiers, and whether a buyer
+     * What the Cart prices a Product from: its MRP and own Tiers, and whether a buyer
      * can have it now.
      *
-     * @return array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}
+     * @return array{id: int, isAvailable: bool, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>}
      */
     public static function cartProduct(Product $product): array
     {
         return [
             'id' => $product->id,
             'isAvailable' => $product->is_available,
+            'mrp' => $product->mrp,
             'tiers' => array_map(fn (Tier $tier): array => $tier->toArray(), $product->priceTiers()),
         ];
     }
@@ -92,7 +94,7 @@ class CatalogueProps
     /**
      * A Product as one line of the header search's live dropdown.
      *
-     * @return array{name: string, href: string, imageUrl: ?string, categoryName: string, regularPrice: int}
+     * @return array{name: string, href: string, imageUrl: ?string, categoryName: string, firstTierPrice: int}
      */
     public static function suggestion(Product $product): array
     {
@@ -101,7 +103,7 @@ class CatalogueProps
             'href' => self::productPath($product),
             'imageUrl' => $product->coverUrl(),
             'categoryName' => $product->category->name,
-            'regularPrice' => self::regularPrice($product),
+            'firstTierPrice' => self::firstTierPrice($product),
         ];
     }
 
@@ -134,7 +136,7 @@ class CatalogueProps
     /**
      * A Category in full, with what its published Products add up to: how
      * many there are, and their prices from the cheapest last Tier to the
-     * dearest Regular Price.
+     * dearest first Tier.
      *
      * @param  Collection<int, Product>  $products
      * @return array<string, mixed>
@@ -164,12 +166,12 @@ class CatalogueProps
 
         return [
             'low' => $products->min(fn (Product $product): int => self::lastTierPrice($product)),
-            'high' => $products->max(fn (Product $product): int => self::regularPrice($product)),
+            'high' => $products->max(fn (Product $product): int => self::firstTierPrice($product)),
         ];
     }
 
     /** What a Kilogram of the Product costs in its first Tier. */
-    public static function regularPrice(Product $product): int
+    public static function firstTierPrice(Product $product): int
     {
         return $product->priceTiers()[0]->price;
     }

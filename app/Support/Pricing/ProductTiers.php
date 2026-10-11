@@ -50,6 +50,35 @@ class ProductTiers
     }
 
     /**
+     * What is wrong with the MRP beside the Tiers, as a Merchant should read
+     * it, or null when it can be saved: every Product has one, and no Tier
+     * Price exceeds it, because nothing is sold above it. The two only need
+     * to share a unit.
+     *
+     * @param  array<array-key, mixed>  $tiers
+     */
+    public static function mrpProblem(array $tiers, mixed $mrp): ?string
+    {
+        $mrp = filter_var($mrp, FILTER_VALIDATE_INT);
+
+        if ($mrp === false || $mrp < 1) {
+            return 'Give the Product an MRP above nothing.';
+        }
+
+        foreach (array_values($tiers) as $index => $tier) {
+            $price = filter_var(is_array($tier) ? ($tier['price'] ?? null) : null, FILTER_VALIDATE_INT);
+
+            if ($price !== false && $price > $mrp) {
+                $position = $index + 1;
+
+                return "The Tier in row {$position} costs more than the MRP; nothing is sold above it.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * A flat Product's one Tier: every weight at the same price.
      *
      * @return list<array{min: int, max: null, price: int}>

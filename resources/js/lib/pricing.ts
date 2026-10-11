@@ -28,6 +28,8 @@ export type PriceBook = {
 
 export type ProductPrices = {
     id: number;
+    /** What every Saving is measured from; no Tier Price exceeds it. */
+    mrp: number;
     /** In order, covering every whole kilogram from one without gap or overlap, never rising in price. */
     tiers: Tier[];
 };
@@ -42,7 +44,7 @@ export type CartLine = {
 export type PricedLine = {
     productId: number;
     kilograms: number;
-    regularPrice: number;
+    mrp: number;
     tierPrice: number;
     /** The range the price came from; null on an overridden line. */
     tier: KilogramRange | null;
@@ -83,7 +85,7 @@ function divide(dividend: number, divisor: number): number {
     return Math.floor(dividend / divisor);
 }
 
-/** The Product's Tier for the Cart's weight; an empty Cart sits in the first, so it shows the Regular Price. */
+/** The Product's Tier for the Cart's weight; an empty Cart sits in the first. */
 export function tierFor(product: ProductPrices, totalKilograms: number): Tier {
     if (totalKilograms === 0) {
         return product.tiers[0];
@@ -171,24 +173,27 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
         throw new Error('A Price Override cannot be below nothing.');
     }
 
+    if (lines.some((line) => (line.overridePrice ?? 0) > line.product.mrp)) {
+        throw new Error('A Price Override cannot be above its MRP.');
+    }
+
     const totalKilograms = lines.reduce((sum, line) => sum + line.kilograms, 0);
 
     let subtotal = 0;
-    let regularTotal = 0;
+    let mrpTotal = 0;
 
     const pricedLines = lines.map((line): PricedLine => {
         const overridePrice = line.overridePrice ?? null;
         const tier = overridePrice === null ? tierFor(line.product, totalKilograms) : null;
         const tierPrice = tier === null ? (overridePrice as number) : tier.price;
-        const regularPrice = line.product.tiers[0].price;
 
         subtotal += tierPrice * line.kilograms;
-        regularTotal += regularPrice * line.kilograms;
+        mrpTotal += line.product.mrp * line.kilograms;
 
         return {
             productId: line.product.id,
             kilograms: line.kilograms,
-            regularPrice,
+            mrp: line.product.mrp,
             tierPrice,
             tier: tier === null ? null : { min: tier.min, max: tier.max },
             overridden: tier === null,
@@ -203,7 +208,7 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
         lines: pricedLines,
         totalKilograms,
         subtotal,
-        savings: regularTotal - subtotal,
+        savings: mrpTotal - subtotal,
         deliveryCharge,
         deliveryBand: band,
         total: subtotal + deliveryCharge,

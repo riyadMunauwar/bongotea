@@ -16,7 +16,7 @@ final readonly class PricedCart
         public int $totalKilograms,
         public int $subtotal,
 
-        /** What the Regular Prices would have come to, less the subtotal. */
+        /** The Saving: what the MRPs would have come to, less the subtotal. */
         public int $savings,
         public int $deliveryCharge,
 

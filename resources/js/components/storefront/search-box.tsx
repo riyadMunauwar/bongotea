@@ -141,7 +141,7 @@ export function SearchBox({ compact = false, className }: { compact?: boolean; c
                                         <span className="text-[12px] text-muted">{suggestion.categoryName}</span>
                                     </span>
                                     <span className="text-[14px] font-bold whitespace-nowrap">
-                                        {taka(suggestion.regularPrice)}
+                                        {taka(suggestion.firstTierPrice)}
                                         {bn.blocks.perKilogram}
                                     </span>
                                 </Link>

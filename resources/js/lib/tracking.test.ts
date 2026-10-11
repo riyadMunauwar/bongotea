@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { priceCart, type Tier } from './pricing';
 import { beaconItems, cartMomentFor, momentSelection } from './tracking';
 
-const gold = { id: 12, tiers: [{ min: 1, max: 5, price: 55000 }, { min: 6, max: null, price: 43000 }] as Tier[] };
-const green = { id: 14, tiers: [{ min: 1, max: null, price: 40000 }] as Tier[] };
+const gold = { id: 12, mrp: 55000, tiers: [{ min: 1, max: 5, price: 55000 }, { min: 6, max: null, price: 43000 }] as Tier[] };
+const green = { id: 14, mrp: 40000, tiers: [{ min: 1, max: null, price: 40000 }] as Tier[] };
 const book = { deliveryBands: [{ min: 1, max: null, fee: 12000 }] };
 
 describe('cartMomentFor', () => {

@@ -55,12 +55,16 @@ final readonly class PriceBook
                 throw new InvalidArgumentException('A Price Override cannot be below nothing.');
             }
 
+            if ($line->overridePrice !== null && $line->overridePrice > $line->product->mrp) {
+                throw new InvalidArgumentException("A Price Override cannot be above Product {$line->product->id}'s MRP.");
+            }
+
             $totalKilograms += $line->kilograms;
         }
 
         $pricedLines = [];
         $subtotal = 0;
-        $regularTotal = 0;
+        $mrpTotal = 0;
 
         foreach ($lines as $line) {
             $tier = $line->overridePrice === null ? $line->product->tierFor($totalKilograms) : null;
@@ -69,7 +73,7 @@ final readonly class PriceBook
             $pricedLines[] = new PricedLine(
                 productId: $line->product->id,
                 kilograms: $line->kilograms,
-                regularPrice: $line->product->regularPrice(),
+                mrp: $line->product->mrp,
                 tierPrice: $tierPrice,
                 tier: $tier,
                 overridden: $tier === null,
@@ -77,7 +81,7 @@ final readonly class PriceBook
             );
 
             $subtotal += $tierPrice * $line->kilograms;
-            $regularTotal += $line->product->regularPrice() * $line->kilograms;
+            $mrpTotal += $line->product->mrp * $line->kilograms;
         }
 
         $band = $this->deliveryBandFor($totalKilograms);
@@ -87,7 +91,7 @@ final readonly class PriceBook
             lines: $pricedLines,
             totalKilograms: $totalKilograms,
             subtotal: $subtotal,
-            savings: $regularTotal - $subtotal,
+            savings: $mrpTotal - $subtotal,
             deliveryCharge: $deliveryCharge,
             deliveryBand: $band,
             total: $subtotal + $deliveryCharge,

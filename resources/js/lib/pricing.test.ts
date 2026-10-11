@@ -28,3 +28,16 @@ describe('the shared pricing examples', () => {
         });
     }
 });
+
+describe('a Price Override', () => {
+    const product: ProductPrices = { id: 1, mrp: 550, tiers: [{ min: 1, max: null, price: 500 }] };
+    const book: PriceBook = { deliveryBands: [{ min: 1, max: null, fee: 0 }] };
+
+    it('is refused above the MRP, since nothing is sold above it', () => {
+        expect(() => priceCart(book, [{ product, kilograms: 1, overridePrice: 551 }])).toThrow();
+    });
+
+    it('is taken at the MRP, and saves nothing', () => {
+        expect(priceCart(book, [{ product, kilograms: 2, overridePrice: 550 }]).savings).toBe(0);
+    });
+});

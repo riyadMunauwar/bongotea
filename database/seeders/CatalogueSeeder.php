@@ -25,7 +25,8 @@ use Illuminate\Support\Facades\DB;
  * The mockup priced each tea as a Regular Price less a discount at each of
  * six weights — a percentage for some teas, taka off for others. Tiers are
  * typed prices (ADR-0031), so that arithmetic is done once here, exactly as
- * the mockup rounded it, and only its results are stored.
+ * the mockup rounded it, and only its results are stored. The mockup's
+ * Regular Price becomes the MRP.
  */
 class CatalogueSeeder extends Seeder
 {
@@ -132,6 +133,7 @@ class CatalogueSeeder extends Seeder
                 ...(isset($product['not_best_for']) ? [] : self::PLAIN_DETAILS),
                 'category_id' => $categories[$product['category']]->id,
                 'brand_id' => $brand->id,
+                'mrp' => Money::toMinorUnits($product['regular']),
                 'tiers' => self::tiers($product['regular'], $product['off'], $product['steps']),
                 'status' => ProductStatus::Published,
                 'is_available' => true,

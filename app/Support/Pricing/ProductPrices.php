@@ -8,7 +8,8 @@ use LogicException;
 /**
  * What the pricing module needs to know about a Product, and nothing else:
  * its own Tiers, in order, the first starting at one and the last open-ended
- * (ADR-0031). The Regular Price is the first Tier's.
+ * (ADR-0031), and the MRP every Saving is measured from, which no Tier
+ * Price exceeds.
  */
 final readonly class ProductPrices
 {
@@ -17,20 +18,16 @@ final readonly class ProductPrices
      */
     public function __construct(
         public int|string $id,
+        public int $mrp,
         public array $tiers,
     ) {}
 
     public static function of(Product $product): self
     {
-        return new self($product->getKey(), $product->priceTiers());
+        return new self($product->getKey(), (int) $product->mrp, $product->priceTiers());
     }
 
-    public function regularPrice(): int
-    {
-        return $this->tiers[0]->price;
-    }
-
-    /** An empty Cart sits in the first Tier, so it shows the Regular Price. */
+    /** An empty Cart sits in the first Tier. */
     public function tierFor(int $totalKilograms): Tier
     {
         if ($totalKilograms === 0) {

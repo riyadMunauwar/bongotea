@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { Picture } from '@/components/blocks/shared';
+import { discountLabel } from '@/components/cart/figures';
 import { Stepper } from '@/components/cart/stepper';
 import { CartIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
@@ -10,13 +11,14 @@ import { useTaka } from '@/lib/use-taka';
 import type { ProductCard as ProductCardProps } from '@/types/catalogue';
 import { StrengthBar } from './strength-bar';
 import { themeStyle } from './theme';
-import { lowestPrice, regularPrice, TierLadder } from './tier-ladder';
+import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
 
 /**
  * A Product as every list draws it: picture and badge, its Category's pill,
- * its name and Brand, strength, Regular Price with the most a Tier takes off
- * it, and its own Tier ladder. An unavailable Product is drawn greyed and
- * says so, because a regular buyer looks for the tea they always buy.
+ * its name and Brand, strength, its first Tier's price beside the MRP struck
+ * through, the most a Tier takes off the MRP, and its own Tier ladder. An
+ * unavailable Product is drawn greyed and says so, because a regular buyer
+ * looks for the tea they always buy.
  *
  * Sized by whoever places it: a grid cell, or a slot in a sideways row.
  */
@@ -24,8 +26,9 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     const taka = useTaka();
     const cart = useCart();
     const kilograms = cart.kilogramsOf(product.id);
-    const regular = regularPrice(product.tiers);
-    const maxSaving = regular - lowestPrice(product.tiers);
+    const first = firstTierPrice(product.tiers);
+    const lowest = lowestPrice(product.tiers);
+    const maxSaving = lowest < first ? product.mrp - lowest : 0;
 
     return (
         <article
@@ -80,9 +83,15 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
 
                 <span className="mt-[2px] flex flex-wrap items-baseline gap-[6px] md:mt-1">
                     <b className="text-[17px] font-extrabold text-ink md:text-[24px]">
-                        {taka(regular)}
+                        {taka(first)}
                         {bn.blocks.perKilogram}
                     </b>
+                    {first < product.mrp && (
+                        <>
+                            <s className="text-[12px] text-muted md:text-[14px]">{taka(product.mrp)}</s>
+                            <span className="text-[11px] font-semibold text-primary md:text-[13px]">{discountLabel(product.mrp, first, taka)}</span>
+                        </>
+                    )}
                     {maxSaving > 0 && (
                         <span className="rounded-[5px] bg-offer-tint px-[6px] py-px text-[10px] font-bold text-cart-badge md:rounded-[6px] md:px-2 md:py-[2px] md:text-[12px]">
                             <span className="md:hidden">{bn.catalogue.upToOffShort(taka(maxSaving))}</span>
@@ -93,7 +102,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
 
                 {product.tiers.length > 1 && (
                     <div className="mt-1 md:mt-[6px]">
-                        <TierLadder tiers={product.tiers} cartKilograms={cart.priced.totalKilograms} />
+                        <TierLadder mrp={product.mrp} tiers={product.tiers} cartKilograms={cart.priced.totalKilograms} />
                     </div>
                 )}
 

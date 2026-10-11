@@ -211,7 +211,7 @@ it('counts the stamped part of a half-costed Product and says the rest is unknow
 });
 
 it('reads a giveaway that cost something as a loss with no rate, never as breaking even', function () {
-    $sample = Product::factory()->create(['name' => 'Sample sachet', 'price' => 0]);
+    $sample = Product::factory()->create(['name' => 'Sample sachet', 'price' => 0, 'mrp' => 5000]);
 
     soldAtCost(orderCapturedAt('2026-09-05 12:00', subtotal: 0, attributes: ['delivery_charge' => 0]), $sample, 5, 2000);
 

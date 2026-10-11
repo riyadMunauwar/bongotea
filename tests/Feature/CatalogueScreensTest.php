@@ -223,6 +223,7 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
             'is_available' => false,
             'seo_title' => 'Premium tea',
         ])
+        ->set('data.mrp', '650')
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '620']])
         ->call('create')
         ->assertHasNoFormErrors();
@@ -242,7 +243,7 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ->and($product->seo_title)->toBe('Premium tea');
 });
 
-it('publishes a Product with nothing but its name, slug, Category, Brand and one Tier', function () {
+it('publishes a Product with nothing but its name, slug, Category, Brand, MRP and one Tier', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Bare',
@@ -250,6 +251,7 @@ it('publishes a Product with nothing but its name, slug, Category, Brand and one
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
             'status' => ProductStatus::Published->value,
+            'mrp' => '500',
         ])
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '500']])
         ->call('create')
@@ -264,13 +266,14 @@ it('publishes a Product with nothing but its name, slug, Category, Brand and one
 |--------------------------------------------------------------------------
 */
 
-it('stores each Tier with its price in minor units, and the first Tier\'s price as the Regular Price', function () {
+it('stores the MRP and each Tier with its price in minor units', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Premium',
             'slug' => 'premium',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
+            'mrp' => '700',
         ])
         ->set('data.tiers', [
             ['min' => '1', 'max' => '3', 'price' => '620'],
@@ -287,9 +290,60 @@ it('stores each Tier with its price in minor units, and the first Tier\'s price 
         ['min' => 4, 'max' => 20, 'price' => 58900],
         ['min' => 21, 'max' => null, 'price' => 58900],
     ])
-        ->and($product->price)->toBe(62000)
+        ->and($product->mrp)->toBe(70000)
+        ->and(ProductPrices::of($product)->mrp)->toBe(70000)
         ->and(ProductPrices::of($product)->tierFor(7)->price)->toBe(58900);
 });
+
+it('opens a Product\'s MRP in whole taka again', function () {
+    $product = Product::factory()->create(['mrp' => 70000, 'price' => 65000]);
+
+    expect(Livewire::test(EditProduct::class, ['record' => $product->getKey()])->get('data.mrp'))->toEqual(700);
+});
+
+it('requires an MRP on every Product', function () {
+    Livewire::test(CreateProduct::class)
+        ->fillForm([
+            'name' => 'No MRP',
+            'slug' => 'no-mrp',
+            'category_id' => $this->category->getKey(),
+            'brand_id' => $this->brand->getKey(),
+        ])
+        ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '500']])
+        ->call('create')
+        ->assertHasFormErrors(['mrp' => 'required']);
+});
+
+it('refuses an MRP below a Tier Price, and takes one equal to the first Tier\'s', function (string $mrp, bool $refused) {
+    $component = Livewire::test(CreateProduct::class)
+        ->fillForm([
+            'name' => 'Above MRP',
+            'slug' => 'above-mrp',
+            'category_id' => $this->category->getKey(),
+            'brand_id' => $this->brand->getKey(),
+            'mrp' => $mrp,
+        ])
+        ->set('data.tiers', [
+            ['min' => '1', 'max' => '5', 'price' => '500'],
+            ['min' => '6', 'max' => '', 'price' => '480'],
+        ])
+        ->call('create');
+
+    $refused ? $component->assertHasFormErrors(['mrp']) : $component->assertHasNoFormErrors();
+
+    expect(Product::query()->where('slug', 'above-mrp')->exists())->toBe(! $refused);
+})->with([
+    'below the first Tier' => ['499', true],
+    'at the first Tier' => ['500', false],
+]);
+
+it('refuses a Product saved from anywhere without an MRP, or with a Tier Price above it', function (array $attributes) {
+    Product::factory()->create($attributes);
+})->with([
+    'no MRP' => [['mrp' => null]],
+    'an MRP of nothing' => [['mrp' => 0, 'price' => 0]],
+    'a Tier above it' => [['mrp' => 49900, 'tiers' => [['min' => 1, 'max' => 5, 'price' => 50000], ['min' => 6, 'max' => null, 'price' => 48000]]]],
+])->throws(LogicException::class);
 
 it('opens a new Product on one open-ended Tier, which is a flat price', function () {
     $tiers = Livewire::test(CreateProduct::class)->get('data.tiers');
@@ -330,6 +384,7 @@ it('refuses Tiers with a gap, a closed last range, or a heavier Tier dearer than
             'slug' => 'refused',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
+            'mrp' => '600',
         ])
         ->set('data.tiers', $tiers)
         ->call('create')
@@ -349,8 +404,8 @@ it('refuses a Product saved from anywhere with Tiers that do not cover every kil
     'a rise' => [[['min' => 1, 'max' => 5, 'price' => 500], ['min' => 6, 'max' => null, 'price' => 520]]],
 ])->throws(LogicException::class);
 
-it('keeps the Regular Price the first Tier\'s, and refuses a price set over Tiers it would contradict', function () {
-    $flat = Product::factory()->create(['price' => 50000]);
+it('keeps price the first Tier\'s, and refuses a price set over Tiers it would contradict', function () {
+    $flat = Product::factory()->create(['price' => 50000, 'mrp' => 60000]);
 
     expect($flat->tiers)->toBe([['min' => 1, 'max' => null, 'price' => 50000]]);
 

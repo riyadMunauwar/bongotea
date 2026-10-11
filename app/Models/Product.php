@@ -33,12 +33,13 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * `tiers` are the Product's own Tiers (ADR-0031): `{min, max|null, price}`
  * in minor units, covering every kilogram from one once and never rising in
  * price, refused on save otherwise because the pricing module assumes it.
- * `price` is the Regular Price — the first Tier's — kept beside them because
- * Capture, tracking and reports read it; the model writes one from the other.
+ * `price` is the first Tier's, kept beside them because tracking and reports
+ * read it; the model writes one from the other. `mrp` is what every Saving
+ * is measured from, required, and no Tier Price may exceed it.
  * What a Kilogram costs in a Cart is only ever worked out by `PriceBook`.
  */
 #[Fillable([
-    'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price',
+    'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
     'tiers', 'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
     'brewing_guide', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
     'seo_title', 'seo_description', 'seo_image',
@@ -72,6 +73,7 @@ class Product extends Model implements HasMedia
     {
         return [
             'price' => 'integer',
+            'mrp' => 'integer',
             'tiers' => 'array',
             'strength' => 'integer',
             'best_for' => 'array',
@@ -99,7 +101,8 @@ class Product extends Model implements HasMedia
                 $product->first_published_at = now();
             }
 
-            $product->settleRegularPrice();
+            $product->settlePrice();
+            $product->guardMrp();
         });
     }
 
@@ -108,7 +111,7 @@ class Product extends Model implements HasMedia
      * given alone is a flat Product's single Tier, and is refused over a
      * ladder of Tiers it would silently flatten.
      */
-    private function settleRegularPrice(): void
+    private function settlePrice(): void
     {
         $tiers = $this->tiers;
 
@@ -132,6 +135,19 @@ class Product extends Model implements HasMedia
             }
 
             $this->tiers = ProductTiers::flat((int) $this->price);
+        }
+    }
+
+    /**
+     * Refuses a Product with no MRP, or with a Tier Price above it, because
+     * every Saving is measured from it and nothing is sold above it.
+     */
+    private function guardMrp(): void
+    {
+        $problem = ProductTiers::mrpProblem($this->tiers, $this->mrp);
+
+        if ($problem !== null) {
+            throw new LogicException("Product {$this->getKey()} cannot be saved: {$problem}");
         }
     }
 

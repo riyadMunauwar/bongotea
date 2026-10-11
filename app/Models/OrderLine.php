@@ -24,9 +24,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * this sale earned. Null is unknown rather than free — a Product nothing has
  * been recorded buying stamps none.
  *
- * `regular_price` is the Product's first Tier's price as it stood when the
- * line was priced, so what the Tier saved the buyer is still on the record
- * after the Product's Tiers move. Null on lines priced before it was kept.
+ * `mrp` is the Product's MRP as it stood when the line was priced, so the
+ * Saving the buyer was shown is still on the record after the MRP moves.
  *
  * `tier_min`/`tier_max` name which of its Product's Tiers the price came
  * from, as the range stood when it was priced (ADR-0031). A line under a Price
@@ -34,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * say why and who instead, and its `unit_price` is kept through any Repricing.
  */
 #[ObservedBy(OrderLineObserver::class)]
-#[Fillable(['product_id', 'product_name', 'unit_price', 'regular_price', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
+#[Fillable(['product_id', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
 class OrderLine extends Model
 {
     /** @use HasFactory<OrderLineFactory> */
@@ -44,7 +43,7 @@ class OrderLine extends Model
     {
         return [
             'unit_price' => 'integer',
-            'regular_price' => 'integer',
+            'mrp' => 'integer',
             'unit_cost' => 'integer',
             'quantity' => 'integer',
             'line_total' => 'integer',

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cartLines, clampKilograms, EMPTY_CART, onlyOrderable, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
-const product = (id: number, isAvailable = true, tiers: Tier[] = [{ min: 1, max: null, price: 50000 }]): CartProduct => ({ id, isAvailable, tiers });
+const product = (id: number, isAvailable = true, tiers: Tier[] = [{ min: 1, max: null, price: 50000 }]): CartProduct => ({ id, isAvailable, mrp: tiers[0].price, tiers });
 
 describe('clampKilograms', () => {
     it('keeps whole Kilograms from nought to 999', () => {

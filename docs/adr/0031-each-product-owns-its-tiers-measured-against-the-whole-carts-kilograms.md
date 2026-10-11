@@ -1,5 +1,9 @@
 # Each Product owns its Tiers, measured against the whole Cart's Kilograms
 
+> The **Regular Price** below is retired. Every Product now carries an **MRP** of its own, which no
+> Tier Price may exceed; what shows struck through, every discount and the Saving are measured
+> from it, and it is what the Order Line stamps (see `CONTEXT.md`). Typed Tier Prices stand.
+
 Supersedes the Tier half of ADR-0028. The Delivery Bands, the one pricing module, its TypeScript
 mirror and the shared worked examples carry over unchanged.
 
