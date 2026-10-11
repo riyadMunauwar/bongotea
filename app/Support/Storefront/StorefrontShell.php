@@ -8,7 +8,7 @@ use App\Models\Product;
 use App\Support\PhoneNumber;
 use App\Support\Pricing\DeliveryBand;
 use App\Support\Pricing\PriceBook;
-use App\Support\Settings\AnnouncementSettings;
+use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\MenuSettings;
 use App\Support\Settings\StoreSettings;
 
@@ -53,7 +53,7 @@ class StorefrontShell
 
     public function __construct(
         private StoreSettings $store,
-        private AnnouncementSettings $announcement,
+        private HeaderSettings $header,
         private MenuSettings $menus,
         private Catalogue $catalogue,
     ) {}
@@ -80,13 +80,13 @@ class StorefrontShell
      */
     public function announcement(): ?array
     {
-        if (! $this->announcement->isShown()) {
+        if (! $this->header->isAnnouncementShown()) {
             return null;
         }
 
         return [
-            'pill' => filled($this->announcement->pill) ? $this->announcement->pill : null,
-            'message' => $this->announcement->message,
+            'pill' => filled($this->header->announcementPill) ? $this->header->announcementPill : null,
+            'message' => $this->header->announcementMessage,
         ];
     }
 
@@ -95,7 +95,7 @@ class StorefrontShell
      */
     public function menus(string $host): array
     {
-        $menus = new StorefrontMenus($this->menus, $host);
+        $menus = new StorefrontMenus($this->menus, $this->header, $host);
 
         return [
             'header' => $menus->header(),

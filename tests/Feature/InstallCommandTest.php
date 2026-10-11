@@ -4,11 +4,12 @@ use App\Enums\CategoryTheme;
 use App\Enums\SystemPage;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Menu;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Tag;
-use App\Support\Settings\AnnouncementSettings;
+use App\Support\Settings\HeaderSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -85,26 +86,29 @@ it('stocks the mockup catalogue: three themed Categories, its Tags, and eighteen
 });
 
 /**
- * Store, Announcement and the Delivery Bands already default to the mockup,
- * so only the Menus are written: they are what can now name the installed
- * Pages rather than typed addresses.
+ * Store, the announcement and the Delivery Bands already default to the
+ * mockup, so only the footer links and the header's Menu are written: they
+ * are what can now name the installed Pages rather than typed addresses. The
+ * header's row holds the Menu alone, so the announcement keeps its defaults.
  */
-it('opens on the mockup Settings, with the Menus pointing at the installed Pages', function () {
+it('opens on the mockup header Menu and footer, pointing at the installed Pages', function () {
     $this->artisan('bongotea:install')->assertSuccessful();
 
-    expect(Setting::query()->pluck('key')->all())->toBe(['menus']);
+    $header = Menu::query()->sole();
 
-    $pricing = Page::query()->where('slug', 'pricing')->sole();
-
-    expect(Setting::query()->find('menus')->value['header'][2])->toMatchArray(['label' => 'দাম হিসাব', 'type' => 'page', 'page_id' => $pricing->id]);
+    expect(Setting::query()->orderBy('key')->pluck('key')->all())->toBe(['header', 'menus'])
+        ->and(Setting::query()->find('header')->value)->toBe(['menuId' => $header->id])
+        ->and($header->items()->whereNull('parent_id')->pluck('type')->map->value->all())->toBe(['page', 'heading', 'page', 'heading', 'page']);
 
     $this->get('/')->assertInertia(fn (Assert $page) => $page
         ->where('store.name', 'Bongotea')
         ->where('announcement.message', '৫১+ কেজিতে প্রতিটি চায়ে সর্বোচ্চ ছাড়')
+        ->where('menus.header.1.href', null)
         ->where('menus.header.1.children.0.href', '/#category-premium')
         ->where('menus.header.2.href', '/pricing')
         ->where('menus.header.3.children.3.href', '/my-orders')
         ->where('menus.header.4.href', '/contact')
+        ->where('menus.footer.columns.1.links.0.href', '/about')
     );
 });
 
@@ -123,7 +127,7 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
     Product::query()->where('name', 'বঙ্গোটি সেভার')->sole()->delete();
 
     Category::query()->where('slug', 'gold')->sole()->update(['theme_key' => CategoryTheme::Garden->value]);
-    app(AnnouncementSettings::class)->with(['enabled' => false, 'message' => 'ঈদ মোবারক'])->save();
+    app(HeaderSettings::class)->with(['announcementEnabled' => false, 'announcementMessage' => 'ঈদ মোবারক'])->save();
 
     $this->artisan('bongotea:install')->assertSuccessful();
 
@@ -139,5 +143,6 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
         ->and(Category::query()->where('slug', 'gold')->sole()->theme_key)->toBe(CategoryTheme::Garden->value)
         ->and(Tag::query()->pluck('slug')->all())->toBe(['milk', 'plain', 'strong'])
         ->and(Brand::query()->count())->toBe(1)
-        ->and(Setting::query()->find('announcement')->value)->toMatchArray(['enabled' => false, 'message' => 'ঈদ মোবারক']);
+        ->and(Setting::query()->find('header')->value)->toMatchArray(['announcementEnabled' => false, 'announcementMessage' => 'ঈদ মোবারক'])
+        ->and(Menu::query()->count())->toBe(1);
 });

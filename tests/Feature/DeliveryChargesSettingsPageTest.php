@@ -18,8 +18,8 @@ beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
-it('sits after Menus in the Settings cluster, and is forbidden to a User who cannot manage settings', function () {
-    expect(DeliveryCharges::getNavigationSort())->toBe(4);
+it('sits after the footer links in the Settings cluster, and is forbidden to a User who cannot manage settings', function () {
+    expect(DeliveryCharges::getNavigationSort())->toBe(3);
 
     $this->get(DeliveryCharges::getUrl())->assertOk()->assertSeeLivewire(DeliveryCharges::class);
 

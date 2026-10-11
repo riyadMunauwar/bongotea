@@ -14,7 +14,8 @@ type MobileMenuProps = {
 
 /**
  * The drawer that opens under the compact header: every Menu entry at full
- * width, a Dropdown unfolding its children beneath it, then My Orders and
+ * width, one with children unfolding them beneath it (and a third level
+ * unfolding again, as an accordion), then My Orders and
  * the number to order by phone.
  */
 export function MobileMenu({ items, store, myOrdersHref }: MobileMenuProps) {
@@ -44,16 +45,15 @@ export function MobileMenu({ items, store, myOrdersHref }: MobileMenuProps) {
                                 </button>
                                 {isOpen && (
                                     <div className="mx-0 mt-0 mb-3 ml-[2px] flex flex-col border-l-2 border-drawer-rule pb-[10px] pl-[14px]">
-                                        {item.children.map((child, childIndex) => (
-                                            <MenuAnchor
-                                                key={childIndex}
-                                                href={child.href}
-                                                external={child.external}
-                                                className="min-h-[22px] py-[11px] text-[16px] text-drawer-text no-underline hover:text-drawer-text"
-                                            >
-                                                {child.label}
-                                            </MenuAnchor>
-                                        ))}
+                                        {(item.href ? [{ ...item, children: [] }, ...item.children] : item.children).map((child, childIndex) =>
+                                            child.children.length === 0 ? (
+                                                <MenuAnchor key={childIndex} href={child.href ?? '/'} external={child.external} className={DRAWER_CHILD}>
+                                                    {child.label}
+                                                </MenuAnchor>
+                                            ) : (
+                                                <DrawerBranch key={childIndex} item={child} />
+                                            ),
+                                        )}
                                     </div>
                                 )}
                             </>
@@ -69,6 +69,44 @@ export function MobileMenu({ items, store, myOrdersHref }: MobileMenuProps) {
                 <a href={store.hotline.href} className="mt-4 text-[15px] text-muted no-underline hover:text-muted">
                     {bn.drawer.phoneOrder} {formatPhone(store.hotline.number)}
                 </a>
+            )}
+        </div>
+    );
+}
+
+const DRAWER_CHILD = 'min-h-[22px] py-[11px] text-[16px] text-drawer-text no-underline hover:text-drawer-text';
+
+/**
+ * A second-level link holding a third level: a row that unfolds its links
+ * beneath it, the link itself first when it leads somewhere.
+ */
+function DrawerBranch({ item }: { item: HeaderItem }) {
+    const [isOpen, setOpen] = useState(false);
+
+    return (
+        <div className="flex flex-col">
+            <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => setOpen(!isOpen)}
+                className={cn(DRAWER_CHILD, 'flex cursor-pointer items-center justify-between border-0 bg-transparent px-0 text-left')}
+            >
+                {item.label}
+                <ChevronDownIcon size={16} strokeWidth={2} className={cn('transition-transform duration-200', isOpen && 'rotate-180')} />
+            </button>
+            {isOpen && (
+                <div className="mb-2 ml-[2px] flex flex-col border-l-2 border-drawer-rule pl-[14px]">
+                    {item.href && (
+                        <MenuAnchor href={item.href} external={item.external} className={DRAWER_CHILD}>
+                            {item.label}
+                        </MenuAnchor>
+                    )}
+                    {item.children.map((child, index) => (
+                        <MenuAnchor key={index} href={child.href ?? '/'} external={child.external} className={DRAWER_CHILD}>
+                            {child.label}
+                        </MenuAnchor>
+                    ))}
+                </div>
             )}
         </div>
     );

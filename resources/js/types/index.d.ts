@@ -13,11 +13,16 @@ export type MenuLink = {
     note: string | null;
 };
 
+/**
+ * One link of the header Menu, up to three levels deep: the bar, its
+ * dropdown and a flyout. A Heading has no `href` and only opens its children.
+ */
 export type HeaderItem = {
     label: string;
     href: string | null;
     external: boolean;
-    children: MenuLink[];
+    note: string | null;
+    children: HeaderItem[];
 };
 
 export type FooterColumn = {

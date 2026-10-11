@@ -5,8 +5,10 @@ namespace Database\Seeders;
 use App\Enums\MenuLinkType;
 use App\Enums\PageStatus;
 use App\Enums\SystemPage;
+use App\Models\Menu;
 use App\Models\Page;
 use App\Models\Setting;
+use App\Support\Menus\MenuTree;
 use App\Support\Pages\Blocks\BulkOrderForm;
 use App\Support\Pages\Blocks\CallToActionBand;
 use App\Support\Pages\Blocks\CategoryPanels;
@@ -28,6 +30,7 @@ use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\ValueCards;
 use App\Support\Pages\Blocks\VideoReviews;
 use App\Support\Pages\PageBlock;
+use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\MenuSettings;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -42,12 +45,14 @@ use Illuminate\Support\Facades\DB;
  * found by its role, and the starter Pages and Menus are created together,
  * once, on a store that has none of its own.
  *
- * The Menus are saved here rather than left to `MenuSettings`' defaults
- * because only now are there Pages to point at: an entry that names a Page
- * follows it through a renamed slug, where a typed address would not. The
- * Store, Announcement and Delivery Band Settings are not written: their
- * defaults already are the mockup's, and a row would freeze today's
- * defaults over any later change to them (`.ai/rules/settings.md`).
+ * The header Menu is built here (ADR-0033) and the footer links saved rather
+ * than left to `MenuSettings`' defaults, because only now are there Pages to
+ * point at: a link that names a Page follows it through a renamed slug, where
+ * a typed address would not. The Store and Delivery Band Settings are not
+ * written, and the header's row holds only the Menu it is assigned: their
+ * defaults (the announcement among them) already are the mockup's, and a
+ * row would freeze today's defaults over any later change to them
+ * (`.ai/rules/settings.md`).
  */
 class StorefrontSeeder extends Seeder
 {
@@ -89,7 +94,15 @@ class StorefrontSeeder extends Seeder
                 'contact' => self::page('যোগাযোগ', 'contact', self::contactBlocks()),
             ];
 
-            $menus = (new MenuSettings)->with(self::menus(array_map(fn (Page $page): int => $page->id, $pages)));
+            $pageIds = array_map(fn (Page $page): int => $page->id, $pages);
+
+            $header = Menu::query()->create(['name' => 'Main menu']);
+            MenuTree::save($header, self::headerMenu($pageIds));
+
+            $headerRow = Setting::query()->find(HeaderSettings::key());
+            Setting::query()->updateOrCreate(['key' => HeaderSettings::key()], ['value' => [...($headerRow->value ?? []), 'menuId' => $header->id]]);
+
+            $menus = (new MenuSettings)->with(self::footer($pageIds));
 
             Setting::query()->create(['key' => MenuSettings::key(), 'value' => $menus->toArray()]);
         });
@@ -117,6 +130,7 @@ class StorefrontSeeder extends Seeder
     private static function hasStarterContent(): bool
     {
         return Page::query()->whereNull('system_role')->exists()
+            || Menu::query()->exists()
             || Setting::query()->whereKey(MenuSettings::key())->exists();
     }
 
@@ -334,33 +348,50 @@ class StorefrontSeeder extends Seeder
     }
 
     /**
-     * The mockup's Menus, every entry for an installed Page naming that Page.
+     * The mockup's header as a Menu tree in the shape `MenuTree::save()`
+     * takes: its dropdowns become Headings, and every link to an installed
+     * Page names that Page.
+     *
+     * @param  array<string, int>  $pageIds
+     * @return list<array<string, mixed>>
+     */
+    private static function headerMenu(array $pageIds): array
+    {
+        $page = fn (string $label, string $key, ?string $note = null): array => ['label' => $label, 'type' => MenuLinkType::Page->value, 'target_id' => $pageIds[$key], 'note' => $note];
+        $home = fn (string $label, string $anchor, ?string $note = null): array => ['label' => $label, 'type' => MenuLinkType::Anchor->value, 'target_id' => $pageIds['home'], 'anchor' => $anchor, 'note' => $note];
+        $heading = fn (string $label, array $children): array => ['label' => $label, 'type' => MenuLinkType::Heading->value, 'children' => $children];
+
+        return [
+            $page('হোম', 'home'),
+            $heading('আমাদের চা', [
+                $home('প্রিমিয়াম', 'category-premium', 'সেরা বাছাই পাতা'),
+                $home('গোল্ড', 'category-gold', 'মান ও দামের ভারসাম্য'),
+                $home('সিলভার', 'category-silver', 'সাশ্রয়ী দৈনিক চা'),
+            ]),
+            $page('দাম হিসাব', 'pricing'),
+            $heading('কীভাবে অর্ডার করবেন', [
+                $home('অর্ডারের ধাপ', 'how', '৩ ধাপে সহজ অর্ডার'),
+                $page('দাম ও বাল্ক ছাড়', 'pricing', 'বেশি নিলে কেজিপ্রতি দাম কম'),
+                $page('বাল্ক অর্ডার করুন', 'bulk_order'),
+                $page('আমার অর্ডার ও ডেলিভারি', 'my_orders'),
+            ]),
+            $page('যোগাযোগ', 'contact'),
+        ];
+    }
+
+    /**
+     * The mockup's footer links, every entry for an installed Page naming
+     * that Page.
      *
      * @param  array<string, int>  $pageIds
      * @return array<string, mixed>
      */
-    private static function menus(array $pageIds): array
+    private static function footer(array $pageIds): array
     {
         $page = fn (string $label, string $key, ?string $note = null): array => self::entry($label, MenuLinkType::Page, ['page_id' => $pageIds[$key], 'note' => $note]);
         $home = fn (string $label, string $anchor, ?string $note = null): array => self::entry($label, MenuLinkType::Anchor, ['page_id' => $pageIds['home'], 'anchor' => $anchor, 'note' => $note]);
 
         return [
-            'header' => [
-                $page('হোম', 'home'),
-                self::entry('আমাদের চা', MenuLinkType::Dropdown, ['children' => [
-                    $home('প্রিমিয়াম', 'category-premium', 'সেরা বাছাই পাতা'),
-                    $home('গোল্ড', 'category-gold', 'মান ও দামের ভারসাম্য'),
-                    $home('সিলভার', 'category-silver', 'সাশ্রয়ী দৈনিক চা'),
-                ]]),
-                $page('দাম হিসাব', 'pricing'),
-                self::entry('কীভাবে অর্ডার করবেন', MenuLinkType::Dropdown, ['children' => [
-                    $home('অর্ডারের ধাপ', 'how', '৩ ধাপে সহজ অর্ডার'),
-                    $page('দাম ও বাল্ক ছাড়', 'pricing', 'বেশি নিলে কেজিপ্রতি দাম কম'),
-                    $page('বাল্ক অর্ডার করুন', 'bulk_order'),
-                    $page('আমার অর্ডার ও ডেলিভারি', 'my_orders'),
-                ]]),
-                $page('যোগাযোগ', 'contact'),
-            ],
             'footerColumns' => [
                 ['heading' => 'অর্ডার', 'links' => [
                     $page('হোম', 'home'),

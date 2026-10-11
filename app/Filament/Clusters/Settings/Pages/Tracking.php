@@ -41,8 +41,8 @@ class Tracking extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
-    /** After Payment Methods, which sorts 5: how the store is paid, then what it reports. */
-    protected static ?int $navigationSort = 6;
+    /** After Payment Methods, which sorts 4: how the store is paid, then what it reports. */
+    protected static ?int $navigationSort = 5;
 
     /**
      * Every declared event drawn at what it actually does, over whatever the

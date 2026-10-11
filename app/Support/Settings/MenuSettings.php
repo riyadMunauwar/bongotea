@@ -6,30 +6,25 @@ use App\Enums\MenuLinkType;
 use App\Support\Storefront\StorefrontShell;
 
 /**
- * The storefront's header and footer Menus.
+ * The storefront's footer links, until the footer becomes a place Menus are
+ * assigned to. The header's navigation is a `Menu` now, assigned in
+ * `HeaderSettings` (ADR-0033); a stored `header` key is ignored.
  *
- * Every entry is stored flat: a `label`, a `type` (`MenuLinkType`) and the
- * one target field that type reads — `page_id`, `anchor` (with an optional
- * `page_id`) or `url`. A header entry of type Dropdown carries `children`,
- * each of which may add a `note` drawn under its label. The footer is a blurb,
- * columns of links under a heading, and the short line of links at the very
- * bottom. Turning a stored entry into an address is `StorefrontMenus`' job,
- * not this group's.
+ * Every entry is stored flat: a `label`, a `type` (`MenuLinkType`, never a
+ * Heading) and the one target field that type reads — `page_id`, `anchor`
+ * (with an optional `page_id`) or `url`. The footer is a blurb, columns of
+ * links under a heading, and the short line of links at the very bottom.
+ * Turning a stored entry into an address is `StorefrontMenus`' job, not this
+ * group's.
  *
- * The defaults are the mockup's Menus, typed as URLs because no Page exists
+ * The defaults are the mockup's footer, typed as URLs because no Page exists
  * on a fresh install to point at.
  *
  * @phpstan-type MenuLink array{label: string, type: string, page_id: ?int, anchor: ?string, url: ?string, note?: ?string}
- * @phpstan-type HeaderItem array{label: string, type: string, page_id: ?int, anchor: ?string, url: ?string, children: list<MenuLink>}
  * @phpstan-type FooterColumn array{heading: string, links: list<MenuLink>}
  */
 class MenuSettings extends SettingsGroup
 {
-    /**
-     * @var list<HeaderItem>
-     */
-    public array $header = [];
-
     public string $footerBlurb = 'চায়ের দোকান, রেস্টুরেন্ট ও ব্যবসার জন্য বাছাই করা চা। বেশি নিলে প্রতি কেজির দাম কম।';
 
     /**
@@ -44,23 +39,6 @@ class MenuSettings extends SettingsGroup
 
     public function __construct()
     {
-        $this->header = self::headerItems([
-            self::url('হোম', '/'),
-            self::dropdown('আমাদের চা', [
-                self::anchor('প্রিমিয়াম', 'seg-premium', 'সেরা বাছাই পাতা'),
-                self::anchor('গোল্ড', 'seg-gold', 'মান ও দামের ভারসাম্য'),
-                self::anchor('সিলভার', 'seg-silver', 'সাশ্রয়ী দৈনিক চা'),
-            ]),
-            self::url('দাম হিসাব', '/pricing'),
-            self::dropdown('কীভাবে অর্ডার করবেন', [
-                self::anchor('অর্ডারের ধাপ', 'how', '৩ ধাপে সহজ অর্ডার'),
-                self::url('দাম ও বাল্ক ছাড়', '/pricing', 'বেশি নিলে কেজিপ্রতি দাম কম'),
-                self::url('বাল্ক অর্ডার করুন', StorefrontShell::BULK_ORDER_PATH),
-                self::url('আমার অর্ডার ও ডেলিভারি', StorefrontShell::MY_ORDERS_PATH),
-            ]),
-            self::url('যোগাযোগ', '/contact'),
-        ]);
-
         $this->footerColumns = [
             ['heading' => 'অর্ডার', 'links' => [
                 self::url('হোম', '/'),
@@ -89,7 +67,7 @@ class MenuSettings extends SettingsGroup
 
     /**
      * The base coerces scalars and leaves arrays alone, so a hand-edited or
-     * older row could hand a Menu over as a string, or an entry missing its
+     * older row could hand a list over as a string, or an entry missing its
      * label, and `load()` would throw on every request. Each list is reduced
      * to the shape this group promises before the assignment, dropping what
      * cannot be read rather than refusing the row.
@@ -98,44 +76,15 @@ class MenuSettings extends SettingsGroup
      */
     public function with(array $values): static
     {
-        if (array_key_exists('header', $values)) {
-            $values['header'] = self::headerItems($values['header']);
-        }
-
         if (array_key_exists('footerColumns', $values)) {
             $values['footerColumns'] = self::footerColumns($values['footerColumns']);
         }
 
         if (array_key_exists('footerBottomLinks', $values)) {
-            $values['footerBottomLinks'] = self::links($values['footerBottomLinks'], MenuLinkType::targets());
+            $values['footerBottomLinks'] = self::links($values['footerBottomLinks']);
         }
 
         return parent::with($values);
-    }
-
-    /**
-     * @return list<HeaderItem>
-     */
-    private static function headerItems(mixed $items): array
-    {
-        $header = [];
-
-        foreach (is_array($items) ? $items : [] as $item) {
-            $entry = self::link($item, MenuLinkType::cases());
-
-            if ($entry === null) {
-                continue;
-            }
-
-            $header[] = [
-                ...$entry,
-                'children' => $entry['type'] === MenuLinkType::Dropdown->value
-                    ? self::links($item['children'] ?? [], MenuLinkType::targets())
-                    : [],
-            ];
-        }
-
-        return $header;
     }
 
     /**
@@ -152,7 +101,7 @@ class MenuSettings extends SettingsGroup
 
             $footer[] = [
                 'heading' => is_scalar($column['heading'] ?? null) ? (string) $column['heading'] : '',
-                'links' => self::links($column['links'] ?? [], MenuLinkType::targets()),
+                'links' => self::links($column['links'] ?? []),
             ];
         }
 
@@ -163,15 +112,14 @@ class MenuSettings extends SettingsGroup
      * The readable entries of a list, as a plain list: a Repeater's
      * uuid-keyed state saves without its keys.
      *
-     * @param  list<MenuLinkType>  $allowed
      * @return list<MenuLink>
      */
-    private static function links(mixed $links, array $allowed): array
+    private static function links(mixed $links): array
     {
         $kept = [];
 
         foreach (is_array($links) ? $links : [] as $link) {
-            $entry = self::link($link, $allowed);
+            $entry = self::link($link);
 
             if ($entry !== null) {
                 $kept[] = $entry;
@@ -183,12 +131,11 @@ class MenuSettings extends SettingsGroup
 
     /**
      * One entry in exactly the stored shape, or null for one that cannot be
-     * read: not an array, no label, or a type not allowed where it sits.
+     * read: not an array, no label, or a type that leads nowhere.
      *
-     * @param  list<MenuLinkType>  $allowed
      * @return MenuLink|null
      */
-    private static function link(mixed $link, array $allowed): ?array
+    private static function link(mixed $link): ?array
     {
         if (! is_array($link)) {
             return null;
@@ -197,7 +144,7 @@ class MenuSettings extends SettingsGroup
         $type = MenuLinkType::tryFrom(is_scalar($link['type'] ?? null) ? (string) $link['type'] : '');
         $label = is_scalar($link['label'] ?? null) ? trim((string) $link['label']) : '';
 
-        if ($type === null || ! in_array($type, $allowed, true) || $label === '') {
+        if ($type === null || ! in_array($type, MenuLinkType::targets(), true) || $label === '') {
             return null;
         }
 
@@ -209,15 +156,6 @@ class MenuSettings extends SettingsGroup
             'url' => filled($link['url'] ?? null) ? trim((string) $link['url']) : null,
             'note' => filled($link['note'] ?? null) ? (string) $link['note'] : null,
         ];
-    }
-
-    /**
-     * @param  list<MenuLink>  $children
-     * @return HeaderItem
-     */
-    private static function dropdown(string $label, array $children): array
-    {
-        return [...self::entry($label, MenuLinkType::Dropdown), 'children' => $children];
     }
 
     /**

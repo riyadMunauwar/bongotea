@@ -9,10 +9,11 @@ import { cn } from '@/lib/utils';
 const CLOSE_DELAY_MS = 150;
 
 /**
- * The full header's Menu: plain entries are links, and a Dropdown opens on
+ * The full header's Menu: plain entries are links, and one with children opens on
  * hover — closing a moment after the pointer leaves, so a diagonal move onto
  * the panel does not drop it — or on click, for touch screens and keyboards.
- * A click elsewhere, Escape or a visit closes it.
+ * A click elsewhere, Escape or a visit closes it. A second-level link holding
+ * a third level opens it as a flyout.
  */
 export function DesktopNav({ items }: { items: HeaderItem[] }) {
     const [open, setOpen] = useState<number | null>(null);
@@ -89,24 +90,69 @@ export function DesktopNav({ items }: { items: HeaderItem[] }) {
                         </button>
                         {isOpen && (
                             <div className="absolute top-full -left-[14px] z-50 pt-[10px]">
-                                <div className="flex min-w-[230px] flex-col rounded-[12px] border border-border bg-white p-[6px] shadow-dropdown">
-                                    {item.children.map((child, childIndex) => (
-                                        <MenuAnchor
-                                            key={childIndex}
-                                            href={child.href}
-                                            external={child.external}
-                                            className="flex flex-col gap-[2px] rounded-[8px] px-3 py-[10px] text-[15px] font-medium whitespace-normal text-ink no-underline hover:bg-green-50 hover:text-ink"
-                                        >
-                                            {child.label}
-                                            {child.note && <span className="text-[13px] font-normal text-muted">{child.note}</span>}
-                                        </MenuAnchor>
-                                    ))}
-                                </div>
+                                <DropdownPanel items={item.href ? [{ ...item, note: null, children: [] }, ...item.children] : item.children} />
                             </div>
                         )}
                     </div>
                 );
             })}
         </nav>
+    );
+}
+
+const DROPDOWN_ROW = 'flex flex-col gap-[2px] rounded-[8px] px-3 py-[10px] text-[15px] font-medium whitespace-normal text-ink no-underline hover:bg-green-50 hover:text-ink';
+
+/**
+ * The second level, under a top-level entry: each link with its note, and a
+ * link holding a third level opening it as a flyout to its right, on hover
+ * or when focus moves into it.
+ */
+function DropdownPanel({ items }: { items: HeaderItem[] }) {
+    return (
+        <div className="flex min-w-[230px] flex-col rounded-[12px] border border-border bg-white p-[6px] shadow-dropdown">
+            {items.map((child, index) => {
+                const row = (
+                    <>
+                        <span className="flex items-center justify-between gap-3">
+                            {child.label}
+                            {child.children.length > 0 && <ChevronDownIcon className="-rotate-90 text-muted" />}
+                        </span>
+                        {child.note && <span className="text-[13px] font-normal text-muted">{child.note}</span>}
+                    </>
+                );
+
+                if (child.children.length === 0) {
+                    return (
+                        <MenuAnchor key={index} href={child.href ?? '/'} external={child.external} className={DROPDOWN_ROW}>
+                            {row}
+                        </MenuAnchor>
+                    );
+                }
+
+                return (
+                    <div key={index} className="group/flyout relative">
+                        {child.href ? (
+                            <MenuAnchor href={child.href} external={child.external} className={DROPDOWN_ROW}>
+                                {row}
+                            </MenuAnchor>
+                        ) : (
+                            <button type="button" aria-haspopup="true" className={cn(DROPDOWN_ROW, 'w-full cursor-pointer border-0 bg-transparent text-left')}>
+                                {row}
+                            </button>
+                        )}
+                        <div className="absolute top-[-6px] left-full z-50 hidden pl-[6px] group-focus-within/flyout:block group-hover/flyout:block">
+                            <div className="flex min-w-[210px] flex-col rounded-[12px] border border-border bg-white p-[6px] shadow-dropdown">
+                                {child.children.map((grandchild, grandchildIndex) => (
+                                    <MenuAnchor key={grandchildIndex} href={grandchild.href ?? '/'} external={grandchild.external} className={DROPDOWN_ROW}>
+                                        {grandchild.label}
+                                        {grandchild.note && <span className="text-[13px] font-normal text-muted">{grandchild.note}</span>}
+                                    </MenuAnchor>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
     );
 }

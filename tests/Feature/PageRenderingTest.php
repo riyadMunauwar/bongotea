@@ -1,9 +1,10 @@
 <?php
 
-use App\Enums\MenuLinkType;
 use App\Enums\SystemPage;
+use App\Models\Menu;
+use App\Models\MenuItem;
 use App\Models\Page;
-use App\Support\Settings\MenuSettings;
+use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\PaymentSettings;
 use App\Support\Settings\StoreSettings;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -241,9 +242,9 @@ it('leaves a header button at its installed slug while its System Page is a draf
 it('links a Menu entry naming Home to the bare domain', function () {
     $home = Page::factory()->system(SystemPage::Home)->create();
 
-    app(MenuSettings::class)->with([
-        'header' => [['label' => 'হোম', 'type' => MenuLinkType::Page->value, 'page_id' => $home->id]],
-    ])->save();
+    $menu = Menu::factory()->create();
+    MenuItem::factory()->for($menu)->page($home)->create(['label' => 'হোম']);
+    app(HeaderSettings::class)->with(['menuId' => $menu->id])->save();
 
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page->where('menus.header.0.href', '/'));

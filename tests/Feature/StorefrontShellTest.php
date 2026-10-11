@@ -1,12 +1,12 @@
 <?php
 
-use App\Enums\MenuLinkType;
 use App\Enums\SystemPage;
+use App\Models\Menu;
+use App\Models\MenuItem;
 use App\Models\Page;
 use App\Models\Product;
-use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\DeliveryChargeSettings;
-use App\Support\Settings\MenuSettings;
+use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Event;
@@ -22,11 +22,14 @@ beforeEach(function (): void {
 });
 
 /**
- * @return array{label: string, type: string, page_id?: int|null, anchor?: string|null, url?: string|null, note?: string|null}
+ * A Menu assigned to the header.
  */
-function menuLink(string $label, MenuLinkType $type, array $target = []): array
+function headerMenu(): Menu
 {
-    return ['label' => $label, 'type' => $type->value, ...$target];
+    $menu = Menu::factory()->create();
+    app(HeaderSettings::class)->with(['menuId' => $menu->id])->save();
+
+    return $menu;
 }
 
 it('renders the home page inside the storefront shell, with the store, announcement and links shared', function () {
@@ -56,7 +59,7 @@ it('shares what the Merchant saved for the store and the announcement', function
         'logo' => 'store/logo.png',
     ])->save();
 
-    app(AnnouncementSettings::class)->with(['pill' => '', 'message' => 'ঈদে ফ্রি ডেলিভারি'])->save();
+    app(HeaderSettings::class)->with(['announcementPill' => '', 'announcementMessage' => 'ঈদে ফ্রি ডেলিভারি'])->save();
 
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
@@ -70,20 +73,15 @@ it('shares what the Merchant saved for the store and the announcement', function
 });
 
 it('shares no announcement when the bar is switched off', function () {
-    app(AnnouncementSettings::class)->with(['enabled' => false])->save();
+    app(HeaderSettings::class)->with(['announcementEnabled' => false])->save();
 
     $this->get('/')->assertInertia(fn (Assert $page) => $page->where('announcement', null));
 });
 
-it('shares the mockup Menus on a fresh install', function () {
+it('draws the header without a nav when no Menu is assigned, and keeps the mockup footer', function () {
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
-            ->has('menus.header', 5)
-            ->where('menus.header.0', ['label' => 'হোম', 'href' => '/', 'external' => false, 'children' => []])
-            ->where('menus.header.1.label', 'আমাদের চা')
-            ->where('menus.header.1.href', null)
-            ->where('menus.header.1.children.0', ['label' => 'প্রিমিয়াম', 'href' => '/#seg-premium', 'external' => false, 'note' => 'সেরা বাছাই পাতা'])
-            ->where('menus.header.3.children.1.href', '/pricing')
+            ->where('menus.header', [])
             ->where('menus.footer.blurb', 'চায়ের দোকান, রেস্টুরেন্ট ও ব্যবসার জন্য বাছাই করা চা। বেশি নিলে প্রতি কেজির দাম কম।')
             ->has('menus.footer.columns', 2)
             ->where('menus.footer.columns.0.heading', 'অর্ডার')
@@ -92,36 +90,70 @@ it('shares the mockup Menus on a fresh install', function () {
         );
 });
 
-it('points a Menu entry at its Page by reference, and drops entries that lead nowhere', function () {
+it('resolves each header link type, following a Page by reference', function () {
     $pricing = Page::factory()->published()->create(['slug' => 'dam']);
-    $draft = Page::factory()->create(['slug' => 'eid-offer']);
+    $menu = headerMenu();
 
-    app(MenuSettings::class)->with([
-        'header' => [
-            menuLink('দাম', MenuLinkType::Page, ['page_id' => $pricing->id]),
-            menuLink('ঈদ', MenuLinkType::Page, ['page_id' => $draft->id]),
-            menuLink('গায়েব', MenuLinkType::Page, ['page_id' => 999999]),
-            menuLink('ধাপ', MenuLinkType::Anchor, ['page_id' => $pricing->id, 'anchor' => '#matrix']),
-            menuLink('ফেসবুক', MenuLinkType::Url, ['url' => 'https://facebook.com/bongotea']),
-            menuLink('ভেতরে', MenuLinkType::Url, ['url' => url('/about')]),
-            menuLink('খারাপ', MenuLinkType::Url, ['url' => 'javascript:alert(1)']),
-            [...menuLink('খালি', MenuLinkType::Dropdown), 'children' => [menuLink('ঈদ', MenuLinkType::Page, ['page_id' => $draft->id])]],
-            [...menuLink('আরও', MenuLinkType::Dropdown), 'children' => [menuLink('ফোন', MenuLinkType::Url, ['url' => 'tel:+8801700000000', 'note' => 'সারাদিন'])]],
-        ],
-    ])->save();
+    MenuItem::factory()->for($menu)->page($pricing)->create(['label' => 'দাম', 'position' => 0]);
+    MenuItem::factory()->for($menu)->anchor('matrix', $pricing)->create(['label' => 'ধাপ', 'position' => 1]);
+    MenuItem::factory()->for($menu)->anchor('how')->create(['label' => 'কীভাবে', 'position' => 2]);
+    MenuItem::factory()->for($menu)->create(['label' => 'ফেসবুক', 'url' => 'https://facebook.com/bongotea', 'position' => 3]);
+    MenuItem::factory()->for($menu)->create(['label' => 'ভেতরে', 'url' => url('/about'), 'position' => 4]);
+    MenuItem::factory()->for($menu)->create(['label' => 'ফোন', 'url' => 'tel:+8801700000000', 'note' => 'সারাদিন', 'position' => 5]);
 
     $pricing->update(['slug' => 'pricing']);
 
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
             ->where('menus.header', [
-                ['label' => 'দাম', 'href' => '/pricing', 'external' => false, 'children' => []],
-                ['label' => 'ধাপ', 'href' => '/pricing#matrix', 'external' => false, 'children' => []],
-                ['label' => 'ফেসবুক', 'href' => 'https://facebook.com/bongotea', 'external' => true, 'children' => []],
-                ['label' => 'ভেতরে', 'href' => url('/about'), 'external' => false, 'children' => []],
-                ['label' => 'আরও', 'href' => null, 'external' => false, 'children' => [
-                    ['label' => 'ফোন', 'href' => 'tel:+8801700000000', 'external' => false, 'note' => 'সারাদিন'],
+                ['label' => 'দাম', 'href' => '/pricing', 'external' => false, 'note' => null, 'children' => []],
+                ['label' => 'ধাপ', 'href' => '/pricing#matrix', 'external' => false, 'note' => null, 'children' => []],
+                ['label' => 'কীভাবে', 'href' => '/#how', 'external' => false, 'note' => null, 'children' => []],
+                ['label' => 'ফেসবুক', 'href' => 'https://facebook.com/bongotea', 'external' => true, 'note' => null, 'children' => []],
+                ['label' => 'ভেতরে', 'href' => url('/about'), 'external' => false, 'note' => null, 'children' => []],
+                ['label' => 'ফোন', 'href' => 'tel:+8801700000000', 'external' => false, 'note' => 'সারাদিন', 'children' => []],
+            ])
+        );
+});
+
+it('carries three levels: a Heading, its dropdown and a flyout', function () {
+    $menu = headerMenu();
+
+    $tea = MenuItem::factory()->for($menu)->heading()->create(['label' => 'আমাদের চা']);
+    $premium = MenuItem::factory()->under($tea)->create(['label' => 'প্রিমিয়াম', 'url' => '/category/premium', 'note' => 'সেরা']);
+    MenuItem::factory()->under($premium)->create(['label' => 'দার্জিলিং', 'url' => '/tea/darjeeling']);
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('menus.header', [
+                ['label' => 'আমাদের চা', 'href' => null, 'external' => false, 'note' => null, 'children' => [
+                    ['label' => 'প্রিমিয়াম', 'href' => '/category/premium', 'external' => false, 'note' => 'সেরা', 'children' => [
+                        ['label' => 'দার্জিলিং', 'href' => '/tea/darjeeling', 'external' => false, 'note' => null, 'children' => []],
+                    ]],
                 ]],
+            ])
+        );
+});
+
+it('drops links to unpublished or deleted Pages, bad URLs, and Headings left childless', function () {
+    $draft = Page::factory()->create();
+    $gone = Page::factory()->published()->create();
+    $menu = headerMenu();
+
+    MenuItem::factory()->for($menu)->page($draft)->create(['label' => 'খসড়া']);
+    MenuItem::factory()->for($menu)->page($gone)->create(['label' => 'গায়েব']);
+    MenuItem::factory()->for($menu)->create(['label' => 'খারাপ', 'url' => 'javascript:alert(1)']);
+    $empty = MenuItem::factory()->for($menu)->heading()->create(['label' => 'খালি']);
+    MenuItem::factory()->under($empty)->page($draft)->create(['label' => 'ঈদ']);
+    MenuItem::factory()->for($menu)->heading()->create(['label' => 'শুধু শিরোনাম']);
+    MenuItem::factory()->for($menu)->create(['label' => 'থাকে', 'url' => '/ok']);
+
+    $gone->delete();
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('menus.header', [
+                ['label' => 'থাকে', 'href' => '/ok', 'external' => false, 'note' => null, 'children' => []],
             ])
         );
 });

@@ -18,12 +18,13 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * The storefront's header and footer Menus.
+ * The storefront's footer links, until the footer becomes a place under
+ * Pages that Menus are assigned to. The header's navigation is a Menu,
+ * built under Pages → Menus and assigned on Pages → Header.
  *
  * Each entry names what it points at — a Page by reference, a section anchor,
  * or a typed URL — and the storefront works out the address, so renaming a
- * Page's slug never breaks a Menu and unpublishing it takes the entry off. A
- * header entry may instead be a Dropdown, opening the entries beneath it.
+ * Page's slug never breaks a link and unpublishing it takes the entry off.
  */
 class Menus extends SettingsPage
 {
@@ -31,7 +32,11 @@ class Menus extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBars3;
 
-    protected static ?int $navigationSort = 3;
+    protected static ?string $navigationLabel = 'Footer links';
+
+    protected static ?string $title = 'Footer links';
+
+    protected static ?int $navigationSort = 2;
 
     /**
      * @return array<Section>
@@ -39,41 +44,6 @@ class Menus extends SettingsPage
     protected function formComponents(): array
     {
         return [
-            Section::make('Header')
-                ->description('Across the top on a computer and in the menu on a phone, in this order.')
-                ->schema([
-                    Repeater::make('header')
-                        ->hiddenLabel()
-                        ->addActionLabel('Add a header entry')
-                        ->defaultItems(0)
-                        ->reorderable()
-                        ->collapsible()
-                        ->columns(2)
-                        ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
-                        ->schema([
-                            ...self::linkFields(MenuLinkType::cases()),
-
-                            Repeater::make('children')
-                                ->label('Dropdown entries')
-                                ->addActionLabel('Add an entry')
-                                ->defaultItems(0)
-                                ->reorderable()
-                                ->columns(2)
-                                ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
-                                ->visible(fn (Get $get): bool => $get('type') === MenuLinkType::Dropdown->value)
-                                ->columnSpanFull()
-                                ->schema([
-                                    ...self::linkFields(MenuLinkType::targets()),
-
-                                    TextInput::make('note')
-                                        ->label('Note')
-                                        ->maxLength(60)
-                                        ->helperText('A short line under the label on a computer.')
-                                        ->columnSpanFull(),
-                                ]),
-                        ]),
-                ]),
-
             Section::make('Footer')
                 ->description('The blurb beside the store name, the link columns, and the links on the very last line.')
                 ->schema([

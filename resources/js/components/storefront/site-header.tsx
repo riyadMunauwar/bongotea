@@ -57,7 +57,7 @@ export function SiteHeader() {
                 </div>
                 <div className="border-t border-divider">
                     <div className="shell-container flex h-[58px] items-center gap-7 text-ink">
-                        <DesktopNav items={menus.header} />
+                        {menus.header.length > 0 && <DesktopNav items={menus.header} />}
                         <MenuAnchor
                             href={links.bulkOrder}
                             className="my-2 ml-auto flex items-center gap-2 rounded-[8px] bg-primary px-[18px] py-[10px] text-[14px] font-bold text-white no-underline hover:bg-primary-dark hover:text-white"

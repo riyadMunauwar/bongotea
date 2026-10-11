@@ -44,8 +44,8 @@ class Couriers extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    /** After Tracking, which sorts 6: the last of the things decided once. */
-    protected static ?int $navigationSort = 7;
+    /** After Tracking, which sorts 5: the last of the things decided once. */
+    protected static ?int $navigationSort = 6;
 
     /**
      * The stores are a Repeater over a list the group normalises, so they are
