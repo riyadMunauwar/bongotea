@@ -8,6 +8,8 @@ use App\Models\Supplier;
 use App\Support\Inventory\StockLedger;
 use App\Support\Orders\OrderOwnership;
 use App\Support\Settings\GeneralSettings;
+use App\Support\Settings\PaymentSettings;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Fixtures\Payments\SslCommerzScript;
 
@@ -80,15 +82,20 @@ it('draws the checkout with every district and no payment choice while only cash
             ->component('checkout')
             ->has('districts', 64)
             ->where('districts.0', 'Bagerhat')
-            ->where('paymentMethods', ['cash_on_delivery'])
+            ->where('paymentMethods', [['name' => 'cash_on_delivery', 'logoUrl' => asset('images/payment-methods/cash-on-delivery.svg')]])
             ->where('productNames.'.$tea->getKey(), 'Premium'));
 });
 
-it('offers a payment choice once more than one payment method is switched on', function () {
+it('offers a payment choice once more than one payment method is switched on, each with its uploaded logo or else the default', function () {
+    Storage::fake(PaymentSettings::LOGO_DISK);
     (new SslCommerzScript)->makeUsable();
+    app(PaymentSettings::class)->with(['sslcommerzLogo' => 'payment-methods/ours.svg'])->save();
 
     $this->get(route('checkout'))
-        ->assertInertia(fn (Assert $page) => $page->where('paymentMethods', ['cash_on_delivery', 'sslcommerz']));
+        ->assertInertia(fn (Assert $page) => $page->where('paymentMethods', [
+            ['name' => 'cash_on_delivery', 'logoUrl' => asset('images/payment-methods/cash-on-delivery.svg')],
+            ['name' => 'sslcommerz', 'logoUrl' => Storage::disk(PaymentSettings::LOGO_DISK)->url('payment-methods/ours.svg')],
+        ]));
 });
 
 it('captures the cart priced by the store, and hands the placing browser the order', function () {

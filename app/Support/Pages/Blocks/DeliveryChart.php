@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\PaymentMethod;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
@@ -37,11 +38,17 @@ class DeliveryChart extends PageBlock
         ];
     }
 
+    /**
+     * The wording, and whether the chart may say Cash on Delivery is taken:
+     * only while the Merchant has it switched on, so the chart never
+     * advertises a method the store cannot take.
+     */
     public static function props(array $data): array
     {
         return [
             'heading' => self::text($data, 'heading'),
             'text' => self::text($data, 'text'),
+            'offersCashOnDelivery' => PaymentMethod::CashOnDelivery->isUsable(),
         ];
     }
 }

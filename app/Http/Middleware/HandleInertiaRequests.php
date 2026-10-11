@@ -45,7 +45,6 @@ class HandleInertiaRequests extends Middleware
             'store' => fn (): array => $shell()->store(),
             'announcement' => fn (): ?array => $shell()->announcement(),
             'menus' => fn (): array => $shell()->menus($request->getHost()),
-            'paymentMethods' => fn (): array => $shell()->paymentMethods(),
             'links' => fn (): array => $shell()->links(),
             'pricing' => fn (): array => $shell()->pricing(),
             'seo' => fn (): array => Seo::forStore(app(StoreSettings::class), $request)->toArray(),

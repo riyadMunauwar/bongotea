@@ -7,7 +7,6 @@ use App\Models\Product;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\DeliveryChargeSettings;
 use App\Support\Settings\MenuSettings;
-use App\Support\Settings\PaymentSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Event;
@@ -127,22 +126,8 @@ it('points a Menu entry at its Page by reference, and drops entries that lead no
         );
 });
 
-it('names only the payment methods a buyer can actually use', function () {
-    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('paymentMethods', ['cash_on_delivery']));
-
-    app(PaymentSettings::class)->with([
-        'bkashEnabled' => true,
-        'bkashAppKey' => 'key',
-        'bkashAppSecret' => 'secret',
-        'bkashUsername' => 'user',
-        'bkashPassword' => 'pass',
-    ])->save();
-
-    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('paymentMethods', ['cash_on_delivery', 'bkash']));
-
-    app(PaymentSettings::class)->with(['cashOnDeliveryEnabled' => false, 'bkashEnabled' => false])->save();
-
-    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('paymentMethods', []));
+it('shares no payment methods with every page, since the footer no longer names them', function () {
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->missing('paymentMethods'));
 });
 
 it('sets the title, description, canonical and share tags server-side', function () {

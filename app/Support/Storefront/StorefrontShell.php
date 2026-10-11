@@ -2,7 +2,6 @@
 
 namespace App\Support\Storefront;
 
-use App\Enums\PaymentMethod;
 use App\Enums\SystemPage;
 use App\Models\Page;
 use App\Models\Product;
@@ -11,7 +10,6 @@ use App\Support\Pricing\DeliveryBand;
 use App\Support\Pricing\PriceBook;
 use App\Support\Settings\AnnouncementSettings;
 use App\Support\Settings\MenuSettings;
-use App\Support\Settings\PaymentSettings;
 use App\Support\Settings\StoreSettings;
 
 /**
@@ -57,7 +55,6 @@ class StorefrontShell
         private StoreSettings $store,
         private AnnouncementSettings $announcement,
         private MenuSettings $menus,
-        private PaymentSettings $payments,
         private Catalogue $catalogue,
     ) {}
 
@@ -104,18 +101,6 @@ class StorefrontShell
             'header' => $menus->header(),
             'footer' => $menus->footer(),
         ];
-    }
-
-    /**
-     * The methods a buyer can pay by right now, by stored name; the client
-     * names them in Bangla. Only switched-on, usable methods, so the footer
-     * never advertises one the store cannot take.
-     *
-     * @return list<string>
-     */
-    public function paymentMethods(): array
-    {
-        return PaymentMethod::names($this->payments->usableMethods());
     }
 
     /**

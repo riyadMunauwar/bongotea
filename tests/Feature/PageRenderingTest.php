@@ -4,6 +4,7 @@ use App\Enums\MenuLinkType;
 use App\Enums\SystemPage;
 use App\Models\Page;
 use App\Support\Settings\MenuSettings;
+use App\Support\Settings\PaymentSettings;
 use App\Support\Settings\StoreSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -204,11 +205,18 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('contact_form', ['heading' => 'মেসেজ পাঠান', 'text' => '', 'topics' => ['অর্ডার', ' দাম ', '', 'অর্ডার', 'ডেলিভারি']]),
         ['heading' => 'মেসেজ পাঠান', 'text' => null, 'topics' => ['অর্ডার', 'দাম', 'ডেলিভারি']],
     ],
-    'delivery chart, only its wording, since it draws the shared Delivery Bands' => [
+    'delivery chart, its wording and whether cash on delivery is taken, since it draws the shared Delivery Bands' => [
         pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
-        ['heading' => 'ডেলিভারি চার্জ', 'text' => null],
+        ['heading' => 'ডেলিভারি চার্জ', 'text' => null, 'offersCashOnDelivery' => true],
     ],
 ]);
+
+it('tells the delivery chart cash on delivery is not taken once the Merchant switches it off', function () {
+    app(PaymentSettings::class)->with(['cashOnDeliveryEnabled' => false])->save();
+    Page::factory()->published()->withBlocks([pageBlock('delivery_chart')])->create(['slug' => 'delivery']);
+
+    $this->get('/delivery')->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.offersCashOnDelivery', false));
+});
 
 it('points the header at the Bulk Order and My Orders System Pages by role', function () {
     Page::factory()->system(SystemPage::Home)->create();

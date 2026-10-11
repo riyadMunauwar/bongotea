@@ -15,9 +15,9 @@ import type { DeliveryChartProps } from '@/types/blocks';
  * in filled and marked "আপনার কার্ট". The bands are the shared ones the Cart
  * is priced from, so the chart never disagrees with the summary.
  */
-export function DeliveryChart({ heading, text }: DeliveryChartProps) {
+export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryChartProps) {
     const taka = useTaka();
-    const { pricing, paymentMethods } = usePage().props;
+    const { pricing } = usePage().props;
     const { priced } = useCart();
     const bands = pricing.deliveryBands;
     const dearest = Math.max(...bands.map((band) => band.fee));
@@ -47,7 +47,7 @@ export function DeliveryChart({ heading, text }: DeliveryChartProps) {
                     )}
                     <div className="flex flex-col gap-[6px] text-[13px] text-on-dark-sub">
                         <span>{bn.delivery.sameEverywhere}</span>
-                        {paymentMethods.includes('cash_on_delivery') && <span>{bn.delivery.cashOnDelivery}</span>}
+                        {offersCashOnDelivery && <span>{bn.delivery.cashOnDelivery}</span>}
                     </div>
                 </div>
 

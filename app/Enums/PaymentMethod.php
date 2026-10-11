@@ -72,6 +72,18 @@ enum PaymentMethod: string implements HasLabel
     }
 
     /**
+     * A list of methods as a Checkout draws them: the stored name, which the
+     * client names in Bangla and posts back, and the logo to draw beside it.
+     *
+     * @param  list<self>  $methods
+     * @return list<array{name: string, logoUrl: string}>
+     */
+    public static function withLogos(array $methods): array
+    {
+        return array_map(fn (self $method): array => ['name' => $method->value, 'logoUrl' => $method->logoUrl()], $methods);
+    }
+
+    /**
      * What each method is called on screen, keyed by name.
      *
      * @return array<string, string>

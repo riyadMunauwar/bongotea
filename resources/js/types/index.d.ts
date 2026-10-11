@@ -66,7 +66,6 @@ export type SharedProps = {
             bottomLinks: MenuLink[];
         };
     };
-    paymentMethods: string[];
     links: {
         bulkOrder: string;
         myOrders: string;

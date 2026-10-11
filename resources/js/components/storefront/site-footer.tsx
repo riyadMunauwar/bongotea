@@ -5,19 +5,13 @@ import { formatPhone, toBanglaDigits } from '@/lib/bangla';
 import { cn } from '@/lib/utils';
 import { MenuAnchor } from './menu-anchor';
 
-/** How each switched-on method's badge is drawn on the payment line. */
-const PAYMENT_BADGE: Record<string, string> = {
-    bkash: 'bg-bkash text-white font-bold',
-    cash_on_delivery: 'bg-gold-accent text-night font-semibold',
-};
-
 /**
  * The dark footer: the store's blurb and the two ways to reach it, the
- * Merchant's link columns, the address, and a bottom line naming only the
- * payment methods actually switched on.
+ * Merchant's link columns, the address, and a bottom line with the
+ * copyright and the Merchant's bottom links.
  */
 export function SiteFooter() {
-    const { store, menus, paymentMethods } = usePage().props;
+    const { store, menus } = usePage().props;
     const { blurb, columns, bottomLinks } = menus.footer;
 
     /** The brand block, then each column, then the address. */
@@ -71,16 +65,6 @@ export function SiteFooter() {
             <div className="mx-auto mt-10 max-w-[1200px] px-[clamp(16px,4vw,32px)]">
                 <div className="flex flex-wrap justify-between gap-3 border-t border-white/10 pt-[18px] pb-[22px] text-[13px] text-night-faint">
                     <span>{bn.footer.rights(toBanglaDigits(new Date().getFullYear()), store.name)}</span>
-                    {paymentMethods.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-[6px]">
-                            <span>{bn.footer.payment}</span>
-                            {paymentMethods.map((method) => (
-                                <span key={method} className={cn('rounded-[4px] px-2 py-[2px] text-[12px]', PAYMENT_BADGE[method] ?? 'bg-night-raised font-semibold text-white')}>
-                                    {bn.paymentMethods[method] ?? method}
-                                </span>
-                            ))}
-                        </div>
-                    )}
                     {bottomLinks.length > 0 && (
                         <div className="flex gap-[18px]">
                             {bottomLinks.map((link, index) => (

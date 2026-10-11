@@ -34,7 +34,6 @@ export const bn = {
         whatsapp: 'হোয়াটসঅ্যাপে মেসেজ দিন',
         address: 'ঠিকানা',
         deliveryNote: 'সারা দেশে ডেলিভারি, ক্যাশ অন ডেলিভারি',
-        payment: 'পেমেন্ট:',
         rights: (year: string, name: string) => `© ${year} ${name}। সর্বস্বত্ব সংরক্ষিত।`,
     },
     paymentMethods: {

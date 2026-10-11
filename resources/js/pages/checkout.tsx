@@ -12,12 +12,19 @@ import { cn } from '@/lib/utils';
 type CheckoutPageProps = {
     /** Every district a parcel can go to, by the name the store stores. */
     districts: string[];
-    /** The methods offered, by stored name; a choice is drawn only where there is more than one. */
-    paymentMethods: string[];
+    /** The methods offered, by stored name with the logo to draw; a choice is drawn only where there is more than one. */
+    paymentMethods: PaymentMethodOption[];
     /** Every published tea's name, by Product id. */
     productNames: Record<number, string>;
     /** The number this browser is Signed in as, typed in for the buyer; null when nobody is. */
     signedInPhone: string | null;
+};
+
+type PaymentMethodOption = {
+    /** The name the method is stored and posted under. */
+    name: string;
+    /** The Merchant's uploaded logo, else the default shipped with the method. */
+    logoUrl: string;
 };
 
 type CheckoutForm = {
@@ -76,7 +83,7 @@ export default function CheckoutPage() {
         address: '',
         shop_name: '',
         note: '',
-        payment_method: paymentMethods.length > 1 ? '' : paymentMethods[0],
+        payment_method: paymentMethods.length > 1 ? '' : paymentMethods[0].name,
     });
 
     const { priced, isEmpty } = cart;
@@ -252,11 +259,11 @@ export default function CheckoutPage() {
                         <legend className="mb-[6px] p-0 text-[15px] font-semibold">{bn.checkout.payment}</legend>
                         {paymentMethods.map((method) => (
                             <PaymentChoice
-                                key={method}
+                                key={method.name}
                                 method={method}
-                                chosen={form.data.payment_method === method}
+                                chosen={form.data.payment_method === method.name}
                                 choosable={paymentMethods.length > 1}
-                                onChoose={() => form.setData('payment_method', method)}
+                                onChoose={() => form.setData('payment_method', method.name)}
                             />
                         ))}
                         {form.errors.payment_method && <span className="text-[13px] text-error">{form.errors.payment_method}</span>}
@@ -335,9 +342,10 @@ function Field({ label, required = false, error, children }: { label: string; re
     );
 }
 
-/** One way to pay: a radio card where there is a choice, the mockup's fixed card where there is none. */
-function PaymentChoice({ method, chosen, choosable, onChoose }: { method: string; chosen: boolean; choosable: boolean; onChoose: () => void }) {
+/** One way to pay, its logo beside its name: a radio card where there is a choice, the mockup's fixed card where there is none. */
+function PaymentChoice({ method, chosen, choosable, onChoose }: { method: PaymentMethodOption; chosen: boolean; choosable: boolean; onChoose: () => void }) {
     const selected = chosen || !choosable;
+    const name = bn.paymentMethods[method.name] ?? method.name;
 
     return (
         <label
@@ -348,13 +356,14 @@ function PaymentChoice({ method, chosen, choosable, onChoose }: { method: string
             )}
         >
             {choosable ? (
-                <input type="radio" name="payment_method" value={method} checked={chosen} onChange={onChoose} className="size-[18px] accent-primary" />
+                <input type="radio" name="payment_method" value={method.name} checked={chosen} onChange={onChoose} className="size-[18px] accent-primary" />
             ) : (
                 <span aria-hidden className="box-border size-[18px] flex-none rounded-full border-[5px] border-primary bg-white" />
             )}
+            <img src={method.logoUrl} alt={name} className="block h-8 w-auto max-w-[96px] flex-none object-contain" />
             <span className="flex flex-col">
-                <b className="text-[15px] font-semibold">{bn.paymentMethods[method] ?? method}</b>
-                <span className="text-[13px] text-muted">{method === 'cash_on_delivery' ? bn.checkout.cashOnDeliveryHint : bn.checkout.onlineHint}</span>
+                <b className="text-[15px] font-semibold">{name}</b>
+                <span className="text-[13px] text-muted">{method.name === 'cash_on_delivery' ? bn.checkout.cashOnDeliveryHint : bn.checkout.onlineHint}</span>
             </span>
         </label>
     );

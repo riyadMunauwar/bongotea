@@ -59,7 +59,7 @@ class CheckoutController extends Controller
         return Inertia::render('checkout', [
             'signedInPhone' => $signedIn === null ? null : PhoneNumber::asDialled($signedIn->phone),
             'districts' => config('giopages.districts'),
-            'paymentMethods' => PaymentMethod::names($payments->offeredMethods()),
+            'paymentMethods' => PaymentMethod::withLogos($payments->offeredMethods()),
             'productNames' => $catalogue->products()
                 ->mapWithKeys(fn (Product $product): array => [$product->getKey() => $product->name])
                 ->all(),

@@ -163,6 +163,8 @@ export type PriceMatrixProps = {
 export type DeliveryChartProps = {
     heading: string | null;
     text: string | null;
+    /** Whether the Merchant takes Cash on Delivery, so the chart may say so. */
+    offersCashOnDelivery: boolean;
 };
 
 /** Where an Order stands as its Customer sees it, worked out by the server. */
