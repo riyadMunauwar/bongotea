@@ -456,9 +456,13 @@ _Avoid_: deleted, archived, removed, terminated, offboarded
 ### The installation
 
 **Settings**:
-The values a Merchant decides once for the whole store: how the store is reached and what it is called, the Menus, the Delivery Bands, and what payment gateways, couriers and SMS Gateways need. What appears on every page is a Setting and what appears on one is a Block; if a single Page could reasonably differ on it, it is not a Setting.
+The values a Merchant decides once for the whole store: how the store is reached and what it is called, the Delivery Bands, and what payment gateways, couriers and SMS Gateways need. What appears on every page is a Setting and what appears on one is a Block; if a single Page could reasonably differ on it, it is not a Setting.
 _Avoid_: config, options, preferences, site settings, global settings
 
 **Menu**:
-The links a Customer finds on every page — the header's, with their dropdowns, and the footer's columns — set in Settings. A link points at a Page, a Category, a Product, a place on a page or an outside address, and points at the thing rather than at where it is, so renaming never breaks a Menu. A dropdown may be told to list every Category as it stands, rather than the ones somebody remembered to add.
+A named list of links the Merchant builds — "Main menu", "Footer – Order" — that appears wherever it is assigned: the header (on every screen size), a footer column, the bottom line. Menus belong with Pages, not Settings: they are storefront content, edited by whoever writes Pages. A Menu is not its place: one Menu may serve two, and a place shows nothing until a Menu is assigned to it. A link may hold links beneath it, which the header draws as a dropdown. A link points at a Page, a Category, a Product, a place on a page or an outside address, and points at the thing rather than at where it is, so renaming never breaks a Menu. A dropdown may be told to list every Category as it stands, rather than the ones somebody remembered to add.
 _Avoid_: navigation, nav, links, sitemap
+
+**Payment Banner**:
+One image the Merchant uploads showing how a Customer can pay, drawn across the full width of the footer. It is a picture and nothing more: it is not read from which payment methods are switched on, and a store that has uploaded none shows nothing in its place. Not the payment method logos, which are drawn only at Checkout beside each method's name.
+_Avoid_: payment badges, payment strip, accepted cards
