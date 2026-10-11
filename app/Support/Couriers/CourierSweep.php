@@ -177,7 +177,7 @@ class CourierSweep
      * each answer.
      *
      * A Courier that goes quiet stops this Courier's run where it stands,
-     * exactly as an unreachable Provider stops a Destination's
+     * exactly as an unreachable Provider stops its own
      * (`TrackingSweep::deliver()`): every later parcel would fail the same way
      * and cost a call to find out. Nothing is recorded against any of them, so
      * the next sweep picks the whole lot up again.

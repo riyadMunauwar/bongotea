@@ -4,11 +4,11 @@ namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
 use App\Models\Order;
 use App\Models\TrackingEvent;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
+use App\Support\Settings\TrackingSettings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
@@ -96,7 +96,10 @@ class Facebook implements Provider
 
     private const HTTP_TOO_MANY_REQUESTS = 429;
 
-    public function __construct(private readonly Http $http) {}
+    public function __construct(
+        private readonly TrackingSettings $settings,
+        private readonly Http $http,
+    ) {}
 
     public function provider(): TrackingProvider
     {
@@ -150,21 +153,35 @@ class Facebook implements Provider
         return self::ACCEPTANCE_WINDOW_SECONDS;
     }
 
-    public function refusal(Destination $destination): ?string
+    public function refusal(): ?string
     {
-        if (! $destination->enabled) {
-            return "{$destination->label} is switched off.";
+        $label = $this->provider()->getLabel();
+
+        if (! $this->settings->isEnabled($this->provider())) {
+            return "{$label} is switched off in Settings.";
         }
 
-        if (blank($destination->dataset)) {
-            return "{$destination->label} has no ".$this->provider()->datasetLabel().'.';
+        if ($this->dataset() === '') {
+            return "{$label} has no ".$this->provider()->datasetLabel().' in Settings.';
         }
 
-        if (blank($destination->access_token)) {
-            return "{$destination->label} has no access token.";
+        if ($this->accessToken() === '') {
+            return "{$label} has no access token in Settings.";
         }
 
         return null;
+    }
+
+    /** The dataset the Merchant supplied: what the Pixel initialises and the Conversions API addresses. */
+    private function dataset(): string
+    {
+        return $this->settings->supplied($this->provider(), 'Dataset');
+    }
+
+    /** The credential that writes to the dataset, which only the server half ever reads. */
+    private function accessToken(): string
+    {
+        return $this->settings->supplied($this->provider(), 'AccessToken');
     }
 
     /**
@@ -188,22 +205,22 @@ class Facebook implements Provider
      *
      * @param  list<BrowserEvent>  $events
      */
-    public function script(Destination $destination, array $events, bool $reportsLoad): string
+    public function script(array $events, bool $reportsLoad): string
     {
-        if (blank($destination->dataset)) {
+        if ($this->dataset() === '') {
             return '';
         }
 
         $lines = [
             self::LOADER,
-            $this->call('init', $destination->dataset),
+            $this->call('init', $this->dataset()),
         ];
 
         if ($reportsLoad && ! $this->reportsPageView($events)) {
             $lines[] = $this->call('track', self::PAGE_VIEW);
         }
 
-        $calls = $this->calls($destination, $events);
+        $calls = $this->calls($events);
 
         return implode("\n", $calls === '' ? $lines : [...$lines, $calls]);
     }
@@ -214,14 +231,14 @@ class Facebook implements Provider
      *
      * A Pixel is initialised once and then told things, so a Moment that
      * happens later — a visitor starting the Checkout — is these calls alone,
-     * run where it happens. Empty for a Destination the browser cannot
+     * run where it happens. Empty where the browser has nothing to
      * address, exactly as the base code is: there is nothing to tell.
      *
      * @param  list<BrowserEvent>  $events
      */
-    public function calls(Destination $destination, array $events): string
+    public function calls(array $events): string
     {
-        if (blank($destination->dataset)) {
+        if ($this->dataset() === '') {
             return '';
         }
 
@@ -343,14 +360,14 @@ class Facebook implements Provider
     /**
      * @param  list<TrackingEvent>  $events
      */
-    public function send(Destination $destination, array $events): Delivery
+    public function send(array $events): Delivery
     {
-        $address = self::HOST.'/'.self::API_VERSION.'/'.$destination->dataset.'/events';
+        $address = self::HOST.'/'.self::API_VERSION.'/'.$this->dataset().'/events';
 
         try {
             $response = $this->client()->post($address, [
                 'data' => array_map($this->payloadFor(...), $events),
-                'access_token' => $destination->access_token,
+                'access_token' => $this->accessToken(),
             ]);
         } catch (ConnectionException $exception) {
             return Delivery::unreachable($exception->getMessage());

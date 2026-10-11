@@ -32,7 +32,7 @@ dataset('storefront moments', [
 ]);
 
 it('writes the server copy of what the moment reports', function (ProviderScript $script, TrackingMoment $moment, Closure $events) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create(['price' => 55000]);
 
     reportProducts($moment, $gold->getKey().':1')->assertNoContent();
@@ -48,7 +48,7 @@ it('writes the server copy of what the moment reports', function (ProviderScript
 })->with('tracking providers')->with('storefront moments');
 
 it('reports the product viewed at what one kilogram of it costs', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create(['tiers' => [
         ['min' => 1, 'max' => 5, 'price' => 55000],
         ['min' => 6, 'max' => null, 'price' => 43000],
@@ -74,7 +74,7 @@ it('reports the product viewed at what one kilogram of it costs', function (Prov
  * top: that enters a reported value only at the Purchase.
  */
 it('reports what was added to the cart at the tier its kilograms reach', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create(['tiers' => [
         ['min' => 1, 'max' => 5, 'price' => 55000],
         ['min' => 6, 'max' => null, 'price' => 43000],
@@ -101,7 +101,7 @@ it('reports what was added to the cart at the tier its kilograms reach', functio
  * index, which is what makes it once per Product per Cart on the server too.
  */
 it('counts one added to cart per product per cart however often the browser reports it', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create();
     $green = Product::factory()->create();
 
@@ -113,7 +113,7 @@ it('counts one added to cart per product per cart however often the browser repo
 })->with('tracking providers');
 
 it('writes nothing for a moment the store has switched off', function (ProviderScript $script, TrackingMoment $moment, Closure $events) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create();
 
     app(TrackingSettings::class)->with([
@@ -126,7 +126,7 @@ it('writes nothing for a moment the store has switched off', function (ProviderS
 })->with('tracking providers')->with('storefront moments');
 
 it('reports the money and not the products where the store does not name them', function (ProviderScript $script, TrackingMoment $moment) {
-    $script->makeDestination();
+    $script->switchOn();
     $gold = Product::factory()->create(['price' => 55000]);
 
     app(TrackingSettings::class)->with(['namesProducts' => false])->save();
@@ -143,7 +143,7 @@ it('reports the money and not the products where the store does not name them', 
 })->with('tracking providers')->with([TrackingMoment::ProductViewed, TrackingMoment::AddedToCart]);
 
 it('reports nothing it does not sell', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $retired = Product::factory()->create();
     $retired->delete();
     $draft = Product::factory()->draft()->create();

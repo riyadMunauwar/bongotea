@@ -3,7 +3,7 @@
 namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
+use App\Enums\TrackingProvider;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\TrackingContext;
@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
  * Where a Moment becomes rows.
  *
  * Nothing here calls an ad platform. A Moment writes one outbox row per
- * applicable Destination per provider event and returns, which is the whole
+ * switched-on Provider per provider event and returns, which is the whole
  * of how a traffic spike costs one small write per visit instead of one
  * outbound HTTP call, and how somebody else's outage is never ours.
  *
@@ -45,7 +45,7 @@ class MomentRecorder
      * No outbox row at all where the store reports nowhere.
      *
      * The Merchant's own Visit figure is taken first and separately, because
-     * it owes nothing to any ad platform: a store with no Destination anywhere
+     * it owes nothing to any ad platform: a store reporting to no Provider
      * still counts its loads while counting is on, and a store whose `PageView`
      * is switched off still counts them too. That is what keeps the Moment
      * seam honest rather than decorative — if a Visit existed only to feed a
@@ -174,9 +174,9 @@ class MomentRecorder
     }
 
     /**
-     * One row per applicable Destination per event that Destination's
-     * Provider produces for this Moment — less the events the store does not
-     * report, which the Plan takes off the list.
+     * One row per switched-on Provider per event it produces for this
+     * Moment — less the events the store does not report, which the Plan
+     * takes off the list.
      *
      * The deduplication id is what the browser copy of the same event will
      * carry, so Meta counts one and not two; the Order's number for Capture
@@ -192,15 +192,15 @@ class MomentRecorder
         TrackingContext $context,
         ?Selection $selection = null,
     ): void {
-        foreach ($plan->destinations() as $destination) {
-            foreach ($plan->eventsFor($destination, $moment) as $event) {
-                $this->write($destination, $moment, $event, $deduplicationId, $occurredAt, $order, $context, $plan->sendsContentDetail(), $selection);
+        foreach ($plan->providers() as $provider) {
+            foreach ($plan->eventsFor($provider, $moment) as $event) {
+                $this->write($provider, $moment, $event, $deduplicationId, $occurredAt, $order, $context, $plan->sendsContentDetail(), $selection);
             }
         }
     }
 
     private function write(
-        Destination $destination,
+        TrackingProvider $provider,
         TrackingMoment $moment,
         string $event,
         string $deduplicationId,
@@ -212,7 +212,7 @@ class MomentRecorder
     ): void {
         TrackingEvent::query()->firstOrCreate(
             [
-                'destination_id' => $destination->getKey(),
+                'provider' => $provider,
                 'deduplication_id' => $deduplicationId,
                 'event' => $event,
             ],

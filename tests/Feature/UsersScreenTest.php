@@ -49,8 +49,8 @@ it('leaves the Settings cluster as before for a manage settings User, with no Us
         ->assertSee(UserResource::getUrl('index'));
 });
 
-it('sits in the Settings cluster at navigation sort 11, above Roles', function () {
-    expect(UserResource::getNavigationSort())->toBe(11)
+it('sits in the Settings cluster at navigation sort 10, above Roles', function () {
+    expect(UserResource::getNavigationSort())->toBe(10)
         ->and(UserResource::getCluster())->toBe(SettingsCluster::class);
 });
 

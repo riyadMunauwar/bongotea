@@ -22,7 +22,7 @@ class SweepTrackingCommand extends Command
 {
     protected $signature = 'tracking:sweep';
 
-    protected $description = 'Deliver pending tracking events to their Destinations, and expire those too old to be accepted';
+    protected $description = 'Deliver pending tracking events to their Providers, and expire those too old to be accepted';
 
     public function handle(TrackingSweep $sweep): int
     {
@@ -33,9 +33,9 @@ class SweepTrackingCommand extends Command
         $this->components->info("Expired {$expired} ".Str::plural('event', $expired).'.');
         $this->components->info("Left {$pending} ".Str::plural('event', $pending).' pending.');
 
-        /** The Provider's own wording, which already names the Destination, so the operator reads here what the admin would tell them. */
+        /** The Provider's own wording, which already names the Provider, so the operator reads here what the admin would tell them. */
         foreach ($skipped as $refusal) {
-            $this->components->warn("Skipped a destination: {$refusal}");
+            $this->components->warn("Skipped a provider: {$refusal}");
         }
 
         return self::SUCCESS;

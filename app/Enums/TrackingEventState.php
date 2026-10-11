@@ -6,7 +6,7 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Where one outbox row stands: one provider event, for one Destination,
+ * Where one outbox row stands: one provider event, for one Provider,
  * waiting to be delivered or done with.
  *
  * Mirrors `PaymentState` deliberately, including the rule that matters most:

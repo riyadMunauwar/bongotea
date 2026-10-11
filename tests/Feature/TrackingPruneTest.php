@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\TrackingEventState;
-use App\Models\Destination;
+use App\Enums\TrackingProvider;
 use App\Models\Order;
 use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
@@ -21,10 +21,10 @@ use Tests\Fixtures\Tracking\ProviderScript;
  * is the Conversion Rate history a Merchant reads next month.
  */
 it('deletes a delivered event once it is past its retention, and keeps one inside it', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
-    $kept = sentEvent($destination, now()->subDays(TrackingPrune::SENT_RETENTION_DAYS)->addHour());
-    $gone = sentEvent($destination, now()->subDays(TrackingPrune::SENT_RETENTION_DAYS)->subHour());
+    $kept = sentEvent($script->provider(), now()->subDays(TrackingPrune::SENT_RETENTION_DAYS)->addHour());
+    $gone = sentEvent($script->provider(), now()->subDays(TrackingPrune::SENT_RETENTION_DAYS)->subHour());
 
     $this->artisan('tracking:prune')
         ->expectsOutputToContain('Deleted 1 delivered event')
@@ -35,13 +35,13 @@ it('deletes a delivered event once it is past its retention, and keeps one insid
 })->with('tracking providers');
 
 it('keeps a refused event and an expired one for the longer diagnostic retention', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     /** Past what a delivered row gets, and well inside what a failure gets. */
     $justSettled = now()->subDays(TrackingPrune::SENT_RETENTION_DAYS)->subDay();
 
-    $refused = settledEvent($destination, TrackingEventState::Failed, $justSettled);
-    $expired = settledEvent($destination, TrackingEventState::Expired, $justSettled);
+    $refused = settledEvent($script->provider(), TrackingEventState::Failed, $justSettled);
+    $expired = settledEvent($script->provider(), TrackingEventState::Expired, $justSettled);
 
     $this->artisan('tracking:prune')
         ->expectsOutputToContain('Deleted 0 undelivered events')
@@ -51,12 +51,12 @@ it('keeps a refused event and an expired one for the longer diagnostic retention
 })->with('tracking providers');
 
 it('deletes a refused event and an expired one once even the diagnostics are stale', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     $longSettled = now()->subDays(TrackingPrune::DIAGNOSTIC_RETENTION_DAYS)->subHour();
 
-    settledEvent($destination, TrackingEventState::Failed, $longSettled);
-    settledEvent($destination, TrackingEventState::Expired, $longSettled);
+    settledEvent($script->provider(), TrackingEventState::Failed, $longSettled);
+    settledEvent($script->provider(), TrackingEventState::Expired, $longSettled);
 
     $this->artisan('tracking:prune')
         ->expectsOutputToContain('Deleted 2 undelivered events')
@@ -66,10 +66,10 @@ it('deletes a refused event and an expired one once even the diagnostics are sta
 })->with('tracking providers');
 
 it('never deletes a waiting event, however long the scheduler has been broken', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     TrackingEvent::factory()->count(3)->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'state' => TrackingEventState::Pending,
         'occurred_at' => now()->subMonths(3),
         'created_at' => now()->subMonths(3),
@@ -82,12 +82,12 @@ it('never deletes a waiting event, however long the scheduler has been broken', 
 })->with('tracking providers');
 
 it('leaves a merchant whose cron was broken with every event still waiting, and sends all of them once it is fixed', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     /** A day of reporting nobody delivered, still inside what the Provider accepts. */
     foreach (range(1, 4) as $index) {
         TrackingEvent::factory()->create([
-            'destination_id' => $destination->getKey(),
+            'provider' => $script->provider(),
             'deduplication_id' => "GIO-100{$index}",
             'occurred_at' => now()->subDay(),
             'created_at' => now()->subDay(),
@@ -148,9 +148,7 @@ it('never touches the visit aggregate, so last months conversion rate is still t
     VisitCount::query()->create(['visited_on' => now()->toDateString(), 'visits' => 7]);
 
     /** The rows a rollup would have been tempted to derive it from, all prunable. */
-    $destination = Destination::factory()->create();
-
-    settledEvent($destination, TrackingEventState::Sent, now()->subMonths(2));
+    settledEvent(TrackingProvider::Facebook, TrackingEventState::Sent, now()->subMonths(2));
 
     $this->artisan('tracking:prune')->assertSuccessful();
 
@@ -172,20 +170,20 @@ it('is scheduled once a day, and never runs two at once', function () {
  * One delivered outbox row, settled at the given instant — which is the age
  * the prune cuts on.
  */
-function sentEvent(Destination $destination, DateTimeInterface $settledAt): TrackingEvent
+function sentEvent(TrackingProvider $provider, DateTimeInterface $settledAt): TrackingEvent
 {
-    return settledEvent($destination, TrackingEventState::Sent, $settledAt);
+    return settledEvent($provider, TrackingEventState::Sent, $settledAt);
 }
 
 /**
  * One outbox row the sweep has finished with, settled at the given instant.
  * A unique deduplication id per row, because the outbox refuses two of the
- * same event for one Destination.
+ * same event for one Provider.
  */
-function settledEvent(Destination $destination, TrackingEventState $state, DateTimeInterface $settledAt): TrackingEvent
+function settledEvent(TrackingProvider $provider, TrackingEventState $state, DateTimeInterface $settledAt): TrackingEvent
 {
     return TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $provider,
         'deduplication_id' => 'GIO-'.fake()->unique()->numerify('######'),
         'state' => $state,
         'sent_at' => $state === TrackingEventState::Sent ? $settledAt : null,

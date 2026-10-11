@@ -2,14 +2,12 @@
 
 use App\Enums\TrackingProvider;
 use App\Filament\Clusters\Settings\Pages\Tracking;
-use App\Models\Destination;
 use App\Models\TrackingEvent;
 use App\Models\User;
 use App\Support\Orders\OrderOwnership;
 use App\Support\Settings\TrackingSettings;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
-use Spatie\Activitylog\Models\Activity;
 use Tests\Fixtures\Tracking\ProviderScript;
 
 /**
@@ -49,7 +47,7 @@ it('holds the store-wide switch for every event a provider declares, and the bea
 });
 
 it('stops reporting an event the store switched off, in both halves', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     app(TrackingSettings::class)->with([
         'eventDefaults' => [$script->provider()->value => [$script->purchaseEvent() => false]],
@@ -67,7 +65,7 @@ it('stops reporting an event the store switched off, in both halves', function (
         ->assertOk()
         ->getContent();
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
+    expect($script->carriesBaseCode($html))->toBeTrue()
         ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([$script->pageViewEvent()]);
 })->with('tracking providers');
 
@@ -99,7 +97,7 @@ it('keeps a switch for an event the provider no longer declares, for the day it 
 });
 
 it('names the products bought until the store says not to, and then withholds them from both halves', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Livewire::test(Tracking::class)
         ->assertFormSet(['namesProducts' => true])
@@ -132,35 +130,75 @@ it('names the products bought until the store says not to, and then withholds th
     expect($script->contentsOf($purchase))->toBe([]);
 })->with('tracking providers');
 
-it('chooses each provider\'s default destination, which is where the store then reports', function (ProviderScript $script) {
-    $first = $script->makeDestination();
-    $second = $script->makeDestination();
-    $provider = $script->provider()->value;
-
+it('switches facebook on with its dataset and token, after which the store reports there', function () {
     Livewire::test(Tracking::class)
-        ->assertFormSet(["defaultDestinations.{$provider}" => $first->getKey()])
-        ->fillForm(["defaultDestinations.{$provider}" => $second->getKey()])
+        ->assertFormSet(['facebookEnabled' => false])
+        ->fillForm([
+            'facebookEnabled' => true,
+            'facebookDataset' => '110022003300440',
+            'facebookAccessToken' => 'EAA-very-secret-token',
+        ])
         ->call('save')
         ->assertHasNoFormErrors();
 
-    expect($second->refresh()->is_default)->toBeTrue()
-        ->and($first->refresh()->is_default)->toBeFalse()
-        ->and(Activity::query()->where('subject_id', $second->getKey())->sole()->description)
-        ->toBe("Made {$second->label} the default {$script->provider()->getLabel()} Destination");
+    $settings = app(TrackingSettings::class);
+
+    expect($settings->enabledProviders())->toBe([TrackingProvider::Facebook])
+        ->and(TrackingProvider::Facebook->driver()->refusal())->toBeNull();
+
+    /** The dataset stays readable in SQL; only the credential does not. */
+    $row = DB::table('settings')->where('key', 'tracking')->sole()->value;
+
+    expect($row)->toContain('110022003300440')
+        ->and($row)->not->toContain('EAA-very-secret-token');
 
     recordCaptureOf(orderAsCaptured());
 
-    expect(TrackingEvent::sole()->destination_id)->toBe($second->getKey());
+    expect(TrackingEvent::sole()->provider)->toBe(TrackingProvider::Facebook);
+});
 
-    /** The choice is the Destination's own flag, and never a second copy of it in the settings row. */
-    expect(DB::table('settings')->where('key', 'tracking')->sole()->value)->not->toContain('defaultDestinations');
-})->with('tracking providers');
+it('loads the token blank with a hint, keeps it when left blank, and replaces it when one is typed', function (ProviderScript $script) {
+    $script->switchOn();
 
-it('refuses a default destination that is not one of the provider\'s', function () {
-    Destination::factory()->create();
+    $token = TrackingSettings::property($script->provider(), 'AccessToken');
 
     Livewire::test(Tracking::class)
-        ->fillForm(['defaultDestinations.facebook' => 999])
+        ->assertSet("data.{$token}", null)
+        ->assertSee('A value is stored')
+        ->assertDontSee($script->accessToken())
+        ->fillForm([$token => null])
         ->call('save')
-        ->assertHasFormErrors(['defaultDestinations.facebook']);
-});
+        ->assertHasNoFormErrors();
+
+    expect(app(TrackingSettings::class)->{$token})->toBe($script->accessToken());
+
+    Livewire::test(Tracking::class)
+        ->fillForm([$token => 'EAA-rotated-token'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(app(TrackingSettings::class)->{$token})->toBe('EAA-rotated-token');
+})->with('tracking providers');
+
+it('says why a switched-on provider cannot be reported to, in the words the sweep uses', function (ProviderScript $script) {
+    $script->switchOn();
+    $script->withoutAccessToken();
+
+    $refusal = $script->provider()->driver()->refusal();
+
+    expect($refusal)->toBe($script->provider()->getLabel().' has no access token in Settings.');
+
+    Livewire::test(Tracking::class)->assertSee($refusal);
+
+    /** Beside an Off switch, "switched off" would tell nobody anything. */
+    $script->switchOff();
+
+    Livewire::test(Tracking::class)->assertDontSee($script->provider()->driver()->refusal());
+})->with('tracking providers');
+
+it('names a missing dataset in the providers own word for it', function (ProviderScript $script) {
+    app(TrackingSettings::class)->with([TrackingSettings::property($script->provider(), 'Enabled') => true])->save();
+
+    expect($script->provider()->driver()->refusal())
+        ->toBe($script->provider()->getLabel().' has no '.$script->provider()->datasetLabel().' in Settings.');
+})->with('tracking providers');

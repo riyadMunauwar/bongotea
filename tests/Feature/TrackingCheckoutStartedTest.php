@@ -36,7 +36,7 @@ function reportStart(?string $items = null, string $identifier = 'load-3f9a2c'):
 
 describe('the beacon', function () {
     it('writes the server copy of everything the moment reports', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create(['price' => 99000]);
 
         reportStart($jacket->getKey().':2')->assertNoContent();
@@ -57,7 +57,7 @@ describe('the beacon', function () {
      * Order reference, because there is no Order.
      */
     it('reports what the visitor had in the cart, at the catalogue\'s own prices', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create(['name' => 'Winter Jacket', 'price' => 99000]);
         Product::factory()->create(['name' => 'Scarf', 'price' => 15000]);
 
@@ -82,7 +82,7 @@ describe('the beacon', function () {
      * Tier six kilograms reach — the figure the Checkout's summary showed.
      */
     it('prices each product at the tier the whole cart\'s kilograms reach', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $gold = Product::factory()->create(['tiers' => [
             ['min' => 1, 'max' => 5, 'price' => 55000],
             ['min' => 6, 'max' => null, 'price' => 43000],
@@ -112,7 +112,7 @@ describe('the beacon', function () {
      * however loudly it is named.
      */
     it('prices what it is told about from the catalogue, and reports nothing it does not sell', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create(['price' => 99000]);
         $retired = Product::factory()->create(['price' => 500000]);
         $retired->delete();
@@ -131,7 +131,7 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     it('brings a quantity nobody could order back inside what a checkout would take', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create(['price' => 99000]);
 
         reportStart($jacket->getKey().':99999')->assertNoContent();
@@ -145,7 +145,7 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     it('reports no money where the browser named nothing', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         Product::factory()->create(['price' => 99000]);
 
         reportStart()->assertNoContent();
@@ -157,7 +157,7 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     it('counts one checkout started however many times the browser reports it', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create(['price' => 99000]);
 
         reportStart($jacket->getKey().':1')->assertNoContent();
@@ -170,7 +170,7 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     it('writes nothing where the store has switched the event off', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
         $jacket = Product::factory()->create();
 
         app(TrackingSettings::class)->with([

@@ -4,7 +4,6 @@ namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
 use App\Models\TrackingEvent;
 
 /**
@@ -14,13 +13,13 @@ use App\Models\TrackingEvent;
  * vocabulary: a Moment is recorded, the Provider says which of its own events
  * that produces, the sweep hands it batches to deliver, and the snippet
  * builder asks it what the browser should run. Adding TikTok is one class
- * implementing this and one case on `TrackingProvider` — the outbox, the
- * sweep, the beacon and the Tracking settings page are untouched.
+ * implementing this, one case on `TrackingProvider` and its properties on
+ * `TrackingSettings` — the outbox, the sweep and the beacon are untouched.
  *
- * The questions are deliberately narrow. Nothing here takes a Page, a
- * Request or a Settings group: a driver reads the row or the Destination it
- * is handed and the Order that points at, and everything else is decided
- * before it is called.
+ * The questions are deliberately narrow. Nothing here takes a Page or a
+ * Request: a driver reads the row it is handed, the Order that row points at,
+ * and the account the Merchant supplied for it in `TrackingSettings`, and
+ * everything else is decided before it is called.
  */
 interface Provider
 {
@@ -73,17 +72,17 @@ interface Provider
     public function acceptanceWindowSeconds(): int;
 
     /**
-     * Why this Destination cannot be delivered to, worded for the Merchant,
-     * or null where it can.
+     * Why this Provider cannot be delivered to with what the Merchant supplied,
+     * worded for the Merchant, or null where it can.
      *
      * The one wording of "usable", as `PaymentSettings::refusal()` is for a
      * Payment Method: the sweep prints it and the admin prints it, and
      * neither restates the rule.
      */
-    public function refusal(Destination $destination): ?string;
+    public function refusal(): ?string;
 
     /**
-     * The browser's half: this Destination's base code, which reports the
+     * The browser's half: this Provider's base code, which reports the
      * load of the page it is written into, followed by one call per event
      * given.
      *
@@ -97,7 +96,7 @@ interface Provider
      * the choice of what fires are `TrackingSnippet`'s, so that a Provider
      * stays the only thing that ever speaks its own vocabulary.
      *
-     * Empty where the browser has nothing to address this Destination by. A
+     * Empty where the browser has nothing to address this Provider by. A
      * base code with no public identifier is dead script on every page it is
      * baked into, and the access token is not asked for: that is the server
      * half's credential, and a Merchant who has pasted the identifier and
@@ -110,7 +109,7 @@ interface Provider
      *
      * @param  list<BrowserEvent>  $events
      */
-    public function script(Destination $destination, array $events, bool $reportsLoad): string;
+    public function script(array $events, bool $reportsLoad): string;
 
     /**
      * The same events with no base code around them, for a Moment the page
@@ -122,12 +121,12 @@ interface Provider
      * what it hands the events to report about, is `TrackingSnippet`'s and
      * never a Provider's.
      *
-     * Empty for a Destination the browser cannot address, exactly as
+     * Empty for a Provider the browser cannot address, exactly as
      * `script()` is.
      *
      * @param  list<BrowserEvent>  $events
      */
-    public function calls(Destination $destination, array $events): string;
+    public function calls(array $events): string;
 
     /**
      * One outbox row as this Provider's wire format: exactly what `send()`
@@ -145,13 +144,13 @@ interface Provider
     public function payloadFor(TrackingEvent $event): array;
 
     /**
-     * Deliver one batch to one Destination, in a single request.
+     * Deliver one batch to the account the Merchant supplied, in a single request.
      *
      * The batch is never larger than `batchLimit()` and every row in it is
-     * for this Destination. A driver makes exactly one call and answers what
+     * for this Provider. A driver makes exactly one call and answers what
      * happened; it never retries in-request, because the sweep is the retry.
      *
      * @param  list<TrackingEvent>  $events
      */
-    public function send(Destination $destination, array $events): Delivery;
+    public function send(array $events): Delivery;
 }

@@ -3,6 +3,7 @@ paths:
   - 'app/Filament/Widgets/**'
   - 'app/Filament/Resources/**/Widgets/**'
   - 'app/Filament/Clusters/Reports/**'
+  - 'app/Filament/Clusters/Settings/Widgets/**'
 ---
 
 # Widgets

@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
+use App\Enums\TrackingProvider;
 use App\Models\Order;
 use App\Models\TrackingEvent;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -25,7 +25,7 @@ class TrackingEventFactory extends Factory
     public function definition(): array
     {
         return [
-            'destination_id' => Destination::factory(),
+            'provider' => TrackingProvider::Facebook,
             'moment' => TrackingMoment::Capture,
             'event' => 'Purchase',
             'order_id' => Order::factory(),

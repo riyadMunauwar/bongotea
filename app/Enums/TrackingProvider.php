@@ -12,8 +12,9 @@ use Filament\Support\Contracts\HasLabel;
  * The enum is the name and the driver is the behaviour, exactly as
  * `PaymentMethod` and `PaymentGateway` are (ADR-0013): everything that
  * decides what a Moment becomes on the wire, how many events one request may
- * carry and why a Destination cannot be sent to asks the driver. Adding
- * TikTok is one case here and one class implementing the contract.
+ * carry and why its account cannot be sent to asks the driver. Adding
+ * TikTok is one case here, one class implementing the contract, and its
+ * properties on `TrackingSettings`.
  */
 enum TrackingProvider: string implements HasLabel
 {
@@ -27,8 +28,8 @@ enum TrackingProvider: string implements HasLabel
     }
 
     /**
-     * What the Merchant's own ad account calls the public identifier a
-     * Destination is addressed by. Facebook renamed its Pixel ID to a Dataset
+     * What the Merchant's own ad account calls the public identifier the
+     * account is addressed by. Facebook renamed its Pixel ID to a Dataset
      * ID; TikTok calls its own a Pixel Code.
      */
     public function datasetLabel(): string

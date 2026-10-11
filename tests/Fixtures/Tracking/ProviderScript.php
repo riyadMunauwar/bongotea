@@ -3,7 +3,7 @@
 namespace Tests\Fixtures\Tracking;
 
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
+use App\Support\Settings\TrackingSettings;
 
 /**
  * One Provider's documented wire shapes, scripted for the faked HTTP client,
@@ -25,10 +25,39 @@ abstract class ProviderScript
     abstract public function provider(): TrackingProvider;
 
     /**
-     * A usable Destination for this Provider, switched on and default, the
-     * way a Merchant's first one is once they have pasted their credentials.
+     * Switch this Provider on with its account supplied, the way a Merchant
+     * leaves it once they have pasted what the platform gave them.
      */
-    abstract public function makeDestination(): Destination;
+    abstract public function switchOn(): void;
+
+    /** The access token `switchOn()` supplies, as the request should carry it. */
+    abstract public function accessToken(): string;
+
+    /** Switch this Provider off, keeping what was supplied: the campaign break. */
+    public function switchOff(): void
+    {
+        $this->changeSettings('Enabled', false);
+    }
+
+    /**
+     * Forget the access token and nothing else: the Merchant who has pasted
+     * the dataset and is still waiting on a token.
+     */
+    public function withoutAccessToken(): void
+    {
+        $this->changeSettings('AccessToken', '');
+    }
+
+    /** Supply an access token again, as the Merchant who has finally been given one. */
+    public function restoreAccessToken(string $accessToken): void
+    {
+        $this->changeSettings('AccessToken', $accessToken);
+    }
+
+    private function changeSettings(string $suffix, mixed $value): void
+    {
+        app(TrackingSettings::class)->with([TrackingSettings::property($this->provider(), $suffix) => $value])->save();
+    }
 
     /** How many events one request to this Provider may carry. */
     abstract public function batchLimit(): int;
@@ -91,11 +120,11 @@ abstract class ProviderScript
     abstract public function browserClickIds(): array;
 
     /**
-     * Whether this document carries the browser snippet addressed to this
-     * Destination: the Provider's own base code, and the public identifier
-     * that says whose it is.
+     * Whether this document carries the browser snippet addressed to the
+     * account `switchOn()` supplied: the Provider's own base code, and the
+     * public identifier that says whose it is.
      */
-    abstract public function carriesBaseCodeFor(Destination $destination, string $html): bool;
+    abstract public function carriesBaseCode(string $html): bool;
 
     /**
      * Every event the snippet in this document tells the browser to report,
@@ -143,8 +172,8 @@ abstract class ProviderScript
     /** Assert the Provider was sent exactly this many batches since the last fake was laid. */
     abstract public function assertBatchesSent(int $count): void;
 
-    /** Assert the Destination the batch went to, as the request addresses it. */
-    abstract public function assertAddressedTo(Destination $destination): void;
+    /** Assert the batch went to the account `switchOn()` supplied, as the request addresses it. */
+    abstract public function assertAddressedToTheAccount(): void;
 
     /** Assert the credential travelled with the batch. */
     abstract public function assertAuthorisedWith(string $accessToken): void;

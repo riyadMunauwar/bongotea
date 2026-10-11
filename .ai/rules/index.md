@@ -29,5 +29,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Support/Storefront/** | .ai/rules/storefront.md |
 | app/Filament/Clusters/Inventory/Resources/Supplies/**, app/Filament/Clusters/Inventory/Resources/Suppliers/** | .ai/rules/supplies.md |
 | tests/** | .ai/rules/tests.md |
-| app/Support/Tracking/**, app/Models/Destination.php, app/Models/TrackingEvent.php, app/Models/TrackingContext.php, app/Observers/DestinationObserver.php, app/Enums/Tracking*.php, app/Console/Commands/*Tracking*.php, app/Filament/Resources/Destinations/**, tests/Fixtures/Tracking/** | .ai/rules/tracking.md |
-| app/Filament/Widgets/**, app/Filament/Resources/**/Widgets/**, app/Filament/Clusters/Reports/** | .ai/rules/widgets.md |
+| app/Support/Tracking/**, app/Models/TrackingEvent.php, app/Models/TrackingContext.php, app/Enums/Tracking*.php, app/Console/Commands/*Tracking*.php, app/Filament/Clusters/Settings/Pages/Tracking.php, app/Filament/Clusters/Settings/Widgets/**, tests/Fixtures/Tracking/** | .ai/rules/tracking.md |
+| app/Filament/Widgets/**, app/Filament/Resources/**/Widgets/**, app/Filament/Clusters/Reports/**, app/Filament/Clusters/Settings/Widgets/** | .ai/rules/widgets.md |

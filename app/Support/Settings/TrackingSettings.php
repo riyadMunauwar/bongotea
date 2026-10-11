@@ -4,18 +4,38 @@ namespace App\Support\Settings;
 
 use App\Enums\TrackingProvider;
 use App\Support\Tracking\EventSwitches;
+use Illuminate\Support\Str;
 
 /**
- * What the store decides about tracking: which of each Provider's events
- * fire, whether they name the Products bought, whether every storefront load
- * is counted as a Visit, and how hard the beacon may be leaned on.
+ * What the store decides about tracking: the one account each Provider
+ * reports to, which of each Provider's events fire, whether they name the
+ * Products bought, whether every storefront load is counted as a Visit, and
+ * how hard the beacon may be leaned on.
+ *
+ * One account per Provider, held here exactly as a Courier's is held in
+ * `CourierSettings` (ADR-0032): a Provider's properties are its name in camel
+ * case, then `Enabled` and each of what it needs to be spoken to. A Provider
+ * with no `Enabled` property here has no settings yet and reports nowhere.
  *
  * Deliberately not here: anything about `user_data`. Meta computes match
  * quality per dataset, so a switch for it would be a Merchant quietly
- * degrading every event sharing a Destination.
+ * degrading every event the dataset receives.
  */
 class TrackingSettings extends SettingsGroup
 {
+    /**
+     * Facebook: off until the Merchant switches it on. On with a blank
+     * credential still records what happens, so a Merchant who has pasted the
+     * dataset and is waiting on a token loses nothing meanwhile.
+     */
+    public bool $facebookEnabled = false;
+
+    /** The dataset Facebook's Events Manager issued: the public identifier the Pixel and the Conversions API address. */
+    public string $facebookDataset = '';
+
+    /** The access token that writes to the dataset. A credential, and so sealed and write-only. */
+    public string $facebookAccessToken = '';
+
     /**
      * What is fired, by Provider and then by the Provider's own name for the
      * event.
@@ -52,7 +72,7 @@ class TrackingSettings extends SettingsGroup
      * small it is. Switching it on is what turns the Visits tile from a
      * sentence into a figure.
      *
-     * It owes nothing to any ad platform: a store with no Destination anywhere
+     * It owes nothing to any ad platform: a store reporting to no Provider
      * still counts while this is on. That is the whole of why the Visit
      * Moment is worth having on its own.
      */
@@ -78,6 +98,59 @@ class TrackingSettings extends SettingsGroup
     public static function key(): string
     {
         return 'tracking';
+    }
+
+    /**
+     * Every credential, and nothing else. A dataset is not one: it is the
+     * public identifier every page carrying the Pixel already publishes.
+     *
+     * @return list<string>
+     */
+    public static function secrets(): array
+    {
+        return ['facebookAccessToken'];
+    }
+
+    /**
+     * Where the store reports: every Provider the Merchant has switched on,
+     * in the enum's order — including one whose credentials are not complete
+     * yet, because its events are still owed once they are.
+     *
+     * @return list<TrackingProvider>
+     */
+    public function enabledProviders(): array
+    {
+        return array_values(array_filter(TrackingProvider::cases(), $this->isEnabled(...)));
+    }
+
+    /**
+     * Whether the Merchant has switched a Provider on. A Provider with no
+     * settings here yet is off, whatever anything else lists.
+     */
+    public function isEnabled(TrackingProvider $provider): bool
+    {
+        $property = self::property($provider, 'Enabled');
+
+        return property_exists($this, $property) && $this->{$property} === true;
+    }
+
+    /**
+     * What the Merchant supplied a Provider under one suffix, as a string,
+     * or blank where the Provider has no such property.
+     */
+    public function supplied(TrackingProvider $provider, string $suffix): string
+    {
+        $property = self::property($provider, $suffix);
+
+        return property_exists($this, $property) ? trim((string) $this->{$property}) : '';
+    }
+
+    /**
+     * A Provider's property of the given kind, by the naming rule.
+     */
+    public static function property(TrackingProvider $provider, string $suffix): string
+    {
+        return Str::camel($provider->value).$suffix;
     }
 
     /**

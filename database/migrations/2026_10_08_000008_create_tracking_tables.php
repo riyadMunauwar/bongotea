@@ -7,9 +7,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Where the store reports (Destinations), the outbox of what is to be
-     * reported there, what a browser told us for an Order whose Purchase is
-     * still to come, and the store-wide Visit count per day.
+     * The outbox of what is to be reported to each Provider, what a browser
+     * told us for an Order whose Purchase is still to come, and the
+     * store-wide Visit count per day.
      *
      * The outbox is idempotent by its unique index, not by a check at the
      * call site, and holds no personal data: a Provider reads the Customer
@@ -17,22 +17,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('destinations', function (Blueprint $table) {
-            $table->id();
-            $table->string('label');
-            $table->string('provider');
-            $table->string('dataset')->default('');
-            $table->text('access_token')->nullable();
-            $table->boolean('enabled')->default(true);
-            $table->boolean('is_default')->default(false);
-            $table->timestamps();
-
-            $table->index(['provider', 'is_default']);
-        });
-
         Schema::create('tracking_events', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('destination_id')->constrained()->cascadeOnDelete();
+            $table->string('provider');
             $table->string('moment');
             $table->string('event');
             $table->string('deduplication_id');
@@ -50,8 +37,8 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['destination_id', 'deduplication_id', 'event']);
-            $table->index(['state', 'destination_id', 'id']);
+            $table->unique(['provider', 'deduplication_id', 'event']);
+            $table->index(['state', 'provider', 'id']);
         });
 
         Schema::create('tracking_contexts', function (Blueprint $table) {
@@ -76,6 +63,5 @@ return new class extends Migration
         Schema::dropIfExists('visit_counts');
         Schema::dropIfExists('tracking_contexts');
         Schema::dropIfExists('tracking_events');
-        Schema::dropIfExists('destinations');
     }
 };

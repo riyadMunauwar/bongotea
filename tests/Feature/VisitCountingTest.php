@@ -51,10 +51,10 @@ describe('the switch', function () {
     });
 
     /**
-     * Counting owes nothing to any ad platform: a store with no Destination
+     * Counting owes nothing to any ad platform: a store reporting to no Provider
      * anywhere still counts.
      */
-    it('counts a load for a store with no destination once counting is on', function () {
+    it('counts a load for a store reporting to no provider once counting is on', function () {
         countingVisits();
 
         reportToBeacon()->assertNoContent();
@@ -71,7 +71,7 @@ describe('the switch', function () {
             'eventDefaults' => ['facebook' => ['PageView' => false, 'ViewContent' => false]],
         ])->save();
 
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         reportToBeacon()->assertNoContent();
 
@@ -137,7 +137,7 @@ describe('what a visit is', function () {
     it('is not a load of the order complete page or the retry page', function () {
         countingVisits();
 
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         $order = orderAsCaptured();
 

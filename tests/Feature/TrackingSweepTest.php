@@ -2,7 +2,6 @@
 
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\TrackingEvent;
@@ -22,16 +21,15 @@ use Tests\Fixtures\Tracking\ProviderScript;
  */
 
 /**
- * A captured Cash on Delivery Order reporting to a usable Destination: the
+ * A captured Cash on Delivery Order reporting to a Provider switched on and supplied: the
  * shape every test here starts from, captured and recorded for real so the
  * row under test is one a Customer actually produced.
  *
  * @param  array<string, mixed>  $details
- * @return array{0: Destination, 1: Order}
  */
-function reportingCapture(ProviderScript $script, int $price = 99000, int $quantity = 1, array $details = [], int $deliveryCharge = 0): array
+function reportingCapture(ProviderScript $script, int $price = 99000, int $quantity = 1, array $details = [], int $deliveryCharge = 0): Order
 {
-    $destination = $script->makeDestination();
+    $script->switchOn();
     $product = Product::factory()->create(['name' => 'Winter Jacket', 'price' => $price]);
 
     $order = orderAsCaptured($details, [['product' => $product, 'kilograms' => $quantity]]);
@@ -42,11 +40,11 @@ function reportingCapture(ProviderScript $script, int $price = 99000, int $quant
 
     recordCaptureOf($order->refresh());
 
-    return [$destination, $order];
+    return $order;
 }
 
-it('delivers every pending row for a destination in one request and marks them sent', function (ProviderScript $script) {
-    [$destination] = reportingCapture($script);
+it('delivers every pending row for a provider in one request and marks them sent', function (ProviderScript $script) {
+    reportingCapture($script);
 
     $script->fakeAccepted();
 
@@ -55,8 +53,8 @@ it('delivers every pending row for a destination in one request and marks them s
         ->assertSuccessful();
 
     $script->assertBatchesSent(1);
-    $script->assertAddressedTo($destination);
-    $script->assertAuthorisedWith($destination->access_token);
+    $script->assertAddressedToTheAccount();
+    $script->assertAuthorisedWith($script->accessToken());
 
     $row = TrackingEvent::sole();
 
@@ -67,7 +65,7 @@ it('delivers every pending row for a destination in one request and marks them s
 })->with('tracking providers');
 
 it('reports the purchase with the order number as both the deduplication id and the merchant reference', function (ProviderScript $script) {
-    [, $order] = reportingCapture($script);
+    $order = reportingCapture($script);
 
     $script->fakeAccepted();
     $this->artisan('tracking:sweep')->assertSuccessful();
@@ -83,7 +81,7 @@ it('reports the purchase with the order number as both the deduplication id and 
 })->with('tracking providers');
 
 it('reports a value that includes the delivery charge, so it agrees with the merchants own sales figure', function (ProviderScript $script) {
-    [, $order] = reportingCapture($script, price: 99000, quantity: 2, deliveryCharge: 6000);
+    $order = reportingCapture($script, price: 99000, quantity: 2, deliveryCharge: 6000);
 
     expect($order->subtotal)->toBe(198000)
         ->and($order->delivery_charge)->toBe(6000)
@@ -110,7 +108,7 @@ it('reports the currency the merchant set, not the one config shipped with', fun
 })->with('tracking providers');
 
 it('reports the contents from the order lines, at the price and quantity agreed at capture', function (ProviderScript $script) {
-    [, $order] = reportingCapture($script, price: 45000, quantity: 3);
+    $order = reportingCapture($script, price: 45000, quantity: 3);
     $line = $order->lines()->sole();
 
     $script->fakeAccepted();
@@ -122,7 +120,7 @@ it('reports the contents from the order lines, at the price and quantity agreed 
 })->with('tracking providers');
 
 it('hashes every match key, and leaves the ip, the user agent and the click identifiers plain', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     $order = orderAsCaptured([
         'name' => 'Rahim Uddin',
@@ -166,7 +164,7 @@ it('hashes every match key, and leaves the ip, the user agent and the click iden
 })->with('tracking providers');
 
 it('leaves a match key out rather than sending a hashed blank the provider can never match', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     /** The Customer gave a one-word name and no email. */
     recordCaptureOf(orderAsCaptured(['name' => 'Rahim', 'email' => null]));
@@ -188,7 +186,7 @@ it('leaves a match key out rather than sending a hashed blank the provider can n
 })->with('tracking providers');
 
 it('cuts batches at the providers own limit and sends one request per batch', function (ProviderScript $script) {
-    [$destination] = reportingCapture($script);
+    reportingCapture($script);
     $order = Order::sole();
     $limit = $script->batchLimit();
 
@@ -201,7 +199,7 @@ it('cuts batches at the providers own limit and sends one request per batch', fu
 
     for ($i = 0; $i < $limit; $i++) {
         $rows[] = [
-            'destination_id' => $destination->getKey(),
+            'provider' => $script->provider()->value,
             'moment' => TrackingMoment::Capture->value,
             'event' => $script->purchaseEvent(),
             'deduplication_id' => 'filler-'.$i,
@@ -290,6 +288,30 @@ it('marks a refused batch failed with what the provider said, because retrying i
     $script->assertBatchesSent(0);
 })->with('tracking providers');
 
+it('holds a switched-off providers rows and still expires them once they are too old', function (ProviderScript $script) {
+    reportingCapture($script);
+
+    $script->switchOff();
+
+    Http::fake();
+
+    $this->artisan('tracking:sweep')
+        ->expectsOutputToContain($script->provider()->getLabel().' is switched off in Settings.')
+        ->assertSuccessful();
+
+    expect(TrackingEvent::sole()->state)->toBe(TrackingEventState::Pending);
+
+    $this->travelTo(now()->addSeconds($script->acceptanceWindowSeconds() + 60));
+
+    $this->artisan('tracking:sweep')
+        ->expectsOutputToContain('Expired 1 event')
+        ->assertSuccessful();
+
+    expect(TrackingEvent::sole()->state)->toBe(TrackingEventState::Expired);
+
+    Http::assertNothingSent();
+})->with('tracking providers');
+
 it('expires a row the provider will no longer accept rather than retrying it forever', function (ProviderScript $script) {
     reportingCapture($script);
 
@@ -306,15 +328,15 @@ it('expires a row the provider will no longer accept rather than retrying it for
     Http::assertNothingSent();
 })->with('tracking providers');
 
-it('skips an unusable destination with the providers own wording, and keeps its rows for when it is fixed', function (ProviderScript $script) {
-    [$destination] = reportingCapture($script);
+it('skips an unusable provider with its own wording, and keeps its rows for when it is fixed', function (ProviderScript $script) {
+    reportingCapture($script);
 
-    $destination->update(['access_token' => null]);
+    $script->withoutAccessToken();
 
     Http::fake();
 
     $this->artisan('tracking:sweep')
-        ->expectsOutputToContain($destination->refusal())
+        ->expectsOutputToContain($script->provider()->driver()->refusal())
         ->assertSuccessful();
 
     Http::assertNothingSent();
@@ -322,9 +344,9 @@ it('skips an unusable destination with the providers own wording, and keeps its 
     expect(TrackingEvent::sole()->state)->toBe(TrackingEventState::Pending);
 
     /** The wording is the Provider's, said once, and the admin reads the same sentence. */
-    expect($destination->refresh()->refusal())->toContain('has no access token');
+    expect($script->provider()->driver()->refusal())->toContain('has no access token');
 
-    $destination->update(['access_token' => 'EAA-restored']);
+    $script->restoreAccessToken('EAA-restored');
 
     $script->fakeAccepted();
     $this->artisan('tracking:sweep')->assertSuccessful();
@@ -333,7 +355,7 @@ it('skips an unusable destination with the providers own wording, and keeps its 
 })->with('tracking providers');
 
 it('speaks to nobody when there is nothing waiting', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Http::fake();
 

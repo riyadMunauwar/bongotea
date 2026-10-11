@@ -403,23 +403,19 @@ The Moment a Product goes from none to some in a Cart — once per Product per C
 _Avoid_: add to basket, cart event, cart update
 
 **Provider**:
-An ad platform events can be reported to — Facebook first, TikTok and Google Ads later. A Provider owns everything platform-specific: which of its own events a Moment produces, how many may travel in one request, how long after the fact it still accepts them, and why a Destination cannot be delivered to.
-_Avoid_: channel, integration, vendor, network
-
-**Destination**:
-One configured place a Provider's events are sent: for Facebook, a dataset and the access token that writes to it, under a name the Merchant chose. A Merchant may hold several — separate brands, separate clients — and marks exactly one default per Provider, which is where the store reports. Switching a Destination off pauses reporting to it without deleting it.
-_Avoid_: pixel, account, connection, integration
+An ad platform events can be reported to — Facebook first, TikTok and Google Ads later. Like a Courier, the Merchant supplies what it needs once in Settings — for Facebook, a dataset and the access token that writes to it — and the store reports to one account per Provider, never several. Switching a Provider off pauses reporting to it without forgetting what was supplied. A Provider owns everything platform-specific: which of its own events a Moment produces, how many may travel in one request, how long after the fact it still accepts them, and why what the Merchant supplied cannot be delivered to.
+_Avoid_: channel, integration, vendor, network, destination, connection
 
 **Purchase**:
 Exactly one is counted per Order. A Cash on Delivery Order reports it at Capture, because there is no later moment; an Order paid online reports it only once a Payment is Paid, so an Order abandoned at the gateway is never reported as revenue. What it is worth is the Order's total, Delivery Charge included, so it agrees with Sales. It is sent twice — once from the Customer's browser and once from the server — and counted once, because both copies carry the order number as the deduplication id. Not the **Purchases** the Inventory admin shows: that label is a Supply — stock bought in — where this Moment is a sale sent out. The two share a word and nothing else (#172).
 _Avoid_: conversion, sale, transaction
 
 **Pixel**:
-The browser's half of reporting: a snippet a page carries that reports a Moment from the Customer's own browser, beside the copy the server sends. Both copies carry the same deduplication id, so the Provider counts one event. A Destination is not a Pixel — the Pixel is what addresses one, and a page with no Destination carries none.
+The browser's half of reporting: a snippet a page carries that reports a Moment from the Customer's own browser, beside the copy the server sends. Both copies carry the same deduplication id, so the Provider counts one event. A Provider is not a Pixel — the Pixel is what addresses one, and a page while no Provider is switched on carries none.
 _Avoid_: tag, tracker, script, beacon
 
 **Tracking Outbox**:
-Where a Moment is written down, one row per Destination per provider event, so that no web request ever calls an ad platform. A scheduled sweep delivers what is waiting. A row holds no personal detail: what a Provider is told about the Customer is read from the Order when the row is delivered.
+Where a Moment is written down, one row per switched-on Provider per provider event, so that no web request ever calls an ad platform. A scheduled sweep delivers what is waiting. A row holds no personal detail: what a Provider is told about the Customer is read from the Order when the row is delivered.
 _Avoid_: queue, event log, buffer
 
 **Tracking Context**:

@@ -3,7 +3,7 @@
 namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
+use App\Enums\TrackingProvider;
 use App\Models\Order;
 
 /**
@@ -17,7 +17,7 @@ use App\Models\Order;
  * two.
  *
  * What is built here is the element and the consent hook. What goes inside it
- * is each Provider's own `script()`: one base code per Destination, and
+ * is each Provider's own `script()`: one base code per Provider, and
  * nothing in this class ever names an event of any platform's.
  *
  * Where the store reports and what it reports there is
@@ -55,7 +55,7 @@ class TrackingSnippet
 
     /**
      * The Pixel every storefront page carries, written into the Inertia root
-     * document: each Destination's base code, and one function per Moment the
+     * document: each Provider's base code, and one function per Moment the
      * browser reports for the storefront to call as each one happens.
      *
      * The load is not reported by the base code. The storefront is one
@@ -75,9 +75,9 @@ class TrackingSnippet
         $scripts = [];
         $calls = [];
 
-        foreach ($plan->destinations() as $destination) {
-            $driver = $destination->driver();
-            $script = $driver->script($destination, [], reportsLoad: false);
+        foreach ($plan->providers() as $provider) {
+            $driver = $provider->driver();
+            $script = $driver->script([], reportsLoad: false);
 
             if ($script === '') {
                 continue;
@@ -86,7 +86,7 @@ class TrackingSnippet
             $scripts[] = $script;
 
             foreach (TrackingMoment::reportableByBrowser() as $moment) {
-                $call = $driver->calls($destination, $this->storefrontEvents($plan, $destination, $moment));
+                $call = $driver->calls($this->storefrontEvents($plan, $provider, $moment));
 
                 if ($call !== '') {
                     $calls[$moment->value][] = $call;
@@ -115,24 +115,24 @@ class TrackingSnippet
     }
 
     /**
-     * The events this Destination reports for one storefront Moment, less the
+     * The events this Provider reports for one storefront Moment, less the
      * ones the store has switched off.
      *
      * @return list<BrowserEvent>
      */
-    private function storefrontEvents(TrackingPlan $plan, Destination $destination, TrackingMoment $moment): array
+    private function storefrontEvents(TrackingPlan $plan, TrackingProvider $provider, TrackingMoment $moment): array
     {
         return array_map(
             fn (string $event): BrowserEvent => $moment->isAboutProductsNamed()
                 ? BrowserEvent::forSelection($event, self::IDENTIFIER, self::SELECTION, $plan->sendsContentDetail())
                 : BrowserEvent::forLoad($event, self::IDENTIFIER),
-            $plan->eventsFor($destination, $moment),
+            $plan->eventsFor($provider, $moment),
         );
     }
 
     /**
      * The global the storefront calls into: a function per Moment that has
-     * anything to report, each running every Destination's calls for it.
+     * anything to report, each running every Provider's calls for it.
      *
      * @param  array<string, list<string>>  $calls  by Moment
      */
@@ -171,13 +171,12 @@ class TrackingSnippet
 
         $scripts = [];
 
-        foreach ($plan->destinations() as $destination) {
-            $driver = $destination->driver();
+        foreach ($plan->providers() as $provider) {
+            $driver = $provider->driver();
 
             $script = $driver->script(
-                $destination,
-                $this->purchase($plan, $destination, $order, $reportsPurchase),
-                reportsLoad: $plan->reports($destination->provider, $driver->loadEvent()),
+                $this->purchase($plan, $provider, $order, $reportsPurchase),
+                reportsLoad: $plan->reports($provider, $driver->loadEvent()),
             );
 
             if ($script !== '') {
@@ -189,7 +188,7 @@ class TrackingSnippet
     }
 
     /**
-     * The Purchase this Destination reports for the Order, or nothing where
+     * The Purchase this Provider reports for the Order, or nothing where
      * this browser is not the one that placed it.
      *
      * Which Moment the Purchase belongs to is `MomentRecorder`'s rule and not
@@ -199,7 +198,7 @@ class TrackingSnippet
      *
      * @return list<BrowserEvent>
      */
-    private function purchase(TrackingPlan $plan, Destination $destination, Order $order, bool $reportsPurchase): array
+    private function purchase(TrackingPlan $plan, TrackingProvider $provider, Order $order, bool $reportsPurchase): array
     {
         if (! $reportsPurchase) {
             return [];
@@ -207,14 +206,14 @@ class TrackingSnippet
 
         return array_map(
             fn (string $event): BrowserEvent => BrowserEvent::forOrder($event, $order, $plan->sendsContentDetail()),
-            $plan->eventsFor($destination, MomentRecorder::purchaseMomentFor($order)),
+            $plan->eventsFor($provider, MomentRecorder::purchaseMomentFor($order)),
         );
     }
 
     /**
      * Every Provider's script in one element, behind the consent hook.
      *
-     * Nothing at all where no Destination had anything to say, so a page with
+     * Nothing at all where no Provider had anything to say, so a page with
      * no tracking configured is the document it has always been — no element,
      * no global, no request to anyone.
      *

@@ -2,7 +2,6 @@
 
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
 use App\Models\Order;
 use App\Models\TrackingContext;
 use App\Models\TrackingEvent;
@@ -21,8 +20,8 @@ use Tests\Fixtures\Tracking\ProviderScript;
  * spoken to from a request, and the row is the only evidence there is until
  * the sweep runs.
  */
-it('writes one pending purchase row per applicable destination when a cash on delivery order is captured', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+it('writes one pending purchase row per switched-on provider when a cash on delivery order is captured', function (ProviderScript $script) {
+    $script->switchOn();
 
     Http::fake();
 
@@ -34,7 +33,7 @@ it('writes one pending purchase row per applicable destination when a cash on de
 
     $row = TrackingEvent::sole();
 
-    expect($row->destination_id)->toBe($destination->getKey())
+    expect($row->provider)->toBe($script->provider())
         ->and($row->moment)->toBe(TrackingMoment::Capture)
         ->and($row->event)->toBe($script->purchaseEvent())
         ->and($row->state)->toBe(TrackingEventState::Pending)
@@ -53,7 +52,7 @@ it('writes one pending purchase row per applicable destination when a cash on de
 })->with('tracking providers');
 
 it('records what the browser told us, unhashed, because a provider matches on it itself', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured(), server: [
         'REMOTE_ADDR' => '203.0.113.42',
@@ -67,7 +66,7 @@ it('records what the browser told us, unhashed, because a provider matches on it
 })->with('tracking providers');
 
 it('records the click identifiers the browser sent, unhashed, because a provider matches on them itself', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured(), [TrackingContext::CLICK_IDS_FIELD => $script->browserClickIds()]);
 
@@ -75,7 +74,7 @@ it('records the click identifiers the browser sent, unhashed, because a provider
 })->with('tracking providers');
 
 it('reports no click identifiers for a visitor whose browser sent none', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured());
 
@@ -88,7 +87,7 @@ it('reports no click identifiers for a visitor whose browser sent none', functio
  * over one would be a sale lost to tracking.
  */
 it('keeps only the click identifiers a provider recognises, cut to length', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured(), [
         TrackingContext::CLICK_IDS_FIELD => [
@@ -102,7 +101,7 @@ it('keeps only the click identifiers a provider recognises, cut to length', func
 })->with('tracking providers');
 
 it('holds no personal detail on the row: what a provider is told about the customer is read from the order at delivery', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured());
 
@@ -116,7 +115,7 @@ it('holds no personal detail on the row: what a provider is told about the custo
 })->with('tracking providers');
 
 it('reports nothing at capture for an order that chose an online method, because the money has not moved', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     $payment = capturedFor(new SslCommerzScript);
     recordCaptureOf($payment->order);
@@ -125,7 +124,7 @@ it('reports nothing at capture for an order that chose an online method, because
         ->and(Order::sole()->payment_method->isOnline())->toBeTrue();
 })->with('tracking providers');
 
-it('reports nothing at all when no destination is configured', function () {
+it('reports nothing at all when no provider is switched on', function () {
     Http::fake();
 
     recordCaptureOf(orderAsCaptured());
@@ -135,31 +134,23 @@ it('reports nothing at all when no destination is configured', function () {
     Http::assertNothingSent();
 });
 
-it('reports nothing to a destination the merchant has switched off, so a campaign break accumulates nothing', function () {
-    Destination::factory()->disabled()->create();
+it('reports nothing to a provider the merchant has switched off, so a campaign break accumulates nothing', function (ProviderScript $script) {
+    $script->switchOn();
+    $script->switchOff();
 
     recordCaptureOf(orderAsCaptured());
 
     expect(TrackingEvent::count())->toBe(0);
-});
+})->with('tracking providers');
 
-it('still accumulates rows for a destination that is on but has no credentials yet, so fixing the token loses nothing', function () {
-    Destination::factory()->withoutCredentials()->create();
+it('still accumulates rows for a provider that is on but has no access token yet, so fixing the token loses nothing', function (ProviderScript $script) {
+    $script->switchOn();
+    $script->withoutAccessToken();
 
     recordCaptureOf(orderAsCaptured());
 
     expect(TrackingEvent::sole()->state)->toBe(TrackingEventState::Pending);
-});
-
-it('reports only to the provider default, not to every destination the merchant holds', function () {
-    $default = Destination::factory()->create(['label' => 'Brand Ads']);
-    $other = Destination::factory()->notDefault()->create(['label' => "A client's account"]);
-
-    recordCaptureOf(orderAsCaptured());
-
-    expect(TrackingEvent::sole()->destination_id)->toBe($default->getKey())
-        ->and($other->trackingEvents()->count())->toBe(0);
-});
+})->with('tracking providers');
 
 /**
  * The invariant the outbox's unique index carries, rather than a check in
@@ -167,7 +158,7 @@ it('reports only to the provider default, not to every destination the merchant 
  * Notification and the sweep, and only the first of them may write.
  */
 it('writes one row however many times the same moment is recorded', function () {
-    (new FacebookScript)->makeDestination();
+    (new FacebookScript)->switchOn();
 
     $order = orderAsCaptured();
     recordCaptureOf($order);

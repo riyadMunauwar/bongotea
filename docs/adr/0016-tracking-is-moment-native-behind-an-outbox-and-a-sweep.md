@@ -1,5 +1,7 @@
 # Tracking is Moment-native, written to an outbox and delivered by a sweep
 
+> **Superseded in part by [ADR-0032](0032-one-account-per-provider-held-in-settings.md).** There are no Destinations: each Provider has one account, held in `TrackingSettings`, and an outbox row names its Provider.
+
 Tracking is organised around **Moments** — Visit, Checkout Started, Capture, Paid — rather than
 around any one ad platform's event names. A **Provider** is one class that translates a Moment
 into its own wire format and owns everything platform-specific: which of its events a Moment

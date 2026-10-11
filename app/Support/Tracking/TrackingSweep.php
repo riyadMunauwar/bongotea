@@ -3,7 +3,7 @@
 namespace App\Support\Tracking;
 
 use App\Enums\TrackingEventState;
-use App\Models\Destination;
+use App\Enums\TrackingProvider;
 use App\Models\TrackingEvent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
  * The one place an ad platform is ever spoken to.
  *
  * It drains the outbox in the shape every Provider's API takes: group by
- * Destination, cut batches at the Provider's own limit, one request per
+ * Provider, cut batches at the Provider's own limit, one request per
  * batch, record what was said. Nothing here knows an event name or a payload
  * field — that is the Provider's, and this is why adding TikTok needs no
  * change to the sweep.
@@ -31,29 +31,27 @@ class TrackingSweep
 
     /**
      * What one sweep did: how many rows were delivered, refused, given up on
-     * and left for next time, and why each unusable Destination was passed
-     * over. The reasons are the Provider's own wording — which already names
-     * the Destination — and are keyed by id, because two Destinations may
-     * share a label and an operator must hear about both.
+     * and left for next time, and why each unusable Provider was passed
+     * over, in the Provider's own wording and keyed by its name.
      *
-     * @return array{sent: int, failed: int, expired: int, pending: int, skipped: array<int, string>}
+     * @return array{sent: int, failed: int, expired: int, pending: int, skipped: array<string, string>}
      */
     public function run(): array
     {
         $tally = ['sent' => 0, 'failed' => 0, 'expired' => 0, 'pending' => 0, 'skipped' => []];
 
-        foreach ($this->destinationsWithPendingRows() as $destination) {
-            $tally['expired'] += $this->expireStaleRows($destination);
+        foreach ($this->providersWithPendingRows() as $provider) {
+            $tally['expired'] += $this->expireStaleRows($provider);
 
-            $refusal = $destination->refusal();
+            $refusal = $provider->driver()->refusal();
 
             if ($refusal !== null) {
-                $tally['skipped'][$destination->getKey()] = $refusal;
+                $tally['skipped'][$provider->value] = $refusal;
 
                 continue;
             }
 
-            $this->deliver($destination, $tally);
+            $this->deliver($provider, $tally);
         }
 
         /**
@@ -68,20 +66,26 @@ class TrackingSweep
     }
 
     /**
-     * Every Destination holding at least one Pending row, oldest first.
+     * Every Provider holding at least one Pending row, in the enum's order.
      *
-     * Read as models rather than as ids because the Provider is asked for its
-     * refusal and its batch limit per Destination, and a Destination that was
-     * deleted since the rows were written has taken them with it.
+     * Asked of the rows rather than of the Settings, so a Provider switched
+     * off since its rows were written still has them expired once they are
+     * too old, and is named in the tally for as long as they wait.
      *
-     * @return Collection<int, Destination>
+     * @return list<TrackingProvider>
      */
-    private function destinationsWithPendingRows(): Collection
+    private function providersWithPendingRows(): array
     {
-        return Destination::query()
-            ->whereHas('trackingEvents', fn ($query) => $query->where('state', TrackingEventState::Pending))
-            ->orderBy('id')
-            ->get();
+        $waiting = TrackingEvent::query()
+            ->where('state', TrackingEventState::Pending)
+            ->distinct()
+            ->pluck('provider')
+            ->all();
+
+        return array_values(array_filter(
+            TrackingProvider::cases(),
+            fn (TrackingProvider $provider): bool => in_array($provider, $waiting, true),
+        ));
     }
 
     /**
@@ -89,38 +93,40 @@ class TrackingSweep
      *
      * Measured from when the Moment happened, not from when the row was
      * written, because that is what a Provider's acceptance window is
-     * measured from. Done before the refusal check, so a Destination the
+     * measured from. Done before the refusal check, so a Provider the
      * Merchant never fixes still drains rather than growing forever.
      */
-    private function expireStaleRows(Destination $destination): int
+    private function expireStaleRows(TrackingProvider $provider): int
     {
-        $cutoff = now()->subSeconds($destination->driver()->acceptanceWindowSeconds());
+        $cutoff = now()->subSeconds($provider->driver()->acceptanceWindowSeconds());
 
-        return $destination->trackingEvents()
+        return TrackingEvent::query()
+            ->where('provider', $provider)
             ->where('state', TrackingEventState::Pending)
             ->where('occurred_at', '<=', $cutoff)
             ->update([
                 'state' => TrackingEventState::Expired,
-                'last_error' => 'Older than what '.$destination->provider->getLabel().' accepts.',
+                'last_error' => 'Older than what '.$provider->getLabel().' accepts.',
                 'updated_at' => now(),
             ]);
     }
 
     /**
-     * @param  array{sent: int, failed: int, expired: int, pending: int, skipped: array<int, string>}  $tally
+     * @param  array{sent: int, failed: int, expired: int, pending: int, skipped: array<string, string>}  $tally
      */
-    private function deliver(Destination $destination, array &$tally): void
+    private function deliver(TrackingProvider $provider, array &$tally): void
     {
-        $driver = $destination->driver();
+        $driver = $provider->driver();
 
-        $destination->trackingEvents()
+        TrackingEvent::query()
+            ->where('provider', $provider)
             ->pending()
             ->with(['order.lines'])
-            ->chunkById($driver->batchLimit(), function (Collection $batch) use ($destination, $driver, &$tally): bool {
+            ->chunkById($driver->batchLimit(), function (Collection $batch) use ($provider, $driver, &$tally): bool {
                 /** @var list<TrackingEvent> $events */
                 $events = $batch->all();
 
-                $delivery = $driver->send($destination, $events);
+                $delivery = $driver->send($events);
 
                 if ($delivery->accepted) {
                     $tally['sent'] += $this->settle($batch, TrackingEventState::Sent, null);
@@ -132,15 +138,14 @@ class TrackingSweep
                     $tally['pending'] += $this->settle($batch, TrackingEventState::Pending, $delivery->error);
 
                     Log::warning('A tracking batch could not be delivered and stays pending.', [
-                        'destination' => $destination->label,
-                        'provider' => $destination->provider->value,
+                        'provider' => $provider->value,
                         'events' => $batch->count(),
                         'error' => $delivery->error,
                     ]);
 
                     /**
                      * Stop rather than walk on: the Provider is unreachable,
-                     * so every later batch for this Destination would fail
+                     * so every later batch for this Provider would fail
                      * the same way and cost a call to find out.
                      */
                     return false;
@@ -150,8 +155,7 @@ class TrackingSweep
 
                 /** What the Provider actually said, whole: a refusal is the one outcome somebody has to read. */
                 Log::warning('A tracking batch was refused and will not be retried.', [
-                    'destination' => $destination->label,
-                    'provider' => $destination->provider->value,
+                    'provider' => $provider->value,
                     'events' => $batch->count(),
                     'error' => $delivery->error,
                     'response' => $delivery->response,

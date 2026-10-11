@@ -1,15 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Destinations\Widgets;
+namespace App\Filament\Clusters\Settings\Widgets;
 
-use App\Models\Destination;
 use App\Support\Tracking\DeliveryHealth;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
- * Whether reporting is healthy, above the list of places it reports to.
+ * Whether reporting is healthy, above the accounts it reports to.
  *
  * Three tiles answering the three questions an operator arrives with. How
  * much is waiting, which is a queue being worked unless it is days old. How
@@ -20,8 +19,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * figure on this screen looks like a quiet week.
  *
  * The figures come whole from `DeliveryHealth`; nothing here counts. Drawn
- * only where a Destination exists, so a Merchant who has never configured
- * tracking is not told their scheduler is broken.
+ * only where `DeliveryHealth::applies()`, so a Merchant who has never
+ * configured tracking is not told their scheduler is broken.
  */
 class DeliveryHealthStats extends StatsOverviewWidget
 {
@@ -31,7 +30,7 @@ class DeliveryHealthStats extends StatsOverviewWidget
 
     public static function canView(): bool
     {
-        return Destination::query()->exists();
+        return app(DeliveryHealth::class)->applies();
     }
 
     /**
@@ -75,7 +74,7 @@ class DeliveryHealthStats extends StatsOverviewWidget
      * The split is in the description because it is what the operator does
      * next: a refusal is a credential or a payload somebody must fix and will
      * sit here until they do, since the sweep never retries one, while an
-     * expiry is a Destination that stayed broken for longer than the
+     * expiry is a Provider that stayed broken for longer than the
      * Provider's window.
      */
     private function failed(DeliveryHealth $health): Stat

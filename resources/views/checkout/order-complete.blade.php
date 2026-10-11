@@ -7,7 +7,7 @@
     This document is ours, so it carries its own styles inline: no stylesheet,
     font or picture from anywhere. A page carrying a Customer's details makes
     no request they did not ask for, and the one exception is the one the
-    Merchant asked for by configuring a Destination — the Pixel in `$snippet`,
+    Merchant asked for by switching a Provider on — the Pixel in `$snippet`,
     which is absent entirely where there is none. It is never cached: it is
     addressed per order and hit once.
 

@@ -3,34 +3,37 @@
 namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
+use App\Filament\Clusters\Settings\Widgets\DeliveryHealthStats;
+use App\Filament\Clusters\Settings\Widgets\RecentDeliveryFailures;
 use App\Support\Settings\TrackingSettings;
 use BackedEnum;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 
 /**
- * The store-wide Tracking Config: where the store reports, what it reports
- * there, whether it names the Products bought, and whether the Merchant
- * counts their own Visits while it does.
+ * The store-wide Tracking Config: the one account each Provider reports to,
+ * what it reports there, whether it names the Products bought, and whether
+ * the Merchant counts their own Visits while it does — with whether any of it
+ * is actually leaving the building drawn above and below the form.
  *
- * One section per Provider, with its default Destination and exactly the
- * events that Provider declares — so the page grows on its own as a Provider
- * gains an event, and a second platform is a section nobody had to write.
+ * One section per Provider, the way the Couriers page has one per Courier
+ * (ADR-0032): its switch, what it needs to be spoken to, why it cannot be
+ * reported to where it cannot, and exactly the events that Provider declares
+ * — so the page grows on its own as a Provider gains an event. The access
+ * token is a plain `TextInput` here; the page base makes it write-only.
  *
- * The default Destination is the Destination's own flag rather than a
- * property of the group: `DestinationObserver` keeps exactly one per
- * Provider, and a second copy in the settings row would be a second thing to
- * keep true when one is deleted.
+ * Nothing is required. A Provider switched on with a blank credential still
+ * records what happens and the sweep holds it until the credential arrives,
+ * so a Merchant may paste the dataset today and the token tomorrow. Every
+ * event is on until switched off.
  *
- * Everything is on by default and nothing is required. A Merchant who never
- * opens this page reports everything their Providers produce.
+ * The two diagnostics widgets are not discovered ones: anything under
+ * `app/Filament/Widgets` is drawn on the Dashboard, and "is my tracking
+ * working" is an operator's question asked beside the account it is about.
  */
 class Tracking extends SettingsPage
 {
@@ -38,8 +41,8 @@ class Tracking extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
-    /** After the Destinations resource, which sorts 6: where events go, then which of them do. */
-    protected static ?int $navigationSort = 7;
+    /** After Payment Methods, which sorts 5: how the store is paid, then what it reports. */
+    protected static ?int $navigationSort = 6;
 
     /**
      * Every declared event drawn at what it actually does, over whatever the
@@ -66,71 +69,28 @@ class Tracking extends SettingsPage
     }
 
     /**
-     * The group's properties, and each Provider's default Destination as the
-     * Destinations have it.
+     * Whether reporting is healthy, above the form that configures it.
      *
-     * @return array<string, mixed>
+     * @return array<class-string>
      */
-    protected function formValues(): array
+    protected function getHeaderWidgets(): array
     {
         return [
-            ...parent::formValues(),
-            'defaultDestinations' => Destination::query()
-                ->where('is_default', true)
-                ->get()
-                ->mapWithKeys(fn (Destination $destination): array => [$destination->provider->value => $destination->getKey()])
-                ->all(),
+            DeliveryHealthStats::class,
         ];
     }
 
     /**
-     * The group, and each chosen default Destination, saved together or not
-     * at all.
-     */
-    public function save(): void
-    {
-        $chosen = $this->form->getState()['defaultDestinations'] ?? [];
-
-        DB::transaction(function () use ($chosen): void {
-            parent::save();
-
-            $this->markDefaultDestinations($chosen);
-        });
-    }
-
-    /**
-     * The group's values: the default Destinations are not among them.
+     * What never arrived, at the foot of the page, in each Provider's own
+     * words.
      *
-     * @return array<string, mixed>
+     * @return array<class-string>
      */
-    protected function valuesToSave(): array
+    protected function getFooterWidgets(): array
     {
-        return Arr::except(parent::valuesToSave(), 'defaultDestinations');
-    }
-
-    /**
-     * Mark each chosen Destination default — the observer turns that into
-     * "and no other" — and log the ones that changed, as a saved setting is.
-     *
-     * @param  array<string, int|string|null>  $chosen  Destination ids keyed by Provider
-     */
-    private function markDefaultDestinations(array $chosen): void
-    {
-        $destinations = Destination::query()
-            ->whereKey(array_filter($chosen))
-            ->where('is_default', false)
-            ->get()
-            ->filter(fn (Destination $destination): bool => (string) ($chosen[$destination->provider->value] ?? '') === (string) $destination->getKey());
-
-        foreach ($destinations as $destination) {
-            $destination->update(['is_default' => true]);
-
-            activity()
-                ->causedBy(auth()->user())
-                ->performedOn($destination)
-                ->event('updated')
-                ->log("Made {$destination->label} the default {$destination->provider->getLabel()} Destination");
-        }
+        return [
+            RecentDeliveryFailures::class,
+        ];
     }
 
     /**
@@ -175,17 +135,33 @@ class Tracking extends SettingsPage
     }
 
     /**
-     * One Provider's default Destination and its events, read from the
-     * Provider itself rather than listed here, so nothing on this page has to
-     * be edited when one gains an event.
+     * One Provider's account and its events, read from the Provider itself
+     * rather than listed here, so nothing on this page has to be edited when
+     * one gains an event.
      */
     private static function provider(TrackingProvider $provider): Section
     {
-        return Section::make($provider->getLabel())
-            ->description('Where the store reports to '.$provider->getLabel().', and what it reports there.')
+        $label = $provider->getLabel();
+
+        return Section::make($label)
+            ->description("The {$label} account the store reports to, and what it reports there.")
             ->columns(1)
             ->schema([
-                self::defaultDestination($provider),
+                Toggle::make(TrackingSettings::property($provider, 'Enabled'))
+                    ->label("Report to {$label}")
+                    ->helperText('Off, and nothing new is recorded or reported. What is already waiting stays until it is too old to send.'),
+
+                TextInput::make(TrackingSettings::property($provider, 'Dataset'))
+                    ->label($provider->datasetLabel())
+                    ->maxLength(255)
+                    ->helperText("From your {$label} Events Manager. The Pixel is on your pages as soon as this is filled."),
+
+                TextInput::make(TrackingSettings::property($provider, 'AccessToken'))
+                    ->label('Access token')
+                    ->maxLength(1000)
+                    ->helperText('What the server sends its own copy of each event with. Until it is filled, events are kept and sent once it is.'),
+
+                self::refusal($provider),
 
                 ...array_map(
                     fn (string $event): Toggle => Toggle::make("eventDefaults.{$provider->value}.{$event}")
@@ -198,24 +174,17 @@ class Tracking extends SettingsPage
     }
 
     /**
-     * Which of the Provider's Destinations the store reports to. Never
-     * clearable: a Provider with Destinations always has a default, and
-     * reporting nowhere is switching the Destination off.
+     * Why the store cannot report to this Provider, in the Provider's own one
+     * wording — the words the sweep prints too. Drawn only while it is
+     * switched on, because beside an Off switch "switched off" tells nobody
+     * anything, and read inside closures so it follows what was last saved
+     * rather than what the schema was built with.
      */
-    private static function defaultDestination(TrackingProvider $provider): Select
+    private static function refusal(TrackingProvider $provider): Text
     {
-        $destinations = fn (): array => Destination::query()
-            ->where('provider', $provider)
-            ->orderBy('label')
-            ->pluck('label', 'id')
-            ->all();
-
-        return Select::make("defaultDestinations.{$provider->value}")
-            ->label('Default Destination')
-            ->options($destinations)
-            ->selectablePlaceholder(false)
-            ->placeholder('No '.$provider->getLabel().' Destination yet')
-            ->disabled(fn (Select $component): bool => $component->getOptions() === [])
-            ->helperText('Where the store reports. A default that is switched off reports nowhere. Destinations are added and switched off under Destinations.');
+        return Text::make(fn (): string => (string) $provider->driver()->refusal())
+            ->icon(Heroicon::OutlinedExclamationTriangle)
+            ->color('danger')
+            ->visible(fn (): bool => app(TrackingSettings::class)->isEnabled($provider) && $provider->driver()->refusal() !== null);
     }
 }

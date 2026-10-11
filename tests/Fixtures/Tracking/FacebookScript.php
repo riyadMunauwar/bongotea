@@ -3,7 +3,7 @@
 namespace Tests\Fixtures\Tracking;
 
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
+use App\Support\Settings\TrackingSettings;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -40,14 +40,18 @@ class FacebookScript extends ProviderScript
         return TrackingProvider::Facebook;
     }
 
-    public function makeDestination(): Destination
+    public function switchOn(): void
     {
-        return Destination::factory()->create([
-            'label' => 'Brand Ads',
-            'provider' => TrackingProvider::Facebook,
-            'dataset' => self::DATASET,
-            'access_token' => self::ACCESS_TOKEN,
-        ]);
+        app(TrackingSettings::class)->with([
+            'facebookEnabled' => true,
+            'facebookDataset' => self::DATASET,
+            'facebookAccessToken' => self::ACCESS_TOKEN,
+        ])->save();
+    }
+
+    public function accessToken(): string
+    {
+        return self::ACCESS_TOKEN;
     }
 
     public function batchLimit(): int
@@ -125,10 +129,10 @@ class FacebookScript extends ProviderScript
         ];
     }
 
-    public function carriesBaseCodeFor(Destination $destination, string $html): bool
+    public function carriesBaseCode(string $html): bool
     {
         return Str::contains($html, 'connect.facebook.net/en_US/fbevents.js')
-            && Str::contains($html, 'fbq("init", "'.$destination->dataset.'");');
+            && Str::contains($html, 'fbq("init", "'.self::DATASET.'");');
     }
 
     /**
@@ -284,9 +288,9 @@ class FacebookScript extends ProviderScript
         Http::assertSentCount($count);
     }
 
-    public function assertAddressedTo(Destination $destination): void
+    public function assertAddressedToTheAccount(): void
     {
-        Http::assertSent(fn (Request $request): bool => Str::contains($request->url(), "/{$destination->dataset}/events"));
+        Http::assertSent(fn (Request $request): bool => Str::contains($request->url(), '/'.self::DATASET.'/events'));
     }
 
     public function assertAuthorisedWith(string $accessToken): void

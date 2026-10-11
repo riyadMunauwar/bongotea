@@ -4,7 +4,6 @@ namespace App\Support\Tracking;
 
 use App\Enums\TrackingMoment;
 use App\Enums\TrackingProvider;
-use App\Models\Destination;
 use App\Support\Settings\TrackingSettings;
 
 /**
@@ -21,40 +20,40 @@ use App\Support\Settings\TrackingSettings;
 final class TrackingPlan
 {
     /**
-     * @param  list<Destination>  $destinations
+     * @param  list<TrackingProvider>  $providers
      */
     private function __construct(
-        private readonly array $destinations,
+        private readonly array $providers,
         private readonly TrackingSettings $settings,
     ) {}
 
     /**
-     * @param  list<Destination>  $destinations
+     * @param  list<TrackingProvider>  $providers
      */
-    public static function of(array $destinations, TrackingSettings $settings): self
+    public static function of(array $providers, TrackingSettings $settings): self
     {
-        return new self($destinations, $settings);
+        return new self($providers, $settings);
     }
 
     /**
-     * Where the store reports: each Provider's default Destination.
+     * Where the store reports: every Provider switched on.
      *
-     * @return list<Destination>
+     * @return list<TrackingProvider>
      */
-    public function destinations(): array
+    public function providers(): array
     {
-        return $this->destinations;
+        return $this->providers;
     }
 
     /** Whether the store reports nowhere at all, which is nothing to record and no Pixel to inject. */
     public function reportsNowhere(): bool
     {
-        return $this->destinations === [];
+        return $this->providers === [];
     }
 
     /**
-     * The events this Destination's Provider produces for this Moment, less
-     * the ones the store does not report.
+     * The events this Provider produces for this Moment, less the ones the
+     * store does not report.
      *
      * The Provider still decides what a Moment produces; this only takes
      * things off that list. So a Moment a Provider says nothing about is
@@ -62,11 +61,11 @@ final class TrackingPlan
      *
      * @return list<string>
      */
-    public function eventsFor(Destination $destination, TrackingMoment $moment): array
+    public function eventsFor(TrackingProvider $provider, TrackingMoment $moment): array
     {
         return array_values(array_filter(
-            $destination->driver()->eventsFor($moment),
-            fn (string $event): bool => $this->reports($destination->provider, $event),
+            $provider->driver()->eventsFor($moment),
+            fn (string $event): bool => $this->reports($provider, $event),
         ));
     }
 

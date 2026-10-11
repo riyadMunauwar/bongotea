@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\TrackingEvent;
@@ -23,13 +22,13 @@ use Tests\Fixtures\Tracking\ProviderScript;
  */
 
 /**
- * A Cash on Delivery Order captured for one Product, with the Provider's
- * Destination configured before the Capture so the server copy is written
+ * A Cash on Delivery Order captured for one Product, with the Provider
+ * switched on before the Capture so the server copy is written
  * too.
  */
 function orderPlacedOn(ProviderScript $script, ?Product $product = null): Order
 {
-    $script->makeDestination();
+    $script->switchOn();
 
     $order = orderAsCaptured(lines: [['product' => $product ?? Product::factory()->create(), 'kilograms' => 1]]);
     recordCaptureOf($order);
@@ -60,7 +59,7 @@ it('reports the page load and the purchase from the order complete page of the b
 
     $html = orderCompletePageFor($order);
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue();
+    expect($script->carriesBaseCode($html))->toBeTrue();
 
     $events = $script->browserEventsIn($html);
 
@@ -89,12 +88,12 @@ it('reports no purchase to a browser that did not place the order, whoever is ho
 
     $html = orderCompletePageFor($order, owning: false);
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
+    expect($script->carriesBaseCode($html))->toBeTrue()
         ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([$script->pageViewEvent()]);
 })->with('tracking providers');
 
 it('reports the page load and nothing else from the retry page, where nothing has been bought yet', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     /** An Order that chose an online method and has not been verified: Unpaid, and drawn by the Retry Page. */
     $order = capturedFor(new SslCommerzScript)->order;
@@ -104,7 +103,7 @@ it('reports the page load and nothing else from the retry page, where nothing ha
         ->assertOk()
         ->getContent();
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeTrue()
+    expect($script->carriesBaseCode($html))->toBeTrue()
         ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([$script->pageViewEvent()]);
 })->with('tracking providers');
 
@@ -114,13 +113,13 @@ it('reports the page load and nothing else from the retry page, where nothing ha
  * Customer on. It carries no Pixel at all.
  */
 it('carries no pixel on the processing page', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     $payment = capturedFor(new SslCommerzScript);
 
     $html = $this->get(processingUrl($payment))->assertOk()->getContent();
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), $html))->toBeFalse()
+    expect($script->carriesBaseCode($html))->toBeFalse()
         ->and($script->browserEventsIn($html))->toBe([])
         ->and($html)->not->toContain(TrackingSnippet::CONSENT_HOOK);
 })->with('tracking providers');
@@ -146,35 +145,35 @@ it('consults one global for consent and fires unless it is explicitly false', fu
     expect(orderCompletePageFor($order))->toContain('if (window.'.TrackingSnippet::CONSENT_HOOK.' === false) {');
 })->with('tracking providers');
 
-it('carries no pixel and requests nothing from anyone where no destination is configured', function () {
+it('carries no pixel and requests nothing from anyone where no provider is switched on', function () {
     $html = orderCompletePageFor(orderAsCaptured());
 
-    /** The document a store with no Destination serves is the one it has always served. */
+    /** The document a store reporting nowhere serves is the one it has always served. */
     expect($html)->not->toContain('<script')
         ->and($html)->not->toContain(TrackingSnippet::CONSENT_HOOK)
         ->and($html)->not->toContain('src=');
 });
 
-it('carries no pixel for a destination the merchant has switched off, because that is what a campaign break is', function (ProviderScript $script) {
+it('carries no pixel for a provider the merchant has switched off, because that is what a campaign break is', function (ProviderScript $script) {
     $order = orderAsCaptured();
 
-    $destination = $script->makeDestination();
-    $destination->update(['enabled' => false]);
+    $script->switchOn();
+    $script->switchOff();
 
     expect(orderCompletePageFor($order))->not->toContain('<script');
 })->with('tracking providers');
 
 /**
  * The access token is the server half's credential. The browser addresses a
- * Destination by its public identifier alone, so a Merchant who has pasted
+ * Provider by its public identifier alone, so a Merchant who has pasted
  * the dataset and not yet the token is already reporting from the browser.
  */
-it('still carries the pixel for a destination that has no access token yet', function (ProviderScript $script) {
+it('still carries the pixel for a provider that has no access token yet', function (ProviderScript $script) {
     $order = orderPlacedOn($script);
 
-    Destination::sole()->update(['access_token' => null]);
+    $script->withoutAccessToken();
 
-    expect($script->carriesBaseCodeFor(Destination::sole(), orderCompletePageFor($order)))->toBeTrue();
+    expect($script->carriesBaseCode(orderCompletePageFor($order)))->toBeTrue();
 })->with('tracking providers');
 
 /**
@@ -193,7 +192,7 @@ it('counts the order complete page as no visit, however often it is reloaded', f
 });
 
 it('counts the processing page and the retry page as no visits', function () {
-    (new FacebookScript)->makeDestination();
+    (new FacebookScript)->switchOn();
 
     $payment = capturedFor(new SslCommerzScript);
 
@@ -223,11 +222,11 @@ function storefrontDocument(?string $address = null): string
  */
 describe('the storefront', function () {
     it('carries the pixel and the moments the browser reports on every storefront page', function (ProviderScript $script, string $address) {
-        $destination = $script->makeDestination();
+        $script->switchOn();
 
         $html = storefrontDocument($address);
 
-        expect($script->carriesBaseCodeFor($destination, $html))->toBeTrue()
+        expect($script->carriesBaseCode($html))->toBeTrue()
             ->and(array_map($script->eventNameOf(...), $script->browserEventsIn($html)))->toBe([
                 ...$script->visitEvents(),
                 ...$script->productViewedEvents(),
@@ -246,7 +245,7 @@ describe('the storefront', function () {
      * bare base code no beacon can deduplicate against.
      */
     it('leaves the deduplication id and the basket to the browser', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         $events = $script->browserEventsIn(storefrontDocument());
         $load = array_shift($events);
@@ -262,7 +261,7 @@ describe('the storefront', function () {
     })->with('tracking providers');
 
     it('leaves out an event the store has switched off', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         app(TrackingSettings::class)->with([
             'eventDefaults' => [$script->provider()->value => array_fill_keys($script->addedToCartEvents(), false)],
@@ -275,7 +274,7 @@ describe('the storefront', function () {
     })->with('tracking providers');
 
     it('names no products from the browser where the store does not name them', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         app(TrackingSettings::class)->with(['namesProducts' => false])->save();
 
@@ -287,7 +286,8 @@ describe('the storefront', function () {
     })->with('tracking providers');
 
     it('carries no pixel where the store reports nowhere', function (ProviderScript $script) {
-        $script->makeDestination()->update(['enabled' => false]);
+        $script->switchOn();
+        $script->switchOff();
 
         $html = storefrontDocument();
 
@@ -298,12 +298,12 @@ describe('the storefront', function () {
 
     /**
      * The beacon costs a request on every load, so the storefront is told
-     * where it is only where something would be written: a Destination to
+     * where it is only where something would be written: a Provider to
      * report to, or the Merchant's own Visit count.
      */
     it('tells the storefront where the beacon is only where it would write something', function (bool $reports, bool $counts, bool $told) {
         if ($reports) {
-            (new FacebookScript)->makeDestination();
+            (new FacebookScript)->switchOn();
         }
 
         app(TrackingSettings::class)->with(['countsVisits' => $counts])->save();

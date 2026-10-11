@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
+use App\Enums\TrackingProvider;
 use App\Support\Tracking\AsSelection;
 use Database\Factories\TrackingEventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -14,8 +15,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One outbox row: one provider event, for one Destination, waiting to be
- * delivered.
+ * One outbox row: one provider event, for one Provider, waiting to be
+ * delivered to the account the Merchant supplied for it.
  *
  * Written during a request and never sent from one. Everything a Provider is
  * told about the Customer is built in the sweep out of the Order this points
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * touching a fulfilment record.
  */
 #[Fillable([
-    'destination_id',
+    'provider',
     'moment',
     'event',
     'deduplication_id',
@@ -58,6 +59,7 @@ class TrackingEvent extends Model
     protected function casts(): array
     {
         return [
+            'provider' => TrackingProvider::class,
             'moment' => TrackingMoment::class,
             'state' => TrackingEventState::class,
             'occurred_at' => 'datetime',
@@ -84,14 +86,6 @@ class TrackingEvent extends Model
     }
 
     /**
-     * @return BelongsTo<Destination, $this>
-     */
-    public function destination(): BelongsTo
-    {
-        return $this->belongsTo(Destination::class);
-    }
-
-    /**
      * The Order this event is about, where it has one. Trashed included: an
      * Order soft-deleted between Capture and the sweep still happened, and
      * the Provider is owed the event.
@@ -104,7 +98,7 @@ class TrackingEvent extends Model
     }
 
     /**
-     * The rows a sweep picks up: Pending, oldest first, so a Destination's
+     * The rows a sweep picks up: Pending, oldest first, so a Provider's
      * batch is in the order the Moments happened.
      *
      * @param  Builder<TrackingEvent>  $query

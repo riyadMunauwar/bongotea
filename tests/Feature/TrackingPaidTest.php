@@ -3,7 +3,6 @@
 use App\Enums\PaymentState;
 use App\Enums\TrackingEventState;
 use App\Enums\TrackingMoment;
-use App\Models\Destination;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\TrackingContext;
@@ -36,7 +35,7 @@ function sweepingPaymentsAfter(Payment $payment, int $seconds): void
  * gateway took the money.
  */
 it('reports nothing at capture and one purchase once a verification marks the payment paid', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -74,7 +73,7 @@ it('reports nothing at capture and one purchase once a verification marks the pa
  * is nothing they could disagree about.
  */
 it('reports the purchase whichever of the three reaches the verification', function (ProviderScript $script, string $reachedFrom) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -108,7 +107,7 @@ it('reports the purchase whichever of the three reaches the verification', funct
  * on to report it.
  */
 it('writes one purchase when all three verify at once, because the second and third writes are no-ops', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -126,7 +125,7 @@ it('writes one purchase when all three verify at once, because the second and th
 })->with('tracking providers');
 
 it('reports no purchase for an online order the gateway never confirms', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -140,7 +139,7 @@ it('reports no purchase for an online order the gateway never confirms', functio
 })->with('tracking providers');
 
 it('reports no purchase for an online order abandoned at the gateway and left to expire', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -161,7 +160,7 @@ it('reports no purchase for an online order abandoned at the gateway and left to
  * no row at Capture and so leaves none to copy from.
  */
 it('reports the purchase with what the browser told us at capture, long after the browser has gone', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -192,7 +191,7 @@ it('reports the purchase with what the browser told us at capture, long after th
  * row, and a second copy would be a second thing to prune.
  */
 it('keeps what the browser said for an order whose purchase is still to come', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);
@@ -207,7 +206,7 @@ it('keeps what the browser said for an order whose purchase is still to come', f
 })->with('tracking providers');
 
 it('keeps nothing for a cash on delivery order, which reported everything it had at capture', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     recordCaptureOf(orderAsCaptured());
 
@@ -219,7 +218,7 @@ it('keeps nothing for a cash on delivery order, which reported everything it had
  * An IP address with no purpose is not collected at all. A store reporting
  * nowhere has nothing a click identifier could ever be used for.
  */
-it('keeps nothing at all where no destination is configured', function () {
+it('keeps nothing at all where no provider is switched on', function () {
     $payment = capturedFor(new SslCommerzScript);
     recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
 
@@ -227,14 +226,15 @@ it('keeps nothing at all where no destination is configured', function () {
         ->and(TrackingEvent::count())->toBe(0);
 });
 
-it('keeps nothing for a destination the merchant has switched off, because that is what a campaign break is', function () {
-    Destination::factory()->disabled()->create();
+it('keeps nothing for a provider the merchant has switched off, because that is what a campaign break is', function (ProviderScript $script) {
+    $script->switchOn();
+    $script->switchOff();
 
     $payment = capturedFor(new SslCommerzScript);
     recordCaptureOf($payment->order, [TrackingContext::CLICK_IDS_FIELD => ['fbc' => 'fb.1.1757000000000.IwAR0abc']]);
 
     expect(TrackingContext::count())->toBe(0);
-});
+})->with('tracking providers');
 
 /**
  * The first visit's word is what stands. Whatever asks again is a later
@@ -242,7 +242,7 @@ it('keeps nothing for a destination the merchant has switched off, because that 
  * than the one that happened to re-submit it.
  */
 it('keeps one context per order however many times the capture moment is recorded', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
     $gateway = new SslCommerzScript;
 
     $payment = capturedFor($gateway);

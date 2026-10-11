@@ -1,8 +1,7 @@
 <?php
 
-namespace App\Filament\Resources\Destinations\Widgets;
+namespace App\Filament\Clusters\Settings\Widgets;
 
-use App\Models\Destination;
 use App\Models\TrackingEvent;
 use App\Support\Tracking\DeliveryHealth;
 use App\Support\Tracking\TrackingPrune;
@@ -27,7 +26,7 @@ use Livewire\Features\SupportPagination\WithoutUrlPagination;
  * be found rather than a mystery.
  *
  * Backed by a real query rather than a collection, so it pages and sorts
- * through the database — a refusing Destination can produce thousands of
+ * through the database — a refusing Provider can produce thousands of
  * rows, and loading thirty days of them into memory to draw ten is not worth
  * it. That is the one reason it does not use `PaginatesRows`; it owes both of
  * that trait's guarantees all the same, and pays them below — a paging key of
@@ -41,7 +40,7 @@ class RecentDeliveryFailures extends TableWidget
 
     public static function canView(): bool
     {
-        return Destination::query()->exists();
+        return app(DeliveryHealth::class)->applies();
     }
 
     /**
@@ -53,7 +52,7 @@ class RecentDeliveryFailures extends TableWidget
      * read as a short table — it reads as "Nothing has failed" over a list of
      * failures, which is the one thing this screen must never say wrongly.
      * The rows shrink under an open page for an ordinary reason: the nightly
-     * prune, or a Destination being deleted, while an operator sits on page
+     * prune, or a Provider's rows being settled, while an operator sits on page
      * three.
      *
      * The re-paginate costs a second query only in the case it is fixing —
@@ -79,9 +78,9 @@ class RecentDeliveryFailures extends TableWidget
              * A paging key of this table's own, so it reads `failuresPage`
              * and not `page`. Filament names every table's page plainly
              * `page` otherwise, and Livewire resolves that name straight off
-             * the request (`SupportPagination::resolvePage()`) — so the
-             * Destinations list on this same screen would hand its page
-             * number here, and a page holding no rows draws the **empty
+             * the request (`SupportPagination::resolvePage()`) — so any
+             * other table on this same screen would hand its page number
+             * here, and a page holding no rows draws the **empty
              * state** however large the total is. That reads as "nothing has
              * failed" over a list of failures.
              *
@@ -117,9 +116,8 @@ class RecentDeliveryFailures extends TableWidget
                     ->badge()
                     ->sortable(),
 
-                TextColumn::make('destination.label')
-                    ->label('Destination')
-                    ->description(fn (TrackingEvent $record): string => $record->destination->provider->getLabel()),
+                TextColumn::make('provider')
+                    ->label('Provider'),
 
                 TextColumn::make('event')
                     ->label('Event')
@@ -136,7 +134,7 @@ class RecentDeliveryFailures extends TableWidget
                     ->placeholder('No reason recorded'),
             ])
             ->emptyStateHeading('Nothing has failed')
-            ->emptyStateDescription('Every event written down in the last '.TrackingPrune::DIAGNOSTIC_RETENTION_DAYS.' days either reached its Destination or is still waiting to.')
+            ->emptyStateDescription('Every event written down in the last '.TrackingPrune::DIAGNOSTIC_RETENTION_DAYS.' days either reached its Provider or is still waiting to.')
             ->emptyStateIcon('heroicon-o-check-circle');
     }
 }

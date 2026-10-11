@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
  * Merchant-day for the whole store, so the figure already exists before this
  * ever runs and survives the rows below it being deleted. It is not derived
  * from the outbox and must never be: an outbox row exists only where a
- * Destination does, so a store reporting nowhere would count nothing, and one
+ * Provider is switched on, so a store reporting nowhere would count nothing, and one
  * reporting two provider events for one load would count twice. Anything added here
  * that a figure is derived from must be derived **before** the delete that
  * removes it, in this same method — a prune that runs before its own rollup
@@ -41,7 +41,7 @@ class TrackingPrune
     /**
      * How long a delivered outbox row is kept: long enough to answer "did
      * last week's events go out", and no longer. These are the bulk of the
-     * table — one row per provider event per Destination per Moment — so this
+     * table — one row per provider event per Provider per Moment — so this
      * is the age that decides how large it gets.
      */
     public const SENT_RETENTION_DAYS = 7;
@@ -49,7 +49,7 @@ class TrackingPrune
     /**
      * How long a row that never arrived is kept. Longer, because a refusal is
      * the one outcome somebody has to read and the diagnostics screen is
-     * where they read it, and affordable, because a Destination that refuses
+     * where they read it, and affordable, because a Provider that refuses
      * everything is a defect somebody fixes rather than a steady rate.
      */
     public const DIAGNOSTIC_RETENTION_DAYS = 30;

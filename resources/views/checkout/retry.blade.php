@@ -19,7 +19,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Order {{ $order->order_number }} is unpaid</title>
 {{--
-    The Pixel, where the store reports to a Destination: the base code and the
+    The Pixel, where the store reports to a Provider: the base code and the
     load of this page, and no Purchase — nothing has been bought here yet.
 --}}
 @if ($snippet !== '')

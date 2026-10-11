@@ -1,9 +1,9 @@
 <?php
 
 use App\Enums\TrackingEventState;
-use App\Filament\Resources\Destinations\DestinationResource;
-use App\Filament\Resources\Destinations\Widgets\DeliveryHealthStats;
-use App\Filament\Resources\Destinations\Widgets\RecentDeliveryFailures;
+use App\Filament\Clusters\Settings\Pages\Tracking;
+use App\Filament\Clusters\Settings\Widgets\DeliveryHealthStats;
+use App\Filament\Clusters\Settings\Widgets\RecentDeliveryFailures;
 use App\Models\TrackingEvent;
 use App\Models\User;
 use App\Support\Tracking\DeliveryHealth;
@@ -25,39 +25,56 @@ beforeEach(function (): void {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
-it('draws the delivery figures and the failures beside the destinations they belong to', function (ProviderScript $script) {
-    $script->makeDestination();
+it('draws the delivery figures and the failures on the tracking settings, beside the accounts they belong to', function (ProviderScript $script) {
+    $script->switchOn();
 
-    $this->get(DestinationResource::getUrl('index'))
+    $this->get(Tracking::getUrl())
         ->assertOk()
         ->assertSeeLivewire(DeliveryHealthStats::class)
         ->assertSeeLivewire(RecentDeliveryFailures::class);
 })->with('tracking providers');
 
-it('says nothing about delivery until the merchant has somewhere to deliver to', function () {
-    $this->get(DestinationResource::getUrl('index'))
+it('says nothing about delivery until the merchant has switched a provider on', function () {
+    $this->get(Tracking::getUrl())
         ->assertOk()
         ->assertDontSeeLivewire(DeliveryHealthStats::class)
         ->assertDontSeeLivewire(RecentDeliveryFailures::class);
 });
 
+it('still draws what never arrived after the provider it was owed to is switched off', function (ProviderScript $script) {
+    $script->switchOn();
+
+    TrackingEvent::factory()->create([
+        'provider' => $script->provider(),
+        'state' => TrackingEventState::Failed,
+        'last_error' => 'Invalid OAuth access token.',
+    ]);
+
+    $script->switchOff();
+
+    $this->get(Tracking::getUrl())
+        ->assertOk()
+        ->assertSeeLivewire(DeliveryHealthStats::class)
+        ->assertSeeLivewire(RecentDeliveryFailures::class);
+})->with('tracking providers');
+
 it('counts what is waiting and what never arrived, and names the oldest thing in the queue', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     TrackingEvent::factory()->count(2)->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'occurred_at' => now()->subDays(2),
     ]);
 
     TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'deduplication_id' => 'GIO-9001',
         'state' => TrackingEventState::Failed,
         'last_error' => 'Invalid OAuth access token.',
     ]);
 
     TrackingEvent::factory()->count(2)->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'deduplication_id' => fn (): string => 'GIO-'.fake()->unique()->numerify('#####'),
         'state' => TrackingEventState::Expired,
     ]);
@@ -71,7 +88,7 @@ it('counts what is waiting and what never arrived, and names the oldest thing in
 })->with('tracking providers');
 
 it('says nothing has failed rather than drawing a bare nought', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Livewire::test(DeliveryHealthStats::class)
         ->assertSee('Nothing has failed')
@@ -79,9 +96,9 @@ it('says nothing has failed rather than drawing a bare nought', function (Provid
 })->with('tracking providers');
 
 it('lists a refused event with what the provider actually said', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
-    TrackingEvent::factory()->create(['destination_id' => $destination->getKey()]);
+    TrackingEvent::factory()->create(['provider' => $script->provider()]);
 
     $script->fakeRefused('Invalid OAuth access token.');
 
@@ -89,15 +106,15 @@ it('lists a refused event with what the provider actually said', function (Provi
 
     Livewire::test(RecentDeliveryFailures::class)
         ->assertCanSeeTableRecords(TrackingEvent::all())
-        ->assertSee($destination->label)
+        ->assertSee($script->provider()->getLabel())
         ->assertSee('Invalid OAuth access token.');
 })->with('tracking providers');
 
 it('lists an event that grew too old to be accepted, beside the ones that were refused', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'deduplication_id' => 'GIO-9002',
         'occurred_at' => now()->subSeconds($script->acceptanceWindowSeconds())->subHour(),
     ]);
@@ -113,9 +130,9 @@ it('lists an event that grew too old to be accepted, beside the ones that were r
 })->with('tracking providers');
 
 it('leaves a delivered event out of the failures, because nothing went wrong with it', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
-    TrackingEvent::factory()->create(['destination_id' => $destination->getKey()]);
+    TrackingEvent::factory()->create(['provider' => $script->provider()]);
 
     $script->fakeAccepted();
 
@@ -126,17 +143,17 @@ it('leaves a delivered event out of the failures, because nothing went wrong wit
         ->assertSee('Nothing has failed');
 })->with('tracking providers');
 
-it('keeps its own page number, so paging the destinations list never blanks the failures under it', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+it('keeps its own page number, so paging another table never blanks the failures under it', function (ProviderScript $script) {
+    $script->switchOn();
 
     $failure = TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'state' => TrackingEventState::Failed,
         'last_error' => 'Invalid OAuth access token.',
     ]);
 
     /**
-     * What the Destinations table above leaves behind when it is paged.
+     * What any other table on the screen leaves behind when it is paged.
      * Shared, this table would ask for a page it does not have and Filament
      * would draw the empty state — a green tick over a list of failures.
      */
@@ -147,10 +164,10 @@ it('keeps its own page number, so paging the destinations list never blanks the 
 })->with('tracking providers');
 
 it('answers a page past the end with the last page there is, never with the empty state', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     $failure = TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'state' => TrackingEventState::Failed,
         'last_error' => 'Invalid OAuth access token.',
     ]);
@@ -167,12 +184,12 @@ it('answers a page past the end with the last page there is, never with the empt
 })->with('tracking providers');
 
 it('lists only as far back as it says it keeps, even where the prune is the cron that is broken', function (ProviderScript $script) {
-    $destination = $script->makeDestination();
+    $script->switchOn();
 
     $settled = now()->subDays(TrackingPrune::DIAGNOSTIC_RETENTION_DAYS)->subDay();
 
     TrackingEvent::factory()->create([
-        'destination_id' => $destination->getKey(),
+        'provider' => $script->provider(),
         'state' => TrackingEventState::Failed,
         'last_error' => 'Invalid OAuth access token.',
         'created_at' => $settled,
@@ -186,7 +203,7 @@ it('lists only as far back as it says it keeps, even where the prune is the cron
 })->with('tracking providers');
 
 it('records that the sweep ran even when there was nothing at all to send', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Http::fake();
 
@@ -203,7 +220,7 @@ it('records that the sweep ran even when there was nothing at all to send', func
 })->with('tracking providers');
 
 it('says the scheduler may not be running when no sweep has ever been recorded', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Livewire::test(DeliveryHealthStats::class)
         ->assertSee('Never')
@@ -211,7 +228,7 @@ it('says the scheduler may not be running when no sweep has ever been recorded',
 })->with('tracking providers');
 
 it('says so again once the sweep has been quiet for longer than a few missed runs', function (ProviderScript $script) {
-    $script->makeDestination();
+    $script->switchOn();
 
     Http::fake();
     $this->artisan('tracking:sweep')->assertSuccessful();

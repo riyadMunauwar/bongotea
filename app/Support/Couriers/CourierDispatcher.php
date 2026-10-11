@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Log;
  * limit of 1 rather than declaring "no bulk".
  *
  * A Courier that goes quiet stops its own run where it stands and takes
- * nothing else with it, as an unreachable Provider stops a Destination's:
+ * nothing else with it, as an unreachable Provider stops its own:
  * every later batch would fail the same way and cost a call to find out. The
  * parcels it never answered about stay written and are offered again on the
  * next sweep.

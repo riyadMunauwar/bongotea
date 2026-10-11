@@ -19,8 +19,8 @@ use Filament\Tables\Table;
  * Where a Merchant composes the Roles they give to Users.
  *
  * A resource inside the Settings cluster rather than a Settings page, because
- * this is an unbounded list the Merchant creates — the same reason Tracking
- * Destinations is one. It sits above the cluster's own floor, though:
+ * this is an unbounded list the Merchant creates — the same reason Users is
+ * one. It sits above the cluster's own floor, though:
  * `SettingsCluster` is gated by `manage settings`, but composing Roles is the
  * one thing whoever holds the payment keys must not be able to reach, because
  * it is how they would promote themselves. So this is Owner-only, and a User
@@ -36,9 +36,9 @@ class RoleResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
 
     /**
-     * Sort 12, last: below the Settings pages (0–10) and the Users screen at 11.
+     * Sort 11, last: below the Settings pages (0–9) and the Users screen at 10.
      */
-    protected static ?int $navigationSort = 12;
+    protected static ?int $navigationSort = 11;
 
     public static function form(Schema $schema): Schema
     {

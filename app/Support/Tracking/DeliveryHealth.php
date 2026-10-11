@@ -4,6 +4,7 @@ namespace App\Support\Tracking;
 
 use App\Enums\TrackingEventState;
 use App\Models\TrackingEvent;
+use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -46,6 +47,18 @@ class DeliveryHealth
     private const SWEPT_AT_KEY = 'tracking.swept_at';
 
     /**
+     * Whether there is any delivery to speak of: some Provider is switched
+     * on, or the outbox still holds what one was owed. What the diagnostics
+     * ask before drawing anything, so an installation that has never
+     * reported is not told its scheduler is broken, and one that has just
+     * switched a Provider off still sees what never arrived.
+     */
+    public function applies(): bool
+    {
+        return app(TrackingSettings::class)->enabledProviders() !== [] || TrackingEvent::query()->exists();
+    }
+
+    /**
      * A sweep has just finished. Called whatever it found, because an empty
      * outbox is not the same thing as a scheduler that never fired.
      */
@@ -66,8 +79,8 @@ class DeliveryHealth
 
     /**
      * Whether the sweep has been quiet for long enough to be worth saying so.
-     * A sweep that has never run counts as stale: on an installation holding
-     * Destinations, nothing having reported is exactly the alarm.
+     * A sweep that has never run counts as stale: on an installation reporting
+     * to a Provider, nothing having reported is exactly the alarm.
      */
     public function isStale(): bool
     {
@@ -85,7 +98,7 @@ class DeliveryHealth
     /**
      * When the oldest waiting event happened, or null where nothing is
      * waiting. A queue that is minutes old is a queue being worked; one that
-     * is days old is the sign of a Destination nobody can deliver to.
+     * is days old is the sign of a Provider nobody can deliver to.
      */
     public function oldestWaitingAt(): ?CarbonImmutable
     {
@@ -101,7 +114,7 @@ class DeliveryHealth
      * the rows below it are counting one set — a tile saying nothing has
      * failed over a table of failures is worse than no tile. The split is
      * what the operator does about it: a refusal is a credential or a payload
-     * somebody must fix, and an expiry is a Destination that was left broken
+     * somebody must fix, and an expiry is a Provider that was left broken
      * for longer than the Provider's window.
      *
      * @return array{total: int, refused: int, expired: int}
@@ -132,8 +145,7 @@ class DeliveryHealth
     {
         return TrackingEvent::query()
             ->whereIn('state', TrackingEventState::undelivered())
-            ->where('updated_at', '>', now()->subDays(TrackingPrune::DIAGNOSTIC_RETENTION_DAYS))
-            ->with('destination');
+            ->where('updated_at', '>', now()->subDays(TrackingPrune::DIAGNOSTIC_RETENTION_DAYS));
     }
 
     /**

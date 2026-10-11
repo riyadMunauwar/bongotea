@@ -16,7 +16,7 @@ use Tests\Fixtures\Tracking\ProviderScript;
  */
 describe('the beacon', function () {
     it('writes the server copy of everything the moment reports', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         reportToBeacon(headers: ['Referer' => 'https://shop.test/tea/premium'])->assertNoContent();
 
@@ -38,7 +38,7 @@ describe('the beacon', function () {
      * arrives at Meta with an address and a User-Agent attached.
      */
     it('keeps what the provider matches on from the request the browser made', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9']);
 
@@ -51,7 +51,7 @@ describe('the beacon', function () {
     })->with('tracking providers');
 
     it('counts two loads as two visits, and one load reported twice as one', function (ProviderScript $script) {
-        $script->makeDestination();
+        $script->switchOn();
 
         reportToBeacon(identifier: 'load-one')->assertNoContent();
         reportToBeacon(identifier: 'load-two')->assertNoContent();
@@ -69,7 +69,7 @@ describe('the beacon', function () {
      * forgery answer.
      */
     it('refuses anything that is not this site talking to itself', function (?string $site) {
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         $address = route('tracking.report').'?'.http_build_query(['moment' => TrackingMoment::Visit->value, 'id' => 'load-3f9a2c']);
 
@@ -88,7 +88,7 @@ describe('the beacon', function () {
      * nothing to count.
      */
     it('drops a visit from something that announced itself as a robot', function (string $userAgent) {
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         reportToBeacon(headers: ['User-Agent' => $userAgent])->assertNoContent();
 
@@ -105,7 +105,7 @@ describe('the beacon', function () {
      * have.
      */
     it('writes nothing for a moment the browser may not report', function (string $moment) {
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         $this->post(route('tracking.report').'?'.http_build_query(['moment' => $moment, 'id' => 'load-3f9a2c']), [], ['Sec-Fetch-Site' => 'same-origin'])
             ->assertNoContent();
@@ -124,7 +124,7 @@ describe('the beacon', function () {
      * the double counting the identifier exists to prevent.
      */
     it('writes nothing for an identifier it could not deduplicate on', function (string $identifier) {
-        (new FacebookScript)->makeDestination();
+        (new FacebookScript)->switchOn();
 
         reportToBeacon(identifier: $identifier)->assertNoContent();
 
