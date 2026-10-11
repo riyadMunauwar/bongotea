@@ -3,6 +3,7 @@
 namespace App\Support\Menus;
 
 use App\Models\Menu;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 
 /**
@@ -19,6 +20,9 @@ class MenuPlaces
      */
     public static function of(Menu $menu): array
     {
-        return app(HeaderSettings::class)->placesOf($menu->id);
+        return [
+            ...app(HeaderSettings::class)->placesOf($menu->id),
+            ...app(FooterSettings::class)->placesOf($menu->id),
+        ];
     }
 }

@@ -26,8 +26,8 @@ class DeliveryCharges extends SettingsPage
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedScale;
 
-    /** After the footer: the last of the storefront's groups. */
-    protected static ?int $navigationSort = 3;
+    /** After the store's identity: what it charges to deliver. */
+    protected static ?int $navigationSort = 2;
 
     /**
      * @return array<Section>

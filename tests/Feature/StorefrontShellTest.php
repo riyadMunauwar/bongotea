@@ -6,6 +6,7 @@ use App\Models\MenuItem;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Settings\DeliveryChargeSettings;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\Client\ConnectionException;
@@ -78,15 +79,56 @@ it('shares no announcement when the bar is switched off', function () {
     $this->get('/')->assertInertia(fn (Assert $page) => $page->where('announcement', null));
 });
 
-it('draws the header without a nav when no Menu is assigned, and keeps the mockup footer', function () {
+it('draws the header without a nav and the footer with only its blurb when no Menu is assigned', function () {
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
             ->where('menus.header', [])
-            ->where('menus.footer.blurb', 'চায়ের দোকান, রেস্টুরেন্ট ও ব্যবসার জন্য বাছাই করা চা। বেশি নিলে প্রতি কেজির দাম কম।')
-            ->has('menus.footer.columns', 2)
-            ->where('menus.footer.columns.0.heading', 'অর্ডার')
-            ->where('menus.footer.columns.0.links.1.href', '/#products')
-            ->has('menus.footer.bottomLinks', 2)
+            ->where('menus.footer', [
+                'blurb' => 'চায়ের দোকান, রেস্টুরেন্ট ও ব্যবসার জন্য বাছাই করা চা। বেশি নিলে প্রতি কেজির দাম কম।',
+                'columns' => [],
+                'bottomLinks' => [],
+                'paymentBanner' => null,
+            ])
+        );
+});
+
+it('draws each footer column and the bottom line one level deep, in order, dropping a column with nothing to show', function () {
+    $about = Page::factory()->published()->create(['slug' => 'about']);
+    $order = Menu::factory()->create();
+    $empty = Menu::factory()->create();
+    $bottom = Menu::factory()->create();
+
+    MenuItem::factory()->for($order)->page($about)->create(['label' => 'সম্পর্কে', 'position' => 1]);
+    $home = MenuItem::factory()->for($order)->anchor('products')->create(['label' => 'আমাদের চা', 'position' => 0]);
+    MenuItem::factory()->under($home)->create(['label' => 'দ্বিতীয় স্তর', 'url' => '/deep']);
+    $heading = MenuItem::factory()->for($order)->heading()->create(['label' => 'শিরোনাম', 'position' => 2]);
+    MenuItem::factory()->under($heading)->create(['label' => 'নিচে', 'url' => '/under']);
+    MenuItem::factory()->for($empty)->page(Page::factory()->create())->create(['label' => 'খসড়া']);
+    MenuItem::factory()->for($bottom)->create(['label' => 'যোগাযোগ', 'url' => '/contact']);
+
+    app(FooterSettings::class)->with([
+        'blurb' => 'নতুন কথা',
+        'columns' => [
+            ['heading' => 'খালি', 'menuId' => $empty->id],
+            ['heading' => 'অর্ডার', 'menuId' => $order->id],
+        ],
+        'bottomMenuId' => $bottom->id,
+        'paymentBanner' => 'footer/banner.png',
+    ])->save();
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('menus.footer.blurb', 'নতুন কথা')
+            ->where('menus.footer.columns', [
+                ['heading' => 'অর্ডার', 'links' => [
+                    ['label' => 'আমাদের চা', 'href' => '/#products', 'external' => false, 'note' => null],
+                    ['label' => 'সম্পর্কে', 'href' => '/about', 'external' => false, 'note' => null],
+                ]],
+            ])
+            ->where('menus.footer.bottomLinks', [
+                ['label' => 'যোগাযোগ', 'href' => '/contact', 'external' => false, 'note' => null],
+            ])
+            ->where('menus.footer.paymentBanner', fn (string $url): bool => str_ends_with($url, '/storage/footer/banner.png'))
         );
 });
 

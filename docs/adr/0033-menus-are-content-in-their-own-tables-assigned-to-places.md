@@ -3,8 +3,9 @@
 A **Menu** is a row in `menus` with its links in `menu_items` — nested by `parent_id`, ordered by
 `position` among siblings, up to three levels deep. A link points at its target by reference (a
 Page through the `linkable` morph) or holds an anchor or a typed address; a Heading points at
-nothing and only opens its children. A place — the header today, the footer columns and bottom
-line next — is a settings group holding the id of the Menu it draws (`HeaderSettings::$menuId`).
+nothing and only opens its children. A place — the header, each footer column and the footer's bottom
+line — is a settings group holding the id of the Menu it draws (`HeaderSettings::$menuId`,
+`FooterSettings::$columns` and `$bottomMenuId`).
 Menus are built in our own drag-and-drop builder under Pages and gated on `author pages`, because
 they are storefront content kept in step with the Pages they link, not configuration.
 
@@ -41,4 +42,8 @@ SortableJS — already shipped with Filament — does in one component.
 - No data was migrated from the old `menus` row: an existing installation's header draws without a
   navigation row until a Menu is built and assigned on Pages → Header. `bongotea:install` builds
   and assigns the mockup's.
-- The footer keeps reading the old row until it becomes a place of its own.
+- The footer became a place too: `FooterSettings` holds the blurb, the columns (a heading and a
+  Menu each), the bottom line's Menu and the Payment Banner, and the footer draws its Menus one
+  level deep. `MenuSettings` and Settings → Menus are gone; the old `menus` row is left orphaned
+  and never read, and an existing installation's footer draws no columns until Menus are assigned
+  on Pages → Footer.

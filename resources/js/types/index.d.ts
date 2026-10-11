@@ -69,6 +69,8 @@ export type SharedProps = {
             blurb: string;
             columns: FooterColumn[];
             bottomLinks: MenuLink[];
+            /** The Merchant's Payment Banner, or null when none is uploaded. */
+            paymentBanner: string | null;
         };
     };
     links: {

@@ -1,14 +1,9 @@
 <?php
 
-use App\Enums\MenuLinkType;
-use App\Enums\SystemPage;
-use App\Filament\Clusters\Settings\Pages\Menus;
 use App\Filament\Clusters\Settings\Pages\Store;
 use App\Filament\Clusters\Settings\SettingsCluster;
-use App\Models\Page;
 use App\Models\Setting;
 use App\Models\User;
-use App\Support\Settings\MenuSettings;
 use App\Support\Settings\StoreSettings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -18,26 +13,23 @@ beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
-it('lists the storefront pages right after General in the Settings cluster', function () {
-    $order = collect(SettingsCluster::getClusteredComponents())
+it('lists Store right after General in the Settings cluster, numbered with no gaps', function () {
+    $components = collect(SettingsCluster::getClusteredComponents())
         ->sortBy(fn (string $component): int => $component::getNavigationSort())
-        ->map(fn (string $component): string => $component::getNavigationLabel())
-        ->values()
-        ->all();
+        ->values();
 
-    expect($order)->toBe(['General', 'Store', 'Footer links', 'Delivery Charges', 'Payment Methods', 'Tracking', 'Couriers', 'SMS', 'Inventory', 'Users', 'Roles']);
+    expect($components->map(fn (string $component): string => $component::getNavigationLabel())->all())
+        ->toBe(['General', 'Store', 'Delivery Charges', 'Payment Methods', 'Tracking', 'Couriers', 'SMS', 'Inventory', 'Users', 'Roles'])
+        ->and($components->map(fn (string $component): int => $component::getNavigationSort())->all())
+        ->toBe(range(0, 9));
 
-    foreach ([Store::class, Menus::class] as $page) {
-        $this->get($page::getUrl())->assertOk()->assertSeeLivewire($page);
-    }
+    $this->get(Store::getUrl())->assertOk()->assertSeeLivewire(Store::class);
 });
 
-it('forbids the storefront pages to a User who cannot manage settings', function () {
+it('forbids the Store page to a User who cannot manage settings', function () {
     $this->actingAs(User::factory()->create());
 
-    foreach ([Store::class, Menus::class] as $page) {
-        $this->get($page::getUrl())->assertForbidden();
-    }
+    $this->get(Store::getUrl())->assertForbidden();
 });
 
 it('opens the Store page on the mockup identity and saves what the Merchant types', function () {
@@ -94,73 +86,4 @@ it('stores the logo on the public local disk and keeps only its path', function 
 
     expect($path)->toStartWith(StoreSettings::IMAGE_DIRECTORY.'/');
     Storage::disk(StoreSettings::IMAGE_DISK)->assertExists($path);
-});
-
-it('saves the footer links with Pages by reference', function () {
-    $about = Page::factory()->published()->create(['title' => 'About us']);
-
-    Livewire::test(Menus::class)
-        ->set('data.footerColumns', [
-            ['heading' => 'সাহায্য', 'links' => [
-                ['label' => 'ফেসবুক', 'type' => MenuLinkType::Url->value, 'url' => 'https://facebook.com/bongotea'],
-            ]],
-        ])
-        ->set('data.footerBottomLinks', [
-            ['label' => 'আমাদের সম্পর্কে', 'type' => MenuLinkType::Page->value, 'page_id' => $about->id],
-        ])
-        ->fillForm(['footerBlurb' => 'নতুন কথা'])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    app()->forgetInstance(MenuSettings::class);
-    $menus = app(MenuSettings::class);
-
-    expect($menus->footerBlurb)->toBe('নতুন কথা')
-        ->and($menus->footerColumns)->toBe([
-            ['heading' => 'সাহায্য', 'links' => [
-                ['label' => 'ফেসবুক', 'type' => 'url', 'page_id' => null, 'anchor' => null, 'url' => 'https://facebook.com/bongotea', 'note' => null],
-            ]],
-        ])
-        ->and($menus->footerBottomLinks)->toBe([
-            ['label' => 'আমাদের সম্পর্কে', 'type' => 'page', 'page_id' => $about->id, 'anchor' => null, 'url' => null, 'note' => null],
-        ]);
-});
-
-it('refuses a footer URL that is not a path or a web, phone or mail address', function () {
-    Livewire::test(Menus::class)
-        ->set('data.footerBottomLinks', [
-            'bad' => ['label' => 'খারাপ', 'type' => MenuLinkType::Url->value, 'url' => 'javascript:alert(1)'],
-        ])
-        ->call('save')
-        ->assertHasFormErrors(['footerBottomLinks.bad.url' => 'regex']);
-});
-
-it('reads a damaged footer row as what it can, rather than failing every request', function () {
-    Page::factory()->system(SystemPage::Home)->create();
-
-    Setting::query()->create(['key' => MenuSettings::key(), 'value' => [
-        'header' => 'left over from before the header was a Menu',
-        'footerColumns' => [
-            'not a column',
-            ['heading' => 'ঠিক', 'links' => [
-                'not an entry',
-                ['label' => '', 'type' => 'url', 'url' => '/'],
-                ['label' => 'অজানা', 'type' => 'category'],
-                ['label' => 'শিরোনাম', 'type' => 'heading'],
-                ['label' => 'ঠিক', 'type' => 'url', 'url' => '/ok'],
-            ]],
-        ],
-        'footerBottomLinks' => 'oops',
-    ]]);
-
-    $menus = MenuSettings::load();
-
-    expect($menus->footerColumns)->toBe([
-        ['heading' => 'ঠিক', 'links' => [
-            ['label' => 'ঠিক', 'type' => 'url', 'page_id' => null, 'anchor' => null, 'url' => '/ok', 'note' => null],
-        ]],
-    ])
-        ->and($menus->footerBottomLinks)->toBe([]);
-
-    $this->get('/')->assertOk();
 });

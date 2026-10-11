@@ -6,26 +6,23 @@ use App\Enums\MenuLinkType;
 use App\Models\MenuItem;
 use App\Models\Page;
 use App\Support\Menus\MenuTree;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
-use App\Support\Settings\MenuSettings;
 use Illuminate\Support\Collection;
 
 /**
  * The Menus as the storefront draws them: every stored link turned into an
  * address, and every link that leads nowhere left out.
  *
- * The header is the Menu `HeaderSettings` assigns, read in one query and
- * built into its tree in memory, up to three levels. A Page target is looked
- * up by id, so the address follows a renamed slug, and a link whose Page is
- * unpublished or gone disappears — with anything beneath it — instead of
- * linking to a 404. A Heading left with no children disappears too. A typed
- * URL is kept only when it is a path or an http(s), tel: or mailto: address,
- * so a hand-edited row cannot put `javascript:` into the header.
- *
- * The footer is still read from `MenuSettings` until it becomes a place of
- * its own.
- *
- * @phpstan-import-type MenuLink from MenuSettings
+ * Each place draws the Menu its settings group assigns: the header up to
+ * three levels, the footer's columns and bottom line one level. Every
+ * assigned Menu is read in one query and built into its tree in memory. A
+ * Page target is looked up by id, so the address follows a renamed slug,
+ * and a link whose Page is unpublished or gone disappears — with anything
+ * beneath it — instead of linking to a 404. A Heading left with no children
+ * disappears too, which at one level deep is every Heading. A typed URL is
+ * kept only when it is a path or an http(s), tel: or mailto: address, so a
+ * hand-edited row cannot put `javascript:` into the storefront.
  *
  * @phpstan-type ResolvedLink array{label: string, href: string, external: bool, note: ?string}
  * @phpstan-type ResolvedNode array{label: string, href: ?string, external: bool, note: ?string, children: list<mixed>}
@@ -36,11 +33,12 @@ class StorefrontMenus
     public const ALLOWED_URL = '#^(/|https?://|tel:|mailto:)#i';
 
     /**
-     * The header Menu's items by parent id, 0 for the top level.
+     * Every assigned Menu's items by Menu id, then by parent id (0 for the
+     * top level).
      *
-     * @var Collection<int, Collection<int, MenuItem>>
+     * @var Collection<int, Collection<int, Collection<int, MenuItem>>>
      */
-    private Collection $headerItems;
+    private Collection $items;
 
     /**
      * Published Pages' paths by id, for every Page any link names.
@@ -49,16 +47,19 @@ class StorefrontMenus
      */
     private Collection $paths;
 
-    public function __construct(private MenuSettings $menus, HeaderSettings $header, private string $host)
+    public function __construct(private HeaderSettings $header, private FooterSettings $footer, private string $host)
     {
-        $this->headerItems = $header->menuId === null
+        $menuIds = array_values(array_unique(array_filter([$header->menuId, ...$footer->menuIds()])));
+
+        $this->items = $menuIds === []
             ? collect()
             : MenuItem::query()
-                ->where('menu_id', $header->menuId)
+                ->whereIn('menu_id', $menuIds)
                 ->orderBy('position')
                 ->orderBy('id')
                 ->get()
-                ->groupBy(fn (MenuItem $item): int => $item->parent_id ?? 0);
+                ->groupBy('menu_id')
+                ->map(fn (Collection $items): Collection => $items->groupBy(fn (MenuItem $item): int => $item->parent_id ?? 0));
 
         $this->paths = $this->publishedPaths();
     }
@@ -68,46 +69,60 @@ class StorefrontMenus
      */
     public function header(): array
     {
-        return $this->branch(0, 1);
+        return $this->branch($this->header->menuId, 0, 1, MenuTree::MAX_DEPTH);
     }
 
     /**
-     * @return array{blurb: string, columns: list<array{heading: string, links: list<ResolvedLink>}>, bottomLinks: list<ResolvedLink>}
+     * @return array{blurb: string, columns: list<array{heading: string, links: list<ResolvedLink>}>, bottomLinks: list<ResolvedLink>, paymentBanner: ?string}
      */
     public function footer(): array
     {
         $columns = [];
 
-        foreach ($this->menus->footerColumns as $column) {
-            $links = $this->resolveAll($column['links']);
+        foreach ($this->footer->columns as $column) {
+            $links = $this->links($column['menuId']);
 
-            if ($links !== [] || filled($column['heading'])) {
+            if ($links !== []) {
                 $columns[] = ['heading' => $column['heading'], 'links' => $links];
             }
         }
 
         return [
-            'blurb' => $this->menus->footerBlurb,
+            'blurb' => $this->footer->blurb,
             'columns' => $columns,
-            'bottomLinks' => $this->resolveAll($this->menus->footerBottomLinks),
+            'bottomLinks' => $this->links($this->footer->bottomMenuId),
+            'paymentBanner' => $this->footer->paymentBannerUrl(),
         ];
     }
 
     /**
-     * The drawable children of one header item, in order.
+     * A Menu drawn one level deep, as plain links.
+     *
+     * @return list<ResolvedLink>
+     */
+    private function links(?int $menuId): array
+    {
+        return array_map(
+            fn (array $node): array => ['label' => $node['label'], 'href' => $node['href'], 'external' => $node['external'], 'note' => $node['note']],
+            $this->branch($menuId, 0, 1, 1),
+        );
+    }
+
+    /**
+     * The drawable children of one item of a Menu, in order.
      *
      * @return list<ResolvedNode>
      */
-    private function branch(int $parentId, int $depth): array
+    private function branch(?int $menuId, int $parentId, int $depth, int $maxDepth): array
     {
-        if ($depth > MenuTree::MAX_DEPTH) {
+        if ($menuId === null || $depth > $maxDepth) {
             return [];
         }
 
         $nodes = [];
 
-        foreach ($this->headerItems->get($parentId, collect()) as $item) {
-            $children = $this->branch($item->id, $depth + 1);
+        foreach ($this->items->get($menuId, collect())->get($parentId, collect()) as $item) {
+            $children = $this->branch($menuId, $item->id, $depth + 1, $maxDepth);
 
             if ($item->type === MenuLinkType::Heading) {
                 if ($children !== []) {
@@ -117,7 +132,7 @@ class StorefrontMenus
                 continue;
             }
 
-            $href = $this->href($item->type, $this->pageIdOf($item), $item->anchor, $item->url);
+            $href = $this->href($item);
 
             if ($href !== null) {
                 $nodes[] = ['label' => $item->label, 'href' => $href, 'external' => $this->isExternal($href), 'note' => $item->note, 'children' => $children];
@@ -127,32 +142,12 @@ class StorefrontMenus
         return $nodes;
     }
 
-    /**
-     * @param  list<MenuLink>  $links
-     * @return list<ResolvedLink>
-     */
-    private function resolveAll(array $links): array
+    private function href(MenuItem $item): ?string
     {
-        $resolved = [];
-
-        foreach ($links as $link) {
-            $type = MenuLinkType::tryFrom($link['type']);
-            $href = $type === null ? null : $this->href($type, $link['page_id'], $link['anchor'], $link['url']);
-
-            if ($href !== null) {
-                $resolved[] = ['label' => $link['label'], 'href' => $href, 'external' => $this->isExternal($href), 'note' => $link['note'] ?? null];
-            }
-        }
-
-        return $resolved;
-    }
-
-    private function href(MenuLinkType $type, ?int $pageId, ?string $anchor, ?string $url): ?string
-    {
-        return match ($type) {
-            MenuLinkType::Page => $this->pagePath($pageId),
-            MenuLinkType::Anchor => $this->anchorPath($pageId, $anchor),
-            MenuLinkType::Url => filled($url) && preg_match(self::ALLOWED_URL, $url) ? $url : null,
+        return match ($item->type) {
+            MenuLinkType::Page => $this->pagePath($this->pageIdOf($item)),
+            MenuLinkType::Anchor => $this->anchorPath($this->pageIdOf($item), $item->anchor),
+            MenuLinkType::Url => filled($item->url) && preg_match(self::ALLOWED_URL, $item->url) ? $item->url : null,
             MenuLinkType::Heading => null,
         };
     }
@@ -193,18 +188,7 @@ class StorefrontMenus
      */
     private function publishedPaths(): Collection
     {
-        $entries = $this->menus->footerBottomLinks;
-
-        foreach ($this->menus->footerColumns as $column) {
-            $entries = [...$entries, ...$column['links']];
-        }
-
-        $ids = [
-            ...array_column($entries, 'page_id'),
-            ...$this->headerItems->flatten(1)->map($this->pageIdOf(...))->all(),
-        ];
-
-        $ids = array_values(array_unique(array_filter($ids)));
+        $ids = $this->items->flatten(2)->map($this->pageIdOf(...))->filter()->unique()->values()->all();
 
         if ($ids === []) {
             return collect();

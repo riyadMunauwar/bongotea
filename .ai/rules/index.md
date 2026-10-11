@@ -16,7 +16,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/** | .ai/rules/filament.md |
 | app/Support/Inventory/**, app/Models/StockMovement.php, app/Models/StockCount.php, app/Models/Supplier.php, app/Models/Supply.php, app/Models/SupplyLine.php, app/Enums/StockMovementReason.php, app/Enums/AdjustmentCause.php, app/Support/Orders/OrderCapture.php, app/Models/OrderLine.php, app/Filament/Clusters/Inventory/** | .ai/rules/inventory.md |
 | resources/js/** | .ai/rules/js.md |
-| app/Support/Menus/**, app/Models/Menu.php, app/Models/MenuItem.php, app/Filament/Resources/Menus/**, app/Filament/Pages/Header.php, app/Support/Settings/HeaderSettings.php, app/Support/Storefront/StorefrontMenus.php | .ai/rules/menus.md |
+| app/Support/Menus/**, app/Models/Menu.php, app/Models/MenuItem.php, app/Filament/Resources/Menus/**, app/Filament/Pages/Header.php, app/Filament/Pages/Footer.php, app/Support/Settings/HeaderSettings.php, app/Support/Settings/FooterSettings.php, app/Support/Storefront/StorefrontMenus.php | .ai/rules/menus.md |
 | app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
 | app/Filament/Resources/Orders/** | .ai/rules/orders.md |
 | app/Support/Pages/**, app/Models/Page.php, app/Http/Controllers/PageController.php, app/Filament/Resources/Pages/**, resources/js/components/blocks/**, resources/js/types/blocks.ts | .ai/rules/pages.md |

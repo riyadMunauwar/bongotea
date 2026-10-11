@@ -36,9 +36,9 @@ class RoleResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
 
     /**
-     * Sort 10, last: below the Settings pages (0–8) and the Users screen at 9.
+     * Sort 9, last: below the Settings pages (0–7) and the Users screen at 8.
      */
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 9;
 
     public static function form(Schema $schema): Schema
     {

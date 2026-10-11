@@ -7,12 +7,13 @@ import { MenuAnchor } from './menu-anchor';
 
 /**
  * The dark footer: the store's blurb and the two ways to reach it, the
- * Merchant's link columns, the address, and a bottom line with the
- * copyright and the Merchant's bottom links.
+ * Merchant's link columns, the address, the Payment Banner across the full
+ * width when one is uploaded (never stretched past its own width), and a
+ * bottom line with the copyright and the Merchant's bottom links.
  */
 export function SiteFooter() {
     const { store, menus } = usePage().props;
-    const { blurb, columns, bottomLinks } = menus.footer;
+    const { blurb, columns, bottomLinks, paymentBanner } = menus.footer;
 
     /** The brand block, then each column, then the address. */
     const desktopColumns: CSSProperties = { ['--footer-columns' as string]: `1.5fr repeat(${columns.length + 1}, minmax(0, 1fr))` };
@@ -63,6 +64,11 @@ export function SiteFooter() {
             </div>
 
             <div className="mx-auto mt-10 max-w-[1200px] px-[clamp(16px,4vw,32px)]">
+                {paymentBanner && (
+                    <div className="pb-8">
+                        <img src={paymentBanner} alt={bn.footer.paymentBanner} loading="lazy" className="block h-auto max-w-full" />
+                    </div>
+                )}
                 <div className="flex flex-wrap justify-between gap-3 border-t border-white/10 pt-[18px] pb-[22px] text-[13px] text-night-faint">
                     <span>{bn.footer.rights(toBanglaDigits(new Date().getFullYear()), store.name)}</span>
                     {bottomLinks.length > 0 && (

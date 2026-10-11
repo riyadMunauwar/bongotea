@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MenuLinkType;
+use App\Filament\Pages\Footer;
 use App\Filament\Pages\Header;
 use App\Filament\Resources\Menus\MenuResource;
 use App\Filament\Resources\Menus\Pages\CreateMenu;
@@ -10,6 +11,7 @@ use App\Models\Menu;
 use App\Models\MenuItem;
 use App\Models\Page;
 use App\Models\User;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
@@ -46,8 +48,9 @@ function storedItems(Menu $menu): array
         ->all();
 }
 
-it('draws Header and Menus under Pages, and refuses both to a User who cannot author Pages', function () {
+it('draws Header, Footer and Menus under Pages, and refuses them to a User who cannot author Pages', function () {
     $this->get(Header::getUrl())->assertOk();
+    $this->get(Footer::getUrl())->assertOk();
     $this->get(MenuResource::getUrl('index'))->assertOk();
 
     $pages = collect(Filament::getCurrentOrDefaultPanel()->getNavigation())
@@ -55,11 +58,12 @@ it('draws Header and Menus under Pages, and refuses both to a User who cannot au
         ->first(fn (NavigationItem $item): bool => $item->getLabel() === 'Pages');
 
     expect(collect($pages->getChildItems())->map(fn (NavigationItem $item): string => $item->getLabel())->all())
-        ->toBe(['Header', 'Menus']);
+        ->toBe(['Header', 'Footer', 'Menus']);
 
     $this->actingAs(User::factory()->managingSettings()->create());
 
     $this->get(Header::getUrl())->assertForbidden();
+    $this->get(Footer::getUrl())->assertForbidden();
     $this->get(MenuResource::getUrl('index'))->assertForbidden();
     $this->get(MenuResource::getUrl('edit', ['record' => Menu::factory()->create()]))->assertForbidden();
 });
@@ -209,4 +213,26 @@ it('refuses to delete the header Menu, naming the place, and deletes an unassign
         ->callTableAction('delete', $draft);
 
     expect($draft->fresh())->toBeNull();
+});
+
+it('refuses to delete a Menu a footer column or the bottom line draws, naming the place', function () {
+    $column = Menu::factory()->create();
+    $bottom = Menu::factory()->create();
+    app(FooterSettings::class)->with([
+        'columns' => [['heading' => 'অর্ডার', 'menuId' => $column->id]],
+        'bottomMenuId' => $bottom->id,
+    ])->save();
+
+    Livewire::test(ListMenus::class)
+        ->assertTableColumnStateSet('assigned_to', ['Footer column “অর্ডার”'], $column)
+        ->callTableAction('delete', $column);
+
+    expect($column->fresh())->not->toBeNull()
+        ->and(lastNotification()?->getBody())->toContain('assigned to Footer column “অর্ডার”');
+
+    Livewire::test(EditMenu::class, ['record' => $bottom->getKey()])
+        ->callAction('delete');
+
+    expect($bottom->fresh())->not->toBeNull()
+        ->and(lastNotification()?->getBody())->toContain('assigned to Footer bottom line');
 });

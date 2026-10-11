@@ -8,8 +8,8 @@ use App\Models\Product;
 use App\Support\PhoneNumber;
 use App\Support\Pricing\DeliveryBand;
 use App\Support\Pricing\PriceBook;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
-use App\Support\Settings\MenuSettings;
 use App\Support\Settings\StoreSettings;
 
 /**
@@ -54,7 +54,7 @@ class StorefrontShell
     public function __construct(
         private StoreSettings $store,
         private HeaderSettings $header,
-        private MenuSettings $menus,
+        private FooterSettings $footer,
         private Catalogue $catalogue,
     ) {}
 
@@ -95,7 +95,7 @@ class StorefrontShell
      */
     public function menus(string $host): array
     {
-        $menus = new StorefrontMenus($this->menus, $this->header, $host);
+        $menus = new StorefrontMenus($this->header, $this->footer, $host);
 
         return [
             'header' => $menus->header(),

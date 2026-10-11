@@ -30,8 +30,8 @@ use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\ValueCards;
 use App\Support\Pages\Blocks\VideoReviews;
 use App\Support\Pages\PageBlock;
+use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
-use App\Support\Settings\MenuSettings;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -45,13 +45,13 @@ use Illuminate\Support\Facades\DB;
  * found by its role, and the starter Pages and Menus are created together,
  * once, on a store that has none of its own.
  *
- * The header Menu is built here (ADR-0033) and the footer links saved rather
- * than left to `MenuSettings`' defaults, because only now are there Pages to
- * point at: a link that names a Page follows it through a renamed slug, where
- * a typed address would not. The Store and Delivery Band Settings are not
- * written, and the header's row holds only the Menu it is assigned: their
- * defaults (the announcement among them) already are the mockup's, and a
- * row would freeze today's defaults over any later change to them
+ * The header and footer Menus are built and assigned here (ADR-0033),
+ * because only now are there Pages to point at: a link that names a Page
+ * follows it through a renamed slug, where a typed address would not. The
+ * Store and Delivery Band Settings are not written, and the header's and
+ * footer's rows hold only the Menus they are assigned: their defaults (the
+ * announcement and the blurb among them) already are the mockup's, and a row
+ * would freeze today's defaults over any later change to them
  * (`.ai/rules/settings.md`).
  */
 class StorefrontSeeder extends Seeder
@@ -102,9 +102,21 @@ class StorefrontSeeder extends Seeder
             $headerRow = Setting::query()->find(HeaderSettings::key());
             Setting::query()->updateOrCreate(['key' => HeaderSettings::key()], ['value' => [...($headerRow->value ?? []), 'menuId' => $header->id]]);
 
-            $menus = (new MenuSettings)->with(self::footer($pageIds));
+            $footer = self::footerMenus($pageIds);
+            $columns = [];
 
-            Setting::query()->create(['key' => MenuSettings::key(), 'value' => $menus->toArray()]);
+            foreach ($footer['columns'] as $heading => $links) {
+                $column = Menu::query()->create(['name' => "Footer — {$heading}"]);
+                MenuTree::save($column, $links);
+
+                $columns[] = ['heading' => $heading, 'menuId' => $column->id];
+            }
+
+            $bottom = Menu::query()->create(['name' => 'Footer bottom line']);
+            MenuTree::save($bottom, $footer['bottom']);
+
+            $footerRow = Setting::query()->find(FooterSettings::key());
+            Setting::query()->updateOrCreate(['key' => FooterSettings::key()], ['value' => [...($footerRow->value ?? []), 'columns' => $columns, 'bottomMenuId' => $bottom->id]]);
         });
     }
 
@@ -130,8 +142,7 @@ class StorefrontSeeder extends Seeder
     private static function hasStarterContent(): bool
     {
         return Page::query()->whereNull('system_role')->exists()
-            || Menu::query()->exists()
-            || Setting::query()->whereKey(MenuSettings::key())->exists();
+            || Menu::query()->exists();
     }
 
     /**
@@ -380,45 +391,37 @@ class StorefrontSeeder extends Seeder
     }
 
     /**
-     * The mockup's footer links, every entry for an installed Page naming
-     * that Page.
+     * The mockup's footer as Menus, one for each column and one for the
+     * bottom line, in the shape `MenuTree::save()` takes, every link to an
+     * installed Page naming that Page.
      *
      * @param  array<string, int>  $pageIds
-     * @return array<string, mixed>
+     * @return array{columns: array<string, list<array<string, mixed>>>, bottom: list<array<string, mixed>>}
      */
-    private static function footer(array $pageIds): array
+    private static function footerMenus(array $pageIds): array
     {
-        $page = fn (string $label, string $key, ?string $note = null): array => self::entry($label, MenuLinkType::Page, ['page_id' => $pageIds[$key], 'note' => $note]);
-        $home = fn (string $label, string $anchor, ?string $note = null): array => self::entry($label, MenuLinkType::Anchor, ['page_id' => $pageIds['home'], 'anchor' => $anchor, 'note' => $note]);
+        $page = fn (string $label, string $key): array => ['label' => $label, 'type' => MenuLinkType::Page->value, 'target_id' => $pageIds[$key]];
+        $home = fn (string $label, string $anchor): array => ['label' => $label, 'type' => MenuLinkType::Anchor->value, 'target_id' => $pageIds['home'], 'anchor' => $anchor];
 
         return [
-            'footerColumns' => [
-                ['heading' => 'অর্ডার', 'links' => [
+            'columns' => [
+                'অর্ডার' => [
                     $page('হোম', 'home'),
                     $home('আমাদের চা', 'products'),
                     $page('দাম হিসাব', 'pricing'),
                     $page('বাল্ক অর্ডার', 'bulk_order'),
                     $page('আমার অর্ডার', 'my_orders'),
-                ]],
-                ['heading' => 'Bongotea', 'links' => [
+                ],
+                'Bongotea' => [
                     $page('আমাদের সম্পর্কে', 'about'),
                     $page('যোগাযোগ', 'contact'),
                     $home('কীভাবে অর্ডার করবেন', 'how'),
-                ]],
+                ],
             ],
-            'footerBottomLinks' => [
+            'bottom' => [
                 $page('আমাদের সম্পর্কে', 'about'),
                 $page('যোগাযোগ', 'contact'),
             ],
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $target
-     * @return array<string, mixed>
-     */
-    private static function entry(string $label, MenuLinkType $type, array $target): array
-    {
-        return ['label' => $label, 'type' => $type->value, 'page_id' => null, 'anchor' => null, 'url' => null, 'note' => null, ...$target];
     }
 }

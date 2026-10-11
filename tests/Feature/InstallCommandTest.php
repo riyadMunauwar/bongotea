@@ -86,18 +86,27 @@ it('stocks the mockup catalogue: three themed Categories, its Tags, and eighteen
 });
 
 /**
- * Store, the announcement and the Delivery Bands already default to the
- * mockup, so only the footer links and the header's Menu are written: they
+ * Store, the announcement, the blurb and the Delivery Bands already default
+ * to the mockup, so only the header's and footer's Menus are written: they
  * are what can now name the installed Pages rather than typed addresses. The
- * header's row holds the Menu alone, so the announcement keeps its defaults.
+ * header's and footer's rows hold their Menus alone, so the announcement and
+ * the blurb keep their defaults.
  */
-it('opens on the mockup header Menu and footer, pointing at the installed Pages', function () {
+it('opens on the mockup header and footer Menus, pointing at the installed Pages', function () {
     $this->artisan('bongotea:install')->assertSuccessful();
 
-    $header = Menu::query()->sole();
+    $header = Menu::query()->where('name', 'Main menu')->sole();
+    $order = Menu::query()->where('name', 'Footer — অর্ডার')->sole();
+    $about = Menu::query()->where('name', 'Footer — Bongotea')->sole();
+    $bottom = Menu::query()->where('name', 'Footer bottom line')->sole();
 
-    expect(Setting::query()->orderBy('key')->pluck('key')->all())->toBe(['header', 'menus'])
+    expect(Setting::query()->orderBy('key')->pluck('key')->all())->toBe(['footer', 'header'])
         ->and(Setting::query()->find('header')->value)->toBe(['menuId' => $header->id])
+        ->and(Setting::query()->find('footer')->value)->toBe([
+            'columns' => [['heading' => 'অর্ডার', 'menuId' => $order->id], ['heading' => 'Bongotea', 'menuId' => $about->id]],
+            'bottomMenuId' => $bottom->id,
+        ])
+        ->and(Menu::query()->count())->toBe(4)
         ->and($header->items()->whereNull('parent_id')->pluck('type')->map->value->all())->toBe(['page', 'heading', 'page', 'heading', 'page']);
 
     $this->get('/')->assertInertia(fn (Assert $page) => $page
@@ -108,7 +117,16 @@ it('opens on the mockup header Menu and footer, pointing at the installed Pages'
         ->where('menus.header.2.href', '/pricing')
         ->where('menus.header.3.children.3.href', '/my-orders')
         ->where('menus.header.4.href', '/contact')
+        ->where('menus.footer.blurb', 'চায়ের দোকান, রেস্টুরেন্ট ও ব্যবসার জন্য বাছাই করা চা। বেশি নিলে প্রতি কেজির দাম কম।')
+        ->where('menus.footer.columns.0.heading', 'অর্ডার')
+        ->has('menus.footer.columns.0.links', 5)
+        ->where('menus.footer.columns.0.links.1.href', '/#products')
         ->where('menus.footer.columns.1.links.0.href', '/about')
+        ->where('menus.footer.bottomLinks', [
+            ['label' => 'আমাদের সম্পর্কে', 'href' => '/about', 'external' => false, 'note' => null],
+            ['label' => 'যোগাযোগ', 'href' => '/contact', 'external' => false, 'note' => null],
+        ])
+        ->where('menus.footer.paymentBanner', null)
     );
 });
 
@@ -144,5 +162,5 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
         ->and(Tag::query()->pluck('slug')->all())->toBe(['milk', 'plain', 'strong'])
         ->and(Brand::query()->count())->toBe(1)
         ->and(Setting::query()->find('header')->value)->toMatchArray(['announcementEnabled' => false, 'announcementMessage' => 'ঈদ মোবারক'])
-        ->and(Menu::query()->count())->toBe(1);
+        ->and(Menu::query()->count())->toBe(4);
 });

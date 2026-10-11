@@ -12,8 +12,8 @@ beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
 
-it('sits in the Settings cluster at navigation sort 7, and is forbidden to a User who cannot manage settings', function () {
-    expect(Sms::getNavigationSort())->toBe(7)
+it('sits in the Settings cluster at navigation sort 6, and is forbidden to a User who cannot manage settings', function () {
+    expect(Sms::getNavigationSort())->toBe(6)
         ->and(Sms::getCluster())->toBe(SettingsCluster::class);
 
     $this->get(Sms::getUrl())->assertOk()->assertSeeLivewire(Sms::class);
