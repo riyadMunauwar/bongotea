@@ -9,7 +9,7 @@ price is a **Tier Price** typed by the Merchant in whole taka — there is no di
 Discount. A Product may have one Tier, which is a flat price, and no Tier may cost more per Kilogram
 than one before it; an equal price is allowed. The **Regular Price** is the first Tier's price, and
 is what shows struck through once a cheaper Tier applies. There is no store-wide table of Tiers and
-no default: Settings → Pricing holds only the Delivery Bands.
+no default: Settings → Delivery Charges holds only the Delivery Bands.
 
 What is measured against a Product's Tiers is still the **whole Cart's** total Kilograms, never the
 line's own. Four kilograms of one tea and three of another are seven kilograms, and each tea charges
