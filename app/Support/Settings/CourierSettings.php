@@ -20,7 +20,7 @@ use ReflectionProperty;
  *
  * The properties follow one naming rule, so nothing here lists couriers by
  * hand: a Courier's properties are its name in camel case, then `Enabled`,
- * each of its credentials, and each of the five defaults. A Courier with no
+ * each of its credentials, and each default its driver sends. A Courier with no
  * `Enabled` property here has no settings yet and is offered nowhere.
  *
  * This is the one place the usable-Courier rule lives (`refusal()`). Every
@@ -34,18 +34,20 @@ use ReflectionProperty;
 class CourierSettings extends SettingsGroup
 {
     /**
-     * What a Merchant decides per Courier about an ordinary parcel, by
+     * Every default a Merchant may decide about an ordinary parcel, by
      * property suffix.
      *
      * These are what make an unattended booking possible at all: RedEx
      * refuses a parcel with no weight and no declared value, and the system
      * holds neither — nothing on a Page asks a Customer how heavy their order
-     * is. Which of the five a Courier actually sends is its driver's business
-     * and arrives with booking; the Merchant answers all five once.
+     * is. Which of them a Courier holds is its driver's to declare
+     * (`parcelFields()`): a Courier has a property, and a config key, only for
+     * a default its driver actually sends, so the Merchant is never asked a
+     * question whose answer goes nowhere.
      *
      * This list is what the constructor walks, and each suffix in snake case
-     * is its config key — so a sixth default is one entry here, one property
-     * per Courier, and one config key each.
+     * is its config key — so a new default is one entry here, then one
+     * property and one config key for each Courier that sends it.
      *
      * @var list<string>
      */
@@ -72,27 +74,11 @@ class CourierSettings extends SettingsGroup
     /** The secret key Steadfast issued beside the API key. */
     public string $steadfastSecretKey = '';
 
-    /** Which of the Merchant's warehouses a Steadfast parcel leaves from unless somebody says otherwise. */
-    public string $steadfastPickupStore;
-
-    /**
-     * Every warehouse the Merchant has registered with Steadfast.
-     *
-     * @var list<array{id: string, name: string}>
-     */
-    public array $steadfastPickupStores = [];
-
     /** What Steadfast is told this kind of delivery is. */
     public string $steadfastDeliveryType;
 
     /** What Steadfast is told is inside the parcel. */
     public string $steadfastItemType;
-
-    /** What an ordinary parcel weighs, in kilograms. */
-    public float $steadfastParcelWeight;
-
-    /** What an ordinary parcel is declared to be worth, in major units. */
-    public float $steadfastDeclaredValue;
 
     /** Pathao: off until the Merchant has typed all four of its credentials. */
     public bool $pathaoEnabled = false;
@@ -129,9 +115,6 @@ class CourierSettings extends SettingsGroup
     /** What an ordinary parcel weighs, in kilograms. */
     public float $pathaoParcelWeight;
 
-    /** What an ordinary parcel is declared to be worth, in major units. */
-    public float $pathaoDeclaredValue;
-
     /** RedEx: off until the Merchant has typed its access token. */
     public bool $redexEnabled = false;
 
@@ -149,12 +132,6 @@ class CourierSettings extends SettingsGroup
      */
     public array $redexPickupStores = [];
 
-    /** What RedEx is told this kind of delivery is. */
-    public string $redexDeliveryType;
-
-    /** What RedEx is told is inside the parcel. */
-    public string $redexItemType;
-
     /** What an ordinary parcel weighs, in kilograms. RedEx refuses a parcel without one. */
     public float $redexParcelWeight;
 
@@ -163,9 +140,10 @@ class CourierSettings extends SettingsGroup
 
     /**
      * Every default comes from config, driven by `DEFAULTS` rather than
-     * listed again here, so a sixth default is one entry there and one
-     * property — and nothing outside this constructor reads
-     * `giopages.couriers.*` (ADR-0012).
+     * listed again here, so a new default is one entry there and one
+     * property per Courier that sends it — and nothing outside this
+     * constructor reads `giopages.couriers.*` (ADR-0012). A Courier with no
+     * property for a default does not send it, and is skipped.
      *
      * The switches and the credentials have no config keys on purpose: an
      * installation is off with nothing typed until a Merchant says otherwise,
@@ -179,6 +157,11 @@ class CourierSettings extends SettingsGroup
 
             foreach (self::DEFAULTS as $suffix) {
                 $property = self::property($courier, $suffix);
+
+                if (! property_exists($this, $property)) {
+                    continue;
+                }
+
                 $value = data_get($stored, Str::snake($suffix));
 
                 /** The property's own declaration says what the config value is, so the two cannot drift apart. */

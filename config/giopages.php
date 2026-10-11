@@ -119,24 +119,18 @@ return [
     | them, and a merchant with a different arrangement overrides them in
     | Settings rather than here.
     |
+    | A courier lists only the defaults its driver sends (`parcelFields()`);
+    | a key for anything else would be a setting nothing reads.
+    |
     */
 
     'couriers' => [
 
         'steadfast' => [
-            /** Steadfast collects from one arrangement per account and takes no store. */
-            'pickup_store' => '',
-
             /** Steadfast's `delivery_type`: 0 is to the door, 1 is to one of their points. */
             'delivery_type' => '0',
 
             'item_type' => '',
-
-            /** Kilograms. */
-            'parcel_weight' => 0.5,
-
-            /** Major units, in the installation currency. */
-            'declared_value' => 1000.0,
         ],
 
         'pathao' => [
@@ -149,18 +143,13 @@ return [
             /** Pathao's `item_type`: 2 is a parcel, 1 is a document. */
             'item_type' => '2',
 
+            /** Kilograms. */
             'parcel_weight' => 0.5,
-
-            'declared_value' => 1000.0,
         ],
 
         'redex' => [
             /** RedEx collects from a pickup store the merchant registers with them. */
             'pickup_store' => '',
-
-            'delivery_type' => '',
-
-            'item_type' => '',
 
             /** RedEx refuses a parcel with no weight, so this is never blank. */
             'parcel_weight' => 0.5,

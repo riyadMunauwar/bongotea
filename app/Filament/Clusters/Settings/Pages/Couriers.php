@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Settings\Pages;
 
 use App\Enums\Courier;
+use App\Support\Couriers\ParcelField;
 use App\Support\Settings\CourierSettings;
 use BackedEnum;
 use Closure;
@@ -61,6 +62,10 @@ class Couriers extends SettingsPage
         $registered = [];
 
         foreach (Courier::cases() as $courier) {
+            if (! property_exists($settings, CourierSettings::property($courier, 'PickupStores'))) {
+                continue;
+            }
+
             $rows = [];
 
             foreach ($settings->pickupStoresFor($courier) as $id => $name) {
@@ -94,12 +99,7 @@ class Couriers extends SettingsPage
                         ->label('Secret key')
                         ->maxLength(255),
 
-                    self::pickupStores(
-                        Courier::Steadfast,
-                        'Steadfast collects from one arrangement per account and is never told a store, so leave this empty.',
-                    ),
-
-                    self::defaults(Courier::Steadfast),
+                    ...self::parcelDefaults(Courier::Steadfast),
                 ]),
 
             Section::make(Courier::Pathao->getLabel())
@@ -126,12 +126,10 @@ class Couriers extends SettingsPage
                         ->label('Password')
                         ->maxLength(255),
 
-                    self::pickupStores(
+                    ...self::parcelDefaults(
                         Courier::Pathao,
                         'The Pathao stores your parcels are collected from. Pathao will not take a booking without one.',
                     ),
-
-                    self::defaults(Courier::Pathao),
                 ]),
 
             Section::make(Courier::RedEx->getLabel())
@@ -145,12 +143,10 @@ class Couriers extends SettingsPage
                         ->maxLength(1024)
                         ->helperText('Issued by RedEx for your account. It is the whole of how they recognise you.'),
 
-                    self::pickupStores(
+                    ...self::parcelDefaults(
                         Courier::RedEx,
                         'The RedEx pickup stores your parcels are collected from.',
                     ),
-
-                    self::defaults(Courier::RedEx),
                 ]),
         ];
     }
@@ -174,8 +170,8 @@ class Couriers extends SettingsPage
      * and only once there are two of them.
      *
      * A Merchant with one store is the common case and is never asked, so the
-     * list is not required and a Courier with no notion of a store at all is
-     * simply left empty.
+     * list is not required. A Courier with no notion of a store at all is
+     * never drawn one (`parcelDefaults()`).
      */
     private static function pickupStores(Courier $courier, string $hint): Fieldset
     {
@@ -299,37 +295,57 @@ class Couriers extends SettingsPage
      * starts from, so a whole morning's orders can go out without a decision
      * being made about any of them.
      *
+     * Only what the Courier's driver sends (`parcelFields()`) is offered — a
+     * default nothing sends is a question whose answer goes nowhere — and the
+     * pickup stores come with the pickup-store field, so a Courier that is
+     * never told a store is never shown a list of them.
+     *
      * The weight and the declared value are not decoration. RedEx refuses a
      * parcel without both, and nothing on a page asks a customer how heavy
      * their order is — these are the only answer there is.
+     *
+     * @return list<Fieldset>
      */
-    private static function defaults(Courier $courier): Fieldset
+    private static function parcelDefaults(Courier $courier, string $pickupStoresHint = ''): array
     {
-        return Fieldset::make('Default parcel')
-            ->columns(2)
-            ->schema([
-                TextInput::make(CourierSettings::property($courier, 'DeliveryType'))
-                    ->label('Delivery type')
-                    ->maxLength(255)
-                    ->helperText($courier->getLabel().'\'s own code for the kind of delivery an ordinary order gets.'),
+        $sent = array_map(
+            fn (ParcelField $field): string => $field->settingsProperty,
+            $courier->driver()->parcelFields(),
+        );
 
-                TextInput::make(CourierSettings::property($courier, 'ItemType'))
-                    ->label('Item type')
-                    ->maxLength(255)
-                    ->helperText($courier->getLabel().'\'s own code for what is inside an ordinary parcel.'),
+        $inputs = array_filter([
+            TextInput::make(CourierSettings::property($courier, 'DeliveryType'))
+                ->label('Delivery type')
+                ->maxLength(255)
+                ->helperText($courier->getLabel().'\'s own code for the kind of delivery an ordinary order gets.'),
 
-                TextInput::make(CourierSettings::property($courier, 'ParcelWeight'))
-                    ->label('Parcel weight')
-                    ->numeric()
-                    ->minValue(0)
-                    ->suffix('kg')
-                    ->helperText('What an ordinary parcel weighs, when nothing has been measured.'),
+            TextInput::make(CourierSettings::property($courier, 'ItemType'))
+                ->label('Item type')
+                ->maxLength(255)
+                ->helperText($courier->getLabel().'\'s own code for what is inside an ordinary parcel.'),
 
-                TextInput::make(CourierSettings::property($courier, 'DeclaredValue'))
-                    ->label('Declared value')
-                    ->numeric()
-                    ->minValue(0)
-                    ->helperText('What an ordinary parcel is declared to be worth, in your currency.'),
-            ]);
+            TextInput::make(CourierSettings::property($courier, 'ParcelWeight'))
+                ->label('Parcel weight')
+                ->numeric()
+                ->minValue(0)
+                ->suffix('kg')
+                ->helperText('What an ordinary parcel weighs, when nothing has been measured.'),
+
+            TextInput::make(CourierSettings::property($courier, 'DeclaredValue'))
+                ->label('Declared value')
+                ->numeric()
+                ->minValue(0)
+                ->helperText('What an ordinary parcel is declared to be worth, in your currency.'),
+        ], fn (TextInput $input): bool => in_array($input->getName(), $sent, true));
+
+        return array_values(array_filter([
+            in_array(CourierSettings::property($courier, 'PickupStore'), $sent, true)
+                ? self::pickupStores($courier, $pickupStoresHint)
+                : null,
+
+            $inputs === []
+                ? null
+                : Fieldset::make('Default parcel')->columns(2)->schema(array_values($inputs)),
+        ]));
     }
 }

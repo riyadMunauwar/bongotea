@@ -33,7 +33,7 @@ it('sits in the Settings cluster, one section per Courier, each asking for what 
         /** The warehouses a Courier collects from, and which of them a parcel goes from when nobody chooses. */
         ->assertSee('Pickup stores')
         ->assertSee('Default pickup store')
-        /** The four defaults, once per Courier, are what make an unattended booking possible. */
+        /** The defaults each driver sends are what make an unattended booking possible. */
         ->assertSee('Delivery type')
         ->assertSee('Item type')
         ->assertSee('Parcel weight')
@@ -42,6 +42,30 @@ it('sits in the Settings cluster, one section per Courier, each asking for what 
     $subNavigation = collect(SettingsCluster::getClusteredComponents())->map(fn (string $page): string => $page::getNavigationLabel());
 
     expect($subNavigation)->toContain('Couriers')->toContain('Tracking');
+});
+
+it('offers each Courier only the parcel defaults its driver sends', function () {
+    $this->actingAs(User::factory()->managingSettings()->create());
+
+    Livewire::test(Couriers::class)
+        ->assertFormFieldExists('steadfastDeliveryType')
+        ->assertFormFieldExists('steadfastItemType')
+        ->assertFormFieldDoesNotExist('steadfastPickupStores')
+        ->assertFormFieldDoesNotExist('steadfastPickupStore')
+        ->assertFormFieldDoesNotExist('steadfastParcelWeight')
+        ->assertFormFieldDoesNotExist('steadfastDeclaredValue')
+        ->assertFormFieldExists('pathaoPickupStores')
+        ->assertFormFieldExists('pathaoPickupStore')
+        ->assertFormFieldExists('pathaoDeliveryType')
+        ->assertFormFieldExists('pathaoItemType')
+        ->assertFormFieldExists('pathaoParcelWeight')
+        ->assertFormFieldDoesNotExist('pathaoDeclaredValue')
+        ->assertFormFieldExists('redexPickupStores')
+        ->assertFormFieldExists('redexPickupStore')
+        ->assertFormFieldExists('redexParcelWeight')
+        ->assertFormFieldExists('redexDeclaredValue')
+        ->assertFormFieldDoesNotExist('redexDeliveryType')
+        ->assertFormFieldDoesNotExist('redexItemType');
 });
 
 it('loads the config defaults when nothing has been saved, with every credential blank', function () {
@@ -53,8 +77,6 @@ it('loads the config defaults when nothing has been saved, with every credential
             'steadfastApiKey' => null,
             'steadfastSecretKey' => null,
             'steadfastDeliveryType' => '0',
-            'steadfastParcelWeight' => 0.5,
-            'steadfastDeclaredValue' => 1000.0,
             'pathaoEnabled' => false,
             'pathaoClientId' => null,
             'pathaoClientSecret' => null,

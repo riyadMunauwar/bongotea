@@ -80,20 +80,32 @@ it('spells each driver\'s credentials exactly as the settings group does', funct
         ->each->toBeIn(CourierSettings::secrets());
 })->with('couriers');
 
-it('gives every Courier the same five defaults, so a fourth cannot arrive half-supplied', function (Courier $courier) {
+it('holds exactly the defaults each driver sends, so no default is one nothing reads', function (Courier $courier) {
     $settings = app(CourierSettings::class);
 
-    expect(CourierSettings::DEFAULTS)->toHaveCount(5);
+    $declared = array_map(fn (ParcelField $field): string => $field->settingsProperty, $courier->driver()->parcelFields());
 
-    foreach (CourierSettings::DEFAULTS as $suffix) {
-        $property = CourierSettings::property($courier, $suffix);
+    $held = array_values(array_filter(
+        array_map(fn (string $suffix): string => CourierSettings::property($courier, $suffix), CourierSettings::DEFAULTS),
+        fn (string $property): bool => property_exists($settings, $property),
+    ));
 
-        expect(property_exists($settings, $property))->toBeTrue("[{$property}] is not declared.")
-            ->and(CourierSettings::isSecret($property))->toBeFalse("[{$property}] is a default, not a credential.");
+    expect($held)->toEqualCanonicalizing($declared)
+        ->each->not->toBeIn(CourierSettings::secrets())
+        ->and(CourierSettings::hasSettings($courier))->toBeTrue();
+})->with('couriers');
+
+it('keeps no default for a parcel setting its driver never sends', function () {
+    $settings = app(CourierSettings::class);
+
+    foreach (['steadfastPickupStore', 'steadfastPickupStores', 'steadfastParcelWeight', 'steadfastDeclaredValue', 'pathaoDeclaredValue', 'redexDeliveryType', 'redexItemType'] as $property) {
+        expect(property_exists($settings, $property))->toBeFalse("[{$property}] is still declared.");
     }
 
-    expect(CourierSettings::hasSettings($courier))->toBeTrue();
-})->with('couriers');
+    expect(config('giopages.couriers.steadfast'))->toBe(['delivery_type' => '0', 'item_type' => ''])
+        ->and(config('giopages.couriers.pathao'))->not->toHaveKey('declared_value')
+        ->and(config('giopages.couriers.redex'))->not->toHaveKeys(['delivery_type', 'item_type']);
+});
 
 it('refuses a Courier that is switched off, then one still missing a credential, in one wording', function (Courier $courier) {
     $label = $courier->getLabel();
@@ -148,8 +160,7 @@ it('takes the parcel defaults from config, and lets a saved row override one wit
         ->and($settings->pathaoItemType)->toBe('2')
         ->and($settings->steadfastDeliveryType)->toBe('0')
         ->and($settings->redexDeclaredValue)->toBe(1000.0)
-        ->and($settings->redexPickupStore)->toBe('')
-        ->and($settings->redexItemType)->toBe('');
+        ->and($settings->redexPickupStore)->toBe('');
 
     storeCourierSettings(['redexPickupStore' => 'RDX-STORE-7', 'redexParcelWeight' => 1.25]);
 
@@ -321,4 +332,24 @@ it('reads a row damaged by hand without throwing, so the page that could repair 
         ->and($settings->pathaoDeliveryType)->toBe('12')
         /** A key the class no longer has is dropped, and one the row never mentioned keeps its config default. */
         ->and($settings->redexDeclaredValue)->toBe(1000.0);
+});
+
+it('loads a row still holding defaults no driver sends, and ignores them', function () {
+    storeCourierSettings([]);
+
+    DB::table('settings')->where('key', CourierSettings::key())->update(['value' => json_encode([
+        'steadfastPickupStore' => 'SF-1',
+        'steadfastPickupStores' => [['id' => 'SF-1', 'name' => 'Banani']],
+        'steadfastParcelWeight' => 2.0,
+        'steadfastDeclaredValue' => 500.0,
+        'pathaoDeclaredValue' => 500.0,
+        'redexDeliveryType' => 'express',
+        'redexItemType' => 'fragile',
+        'pathaoItemType' => '1',
+    ])]);
+
+    $settings = app(CourierSettings::class);
+
+    expect($settings->pathaoItemType)->toBe('1')
+        ->and($settings->pickupStoresFor(Courier::Steadfast))->toBe([]);
 });
