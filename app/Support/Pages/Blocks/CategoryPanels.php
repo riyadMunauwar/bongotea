@@ -17,9 +17,15 @@ use Filament\Support\Icons\Heroicon;
  * once more than one Brand has published Products, for Brands too. The
  * Merchant writes only the headings; the filtering is done in the browser
  * over what is sent.
+ *
+ * A panel carries only a Category's first few why points, in the Merchant's
+ * order, so it stays short above its Products; the Category's own page shows
+ * them all.
  */
 class CategoryPanels extends PageBlock
 {
+    public const WHY_POINTS_SHOWN = 3;
+
     public static function type(): string
     {
         return 'category_panels';
@@ -65,8 +71,11 @@ class CategoryPanels extends PageBlock
         $categories = [];
 
         foreach ($catalogue->stocked() as ['category' => $category, 'products' => $inCategory]) {
+            $detail = CatalogueProps::category($category, $inCategory);
+
             $categories[] = [
-                ...CatalogueProps::category($category, $inCategory),
+                ...$detail,
+                'whyPoints' => array_slice($detail['whyPoints'], 0, self::WHY_POINTS_SHOWN),
                 'products' => CatalogueProps::cards($inCategory),
             ];
         }

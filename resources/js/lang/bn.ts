@@ -83,7 +83,6 @@ export const bn = {
     },
     catalogue: {
         strength: 'কড়া ভাব',
-        strengthOutOf: (strength: string) => `${strength}/৫`,
         tierRange: (min: string, max: string | null) => (max === null ? `${min}+ কেজি` : `${min}–${max} কেজি`),
         offMrp: (amount: string, percent: string | null) => (percent === null ? `${amount} ছাড়` : `${amount} ছাড় (${percent}%)`),
         mrp: 'এমআরপি',
@@ -97,9 +96,14 @@ export const bn = {
     },
     product: {
         allTeas: '← সব চা',
+        teaType: 'চায়ের ধরন',
+        particleSize: 'দানার আকার',
         liquorColour: 'লিকারের রং',
+        liquorBody: 'লিকারের ঘনত্ব',
         aroma: 'ঘ্রাণ',
+        infusion: 'ভেজানোর সময়',
         cups: 'কত কাপ হবে',
+        packageWeight: 'প্যাকেটের ওজন',
         bestFor: 'যেখানে সবচেয়ে ভালো',
         brewing: 'কীভাবে বানাবেন',
         tipsEyebrow: 'চা বিক্রেতাদের জন্য',

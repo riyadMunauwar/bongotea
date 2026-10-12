@@ -77,7 +77,8 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                 {product.strength !== null && (
                     <span className="flex items-center gap-[6px] text-[11px] text-muted md:text-[13px]">
                         {bn.catalogue.strength}
-                        <StrengthBar strength={product.strength} />
+                        <StrengthBar bars={product.strength.bars} />
+                        <b className="font-semibold text-ink">{product.strength.grade}</b>
                     </span>
                 )}
 

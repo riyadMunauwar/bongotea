@@ -16,7 +16,7 @@ it('shows a Category with its description, why points, theme and published Produ
         'note' => 'মান ও দামের ভারসাম্য',
         'quality_headline' => 'মান ও দামের সেরা ভারসাম্য',
         'about' => 'প্রতিদিনের বিক্রিতে সবচেয়ে বেশি চলে।',
-        'why_points' => ['দুধ চা ও রং চা দুটোতেই ভালো', '', 'মাঝারি দামে বেশি কাপ'],
+        'why_points' => ['দুধ চা ও রং চা দুটোতেই ভালো', '', 'মাঝারি দামে বেশি কাপ', 'সারা বছর একই স্বাদ', 'হোটেলে জনপ্রিয়'],
         'theme_key' => CategoryTheme::Gold->value,
     ]);
 
@@ -42,7 +42,7 @@ it('shows a Category with its description, why points, theme and published Produ
                 'note' => 'মান ও দামের ভারসাম্য',
                 'qualityHeadline' => 'মান ও দামের সেরা ভারসাম্য',
                 'about' => 'প্রতিদিনের বিক্রিতে সবচেয়ে বেশি চলে।',
-                'whyPoints' => ['দুধ চা ও রং চা দুটোতেই ভালো', 'মাঝারি দামে বেশি কাপ'],
+                'whyPoints' => ['দুধ চা ও রং চা দুটোতেই ভালো', 'মাঝারি দামে বেশি কাপ', 'সারা বছর একই স্বাদ', 'হোটেলে জনপ্রিয়'],
                 'productCount' => 2,
                 'priceRange' => ['low' => 43000, 'high' => 55000],
             ])

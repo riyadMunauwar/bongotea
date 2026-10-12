@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Enums\ImageSlot;
 use App\Enums\ProductStatus;
+use App\Enums\Strength;
 use App\Filament\Concerns\HasSeoFields;
 use App\Filament\Concerns\HasSlugField;
 use App\Models\Product;
@@ -63,7 +64,7 @@ class ProductForm
         return Section::make('Basics')
             ->columns(2)
             ->schema([
-                self::nameInput(),
+                self::nameInput()->columnSpanFull(),
 
                 /**
                  * Locked the first time the Product went live: a link to it
@@ -75,7 +76,8 @@ class ProductForm
                     ->disabled(fn (?Product $record): bool => $record?->isSlugLocked() ?? false)
                     ->helperText(fn (?Product $record): string => $record?->isSlugLocked()
                         ? 'Fixed since this Product first went live, so links to it never break. The name can still change.'
-                        : 'Lowercase English letters, digits and hyphens. Fixed once the Product is first published.'),
+                        : 'Lowercase English letters, digits and hyphens. Fixed once the Product is first published.')
+                    ->columnSpanFull(),
 
                 Textarea::make('short_description')
                     ->label('Short description')
@@ -108,8 +110,10 @@ class ProductForm
 
     /**
      * What the tea is like, all optional; the Product page shows only what is
-     * filled in. The three short facts share a row, the phrases and the guide
-     * run the width, and the business tips stay folded until there are some.
+     * filled in. The nine fixed Characteristics sit three to a row in the
+     * order the page draws them, the Merchant's own follow, and the phrases,
+     * the brewing steps and the business tips run the width, the tips folded
+     * until there are some.
      */
     private static function teaProfileSection(): Section
     {
@@ -118,35 +122,51 @@ class ProductForm
             ->columns(['default' => 1, 'sm' => 3])
             ->schema([
                 Select::make('strength')
-                    ->options(array_combine(range(1, Product::STRENGTH_MAX), range(1, Product::STRENGTH_MAX)))
+                    ->options(Strength::class)
                     ->placeholder('Not set')
-                    ->helperText('1 is mild, 5 is the strongest liquor.'),
+                    ->helperText('৫+ is the strongest liquor, ২+ the mildest.'),
 
-                TextInput::make('liquor_colour')
-                    ->label('Liquor colour')
-                    ->maxLength(255),
+                self::characteristicInput('tea_type', 'Tea type'),
+                self::characteristicInput('particle_size', 'Tea particle size'),
+                self::characteristicInput('liquor_colour', 'Liquor colour'),
+                self::characteristicInput('liquor_body', 'Liquor body'),
+                self::characteristicInput('aroma', 'Aroma'),
+                self::characteristicInput('infusion', 'Infusion')
+                    ->helperText('How long it steeps, e.g. "৩–৪ মিনিট".'),
+                self::characteristicInput('cups_per_kilogram', 'Cups per kg')
+                    ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".'),
+                self::characteristicInput('package_weight', 'Weight / package'),
 
-                TextInput::make('aroma')
-                    ->maxLength(255),
-
-                TextInput::make('cups_per_kilogram')
-                    ->label('Cups per kg')
-                    ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".')
-                    ->maxLength(255),
-
-                TextInput::make('not_best_for')
-                    ->label('Not best for')
-                    ->maxLength(255)
-                    ->columnSpan(['sm' => 2]),
+                Repeater::make('custom_characteristics')
+                    ->label('More characteristics')
+                    ->helperText('Anything else about this tea alone, shown after the ones above.')
+                    ->schema([
+                        TextInput::make('label')->required()->maxLength(60),
+                        TextInput::make('value')->required()->maxLength(255),
+                    ])
+                    ->columns(2)
+                    ->defaultItems(0)
+                    ->reorderable()
+                    ->addActionLabel('Add a characteristic')
+                    ->columnSpanFull(),
 
                 TagsInput::make('best_for')
                     ->label('Best for')
                     ->helperText('Each phrase is one chip on the Product page. These narrow nothing; Tags do.')
                     ->columnSpanFull(),
 
-                Textarea::make('brewing_guide')
+                TextInput::make('not_best_for')
+                    ->label('Not best for')
+                    ->maxLength(255)
+                    ->columnSpanFull(),
+
+                Repeater::make('brewing_steps')
                     ->label('Brewing guide')
-                    ->rows(2)
+                    ->helperText('One step per line, numbered on the Product page in this order.')
+                    ->simple(TextInput::make('step')->required()->maxLength(255))
+                    ->defaultItems(0)
+                    ->reorderable()
+                    ->addActionLabel('Add a step')
                     ->columnSpanFull(),
 
                 Section::make('Business tips')
@@ -159,11 +179,17 @@ class ProductForm
                             ->hiddenLabel()
                             ->simple(Textarea::make('tip')->required()->rows(2)->maxLength(500))
                             ->defaultItems(0)
-                            ->maxItems(Product::BUSINESS_TIPS_MAX)
                             ->reorderable()
                             ->addActionLabel('Add a tip'),
                     ]),
             ]);
+    }
+
+    private static function characteristicInput(string $name, string $label): TextInput
+    {
+        return TextInput::make($name)
+            ->label($label)
+            ->maxLength(255);
     }
 
     private static function publishingSection(): Section

@@ -2,6 +2,7 @@
 
 use App\Enums\CategoryTheme;
 use App\Enums\ProductStatus;
+use App\Enums\Strength;
 use App\Filament\Resources\Brands\BrandResource;
 use App\Filament\Resources\Brands\Pages\ManageBrands;
 use App\Filament\Resources\Categories\CategoryResource;
@@ -88,16 +89,18 @@ it('makes the Merchant pick a theme rather than defaulting to the fallback', fun
         ->assertHasFormErrors(['theme_key' => 'required']);
 });
 
-it('refuses a fourth why point', function () {
+it('keeps every why point the Merchant writes, past three', function () {
     Livewire::test(CreateCategory::class)
         ->fillForm([
             'name' => 'Silver',
             'slug' => 'silver',
-            'why_points' => [['point' => 'one'], ['point' => 'two'], ['point' => 'three'], ['point' => 'four']],
             'theme_key' => CategoryTheme::Silver->value,
         ])
+        ->set('data.why_points', [['point' => 'one'], ['point' => 'two'], ['point' => 'three'], ['point' => 'four']])
         ->call('create')
-        ->assertHasFormErrors(['why_points']);
+        ->assertHasNoFormErrors();
+
+    expect(Category::query()->where('slug', 'silver')->sole()->why_points)->toBe(['one', 'two', 'three', 'four']);
 });
 
 it('reproduces the mockup tokens for Premium, Gold and Silver exactly', function () {
@@ -227,14 +230,17 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
             'tags' => [$milk->getKey(), $hotel->getKey()],
             'short_description' => 'দুধ চায়ের জন্য ঘন ও সুগন্ধি চা।',
             'description' => '<p>বাগানের কচি পাতা।</p>',
-            'strength' => 4,
+            'strength' => Strength::FourMinus->value,
+            'tea_type' => 'সিটিসি',
+            'particle_size' => 'বিওপি',
             'liquor_colour' => 'গাঢ় লালচে বাদামি',
+            'liquor_body' => 'ঘন লিকার',
             'aroma' => 'তীব্র সুগন্ধ',
+            'infusion' => '৩–৪ মিনিট',
             'cups_per_kilogram' => 'প্রায় ৪০০–৪৫০ কাপ',
+            'package_weight' => '১ কেজি প্যাকেট',
             'best_for' => ['দুধ চা', 'মালাই চা'],
             'not_best_for' => 'হালকা রং চা পছন্দ করলে গোল্ড বেছে নিন।',
-            'brewing_guide' => 'প্রতি কাপে ২–২.৫ গ্রাম।',
-            'business_tips' => [['tip' => 'এক'], ['tip' => 'দুই'], ['tip' => 'তিন']],
             'badge' => 'সবচেয়ে জনপ্রিয়',
             'search_keywords' => ['premium', 'kodom'],
             'status' => ProductStatus::Published->value,
@@ -243,6 +249,9 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ])
         ->set('data.mrp', '650')
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '620']])
+        ->set('data.custom_characteristics', [['label' => 'বাগান', 'value' => 'সিলেট'], ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ']])
+        ->set('data.brewing_steps', [['step' => 'পানি ফুটিয়ে নিন।'], ['step' => 'প্রতি কাপে ২ গ্রাম দিন।'], ['step' => '৩ মিনিট রাখুন।']])
+        ->set('data.business_tips', [['tip' => 'এক'], ['tip' => 'দুই'], ['tip' => 'তিন'], ['tip' => 'চার']])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -251,9 +260,13 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
     expect($product->category->is($this->category))->toBeTrue()
         ->and($product->brand->is($this->brand))->toBeTrue()
         ->and($product->tags->modelKeys())->toEqualCanonicalizing([$milk->getKey(), $hotel->getKey()])
-        ->and($product->strength)->toBe(4)
+        ->and($product->strength)->toBe(Strength::FourMinus)
+        ->and($product->liquor_body)->toBe('ঘন লিকার')
+        ->and($product->package_weight)->toBe('১ কেজি প্যাকেট')
+        ->and($product->custom_characteristics)->toBe([['label' => 'বাগান', 'value' => 'সিলেট'], ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ']])
         ->and($product->best_for)->toBe(['দুধ চা', 'মালাই চা'])
-        ->and($product->business_tips)->toBe(['এক', 'দুই', 'তিন'])
+        ->and($product->brewing_steps)->toBe(['পানি ফুটিয়ে নিন।', 'প্রতি কাপে ২ গ্রাম দিন।', '৩ মিনিট রাখুন।'])
+        ->and($product->business_tips)->toBe(['এক', 'দুই', 'তিন', 'চার'])
         ->and($product->search_keywords)->toBe('premium,kodom')
         ->and($product->is_available)->toBeFalse()
         ->and($product->status)->toBe(ProductStatus::Published)
@@ -462,18 +475,18 @@ it('requires a Category and a Brand on every Product', function () {
         ->assertHasFormErrors(['category_id' => 'required', 'brand_id' => 'required']);
 });
 
-it('refuses a strength outside 1 to 5 and a fourth business tip', function () {
+it('refuses a strength that is not one of the grades and a custom Characteristic missing its label or value', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Too much',
             'slug' => 'too-much',
             'category_id' => $this->category->getKey(),
             'brand_id' => $this->brand->getKey(),
-            'strength' => 6,
-            'business_tips' => [['tip' => 'one'], ['tip' => 'two'], ['tip' => 'three'], ['tip' => 'four']],
+            'strength' => 11,
         ])
+        ->set('data.custom_characteristics', [['label' => 'বাগান', 'value' => ''], ['label' => '', 'value' => 'সিলেট']])
         ->call('create')
-        ->assertHasFormErrors(['strength', 'business_tips']);
+        ->assertHasFormErrors(['strength', 'custom_characteristics.0.value', 'custom_characteristics.1.label']);
 });
 
 it('keeps the slug of a Product taken out of the catalogue claimed', function () {

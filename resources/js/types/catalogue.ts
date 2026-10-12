@@ -35,8 +35,8 @@ export type ProductCard = {
     shortDescription: string | null;
     imageUrl: string | null;
     badge: string | null;
-    /** One to five; null when the Merchant left it blank. */
-    strength: number | null;
+    /** The grade as written ("৪+") and the bars of five it fills; null when the Merchant left it blank. */
+    strength: Strength | null;
     isAvailable: boolean;
     brand: { id: number; name: string };
     category: CategoryReference;
@@ -47,16 +47,26 @@ export type ProductCard = {
     tiers: Tier[];
 };
 
+export type Strength = { grade: string; bars: number };
+
 export type ProductDetail = ProductCard & {
     descriptionHtml: string | null;
     /** In order; the first is the cover. */
     gallery: string[];
+    teaType: string | null;
+    particleSize: string | null;
     liquorColour: string | null;
+    liquorBody: string | null;
     aroma: string | null;
+    infusion: string | null;
     cupsPerKilogram: string | null;
+    packageWeight: string | null;
+    /** The Merchant's own, for this Product alone, drawn after the fixed ones. */
+    customCharacteristics: { label: string; value: string }[];
     bestFor: string[];
     notBestFor: string | null;
-    brewingGuide: string | null;
+    /** In order; numbered on the page. */
+    brewingSteps: string[];
     businessTips: string[];
 };
 

@@ -42,9 +42,15 @@ export default function ProductPage() {
 
     const characteristics = (
         [
+            { label: bn.product.teaType, value: product.teaType },
+            { label: bn.product.particleSize, value: product.particleSize },
             { label: bn.product.liquorColour, value: product.liquorColour },
+            { label: bn.product.liquorBody, value: product.liquorBody },
             { label: bn.product.aroma, value: product.aroma },
+            { label: bn.product.infusion, value: product.infusion },
             { label: bn.product.cups, value: product.cupsPerKilogram },
+            { label: bn.product.packageWeight, value: product.packageWeight },
+            ...product.customCharacteristics,
         ] as { label: string; value: string | null }[]
     ).filter((item): item is { label: string; value: string } => item.value !== null);
     const hasCharacteristics = product.strength !== null || characteristics.length > 0;
@@ -83,13 +89,13 @@ export default function ProductPage() {
                                 <div className="flex flex-col gap-2 bg-white px-4 py-[14px]">
                                     <span className="text-[13px] text-muted">{bn.catalogue.strength}</span>
                                     <span className="flex items-center gap-2">
-                                        <StrengthBar strength={product.strength} size="page" />
-                                        <b className="text-[14px] font-semibold text-ink">{bn.catalogue.strengthOutOf(toBanglaDigits(product.strength))}</b>
+                                        <StrengthBar bars={product.strength.bars} size="page" />
+                                        <b className="text-[14px] font-semibold text-ink">{product.strength.grade}</b>
                                     </span>
                                 </div>
                             )}
-                            {characteristics.map((item) => (
-                                <div key={item.label} className="flex flex-col gap-1 bg-white px-4 py-[14px]">
+                            {characteristics.map((item, index) => (
+                                <div key={index} className="flex flex-col gap-1 bg-white px-4 py-[14px]">
                                     <span className="text-[13px] text-muted">{item.label}</span>
                                     <b className="text-[15px] font-semibold text-ink">{item.value}</b>
                                 </div>
@@ -116,10 +122,19 @@ export default function ProductPage() {
                         </div>
                     )}
 
-                    {product.brewingGuide && (
-                        <div className="flex flex-col gap-1 rounded-[12px] bg-surface px-4 py-[14px]">
+                    {product.brewingSteps.length > 0 && (
+                        <div className="flex flex-col gap-2 rounded-[12px] bg-surface px-4 py-[14px]">
                             <span className="text-[13px] font-semibold text-eyebrow">{bn.product.brewing}</span>
-                            <span className="text-[15px] leading-[1.6] text-ink">{product.brewingGuide}</span>
+                            <ol className="m-0 flex list-none flex-col gap-[6px] p-0">
+                                {product.brewingSteps.map((step, index) => (
+                                    <li key={index} className="flex items-start gap-[10px] text-[15px] leading-[1.6] text-ink">
+                                        <span className="mt-[2px] flex size-[22px] flex-none items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
+                                            {toBanglaDigits(index + 1)}
+                                        </span>
+                                        {step}
+                                    </li>
+                                ))}
+                            </ol>
                         </div>
                     )}
 

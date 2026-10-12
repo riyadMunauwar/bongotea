@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CategoryTheme;
+use App\Enums\Strength;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
@@ -29,13 +30,23 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
             ['min' => 1, 'max' => 5, 'price' => 62000],
             ['min' => 6, 'max' => null, 'price' => 55800],
         ],
-        'strength' => 4,
+        'strength' => Strength::FourPlus,
+        'tea_type' => 'সিটিসি',
+        'particle_size' => 'বিওপি',
         'liquor_colour' => 'গাঢ় লাল',
+        'liquor_body' => 'ঘন লিকার',
         'aroma' => 'তীব্র',
+        'infusion' => '৩–৪ মিনিট',
         'cups_per_kilogram' => '১ কেজিতে প্রায় ৪৫০ কাপ',
+        'package_weight' => '১ কেজি প্যাকেট',
+        'custom_characteristics' => [
+            ['label' => 'বাগান', 'value' => 'সিলেট'],
+            ['label' => 'মৌসুম', 'value' => '  '],
+            ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ'],
+        ],
         'best_for' => ['হোটেল', 'রেস্টুরেন্ট'],
         'not_best_for' => 'হালকা চা যারা পছন্দ করেন',
-        'brewing_guide' => 'প্রতি কাপে ২ গ্রাম।',
+        'brewing_steps' => ['পানি ফুটিয়ে নিন।', '', 'প্রতি কাপে ২ গ্রাম দিন।'],
         'business_tips' => ['এয়ারটাইট কৌটায় রাখুন।'],
         'search_keywords' => 'primium',
     ]);
@@ -60,13 +71,22 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
                 ['min' => 1, 'max' => 5, 'price' => 62000],
                 ['min' => 6, 'max' => null, 'price' => 55800],
             ])
-            ->where('product.strength', 4)
+            ->where('product.strength', ['grade' => '৪+', 'bars' => 4])
+            ->where('product.teaType', 'সিটিসি')
+            ->where('product.particleSize', 'বিওপি')
             ->where('product.liquorColour', 'গাঢ় লাল')
+            ->where('product.liquorBody', 'ঘন লিকার')
             ->where('product.aroma', 'তীব্র')
+            ->where('product.infusion', '৩–৪ মিনিট')
             ->where('product.cupsPerKilogram', '১ কেজিতে প্রায় ৪৫০ কাপ')
+            ->where('product.packageWeight', '১ কেজি প্যাকেট')
+            ->where('product.customCharacteristics', [
+                ['label' => 'বাগান', 'value' => 'সিলেট'],
+                ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ'],
+            ])
             ->where('product.bestFor', ['হোটেল', 'রেস্টুরেন্ট'])
             ->where('product.notBestFor', 'হালকা চা যারা পছন্দ করেন')
-            ->where('product.brewingGuide', 'প্রতি কাপে ২ গ্রাম।')
+            ->where('product.brewingSteps', ['পানি ফুটিয়ে নিন।', 'প্রতি কাপে ২ গ্রাম দিন।'])
             ->where('product.businessTips', ['এয়ারটাইট কৌটায় রাখুন।'])
             ->where('product.gallery', [])
             ->where('minorUnitsPerTaka', 100)
@@ -84,6 +104,8 @@ it('sends every characteristic left blank as empty, so none is drawn', function 
         'badge' => '  ',
         'strength' => null,
         'best_for' => [],
+        'custom_characteristics' => null,
+        'brewing_steps' => null,
         'business_tips' => null,
     ]);
 
@@ -94,12 +116,18 @@ it('sends every characteristic left blank as empty, so none is drawn', function 
             ->where('product.descriptionHtml', null)
             ->where('product.badge', null)
             ->where('product.strength', null)
+            ->where('product.teaType', null)
+            ->where('product.particleSize', null)
             ->where('product.liquorColour', null)
+            ->where('product.liquorBody', null)
             ->where('product.aroma', null)
+            ->where('product.infusion', null)
             ->where('product.cupsPerKilogram', null)
+            ->where('product.packageWeight', null)
+            ->where('product.customCharacteristics', [])
             ->where('product.bestFor', [])
             ->where('product.notBestFor', null)
-            ->where('product.brewingGuide', null)
+            ->where('product.brewingSteps', [])
             ->where('product.businessTips', [])
         );
 });

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProductStatus;
+use App\Enums\Strength;
 use App\Support\Pricing\ProductTiers;
 use App\Support\Pricing\Tier;
 use Database\Factories\ProductFactory;
@@ -27,8 +28,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * (a draft is seen by nobody), the Available flag (unavailable is for now,
  * and the Product is still shown greyed), and the soft delete, which is
  * "taken out of the catalogue" — for good, while its address keeps
- * answering. Every characteristic is optional, so a Product can be published
- * bare and enriched later.
+ * answering. Every Characteristic is optional, so a Product can be published
+ * bare and enriched later: nine fixed ones in columns of their own, and
+ * `custom_characteristics`, the Merchant's own `{label, value}` rows for this
+ * Product alone, drawn after them.
  *
  * `tiers` are the Product's own Tiers (ADR-0031): `{min, max|null, price}`
  * in minor units, covering every kilogram from one once and never rising in
@@ -40,8 +43,9 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
-    'tiers', 'strength', 'liquor_colour', 'aroma', 'cups_per_kilogram', 'best_for', 'not_best_for',
-    'brewing_guide', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
+    'tiers', 'strength', 'tea_type', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
+    'cups_per_kilogram', 'package_weight', 'custom_characteristics', 'best_for', 'not_best_for',
+    'brewing_steps', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
     'seo_title', 'seo_description', 'seo_image',
 ])]
 class Product extends Model implements HasMedia
@@ -65,18 +69,16 @@ class Product extends Model implements HasMedia
      */
     public const IMAGE_DISK = 'local';
 
-    public const STRENGTH_MAX = 5;
-
-    public const BUSINESS_TIPS_MAX = 3;
-
     protected function casts(): array
     {
         return [
             'price' => 'integer',
             'mrp' => 'integer',
             'tiers' => 'array',
-            'strength' => 'integer',
+            'strength' => Strength::class,
+            'custom_characteristics' => 'array',
             'best_for' => 'array',
+            'brewing_steps' => 'array',
             'business_tips' => 'array',
             'status' => ProductStatus::class,
             'first_published_at' => 'datetime',

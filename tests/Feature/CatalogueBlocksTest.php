@@ -64,9 +64,9 @@ it('tiles each Category that has published Products with its count and lowest to
         );
 });
 
-it('draws a panel per Category with its Products, the Tags they carry, and no Brand filter while one Brand sells', function () {
+it('draws a panel per Category with its first three why points, its Products, the Tags they carry, and no Brand filter while one Brand sells', function () {
     $brand = Brand::factory()->create();
-    $premium = Category::factory()->create(['sort_order' => 0, 'why_points' => ['হাতে বাছাই করা কচি পাতা']]);
+    $premium = Category::factory()->create(['sort_order' => 0, 'why_points' => ['হাতে বাছাই করা কচি পাতা', 'গাঢ় রং', 'দীর্ঘস্থায়ী সুগন্ধ', 'হোটেলে জনপ্রিয়']]);
     $silver = Category::factory()->create(['sort_order' => 1]);
     $milk = Tag::factory()->create(['name' => 'দুধ চায়ের জন্য', 'sort_order' => 1]);
     $plain = Tag::factory()->create(['name' => 'রং চায়ের জন্য', 'sort_order' => 0]);
@@ -90,7 +90,7 @@ it('draws a panel per Category with its Products, the Tags they carry, and no Br
             ->where('page.blocks.0.props.brands', [])
             ->has('page.blocks.0.props.categories', 2)
             ->where('page.blocks.0.props.categories.0.id', $premium->id)
-            ->where('page.blocks.0.props.categories.0.whyPoints', ['হাতে বাছাই করা কচি পাতা'])
+            ->where('page.blocks.0.props.categories.0.whyPoints', ['হাতে বাছাই করা কচি পাতা', 'গাঢ় রং', 'দীর্ঘস্থায়ী সুগন্ধ'])
             ->where('page.blocks.0.props.categories.0.productCount', 1)
             ->where('page.blocks.0.props.categories.0.products.0.id', $royal->id)
             ->where('page.blocks.0.props.categories.0.products.0.tagIds', collect([$milk->id, $plain->id])->sort()->values()->all())

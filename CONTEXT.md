@@ -46,6 +46,14 @@ _Avoid_: palette, colour scheme, skin, style, colours
 A use a Product is good for — milk tea, plain tea, strong liquor, hotels — that a Customer can filter by. A Product may carry any number, or none. A Tag says nothing about price, grouping or appearance; it only narrows a list. Not the "best for" phrases on a Product's own page, which are that Product's copy and narrow nothing.
 _Avoid_: label, attribute, use case, category, filter
 
+**Characteristic**:
+One fact about what a Product's tea is like — its strength, its tea type, its particle size, its liquor colour and body, its aroma, its infusion, how many cups a Kilogram makes, how it is packed — shown on the Product's own page and nowhere a list is narrowed. Nine are fixed: every Product has room for each, under the same name and in the same order, so the same fact always reads the same way from one tea to the next. Beside them a Merchant may write any number of custom Characteristics on one Product alone, each a name and a value of their own, drawn after the fixed ones; one that turns out to belong on every Product is made a fixed one rather than retyped. A Characteristic left blank is simply not shown. Not a Tag: a Tag narrows a list, a Characteristic only describes.
+_Avoid_: attribute, spec, property, feature, custom field
+
+**Strength**:
+How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words.
+_Avoid_: strength score, rating, level, intensity
+
 **Brand**:
 Whose tea a Product is — Bongo Tea's own, or another company's that Bongo Tea sells alongside it. Every Product has exactly one, Bongo Tea's own teas included, so that "no brand" never quietly means "ours". A Customer sees it on the Product wherever the Product is drawn, and can narrow a list by it once the store sells more than one. Not a Supplier: a Brand is whose name is on the tea, a Supplier is who Bongo Tea bought it from, and one Supplier may carry several Brands.
 _Avoid_: manufacturer, vendor, supplier, maker, label

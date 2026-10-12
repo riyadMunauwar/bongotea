@@ -19,7 +19,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * Cart's mirror of the arithmetic can price straight from a card.
  *
  * @phpstan-type ThemeTokens array{text: string, tint: string, panel: string, panelText: string, panelSubtext: string, accent: string, pillBackground: string, pillText: string, tickBackground: string, line: string}
- * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: ?int, isAvailable: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>}
+ * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: array{grade: string, bars: int}|null, isAvailable: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>}
  */
 class CatalogueProps
 {
@@ -35,7 +35,7 @@ class CatalogueProps
             'shortDescription' => self::text($product->short_description),
             'imageUrl' => $product->coverUrl(),
             'badge' => self::text($product->badge),
-            'strength' => $product->strength,
+            'strength' => $product->strength === null ? null : ['grade' => $product->strength->grade(), 'bars' => $product->strength->bars()],
             'isAvailable' => $product->is_available,
             'brand' => ['id' => $product->brand->id, 'name' => $product->brand->name],
             'category' => self::categoryReference($product->category),
@@ -123,12 +123,18 @@ class CatalogueProps
                 ->map(fn (Media $media): string => $media->getFullUrl())
                 ->values()
                 ->all(),
+            'teaType' => self::text($product->tea_type),
+            'particleSize' => self::text($product->particle_size),
             'liquorColour' => self::text($product->liquor_colour),
+            'liquorBody' => self::text($product->liquor_body),
             'aroma' => self::text($product->aroma),
+            'infusion' => self::text($product->infusion),
             'cupsPerKilogram' => self::text($product->cups_per_kilogram),
+            'packageWeight' => self::text($product->package_weight),
+            'customCharacteristics' => self::customCharacteristics($product->custom_characteristics),
             'bestFor' => self::texts($product->best_for),
             'notBestFor' => self::text($product->not_best_for),
-            'brewingGuide' => self::text($product->brewing_guide),
+            'brewingSteps' => self::texts($product->brewing_steps),
             'businessTips' => self::texts($product->business_tips),
         ];
     }
@@ -211,6 +217,32 @@ class CatalogueProps
     public static function text(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
+
+    /**
+     * The Merchant's own Characteristics, in their order; a row missing its
+     * label or its value says nothing, so it is not sent.
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    private static function customCharacteristics(mixed $rows): array
+    {
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $characteristics = [];
+
+        foreach ($rows as $row) {
+            $label = self::text($row['label'] ?? null);
+            $value = self::text($row['value'] ?? null);
+
+            if ($label !== null && $value !== null) {
+                $characteristics[] = ['label' => $label, 'value' => $value];
+            }
+        }
+
+        return $characteristics;
     }
 
     /**
