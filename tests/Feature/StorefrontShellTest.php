@@ -47,7 +47,7 @@ it('renders the home page inside the storefront shell, with the store, announcem
             ->where('store.email', 'hello@bongotea.com')
             ->where('store.address', 'শ্রীমঙ্গল, মৌলভীবাজার')
             ->where('store.hours', 'সকাল ৯টা – রাত ৯টা')
-            ->where('announcement', ['pill' => 'অফার', 'message' => '৫১+ কেজিতে প্রতিটি চায়ে সর্বোচ্চ ছাড়'])
+            ->where('announcement', ['pill' => 'অফার', 'message' => '২০+ কেজিতে প্রতিটি চায়ে ডিস্ট্রিবিউটর দাম'])
             ->where('links', ['bulkOrder' => '/bulk-order', 'myOrders' => '/my-orders', 'checkout' => '/checkout', 'search' => '/search', 'searchSuggestions' => '/search/suggestions', 'signInCode' => '/sign-in/code', 'signIn' => '/sign-in', 'signOut' => '/sign-out', 'enquiry' => '/enquiries'])
         );
 });

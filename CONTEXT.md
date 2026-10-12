@@ -35,8 +35,8 @@ Said of a Product that can be ordered right now — a decision the Merchant make
 _Avoid_: in stock, out of stock, enabled, active, sold out
 
 **Category**:
-The one grade a Product is sold under — Premium, Gold, Silver — and the way the store is organised around it: what a Customer browses by, what the order form groups by, and what carries its own description and its own colours wherever it is drawn. Every Product is in exactly one, and Categories do not nest. Its colours are a Category Theme chosen for it, never colours typed in one by one. Each has a public address of its own at its Slug, listing its Products under its own description.
-_Avoid_: segment, grade, collection, department, type
+The one line a Product is sold under, named for who it is made for — Tea Stall Premium, Tea Stall Classic, Family Blend — and the way the store is organised around it: what a Customer browses by, what the order form groups by, and what carries its own description and its own colours wherever it is drawn. Every Product is in exactly one, and Categories do not nest. Its colours are a Category Theme chosen for it, never colours typed in one by one. Each has a public address of its own at its Slug, listing its Products under its own description.
+_Avoid_: segment, grade, series, collection, department, type
 
 **Category Theme**:
 One designed set of colours a Category wears wherever it is drawn — its pill, its panel, its accent, its ticks — chosen by name from the few the store ships with, Premium, Gold and Silver among them. A theme is designed as a whole and never assembled colour by colour, so a Category can look only as the design meant one to; a new theme is a design decision, not a setting.
@@ -49,6 +49,10 @@ _Avoid_: label, attribute, use case, category, filter
 **Characteristic**:
 One fact about what a Product's tea is like — its strength, its tea type, its particle size, its liquor colour and body, its aroma, its infusion, how many cups a Kilogram makes, how it is packed — shown on the Product's own page and nowhere a list is narrowed. Nine are fixed: every Product has room for each, under the same name and in the same order, so the same fact always reads the same way from one tea to the next. Beside them a Merchant may write any number of custom Characteristics on one Product alone, each a name and a value of their own, drawn after the fixed ones; one that turns out to belong on every Product is made a fixed one rather than retyped. A Characteristic left blank is simply not shown. Not a Tag: a Tag narrows a list, a Characteristic only describes.
 _Avoid_: attribute, spec, property, feature, custom field
+
+**Grade**:
+The size of a tea's particles as the trade names it — Leaf, BOP, PD, Dust, CD — which decides how fast it brews, how quickly its colour comes and what it is good for. It is the fixed Characteristic for particle size, read by its trade name, and never a Category: a Category is who a tea is made for, a Grade is what its leaf is like, and one Category may hold teas of several Grades.
+_Avoid_: particle size (to a Customer), segment, quality, category
 
 **Strength**:
 How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words.

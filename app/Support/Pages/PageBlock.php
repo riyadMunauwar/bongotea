@@ -7,6 +7,7 @@ use App\Models\Page;
 use App\Support\Storefront\StorefrontMenus;
 use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
@@ -94,6 +95,35 @@ abstract class PageBlock
     }
 
     /**
+     * An anchor a link can point at inside the Block, or null unless it is
+     * shaped like a slug.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected static function anchor(array $data): ?string
+    {
+        $anchor = self::text($data, 'anchor');
+
+        return $anchor !== null && preg_match('/^'.Page::SLUG.'$/', $anchor) === 1 ? $anchor : null;
+    }
+
+    /**
+     * A simple repeater's words, trimmed, with the blank ones left out.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    protected static function strings(array $data, string $key): array
+    {
+        $values = is_array($data[$key] ?? null) ? array_values($data[$key]) : [];
+
+        return array_values(array_filter(array_map(
+            fn (mixed $value): ?string => is_string($value) && trim($value) !== '' ? trim($value) : null,
+            $values,
+        )));
+    }
+
+    /**
      * A repeater's rows, each read through `$row`; a row that comes back
      * null is left out.
      *
@@ -128,6 +158,31 @@ abstract class PageBlock
         }
 
         return ['label' => $label, 'href' => $href];
+    }
+
+    /**
+     * The buttons after the first two, each drawn like the second.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<array{label: string, href: string}>
+     */
+    protected static function moreButtons(array $data): array
+    {
+        return self::rows($data, 'more_buttons', fn (array $button): ?array => self::button($button, 'label', 'link'));
+    }
+
+    protected static function moreButtonsInput(): Repeater
+    {
+        return Repeater::make('more_buttons')
+            ->label('More buttons')
+            ->maxItems(2)
+            ->defaultItems(0)
+            ->columns(2)
+            ->columnSpanFull()
+            ->schema([
+                TextInput::make('label')->required()->maxLength(60),
+                self::linkInput('link')->required(),
+            ]);
     }
 
     /**

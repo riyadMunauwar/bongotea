@@ -7,7 +7,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * The dark band that asks for the order: a question, a line, and up to two
+ * The dark band that asks for the order: a question, a line, and up to four
  * buttons.
  */
 class CallToActionBand extends PageBlock
@@ -36,6 +36,7 @@ class CallToActionBand extends PageBlock
             self::linkInput('primary_link', 'Main button link'),
             TextInput::make('secondary_label')->label('Second button')->maxLength(60),
             self::linkInput('secondary_link', 'Second button link'),
+            self::moreButtonsInput(),
         ];
     }
 
@@ -46,6 +47,7 @@ class CallToActionBand extends PageBlock
             'text' => self::text($data, 'text'),
             'primary' => self::button($data, 'primary_label', 'primary_link'),
             'secondary' => self::button($data, 'secondary_label', 'secondary_link'),
+            'more' => self::moreButtons($data),
         ];
     }
 }

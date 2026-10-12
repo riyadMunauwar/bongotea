@@ -16,6 +16,8 @@ export type HeroCarouselProps = {
         imageUrl: string | null;
         primary: BlockButton | null;
         secondary: BlockButton | null;
+        /** Further buttons, each drawn like the second. */
+        more: BlockButton[];
     }[];
 };
 
@@ -52,7 +54,13 @@ export type TextReviewsProps = {
     heading: string | null;
     ratingSummary: string | null;
     note: string | null;
-    reviews: { name: string; place: string | null; product: string | null; text: string; verified: boolean }[];
+    reviews: {
+        name: string;
+        place: string | null;
+        product: string | null;
+        text: string;
+        verified: boolean;
+    }[];
 };
 
 export type StoryProps = {
@@ -70,12 +78,18 @@ export type JourneyProps = {
 export type ValueCardsProps = {
     eyebrow: string | null;
     heading: string | null;
-    cards: { icon: string | null; title: string; text: string | null }[];
+    cards: {
+        icon: string | null;
+        title: string;
+        text: string | null;
+        button: BlockButton | null;
+    }[];
 };
 
 export type ChipsRowProps = {
     heading: string | null;
-    chips: string[];
+    /** A chip with no link is a plain word. */
+    chips: { label: string; href: string | null }[];
 };
 
 export type CallToActionBandProps = {
@@ -83,6 +97,54 @@ export type CallToActionBandProps = {
     text: string | null;
     primary: BlockButton | null;
     secondary: BlockButton | null;
+    more: BlockButton[];
+};
+
+export type TableProps = {
+    eyebrow: string | null;
+    heading: string | null;
+    text: string | null;
+    columns: string[];
+    /** Each row holds exactly one cell per column. */
+    rows: { cells: string[] }[];
+    footnote: string | null;
+    button: BlockButton | null;
+};
+
+export type InfoCardsProps = {
+    eyebrow: string | null;
+    heading: string | null;
+    text: string | null;
+    columns: 1 | 2 | 3;
+    cards: {
+        badge: string | null;
+        anchor: string | null;
+        eyebrow: string | null;
+        title: string;
+        subtitle: string | null;
+        text: string | null;
+        lists: { label: string | null; items: string[] }[];
+        note: { label: string | null; text: string } | null;
+        button: BlockButton | null;
+    }[];
+};
+
+export type RecipeCardsProps = {
+    eyebrow: string | null;
+    heading: string | null;
+    text: string | null;
+    recipes: {
+        name: string;
+        englishName: string | null;
+        anchor: string | null;
+        tea: string | null;
+        serves: string | null;
+        time: string | null;
+        taste: string | null;
+        ingredients: { item: string; quantity: string | null }[];
+        steps: string[];
+        tips: { label: string | null; text: string }[];
+    }[];
 };
 
 export type ContactCardsProps = {
@@ -203,6 +265,9 @@ export type BlockPropsByType = {
     story: StoryProps;
     journey: JourneyProps;
     value_cards: ValueCardsProps;
+    info_cards: InfoCardsProps;
+    table: TableProps;
+    recipe_cards: RecipeCardsProps;
     chips_row: ChipsRowProps;
     cta_band: CallToActionBandProps;
     contact_cards: ContactCardsProps;

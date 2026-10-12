@@ -42,6 +42,8 @@ class ValueCards extends PageBlock
                     TextInput::make('icon')->helperText('One glyph: ✓ ৳ →')->maxLength(2),
                     TextInput::make('title')->required()->maxLength(120),
                     TextInput::make('text')->maxLength(300),
+                    TextInput::make('button_label')->label('Button')->maxLength(60),
+                    self::linkInput('button_link', 'Button link')->columnSpan(2),
                 ]),
         ];
     }
@@ -55,6 +57,7 @@ class ValueCards extends PageBlock
                 'icon' => self::text($card, 'icon'),
                 'title' => self::text($card, 'title'),
                 'text' => self::text($card, 'text'),
+                'button' => self::button($card, 'button_label', 'button_link'),
             ]),
         ];
     }

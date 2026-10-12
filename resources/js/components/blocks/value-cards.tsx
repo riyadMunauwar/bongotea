@@ -1,5 +1,5 @@
 import type { ValueCardsProps } from '@/types/blocks';
-import { SectionHeading } from './shared';
+import { ButtonLink, SectionHeading } from './shared';
 
 /** What the store stands for: soft cards, one column on a phone and three across above it. */
 export function ValueCards({ eyebrow, heading, cards }: ValueCardsProps) {
@@ -20,6 +20,7 @@ export function ValueCards({ eyebrow, heading, cards }: ValueCardsProps) {
                         )}
                         <b className="mt-[6px] text-[19px] font-semibold text-ink">{card.title}</b>
                         {card.text && <span className="text-[15px] leading-[1.75] text-muted">{card.text}</span>}
+                        {card.button && <ButtonLink button={card.button} className="mt-auto self-start pt-2 text-[15px] font-semibold text-primary hover:text-primary-dark" />}
                     </div>
                 ))}
             </div>

@@ -18,8 +18,9 @@
 #   4. Deploy. The app container migrates on every start, then reports
 #      healthy; the worker and scheduler wait for that.
 #   5. First deploy only, from Dokploy's terminal on the `app` container:
-#        php artisan make:filament-user
-#        php artisan bongotea:owner you@example.com
+#        php artisan bongotea:install
+#      It asks for the first Owner and whether to open blank or on the demo
+#      (or pass --owner-name= --owner-email= --owner-password= --demo|--blank).
 #
 # Data lives in two named volumes, `database` and `public-files` (Product
 # images: the public `local` disk, served at /storage). Both work with

@@ -8,7 +8,11 @@ use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * A centred row of words in pills — who the store is for.
+ * A centred row of words in pills — who the store is for, or, each pill
+ * linked, where to read on.
+ *
+ * Chips were once stored as bare words; those are read as unlinked chips,
+ * in the editor and on the storefront alike.
  */
 class ChipsRow extends PageBlock
 {
@@ -33,22 +37,43 @@ class ChipsRow extends PageBlock
             TextInput::make('heading')->maxLength(120),
 
             Repeater::make('chips')
-                ->simple(TextInput::make('label')->required()->maxLength(60))
                 ->minItems(1)
-                ->maxItems(20),
+                ->maxItems(20)
+                ->columns(2)
+                ->afterStateHydrated(function (Repeater $component, mixed $state): void {
+                    $component->rawState(is_array($state) ? self::chips($state) : $state);
+                    $component->hydrateItems();
+                })
+                ->schema([
+                    TextInput::make('label')->required()->maxLength(60),
+                    self::linkInput('link', 'Link (optional)'),
+                ]),
         ];
     }
 
+    /**
+     * A chip whose link no Menu could hold is still drawn, as a plain word.
+     */
     public static function props(array $data): array
     {
-        $chips = is_array($data['chips'] ?? null) ? $data['chips'] : [];
-
         return [
             'heading' => self::text($data, 'heading'),
-            'chips' => array_values(array_filter(array_map(
-                fn (mixed $chip): ?string => is_string($chip) && trim($chip) !== '' ? trim($chip) : null,
-                array_values($chips),
-            ))),
+            'chips' => self::rows(['chips' => self::chips(is_array($data['chips'] ?? null) ? $data['chips'] : [])], 'chips', fn (array $chip): ?array => self::text($chip, 'label') === null ? null : [
+                'label' => self::text($chip, 'label'),
+                'href' => self::button($chip, 'label', 'link')['href'] ?? null,
+            ]),
         ];
+    }
+
+    /**
+     * The chips as rows, a bare word stored before chips could link read as
+     * a chip with no link.
+     *
+     * @param  array<array-key, mixed>  $chips
+     * @return array<array-key, mixed>
+     */
+    private static function chips(array $chips): array
+    {
+        return array_map(fn (mixed $chip): mixed => is_string($chip) ? ['label' => $chip] : $chip, $chips);
     }
 }

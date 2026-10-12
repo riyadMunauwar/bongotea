@@ -21,7 +21,7 @@ class HeaderSettings extends SettingsGroup
     /** The gold tag before the message. Blank draws the message alone. */
     public string $announcementPill = 'অফার';
 
-    public string $announcementMessage = '৫১+ কেজিতে প্রতিটি চায়ে সর্বোচ্চ ছাড়';
+    public string $announcementMessage = '২০+ কেজিতে প্রতিটি চায়ে ডিস্ট্রিবিউটর দাম';
 
     public static function key(): string
     {

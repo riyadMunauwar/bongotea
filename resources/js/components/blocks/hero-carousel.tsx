@@ -73,13 +73,22 @@ function Carousel({ slides }: { slides: HeroCarouselProps['slides'] }) {
                             {slide.eyebrow && <span className="text-[14px] font-medium text-hero-eyebrow">{slide.eyebrow}</span>}
                             <Heading className="m-0 max-w-[760px] text-[clamp(26px,5vw,58px)] leading-[1.3] font-semibold text-balance">{slide.title}</Heading>
                             {slide.text && <p className="m-0 max-w-[540px] text-[clamp(15px,1.4vw,18px)] leading-[1.75] text-pretty text-night-text">{slide.text}</p>}
-                            {(slide.primary || slide.secondary) && (
+                            {(slide.primary || slide.secondary || slide.more.length > 0) && (
                                 <div className="mt-[10px] flex flex-wrap gap-[10px]">
                                     {slide.primary && (
-                                        <ButtonLink button={slide.primary} className="rounded-[8px] bg-white px-6 py-[14px] text-[16px] font-semibold text-primary-dark hover:bg-green-50 hover:text-primary-dark" />
+                                        <ButtonLink
+                                            button={slide.primary}
+                                            className="rounded-[8px] bg-white px-6 py-[14px] text-[16px] font-semibold text-primary-dark hover:bg-green-50 hover:text-primary-dark"
+                                        />
                                     )}
-                                    {slide.secondary && (
-                                        <ButtonLink button={slide.secondary} className="rounded-[8px] border border-white/50 px-[22px] py-[13px] text-[16px] font-medium text-white hover:bg-white/10 hover:text-white" />
+                                    {[slide.secondary, ...slide.more].map((button, index) =>
+                                        button ? (
+                                            <ButtonLink
+                                                key={index}
+                                                button={button}
+                                                className="rounded-[8px] border border-white/50 px-[22px] py-[13px] text-[16px] font-medium text-white hover:bg-white/10 hover:text-white"
+                                            />
+                                        ) : null,
                                     )}
                                 </div>
                             )}
@@ -92,7 +101,14 @@ function Carousel({ slides }: { slides: HeroCarouselProps['slides'] }) {
                 <div className="absolute inset-x-0 bottom-6 mx-auto flex max-w-[1240px] items-center gap-4 px-[clamp(16px,4vw,32px)] text-white">
                     <div className="flex gap-[6px]">
                         {slides.map((_, index) => (
-                            <button key={index} type="button" onClick={() => go(index)} aria-label={bn.blocks.slide} aria-current={index === active} className="cursor-pointer border-0 bg-transparent px-0 py-[10px]">
+                            <button
+                                key={index}
+                                type="button"
+                                onClick={() => go(index)}
+                                aria-label={bn.blocks.slide}
+                                aria-current={index === active}
+                                className="cursor-pointer border-0 bg-transparent px-0 py-[10px]"
+                            >
                                 <span className={cn('block h-[3px] rounded-[3px] transition-all duration-400', index === active ? 'w-7 bg-white' : 'w-3 bg-white/40')} />
                             </button>
                         ))}
@@ -139,13 +155,22 @@ function HeroBanner({ slide }: { slide: HeroCarouselProps['slides'][number] }) {
                 )}
                 <h1 className="m-0 max-w-[720px] text-[clamp(30px,4.6vw,58px)] leading-[1.25] font-semibold text-balance">{slide.title}</h1>
                 {slide.text && <p className="m-0 max-w-[560px] text-[clamp(15px,1.3vw,18px)] leading-[1.8] text-on-dark-sub">{slide.text}</p>}
-                {(slide.primary || slide.secondary) && (
+                {(slide.primary || slide.secondary || slide.more.length > 0) && (
                     <div className="mt-2 flex flex-wrap gap-[10px]">
                         {slide.primary && (
-                            <ButtonLink button={slide.primary} className="rounded-[10px] bg-gold-accent px-[22px] py-[13px] text-[15px] font-bold whitespace-nowrap text-night hover:bg-gold-hover hover:text-night" />
+                            <ButtonLink
+                                button={slide.primary}
+                                className="rounded-[10px] bg-gold-accent px-[22px] py-[13px] text-[15px] font-bold whitespace-nowrap text-night hover:bg-gold-hover hover:text-night"
+                            />
                         )}
-                        {slide.secondary && (
-                            <ButtonLink button={slide.secondary} className="rounded-[10px] border border-white/30 px-5 py-3 text-[15px] font-semibold whitespace-nowrap text-white hover:bg-white/8 hover:text-white" />
+                        {[slide.secondary, ...slide.more].map((button, index) =>
+                            button ? (
+                                <ButtonLink
+                                    key={index}
+                                    button={button}
+                                    className="rounded-[10px] border border-white/30 px-5 py-3 text-[15px] font-semibold whitespace-nowrap text-white hover:bg-white/8 hover:text-white"
+                                />
+                            ) : null,
                         )}
                     </div>
                 )}

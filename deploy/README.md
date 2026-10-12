@@ -47,6 +47,29 @@ the warning at the top of that file. OpenLiteSpeed does not read `.htaccess` by
 default; the shortest route is to turn that on, and the file gives the explicit
 rules for operators who keep it off.
 
+## Installing
+
+One command stands an installation up, and is safe to run again:
+
+```bash
+php artisan bongotea:install
+```
+
+It checks the environment (generating `APP_KEY` into `.env` only when there is
+none), migrates, makes the storage link, registers the permissions, asks for the
+first Owner while there is none, and — on a store with no content of its own yet
+— asks whether to open blank (only the home, bulk order and orders pages) or on
+the demo catalogue, pages and menus. It ends by listing what it cannot do: the
+scheduler's cron line, a queue worker, and building the assets. For an
+unattended run pass the answers:
+
+```bash
+php artisan bongotea:install --no-interaction \
+  --owner-name="Rumi" --owner-email=rumi@example.com --owner-password=... --demo
+```
+
+The sections below are what it does, for doing a step by hand.
+
 ## Product images
 
 An image a merchant uploads is served by the webserver reading a file. That
@@ -69,7 +92,8 @@ are given to users. The **Owner** stands outside them and may do everything,
 including deciding what anyone else may do, and an installation needs one before
 anybody can get in — a user holding no role is refused at the door.
 
-Make one by email address:
+`bongotea:install` makes the first. To make an existing user an Owner later, by
+email address:
 
 ```bash
 php artisan bongotea:owner someone@your-company.example

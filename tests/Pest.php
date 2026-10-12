@@ -611,3 +611,22 @@ function weighing(Order $order, int ...$kilograms): Order
 
     return $order;
 }
+
+/**
+ * `bongotea:install`'s answers given as options, as an unattended run gives
+ * them: the first Owner, and the store opened on the demo unless `$extra`
+ * says otherwise.
+ *
+ * @param  array<string, mixed>  $extra
+ * @return array<string, mixed>
+ */
+function installOptions(array $extra = []): array
+{
+    return [
+        '--owner-name' => 'Rumi',
+        '--owner-email' => 'rumi@example.com',
+        '--owner-password' => 'secret-password',
+        '--demo' => true,
+        ...$extra,
+    ];
+}

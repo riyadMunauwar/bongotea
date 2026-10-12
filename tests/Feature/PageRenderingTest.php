@@ -30,7 +30,7 @@ it('serves Home at the bare domain with its Blocks, anchors and screen switches'
             'hide_on_mobile' => true,
             'items' => [['icon' => '৳', 'title' => 'বেশি নিলে বেশি ছাড়', 'text' => '৫১+ কেজিতে সর্বোচ্চ ২০%']],
         ]),
-        pageBlock('chips_row', ['hide_on_desktop' => true, 'heading' => 'যাঁদের জন্য আমরা', 'chips' => ['চায়ের দোকান', 'হোটেল']]),
+        pageBlock('chips_row', ['hide_on_desktop' => true, 'heading' => 'যাঁদের জন্য আমরা', 'chips' => [['label' => 'চায়ের দোকান'], ['label' => 'হোটেল', 'link' => '/who-its-for']]]),
     ])->create();
 
     $this->get('/')
@@ -51,11 +51,23 @@ it('serves Home at the bare domain with its Blocks, anchors and screen switches'
                     'anchor' => null,
                     'hideOnMobile' => false,
                     'hideOnDesktop' => true,
-                    'props' => ['heading' => 'যাঁদের জন্য আমরা', 'chips' => ['চায়ের দোকান', 'হোটেল']],
+                    'props' => ['heading' => 'যাঁদের জন্য আমরা', 'chips' => [['label' => 'চায়ের দোকান', 'href' => null], ['label' => 'হোটেল', 'href' => '/who-its-for']]],
                 ],
             ])
             ->where('seo.title', 'Bongotea — ব্যবসার জন্য পাইকারি চা')
             ->where('seo.canonical', url('/'))
+        );
+});
+
+it('draws chips stored as bare words, from before chips could link, as unlinked chips', function () {
+    Page::factory()->published()->withBlocks([
+        pageBlock('chips_row', ['heading' => 'যাঁদের জন্য আমরা', 'chips' => ['চায়ের দোকান', ' ', 'হোটেল']]),
+    ])->create(['slug' => 'about']);
+
+    $this->get('/about')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.chips', [['label' => 'চায়ের দোকান', 'href' => null], ['label' => 'হোটেল', 'href' => null]])
         );
 });
 
@@ -130,7 +142,8 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('hero_carousel', ['layout' => 'carousel', 'slides' => [
             ['eyebrow' => 'বাল্ক দাম', 'title' => 'বেশি নিলে দাম কম', 'text' => 'সব চা মিলিয়ে', 'image' => 'pages/slide.jpg',
                 'primary_label' => 'বাল্ক অর্ডার করুন', 'primary_link' => '/bulk-order',
-                'secondary_label' => 'দাম দেখুন', 'secondary_link' => 'javascript:alert(1)'],
+                'secondary_label' => 'দাম দেখুন', 'secondary_link' => 'javascript:alert(1)',
+                'more_buttons' => [['label' => 'রেসিপি', 'link' => '/tea-recipes'], ['label' => 'চাপুন', 'link' => 'javascript:alert(1)']]],
             ['title' => ''],
         ]]),
         fn (): array => ['layout' => 'carousel', 'slides' => [[
@@ -138,11 +151,12 @@ it('hands each content Block kind the props its component draws', function (arra
             'imageUrl' => url('/storage/pages/slide.jpg'),
             'primary' => ['label' => 'বাল্ক অর্ডার করুন', 'href' => '/bulk-order'],
             'secondary' => null,
+            'more' => [['label' => 'রেসিপি', 'href' => '/tea-recipes']],
         ]]],
     ],
     'hero laid out as a banner' => [
         pageBlock('hero_carousel', ['layout' => 'banner', 'slides' => [['eyebrow' => 'আমাদের সম্পর্কে', 'title' => 'বিশ্বস্ত চা সরবরাহকারী']]]),
-        ['layout' => 'banner', 'slides' => [['eyebrow' => 'আমাদের সম্পর্কে', 'title' => 'বিশ্বস্ত চা সরবরাহকারী', 'text' => null, 'imageUrl' => null, 'primary' => null, 'secondary' => null]]],
+        ['layout' => 'banner', 'slides' => [['eyebrow' => 'আমাদের সম্পর্কে', 'title' => 'বিশ্বস্ত চা সরবরাহকারী', 'text' => null, 'imageUrl' => null, 'primary' => null, 'secondary' => null, 'more' => []]]],
     ],
     'how-to-order steps, reading the video id out of a link' => [
         pageBlock('how_to_order', ['eyebrow' => 'কীভাবে অর্ডার করবেন', 'heading' => 'মাত্র ৩ ধাপে অর্ডার করুন', 'text' => null,
@@ -178,13 +192,65 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('journey', ['eyebrow' => 'চায়ের যাত্রা', 'heading' => 'বাগান থেকে আপনার দোকানে', 'steps' => [['title' => 'বাগান থেকে পাতা', 'text' => 'কচি পাতা দিয়ে শুরু।', 'image' => 'pages/garden.jpg']]]),
         fn (): array => ['eyebrow' => 'চায়ের যাত্রা', 'heading' => 'বাগান থেকে আপনার দোকানে', 'steps' => [['title' => 'বাগান থেকে পাতা', 'text' => 'কচি পাতা দিয়ে শুরু।', 'imageUrl' => url('/storage/pages/garden.jpg')]]],
     ],
-    'value cards' => [
-        pageBlock('value_cards', ['cards' => [['icon' => '✓', 'title' => 'বাছাই করা পাতা', 'text' => 'প্রতিটি চালান পরখ করা।']]]),
-        ['eyebrow' => null, 'heading' => null, 'cards' => [['icon' => '✓', 'title' => 'বাছাই করা পাতা', 'text' => 'প্রতিটি চালান পরখ করা।']]],
+    'value cards, a card button only where both its words and link are given' => [
+        pageBlock('value_cards', ['cards' => [
+            ['icon' => '✓', 'title' => 'বাছাই করা পাতা', 'text' => 'প্রতিটি চালান পরখ করা।', 'button_label' => 'গ্রেড দেখুন', 'button_link' => '/tea-grades'],
+            ['title' => 'পরিষ্কার দাম', 'button_label' => 'দাম দেখুন'],
+        ]]),
+        ['eyebrow' => null, 'heading' => null, 'cards' => [
+            ['icon' => '✓', 'title' => 'বাছাই করা পাতা', 'text' => 'প্রতিটি চালান পরখ করা।', 'button' => ['label' => 'গ্রেড দেখুন', 'href' => '/tea-grades']],
+            ['icon' => null, 'title' => 'পরিষ্কার দাম', 'text' => null, 'button' => null],
+        ]],
     ],
-    'call-to-action band' => [
-        pageBlock('cta_band', ['heading' => 'আপনার দোকানের জন্য চা লাগবে?', 'text' => 'আজই অর্ডার দিন।', 'primary_label' => 'বাল্ক অর্ডার করুন', 'primary_link' => '/bulk-order', 'secondary_label' => 'যোগাযোগ করুন', 'secondary_link' => '/contact']),
-        ['heading' => 'আপনার দোকানের জন্য চা লাগবে?', 'text' => 'আজই অর্ডার দিন।', 'primary' => ['label' => 'বাল্ক অর্ডার করুন', 'href' => '/bulk-order'], 'secondary' => ['label' => 'যোগাযোগ করুন', 'href' => '/contact']],
+    'call-to-action band, with more buttons after the first two' => [
+        pageBlock('cta_band', ['heading' => 'আপনার দোকানের জন্য চা লাগবে?', 'text' => 'আজই অর্ডার দিন।', 'primary_label' => 'বাল্ক অর্ডার করুন', 'primary_link' => '/bulk-order', 'secondary_label' => 'যোগাযোগ করুন', 'secondary_link' => '/contact',
+            'more_buttons' => [['label' => 'রেসিপি দেখুন', 'link' => '/tea-recipes'], ['label' => 'লিংক নেই']]]),
+        ['heading' => 'আপনার দোকানের জন্য চা লাগবে?', 'text' => 'আজই অর্ডার দিন।', 'primary' => ['label' => 'বাল্ক অর্ডার করুন', 'href' => '/bulk-order'], 'secondary' => ['label' => 'যোগাযোগ করুন', 'href' => '/contact'],
+            'more' => [['label' => 'রেসিপি দেখুন', 'href' => '/tea-recipes']]],
+    ],
+    'table, each row cut or padded to the headings and blank rows left out' => [
+        pageBlock('table', ['heading' => 'এক নজরে গ্রেড', 'columns' => ['গ্রেড', 'দানা', ' '],
+            'rows' => [['cells' => ['লিফ', 'মাঝারি', 'বাড়তি']], ['cells' => ['CD']], ['cells' => ['', ' ']]],
+            'footnote' => 'স্বাদ পানির পরিমাণের ওপর নির্ভর করে।', 'button_label' => 'গ্রেড জানুন', 'button_link' => '/tea-grades']),
+        ['eyebrow' => null, 'heading' => 'এক নজরে গ্রেড', 'text' => null, 'columns' => ['গ্রেড', 'দানা'],
+            'rows' => [['cells' => ['লিফ', 'মাঝারি']], ['cells' => ['CD', '']]],
+            'footnote' => 'স্বাদ পানির পরিমাণের ওপর নির্ভর করে।', 'button' => ['label' => 'গ্রেড জানুন', 'href' => '/tea-grades']],
+    ],
+    'info cards, with their own anchors, lists, note and button' => [
+        pageBlock('info_cards', ['heading' => 'চায়ের প্রধান গ্রেড', 'columns' => '3', 'cards' => [
+            ['badge' => '১', 'anchor' => 'leaf', 'title' => 'লিফ', 'subtitle' => 'ভারসাম্যপূর্ণ নিয়মিত চায়ের জন্য', 'text' => 'মাঝারি দানার চা।',
+                'lists' => [['label' => 'বৈশিষ্ট্য', 'items' => ['মাঝারি দানা', ' ']], ['label' => 'খালি', 'items' => []]],
+                'note_label' => 'কার জন্য', 'note' => 'চায়ের দোকান', 'button_label' => 'লিফ দেখুন', 'button_link' => '/tea-grades#leaf'],
+            ['anchor' => 'Not An Anchor', 'title' => 'CD', 'note_label' => 'শুধু শিরোনাম'],
+            ['title' => ''],
+        ]]),
+        ['eyebrow' => null, 'heading' => 'চায়ের প্রধান গ্রেড', 'text' => null, 'columns' => 3, 'cards' => [
+            ['badge' => '১', 'anchor' => 'leaf', 'eyebrow' => null, 'title' => 'লিফ', 'subtitle' => 'ভারসাম্যপূর্ণ নিয়মিত চায়ের জন্য', 'text' => 'মাঝারি দানার চা।',
+                'lists' => [['label' => 'বৈশিষ্ট্য', 'items' => ['মাঝারি দানা']]],
+                'note' => ['label' => 'কার জন্য', 'text' => 'চায়ের দোকান'], 'button' => ['label' => 'লিফ দেখুন', 'href' => '/tea-grades#leaf']],
+            ['badge' => null, 'anchor' => null, 'eyebrow' => null, 'title' => 'CD', 'subtitle' => null, 'text' => null, 'lists' => [], 'note' => null, 'button' => null],
+        ]],
+    ],
+    'info cards with a column count it does not offer, drawn two across' => [
+        pageBlock('info_cards', ['columns' => '7', 'cards' => [['title' => 'লিফ']]]),
+        ['eyebrow' => null, 'heading' => null, 'text' => null, 'columns' => 2, 'cards' => [
+            ['badge' => null, 'anchor' => null, 'eyebrow' => null, 'title' => 'লিফ', 'subtitle' => null, 'text' => null, 'lists' => [], 'note' => null, 'button' => null],
+        ]],
+    ],
+    'recipe cards' => [
+        pageBlock('recipe_cards', ['heading' => 'দুধ চা', 'recipes' => [
+            ['name' => 'দুধ চা', 'english_name' => 'Milk Tea', 'anchor' => 'milk-tea', 'tea' => 'BOP / PD', 'serves' => '১ কাপ', 'time' => '৫–৭ মিনিট', 'taste' => 'ঘন ও মোলায়েম',
+                'ingredients' => [['item' => 'পানি', 'quantity' => '১২০ মিলি'], ['item' => '']],
+                'steps' => ['পানি ফুটিয়ে নিন।', ''],
+                'tips' => [['label' => 'ব্যবসায়িক টিপস', 'text' => 'লিকার আগে বানিয়ে রাখুন।'], ['label' => 'খালি', 'text' => '']]],
+            ['name' => ' '],
+        ]]),
+        ['eyebrow' => null, 'heading' => 'দুধ চা', 'text' => null, 'recipes' => [
+            ['name' => 'দুধ চা', 'englishName' => 'Milk Tea', 'anchor' => 'milk-tea', 'tea' => 'BOP / PD', 'serves' => '১ কাপ', 'time' => '৫–৭ মিনিট', 'taste' => 'ঘন ও মোলায়েম',
+                'ingredients' => [['item' => 'পানি', 'quantity' => '১২০ মিলি']],
+                'steps' => ['পানি ফুটিয়ে নিন।'],
+                'tips' => [['label' => 'ব্যবসায়িক টিপস', 'text' => 'লিকার আগে বানিয়ে রাখুন।']]],
+        ]],
     ],
     'contact cards' => [
         pageBlock('contact_cards', ['whatsapp_note' => 'সাধারণত ১০ মিনিটে উত্তর', 'email_note' => '', 'raised' => true]),

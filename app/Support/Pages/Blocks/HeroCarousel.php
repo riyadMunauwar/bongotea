@@ -56,6 +56,7 @@ class HeroCarousel extends PageBlock
                     self::linkInput('primary_link', 'Main button link'),
                     TextInput::make('secondary_label')->label('Second button')->maxLength(60),
                     self::linkInput('secondary_link', 'Second button link'),
+                    self::moreButtonsInput(),
                 ]),
         ];
     }
@@ -71,6 +72,7 @@ class HeroCarousel extends PageBlock
                 'imageUrl' => self::imageUrl($slide, 'image'),
                 'primary' => self::button($slide, 'primary_label', 'primary_link'),
                 'secondary' => self::button($slide, 'secondary_label', 'secondary_link'),
+                'more' => self::moreButtons($slide),
             ]),
         ];
     }

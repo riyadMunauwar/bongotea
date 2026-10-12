@@ -60,6 +60,15 @@ export const bn = {
         verifiedBuyer: 'যাচাইকৃত ক্রেতা',
         closeVideo: 'বন্ধ করুন',
         videoDismissHint: 'ভিডিওর বাইরে চাপলে বা ✕ চাপলে বন্ধ হবে',
+        recipe: {
+            tea: 'চা',
+            serves: 'পরিবেশন',
+            time: 'সময়',
+            taste: 'স্বাদ',
+            ingredients: 'উপকরণ ও পরিমাণ',
+            steps: 'প্রস্তুত প্রণালি',
+            open: 'পুরো রেসিপি দেখুন',
+        },
         contact: {
             callBadge: 'কল',
             call: 'ফোন করুন',
@@ -97,7 +106,7 @@ export const bn = {
     product: {
         allTeas: '← সব চা',
         teaType: 'চায়ের ধরন',
-        particleSize: 'দানার আকার',
+        particleSize: 'গ্রেড',
         liquorColour: 'লিকারের রং',
         liquorBody: 'লিকারের ঘনত্ব',
         aroma: 'ঘ্রাণ',

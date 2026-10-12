@@ -12,6 +12,7 @@ import { DeliveryChart } from './delivery-chart';
 import { Faq } from './faq';
 import { HeroCarousel } from './hero-carousel';
 import { HowToOrder } from './how-to-order';
+import { InfoCards } from './info-cards';
 import { Journey } from './journey';
 import { MapAndAddress } from './map-and-address';
 import { MyOrders } from './my-orders';
@@ -19,13 +20,17 @@ import { PriceCalculator } from './price-calculator';
 import { PriceMatrix } from './price-matrix';
 import { ProductRail } from './product-rail';
 import { PromiseStrip } from './promise-strip';
+import { RecipeCards } from './recipe-cards';
 import { Story } from './story';
+import { Table } from './table';
 import { TextReviews } from './text-reviews';
 import { ValueCards } from './value-cards';
 import { VideoReviews } from './video-reviews';
 
 /** Each Block kind's component, under the name its PHP definition stores it by. */
-const COMPONENTS: { [Type in keyof BlockPropsByType]: ComponentType<BlockPropsByType[Type]> } = {
+const COMPONENTS: {
+    [Type in keyof BlockPropsByType]: ComponentType<BlockPropsByType[Type]>;
+} = {
     hero_carousel: HeroCarousel,
     promise_strip: PromiseStrip,
     how_to_order: HowToOrder,
@@ -34,6 +39,9 @@ const COMPONENTS: { [Type in keyof BlockPropsByType]: ComponentType<BlockPropsBy
     story: Story,
     journey: Journey,
     value_cards: ValueCards,
+    info_cards: InfoCards,
+    table: Table,
+    recipe_cards: RecipeCards,
     chips_row: ChipsRow,
     cta_band: CallToActionBand,
     contact_cards: ContactCards,

@@ -176,6 +176,20 @@ it('builds a Page from Blocks, with an anchor and a screen switch, and its SEO f
         ]);
 });
 
+it('opens and saves chips stored as bare words as unlinked chips', function () {
+    $this->actingAs(User::factory()->authoringPages()->create());
+
+    $page = Page::factory()->withBlocks([
+        ['type' => 'chips_row', 'data' => ['heading' => 'যাঁদের জন্য আমরা', 'chips' => ['চায়ের দোকান', 'হোটেল']]],
+    ])->create(['slug' => 'about']);
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(array_column($page->refresh()->blocks[0]['data']['chips'], 'label'))->toBe(['চায়ের দোকান', 'হোটেল']);
+});
+
 it('refuses a Block anchor or button link a Menu could not hold', function (array $data) {
     $this->actingAs(User::factory()->authoringPages()->create());
 

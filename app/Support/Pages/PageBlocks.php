@@ -14,6 +14,7 @@ use App\Support\Pages\Blocks\DeliveryChart;
 use App\Support\Pages\Blocks\Faq;
 use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
+use App\Support\Pages\Blocks\InfoCards;
 use App\Support\Pages\Blocks\Journey;
 use App\Support\Pages\Blocks\MapAndAddress;
 use App\Support\Pages\Blocks\MyOrders;
@@ -21,7 +22,9 @@ use App\Support\Pages\Blocks\PriceCalculator;
 use App\Support\Pages\Blocks\PriceMatrix;
 use App\Support\Pages\Blocks\ProductRail;
 use App\Support\Pages\Blocks\PromiseStrip;
+use App\Support\Pages\Blocks\RecipeCards;
 use App\Support\Pages\Blocks\Story;
+use App\Support\Pages\Blocks\Table;
 use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\ValueCards;
 use App\Support\Pages\Blocks\VideoReviews;
@@ -49,6 +52,9 @@ class PageBlocks
         Story::class,
         Journey::class,
         ValueCards::class,
+        InfoCards::class,
+        Table::class,
+        RecipeCards::class,
         ChipsRow::class,
         CallToActionBand::class,
         ContactCards::class,
