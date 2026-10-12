@@ -59,8 +59,8 @@ class InventoryCluster extends Cluster
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
     /**
-     * After the work and before the reading: Dashboard 0, Orders 1, Shipments
-     * 2, Products 3, Pages 4, Enquiries 5, Inventory 10, Reports 50, Settings 100.
+     * After the work and before the reading: Dashboard 0, Orders 1, Products 2,
+     * Pages 3, Enquiries 4, Inventory 10, Reports 50, Settings 100.
      *
      * 10 rather than 5 for the reason Reports is 50 and Settings is 100 — a
      * category arriving later has somewhere to go without renumbering the

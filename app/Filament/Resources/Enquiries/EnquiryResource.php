@@ -31,8 +31,8 @@ class EnquiryResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    /** Sixth, under Pages: work, but nobody's Order yet. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 5;
+    /** Fifth, under Pages: work, but nobody's Order yet. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 4;
 
     /** Its own working area behind `handle enquiries` (ADR-0025). */
     public static function canAccess(): bool

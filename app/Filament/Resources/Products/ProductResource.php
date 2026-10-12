@@ -34,8 +34,8 @@ class ProductResource extends Resource
      */
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
-    /** Fourth, under Shipments. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 3;
+    /** Third, under Orders and the Shipments and Customers inside it. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

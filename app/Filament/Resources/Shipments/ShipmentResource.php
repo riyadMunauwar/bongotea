@@ -49,8 +49,13 @@ class ShipmentResource extends Resource
      */
     protected static ?string $recordTitleAttribute = 'invoice_reference';
 
-    /** Third, directly under Orders: a parcel is what became of one. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 2;
+    /**
+     * Inside Orders, first of its items: a parcel is what became of an Order,
+     * so it is read under the queue it came from, with Customers after it.
+     */
+    protected static ?string $navigationParentItem = 'Orders';
+
+    protected static ?int $navigationSort = 0;
 
     /**
      * The parcels are part of the same working area as the Orders they came

@@ -152,7 +152,7 @@ it('draws the cluster pages as tabs above the report, never as a second sidebar'
 it('sits between the work and the settings, in the gap the Settings cluster left', function () {
     expect(ReportsCluster::getNavigationSort())->toBe(50)
         ->and(SettingsCluster::getNavigationSort())->toBe(100)
-        ->and(PageResource::getNavigationSort())->toBe(4);
+        ->and(PageResource::getNavigationSort())->toBe(3);
 });
 
 it('opens on the last seven days and reveals the two pickers once Custom is chosen', function () {

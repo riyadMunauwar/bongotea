@@ -697,5 +697,5 @@ it('takes one sidebar line, as a working area above reports and settings', funct
         ->all();
 
     /** A cluster contributes one entry under its own label and never its resources. */
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Enquiries', 'Inventory', 'Reports', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Products', 'Pages', 'Enquiries', 'Inventory', 'Reports', 'Settings']);
 });

@@ -42,8 +42,8 @@ class PageResource extends Resource
      */
     protected static string|BackedEnum|null $navigationIcon = 'giopages-funnel';
 
-    /** Fifth, above Reports. See `Pages\Dashboard` for the whole order. */
-    protected static ?int $navigationSort = 4;
+    /** Fourth, above Enquiries. See `Pages\Dashboard` for the whole order. */
+    protected static ?int $navigationSort = 3;
 
     /**
      * The whole resource — list and form — is behind

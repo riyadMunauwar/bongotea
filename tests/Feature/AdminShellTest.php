@@ -87,7 +87,22 @@ it('draws the sidebar in the order the panel states', function () {
         ->map(fn ($item) => $item->getLabel())
         ->all();
 
-    expect($labels)->toBe(['Dashboard', 'Orders', 'Shipments', 'Products', 'Pages', 'Enquiries', 'Inventory', 'Reports', 'Settings']);
+    expect($labels)->toBe(['Dashboard', 'Orders', 'Products', 'Pages', 'Enquiries', 'Inventory', 'Reports', 'Settings']);
+});
+
+/**
+ * Orders is the whole of working Orders: the queue, then the parcels that
+ * became of them, then the people who placed them.
+ */
+it('draws shipments and customers under orders', function () {
+    $this->actingAs(User::factory()->workingOrders()->create());
+
+    $orders = collect(filament()->getCurrentOrDefaultPanel()->getNavigation())
+        ->flatMap(fn ($group) => $group->getItems())
+        ->first(fn ($item): bool => $item->getLabel() === 'Orders');
+
+    expect(collect($orders->getChildItems())->map(fn ($item) => $item->getLabel())->values()->all())
+        ->toBe(['Shipments', 'Customers']);
 });
 
 /**

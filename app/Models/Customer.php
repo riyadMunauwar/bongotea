@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use App\Support\PhoneNumber;
 use Database\Factories\CustomerFactory;
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use InvalidArgumentException;
 
 /**
@@ -62,5 +66,57 @@ class Customer extends Model implements AuthenticatableContract
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Every line of every Order they placed, deleted Orders' left out.
+     *
+     * @return HasManyThrough<OrderLine, Order, $this>
+     */
+    public function orderLines(): HasManyThrough
+    {
+        return $this->hasManyThrough(OrderLine::class, Order::class);
+    }
+
+    /**
+     * Each Customer with what their Orders come to, for the admin's Customers
+     * screens: the name, shop and District on their latest Order, how many
+     * Orders they placed whatever became of them and how many were Cancelled,
+     * the Kilograms and Sales of the ones Sales counts, and the first and last
+     * time they ordered. A deleted Order is in none of it.
+     *
+     * Latest is by when an Order was captured, so an Order typed in today for
+     * last week does not name the Customer.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withOrderFigures(Builder $query): void
+    {
+        $notCancelled = fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Cancelled->value);
+        $linesNotCancelled = fn (Builder $query): Builder => $query->where('orders.status', '!=', OrderStatus::Cancelled->value);
+
+        $latest = fn (string $column): Builder => Order::query()
+            ->select($column)
+            ->whereColumn('orders.customer_id', 'customers.id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(1);
+
+        $query
+            ->select('customers.*')
+            ->addSelect([
+                'latest_name' => $latest('customer_name'),
+                'latest_shop' => $latest('shop_name'),
+                'latest_district' => $latest('customer_district'),
+            ])
+            ->withCount([
+                'orders',
+                'orders as cancelled_count' => fn (Builder $query): Builder => $query->where('status', OrderStatus::Cancelled->value),
+            ])
+            ->withSum(['orders as sales' => $notCancelled], 'total')
+            ->withSum(['orderLines as kilograms' => $linesNotCancelled], 'order_lines.quantity')
+            ->withMin('orders as first_ordered_at', 'created_at')
+            ->withMax('orders as last_ordered_at', 'created_at');
     }
 }
