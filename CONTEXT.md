@@ -81,7 +81,7 @@ One Product's worth of an Order, recording what was sold, at what unit price, ag
 _Avoid_: line item, order item, cart item
 
 **Capture**:
-The moment a visitor submits the Checkout, or a User saves a new Order taken by phone, and an Order comes into existence. What was agreed at Capture — the Products, their Tier Prices and MRPs, the Saving, and the totals — is fixed from then on, until a User changes what the Order holds.
+The moment a visitor submits the Checkout, or a User saves a new Order taken by phone, and an Order comes into existence. What was agreed at Capture — the Products, their Tier Prices and MRPs, the Category each was sold under, the Saving, and the totals — is fixed from then on, until a User changes what the Order holds.
 _Avoid_: conversion, submission
 
 **Repricing**:
@@ -340,6 +340,14 @@ _Avoid_: conversions, leads, sales
 The money side of a Reporting Window: the totals, Delivery Charge included, of every Order captured in it that is not Cancelled. Counted at Capture, not when it is paid or delivered, because a Cash on Delivery Order has no other moment. Orders and Sales are always shown side by side and never collapsed into one.
 _Avoid_: revenue, turnover, income, GMV
 
+**Sales by Category**:
+`Sales` and `Kilograms Sold` read once per Category, over the same Orders and the same moment, each line counted under the Category it was sold under rather than the one its Product sits in now. A Category's money is its lines alone: the Delivery Charge belongs to an Order and to no Category on it, so the Categories add up to `Sales` less the Delivery Charges and the screen says so, rather than inventing a split nobody charged.
+_Avoid_: category revenue, segment sales, category mix
+
+**Returning Customer**:
+A Customer who bought in a Reporting Window and had bought before it began; one who bought in it for the first time is a **New Customer**. Buying means an Order counted in `Sales`, so a Cancelled Order neither makes anybody returning nor counts them in the window at all: someone whose only earlier Order was Cancelled never received any tea, and coming back is what the figure is about.
+_Avoid_: repeat buyer, loyal customer, existing customer, retained customer
+
 **Kilograms Sold**:
 The weight side of a Reporting Window: the Kilograms on every Order counted in Sales, the same Orders and the same moment. Drawn beside Sales wherever Sales is drawn, because a wholesale tea business measures itself in kilograms as much as in taka, and the two move apart whenever the Tiers do their work.
 _Avoid_: volume, units sold, quantity, tonnage
@@ -357,12 +365,16 @@ The Orders, Payments, parcels and shelves an operator must act on regardless of 
 _Avoid_: alerts, exceptions, issues, anomalies
 
 **Visit**:
-One load of a page of the store by a browser, counted for the whole store per day. Every load, not every browser, matching how an ad platform counts the same thing, so the two figures agree. Loads of the Order Complete Page and the Retry Page are not Visits: whoever is on them has already ordered, and counting them would dilute the Conversion Rate with people who converted. Counted only where the Merchant has switched Visit counting on, because counting is a database write on the path of every page load; what is stored is the count and never the load, so it holds nothing about anybody and is kept indefinitely.
+One load of a page of the store by a browser, counted per day for the whole store and for the place that was loaded — a Page, a Category or a Product by the thing itself rather than its address, so renaming a Slug never splits its history, and Search and the Checkout as one place each. The store's figure stands on its own and the places are a breakdown of it, not its source: a load that resolves to nothing is still a Visit to the store but no place's, and days counted before places were are the store's alone, so the places may add up to less than the store and are never made to agree. Every load, not every browser, matching how an ad platform counts the same thing, so the two figures agree. Loads of the Order Complete Page and the Retry Page are not Visits: whoever is on them has already ordered, and counting them would dilute the Conversion Rate with people who converted. Counted only where the Merchant has switched Visit counting on, because counting is a database write on the path of every page load; what is stored is the count and never the load, so it holds nothing about anybody and is kept indefinitely.
 _Avoid_: page view, hit, session, traffic
 
 **Conversion Rate**:
 Orders as a share of Visits in a Reporting Window, for the whole store. Every Order counts towards it, Cancelled ones included, for the same reason `Orders` as a figure counts them: the Visit converted whatever became of the Order afterwards. It owes nothing to any ad platform — a Merchant who reports to none still has one — and it is unknown rather than zero where Visits are not counted.
 _Avoid_: CVR, conversion, close rate, win rate
+
+**Buy Rate**:
+The Orders that hold a Product as a share of that Product's Visits in a Reporting Window — what it says is "looked at a lot, rarely bought". Said of one Product and never of the store, which has the Conversion Rate instead. Cancelled Orders count, as they do for the Conversion Rate. It sets two counts side by side and follows nobody from one to the other, so an Order taken by phone or placed on a later day still counts, and the rate may read above one; it is shown as it is rather than capped. Unknown, not zero, where Visits are not counted or the Product had none.
+_Avoid_: product conversion rate, view-to-order rate, CVR
 
 **Courier Report**:
 Everything the couriers' figures say over a Reporting Window — parcels sent, delivered and returned, how often each Courier delivers, how long it takes, and what it charged — on a screen of its own, broken down by Courier and never blended into one total. A figure a Courier never reports reads as nothing for that Courier rather than as zero for the trade, because the couriers do not answer the same questions and a single blended figure would present one courier's silence as everybody's.

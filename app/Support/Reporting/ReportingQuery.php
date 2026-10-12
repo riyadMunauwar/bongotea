@@ -5,9 +5,14 @@ namespace App\Support\Reporting;
 use App\Enums\Courier;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
+use App\Enums\PlaceKind;
 use App\Enums\ShipmentStatus;
+use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Page;
+use App\Models\PlaceVisitCount;
 use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\Supplier;
@@ -167,10 +172,13 @@ final class ReportingQuery
         /**
          * Visits are attached to the two whole windows and to no bucket: the
          * aggregate counts a day, and a one-day window's buckets are hours.
+         * Customers are set on the window whole, because one Customer buying
+         * in two buckets is two to the buckets and one to the window; the
+         * comparison is a single bucket, which is already whole.
          */
         return new Overview(
             $window,
-            $figures->withVisits($this->visitsIn($window)),
+            $figures->withVisits($this->visitsIn($window))->withCustomers(...$this->customersIn($window)),
             $this->figuresByBucket($comparison, [$whole])[0]->withVisits($this->visitsIn($comparison)),
             $buckets,
         );
@@ -289,6 +297,255 @@ final class ReportingQuery
             ->all();
 
         return new ProductRanking($window, $ranking);
+    }
+
+    /**
+     * Every Customer who bought in the window and what they bought, most
+     * Kilograms first, then most Sales.
+     *
+     * One grouped query over the Orders `SALES` counts, carrying each
+     * Customer's latest Order of the window by id, and two lookups: the names
+     * on those latest Orders, and which of the Customers had bought before the
+     * window began. The largest thing looped over is the list of Customers.
+     */
+    public function topCustomers(ReportingWindow $window): CustomerRanking
+    {
+        $rows = $this->weighed($this->notCancelledIn($window))
+            ->selectRaw('customer_id, count(*) as order_count, sum(total) as sales, sum(coalesce(order_kilograms, 0)) as kilograms')
+            ->selectSub(
+                /** The name on the Customer's latest counted Order of the window, latest by when it was captured. */
+                Order::query()
+                    ->withoutGlobalScopes()
+                    ->from('orders as latest')
+                    ->whereNull('latest.deleted_at')
+                    ->where('latest.status', '!=', OrderStatus::Cancelled->value)
+                    ->where('latest.created_at', '>=', $window->start->toDateTimeString())
+                    ->where('latest.created_at', '<', $window->end->toDateTimeString())
+                    ->select('latest.customer_name')
+                    ->whereColumn('latest.customer_id', 'orders.customer_id')
+                    ->orderByDesc('latest.created_at')
+                    ->orderByDesc('latest.id')
+                    ->limit(1),
+                'latest_name',
+            )
+            ->groupBy('customer_id')
+            ->toBase()
+            ->get();
+
+        $customerIds = $rows->pluck('customer_id')->map(fn (mixed $id): int => (int) $id)->all();
+
+        $customers = Customer::query()->findMany($customerIds)->keyBy(fn (Customer $customer): int => $customer->getKey());
+
+        $latestNames = $rows->pluck('latest_name', 'customer_id');
+
+        $returning = array_flip(Order::query()
+            ->whereIn('customer_id', $customerIds)
+            ->where('status', '!=', OrderStatus::Cancelled->value)
+            ->where('created_at', '<', $window->start->toDateTimeString())
+            ->distinct()
+            ->pluck('customer_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all());
+
+        $ranking = $rows
+            ->map(fn (object $row): CustomerRankingRow => new CustomerRankingRow(
+                customer: $customers->get((int) $row->customer_id),
+                latestName: $latestNames->get($row->customer_id),
+                orders: (int) $row->order_count,
+                kilograms: (int) $row->kilograms,
+                sales: (int) $row->sales,
+                isReturning: isset($returning[(int) $row->customer_id]),
+            ))
+            ->sortBy([
+                fn (CustomerRankingRow $a, CustomerRankingRow $b): int => $b->kilograms <=> $a->kilograms,
+                fn (CustomerRankingRow $a, CustomerRankingRow $b): int => $b->sales <=> $a->sales,
+                fn (CustomerRankingRow $a, CustomerRankingRow $b): int => strcmp($a->customer->phone, $b->customer->phone),
+            ])
+            ->values()
+            ->all();
+
+        return new CustomerRanking($window, $ranking);
+    }
+
+    /**
+     * Sales and Kilograms Sold per Category over the Orders `SALES` counts,
+     * most Kilograms first, each beside the comparison window's.
+     *
+     * Grouped by the Category stamped on each line at Capture rather than the
+     * one its Product sits in now, so moving a Product never moves a sale. The
+     * money is the lines' own; the window's Delivery Charge comes back beside
+     * the rows because no Category holds it.
+     */
+    public function salesByCategory(ReportingWindow $window): SalesByCategory
+    {
+        $current = $this->categorySalesIn($window);
+        $previous = $this->categorySalesIn($window->comparison())->keyBy('category_id');
+
+        $categories = Category::query()
+            ->findMany($current->pluck('category_id')->filter())
+            ->keyBy(fn (Category $category): int => $category->getKey());
+
+        $rows = $current
+            ->map(fn (object $row): SalesByCategoryRow => new SalesByCategoryRow(
+                category: $row->category_id === null ? null : $categories->get((int) $row->category_id),
+                orders: (int) $row->order_count,
+                sales: (int) $row->sales,
+                kilograms: (int) $row->kilograms,
+                previousSales: (int) ($previous->get($row->category_id)?->sales ?? 0),
+                previousKilograms: (int) ($previous->get($row->category_id)?->kilograms ?? 0),
+            ))
+            ->sortBy([
+                fn (SalesByCategoryRow $a, SalesByCategoryRow $b): int => $b->kilograms <=> $a->kilograms,
+                fn (SalesByCategoryRow $a, SalesByCategoryRow $b): int => $b->sales <=> $a->sales,
+                fn (SalesByCategoryRow $a, SalesByCategoryRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values()
+            ->all();
+
+        return new SalesByCategory(
+            $window,
+            $rows,
+            (int) $this->notCancelledIn($window)->sum('delivery_charge'),
+        );
+    }
+
+    /**
+     * The lines of a window's counted Orders, grouped by the Category they
+     * were sold under.
+     *
+     * @return Collection<int, object>
+     */
+    private function categorySalesIn(ReportingWindow $window): Collection
+    {
+        return OrderLine::query()
+            ->toBase()
+            ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
+            ->selectRaw('category_id, count(distinct order_lines.order_id) as order_count, sum(line_total) as sales, sum(quantity) as kilograms')
+            ->groupBy('category_id')
+            ->get();
+    }
+
+    /**
+     * The store's Visits one Merchant day at a time, for the Visits line:
+     * every day of the window in the answer whether or not it was counted.
+     *
+     * A day per point whatever the window, since the aggregate holds no
+     * hours; no points at all where the Merchant is not counting.
+     */
+    public function visitsOverTime(ReportingWindow $window): VisitsOverTime
+    {
+        if (! $this->countsVisits()) {
+            return new VisitsOverTime($window, false, []);
+        }
+
+        $counted = $this->visitsOverDays($window)
+            ->toBase()
+            ->get(['visited_on', 'visits'])
+            ->mapWithKeys(fn (object $row): array => [substr((string) $row->visited_on, 0, 10) => (int) $row->visits]);
+
+        $points = [];
+
+        for ($day = $window->localStart(); $day->lessThan($window->localEnd()); $day = $day->addDay()) {
+            $points[] = new VisitsOverTimePoint($day, (int) $counted->get($day->toDateString(), 0));
+        }
+
+        return new VisitsOverTime($window, true, $points);
+    }
+
+    /**
+     * Where a window's Visits went, place by place, most visited first, each
+     * beside its own Visits in the comparison window — and for a Product, the
+     * Orders that held it, which its Buy Rate is read from.
+     *
+     * Read off the places' aggregate, compared as whole Merchant days like the
+     * store's own, and set beside the store's figure rather than summed into
+     * it: the places are a breakdown and the store stands on its own. A place
+     * with no Visits in the window is not a row. Nothing at all where Visits
+     * are not counted.
+     *
+     * The Orders are every Order of the window holding the Product, Cancelled
+     * ones included, read exactly as the Conversion Rate reads its Orders.
+     */
+    public function visitsByPlace(ReportingWindow $window): VisitsByPlace
+    {
+        $visits = $this->visitsIn($window);
+
+        if ($visits === null) {
+            return new VisitsByPlace($window, null, []);
+        }
+
+        $current = $this->placeVisitsIn($window);
+        $previous = $this->placeVisitsIn($window->comparison());
+
+        $ordersHolding = OrderLine::query()
+            ->joinSub($this->ordersIn($window)->select('id'), 'held', 'held.id', '=', 'order_lines.order_id')
+            ->whereNotNull('product_id')
+            ->selectRaw('product_id, count(distinct order_lines.order_id) as order_count')
+            ->groupBy('product_id')
+            ->pluck('order_count', 'product_id');
+
+        $subjects = [
+            PlaceKind::Page->value => Page::query()->findMany($this->placeIds($current, PlaceKind::Page))->keyBy('id'),
+            PlaceKind::Category->value => Category::query()->findMany($this->placeIds($current, PlaceKind::Category))->keyBy('id'),
+            PlaceKind::Product->value => Product::withTrashed()->findMany($this->placeIds($current, PlaceKind::Product))->keyBy('id'),
+        ];
+
+        $rows = $current
+            ->map(function (int $count, string $place) use ($previous, $ordersHolding, $subjects): VisitsByPlaceRow {
+                [$kind, $id] = explode(':', $place);
+                $kind = PlaceKind::from($kind);
+
+                return new VisitsByPlaceRow(
+                    kind: $kind,
+                    placeId: (int) $id,
+                    subject: isset($subjects[$kind->value]) ? $subjects[$kind->value]->get((int) $id) : null,
+                    visits: $count,
+                    previousVisits: (int) $previous->get($place, 0),
+                    orders: $kind === PlaceKind::Product ? (int) $ordersHolding->get((int) $id, 0) : null,
+                );
+            })
+            ->sortBy([
+                fn (VisitsByPlaceRow $a, VisitsByPlaceRow $b): int => $b->visits <=> $a->visits,
+                fn (VisitsByPlaceRow $a, VisitsByPlaceRow $b): int => strcasecmp($a->name(), $b->name()),
+            ])
+            ->values()
+            ->all();
+
+        return new VisitsByPlace($window, $visits, $rows);
+    }
+
+    /**
+     * What a window had at each place, keyed `kind:id`, places with none left
+     * out.
+     *
+     * @return Collection<string, int>
+     */
+    private function placeVisitsIn(ReportingWindow $window): Collection
+    {
+        return PlaceVisitCount::query()
+            ->toBase()
+            ->where('visited_on', '>=', $window->localStart()->toDateString())
+            ->where('visited_on', '<', $window->localEnd()->toDateString())
+            ->selectRaw('place_kind, place_id, sum(visits) as visits')
+            ->groupBy('place_kind', 'place_id')
+            ->get()
+            ->filter(fn (object $row): bool => (int) $row->visits > 0)
+            ->mapWithKeys(fn (object $row): array => ["{$row->place_kind}:{$row->place_id}" => (int) $row->visits]);
+    }
+
+    /**
+     * The record ids of one kind of place among a window's places.
+     *
+     * @param  Collection<string, int>  $places
+     * @return list<int>
+     */
+    private function placeIds(Collection $places, PlaceKind $kind): array
+    {
+        return $places->keys()
+            ->filter(fn (string $place): bool => str_starts_with($place, "{$kind->value}:"))
+            ->map(fn (string $place): int => (int) explode(':', $place)[1])
+            ->values()
+            ->all();
     }
 
     /**
@@ -837,10 +1094,19 @@ final class ReportingQuery
 
         $unpaid = $this->groupedByBucket($this->ordersIn($window)->unpaid(), $buckets, 'count(*) as unpaid');
 
+        /**
+         * A Customer is new in the bucket their first purchase falls in and
+         * returning in every other bucket they buy in, so the new ones are
+         * the first purchases grouped by bucket and the rest are returning.
+         */
+        $customers = $this->groupedByBucket($this->notCancelledIn($window), $buckets, 'count(distinct customer_id) as customers');
+        $firstTimers = $this->groupedByBucket($this->firstPurchasesIn($window), $buckets, 'count(*) as customers');
+
         $figures = [];
 
         foreach (array_keys($buckets) as $index) {
             $row = $counted->get($index);
+            $newCustomers = (int) ($firstTimers->get($index)?->customers ?? 0);
 
             $figures[] = new OverviewFigures(
                 orders: (int) ($row->order_count ?? 0),
@@ -849,10 +1115,52 @@ final class ReportingQuery
                 cancelled: (int) ($row->cancelled ?? 0),
                 unpaid: (int) ($unpaid->get($index)?->unpaid ?? 0),
                 new: (int) ($row->new_orders ?? 0),
+                newCustomers: $newCustomers,
+                returningCustomers: (int) ($customers->get($index)?->customers ?? 0) - $newCustomers,
             );
         }
 
         return $figures;
+    }
+
+    /**
+     * A window's New and Returning Customers, each counted over the window
+     * whole: everybody who bought in it, less those whose first purchase it
+     * holds.
+     *
+     * @return array{int, int}
+     */
+    private function customersIn(ReportingWindow $window): array
+    {
+        $bought = $this->notCancelledIn($window)->distinct()->count('customer_id');
+        $new = $this->firstPurchasesIn($window)->count();
+
+        return [$new, $bought - $new];
+    }
+
+    /**
+     * Each Customer's first purchase, as one row under `created_at`, for the
+     * Customers whose first purchase falls inside a window.
+     *
+     * A purchase is an Order counted in Sales, so a Cancelled Order is never
+     * anybody's first: whoever only ever had Cancelled ones has bought
+     * nothing yet. Read as a table of its own so the bucket CASE, which reads
+     * `created_at`, buckets a first purchase exactly as it buckets an Order.
+     *
+     * @return Builder<Order>
+     */
+    private function firstPurchasesIn(ReportingWindow $window): Builder
+    {
+        $firsts = Order::query()
+            ->where('status', '!=', OrderStatus::Cancelled->value)
+            ->selectRaw('customer_id, min(created_at) as created_at')
+            ->groupBy('customer_id');
+
+        return Order::query()
+            ->withoutGlobalScopes()
+            ->fromSub($firsts, 'first_purchases')
+            ->where('created_at', '>=', $window->start->toDateTimeString())
+            ->where('created_at', '<', $window->end->toDateTimeString());
     }
 
     /**

@@ -2,10 +2,13 @@
 
 namespace App\Support\Tracking;
 
+use App\Models\PlaceVisitCount;
 use App\Models\VisitCount;
 use App\Support\Settings\GeneralSettings;
 use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
@@ -41,14 +44,32 @@ class VisitCounter
      * server's midnight would disagree with the Orders it is set against. The
      * timezone is read only once counting is on, so an installation that never
      * asked for this pays no query for it.
+     *
+     * The place the load was of is counted beside the store, never instead of
+     * it: a load of no place is still a Visit to the store, so the store's
+     * figure stands on its own and the places are a breakdown of it. Which
+     * place an address is costs a query, so it too is asked only once
+     * counting is on.
      */
-    public function count(): void
+    public function count(?string $address = null): void
     {
         if (! $this->isCounting()) {
             return;
         }
 
-        $this->add(CarbonImmutable::now(app(GeneralSettings::class)->timezone)->toDateString());
+        $date = CarbonImmutable::now(app(GeneralSettings::class)->timezone)->toDateString();
+
+        $this->add(VisitCount::query(), ['visited_on' => $date]);
+
+        $place = Place::at($address);
+
+        if ($place !== null) {
+            $this->add(PlaceVisitCount::query(), [
+                'visited_on' => $date,
+                'place_kind' => $place->kind->value,
+                'place_id' => $place->id,
+            ]);
+        }
     }
 
     /**
@@ -73,30 +94,30 @@ class VisitCounter
      * An `upsert` would say this in one statement, but only by handing each
      * driver a different raw expression for "the value you already have";
      * this says it in terms every driver agrees on.
+     *
+     * @param  Builder<covariant Model>  $query
+     * @param  array<string, string|int>  $key
      */
-    private function add(string $date): void
+    private function add(Builder $query, array $key): void
     {
-        if ($this->increment($date) > 0) {
+        if ($this->increment(clone $query, $key) > 0) {
             return;
         }
 
         /** In a savepoint whenever a transaction is open, because PostgreSQL aborts the whole transaction on a refused insert. */
-        $query = VisitCount::query();
-
         try {
-            $query->withSavepointIfNeeded(fn () => $query->create([
-                'visited_on' => $date,
-                'visits' => 1,
-            ]));
+            $query->withSavepointIfNeeded(fn () => (clone $query)->create([...$key, 'visits' => 1]));
         } catch (UniqueConstraintViolationException) {
-            $this->increment($date);
+            $this->increment(clone $query, $key);
         }
     }
 
-    private function increment(string $date): int
+    /**
+     * @param  Builder<covariant Model>  $query
+     * @param  array<string, string|int>  $key
+     */
+    private function increment(Builder $query, array $key): int
     {
-        return VisitCount::query()
-            ->where('visited_on', $date)
-            ->increment('visits');
+        return $query->where($key)->increment('visits');
     }
 }

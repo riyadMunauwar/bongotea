@@ -64,7 +64,7 @@ class MomentRecorder
         ?Selection $selection = null,
     ): void {
         if ($moment === TrackingMoment::Visit) {
-            $this->visits->count();
+            $this->visits->count($context->source_url);
         }
 
         $this->record(

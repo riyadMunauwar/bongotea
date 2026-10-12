@@ -28,6 +28,7 @@ class OrderLineFactory extends Factory
              * them — a line that read them back through the relation would not
              * be exercising the snapshot at all.
              */
+            'category_id' => fn (array $attributes): ?int => Product::withTrashed()->find($attributes['product_id'])?->category_id,
             'product_name' => fn (array $attributes): string => Product::find($attributes['product_id'])->name,
             'unit_price' => fn (array $attributes): int => Product::find($attributes['product_id'])->price,
             'quantity' => 1,

@@ -3,19 +3,25 @@
 use App\Enums\Permission;
 use App\Filament\Clusters\Reports\Pages\BuyingReport;
 use App\Filament\Clusters\Reports\Pages\CourierReport;
+use App\Filament\Clusters\Reports\Pages\CustomerReport;
 use App\Filament\Clusters\Reports\Pages\MarginReport;
 use App\Filament\Clusters\Reports\Pages\StockReport;
+use App\Filament\Clusters\Reports\Pages\VisitsReport;
 use App\Filament\Clusters\Reports\ReportsCluster;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\CourierMoneyTable;
 use App\Filament\Widgets\DeliveryMixTable;
+use App\Filament\Widgets\MostVisitedTable;
 use App\Filament\Widgets\NeedsAttentionTable;
 use App\Filament\Widgets\OrderStatusBreakdownChart;
 use App\Filament\Widgets\OverviewStats;
 use App\Filament\Widgets\PaymentMethodMixChart;
+use App\Filament\Widgets\SalesByCategoryTable;
 use App\Filament\Widgets\SalesOverTimeChart;
+use App\Filament\Widgets\TopCustomersTable;
 use App\Filament\Widgets\TopProductsTable;
 use App\Filament\Widgets\UnsentOrdersStat;
+use App\Filament\Widgets\VisitsOverTimeChart;
 use App\Models\User;
 use Filament\Facades\Filament;
 
@@ -32,7 +38,7 @@ use Filament\Facades\Filament;
  */
 function everyReportPage(): array
 {
-    return [CourierReport::class, StockReport::class, BuyingReport::class, MarginReport::class];
+    return [CourierReport::class, StockReport::class, BuyingReport::class, MarginReport::class, VisitsReport::class, CustomerReport::class];
 }
 
 /** The Merchant's figures, gated behind `view reports`. */
@@ -46,6 +52,10 @@ function dashboardMoneyWidgets(): array
         TopProductsTable::class,
         DeliveryMixTable::class,
         CourierMoneyTable::class,
+        VisitsOverTimeChart::class,
+        SalesByCategoryTable::class,
+        TopCustomersTable::class,
+        MostVisitedTable::class,
     ];
 }
 

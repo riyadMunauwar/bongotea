@@ -253,6 +253,7 @@ class Repricing
 
         $row->fill([
             'product_id' => $line->productId,
+            'category_id' => $sameProduct ? $kept->category_id : $product->category_id,
             'product_name' => $sameProduct ? $kept->product_name : $product->name,
             'unit_price' => $priced->tierPrice,
             'mrp' => $priced->mrp,

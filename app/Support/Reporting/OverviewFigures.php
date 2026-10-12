@@ -40,6 +40,18 @@ final readonly class OverviewFigures
          * counted alongside them, and why nothing draws a Visits sparkline.
          */
         public ?int $visits = null,
+        /**
+         * Customers who bought in the span for the first time, and Customers
+         * who bought in it having bought before it began. Buying is an Order
+         * counted in Sales.
+         *
+         * A Customer who buys on two days of a window is one Customer to the
+         * window and one to each of the two buckets, so these never add up
+         * from the buckets: a window's are set whole by `withCustomers()`,
+         * and `plus()` carries none.
+         */
+        public int $newCustomers = 0,
+        public int $returningCustomers = 0,
     ) {}
 
     public static function none(): self
@@ -53,12 +65,22 @@ final readonly class OverviewFigures
      */
     public function withVisits(?int $visits): self
     {
-        return new self($this->orders, $this->sales, $this->kilograms, $this->cancelled, $this->unpaid, $this->new, $visits);
+        return new self($this->orders, $this->sales, $this->kilograms, $this->cancelled, $this->unpaid, $this->new, $visits, $this->newCustomers, $this->returningCustomers);
     }
 
     /**
-     * Two spans' counts added. Visits are not among them: the spans this is
-     * used to add are buckets, and a bucket carries none.
+     * The same figures with the span's New and Returning Customers set, each
+     * counted over the span whole.
+     */
+    public function withCustomers(int $newCustomers, int $returningCustomers): self
+    {
+        return new self($this->orders, $this->sales, $this->kilograms, $this->cancelled, $this->unpaid, $this->new, $this->visits, $newCustomers, $returningCustomers);
+    }
+
+    /**
+     * Two spans' counts added. Visits and Customers are not among them: the
+     * spans this is used to add are buckets, a bucket carries no Visits, and
+     * one Customer in two buckets is still one Customer.
      */
     public function plus(self $other): self
     {

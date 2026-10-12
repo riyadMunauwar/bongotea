@@ -218,12 +218,16 @@ class OrderCapture
      * call and collected at the door.
      *
      * @param  array<int, int>  $costs  the whole Cart's average costs, read in one batch (#170)
-     * @return array{product_id: int, product_name: string, unit_price: int, mrp: int, unit_cost: int|null, quantity: int, tier_min: int|null, tier_max: int|null}
+     * @return array{product_id: int, category_id: int, product_name: string, unit_price: int, mrp: int, unit_cost: int|null, quantity: int, tier_min: int|null, tier_max: int|null}
      */
     private function line(Product $product, PricedLine $priced, array $costs): array
     {
         return [
             'product_id' => $product->getKey(),
+
+            /** The Category it is sold under, fixed here so moving the Product later never moves this sale. */
+            'category_id' => $product->category_id,
+
             'product_name' => $product->name,
             'unit_price' => $priced->tierPrice,
             'mrp' => $priced->mrp,

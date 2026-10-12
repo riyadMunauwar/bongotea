@@ -16,7 +16,8 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Js;
 
 /**
- * Sales over time, full width under the stat tiles: a Sales line, an
+ * Sales over time, half width under the stat tiles with Visits over time
+ * beside it, so money and traffic are read together: a Sales line, an
  * Orders line and a Kilograms Sold line across the Reporting Window, so a
  * Merchant can see whether Sales moved because of volume or because of
  * value. Each has its own axis, money on the left in the installation's
@@ -59,8 +60,6 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
     {
         return Permission::ViewReports;
     }
-
-    protected int|string|array $columnSpan = 'full';
 
     protected ?string $heading = 'Sales over time';
 

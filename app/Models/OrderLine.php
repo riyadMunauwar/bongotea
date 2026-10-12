@@ -27,13 +27,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `mrp` is the Product's MRP as it stood when the line was priced, so the
  * Saving the buyer was shown is still on the record after the MRP moves.
  *
+ * `category_id` is the Category the Product was sold under, fixed at Capture
+ * for the same reason: moving a Product to another Category must not rewrite
+ * what was sold as what. Null once that Category is deleted.
+ *
  * `tier_min`/`tier_max` name which of its Product's Tiers the price came
  * from, as the range stood when it was priced (ADR-0031). A line under a Price
  * Override records no Tier: `price_override_reason` and `price_overridden_by`
  * say why and who instead, and its `unit_price` is kept through any Repricing.
  */
 #[ObservedBy(OrderLineObserver::class)]
-#[Fillable(['product_id', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
+#[Fillable(['product_id', 'category_id', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
 class OrderLine extends Model
 {
     /** @use HasFactory<OrderLineFactory> */

@@ -20,7 +20,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * The row of stat tiles under the Reporting Window: Orders and Sales side
  * by side, never collapsed into one, and Kilograms Sold beside Sales, the
  * same Orders weighed rather than totalled; Average Order Value and the
- * Cancellation Rate; Unpaid and New awaiting call, the two queues; and
+ * Cancellation Rate; Unpaid and New awaiting call, the two queues; New and
+ * Returning Customers, each counted over the window whole; and
  * Visits, which is a figure where the Merchant has switched Visit counting
  * on and a sentence pointing at that switch where they have not, with the
  * store-wide Conversion Rate beside it, which is unknown while Visits are.
@@ -82,9 +83,34 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
             $this->tile('New awaiting call', number_format($current->new), $overview, fn (OverviewFigures $figures): int => $figures->new)
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->new, $previous->new, upIsGood: true)),
 
+            $this->tile('New Customers', number_format($current->newCustomers), $overview, fn (OverviewFigures $figures): int => $figures->newCustomers)
+                ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->newCustomers, $previous->newCustomers, upIsGood: true)),
+
+            $this->returningCustomers($overview),
+
             $this->visits($overview),
             $this->conversionRate($overview),
         ];
+    }
+
+    /**
+     * The Returning Customers tile, whose description leads with their share
+     * of everybody who bought in the window — the figure wholesale lives on —
+     * before the change against the comparison window.
+     */
+    private function returningCustomers(Overview $overview): Stat
+    {
+        $current = $overview->figures;
+        $buyers = $current->newCustomers + $current->returningCustomers;
+
+        $stat = $this->tile('Returning Customers', number_format($current->returningCustomers), $overview, fn (OverviewFigures $figures): int => $figures->returningCustomers);
+        $this->describeChange($stat, $overview, $current->returningCustomers, $overview->comparison->returningCustomers, upIsGood: true);
+
+        if ($buyers === 0) {
+            return $stat;
+        }
+
+        return $stat->description($this->percent($current->returningCustomers / $buyers).' of buyers · '.$stat->getDescription());
     }
 
     /**

@@ -144,6 +144,20 @@ class OrderResource extends Resource
         ]);
     }
 
+    /**
+     * The Orders list searched by one phone number, on the All tab: a
+     * Customer's Orders, whatever became of them. All, for the reason
+     * `notYetSentUrl()` gives — the list opens on New, and a Customer's
+     * confirmed Orders would be missing with nothing saying so.
+     */
+    public static function byPhoneUrl(string $phone): string
+    {
+        return static::getUrl('index', [
+            'tab' => 'all',
+            'search' => $phone,
+        ]);
+    }
+
     public static function getNavigationBadge(): ?string
     {
         $waiting = static::newOrderCount();
