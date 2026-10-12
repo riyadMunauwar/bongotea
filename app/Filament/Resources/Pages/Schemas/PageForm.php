@@ -19,6 +19,10 @@ use Illuminate\Support\Str;
  * A Page is its title, slug and status, the Blocks it is built from, and
  * what it says to search engines.
  *
+ * A strip across the top holds what the Page is called and whether it is
+ * live; the Blocks take the whole width under it, because they are the Page
+ * and their rows of cards, links and images need the room.
+ *
  * A System Page's role is never on the form: it is set when the store is
  * installed and can never change, so the form only says which one this is.
  */
@@ -29,12 +33,10 @@ class PageForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(['default' => 1, 'lg' => 3])
             ->components([
                 Section::make('Page')
-                    ->description(fn (?Page $record): ?string => $record?->isSystemPage()
-                        ? "This is the store's {$record->system_role->getLabel()} page. Its Blocks can change, but it can never be deleted or given another job."
-                        : null)
-                    ->columnSpanFull()
+                    ->columnSpan(['lg' => 2])
                     ->columns(2)
                     ->schema([
                         TextInput::make('title')
@@ -58,7 +60,14 @@ class PageForm
                             ->helperText(fn (?Page $record): string => $record?->isHome()
                                 ? 'Home is always served at the bare domain.'
                                 : 'Flat, lowercase, hyphen-separated.'),
+                    ]),
 
+                Section::make('Publishing')
+                    ->description(fn (?Page $record): ?string => $record?->isSystemPage()
+                        ? "This is the store's {$record->system_role->getLabel()} page. Its Blocks can change, but it can never be deleted or given another job."
+                        : null)
+                    ->columnSpan(['lg' => 1])
+                    ->schema([
                         Select::make('status')
                             ->options(PageStatus::class)
                             ->default(PageStatus::Draft->value)
@@ -78,7 +87,7 @@ class PageForm
                             ->addActionLabel('Add a Block'),
                     ]),
 
-                self::seoSection(),
+                self::seoSection(acrossThePage: true),
             ]);
     }
 }

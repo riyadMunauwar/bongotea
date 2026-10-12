@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Settings\Pages;
 
+use App\Enums\ImageSlot;
 use App\Support\PhoneNumber;
 use App\Support\Settings\StoreSettings;
 use BackedEnum;
@@ -48,8 +49,8 @@ class Store extends SettingsPage
                         ->maxLength(80)
                         ->helperText('Under the name in the header, and after it in the page title.'),
 
-                    self::image('logo', 'Logo')
-                        ->helperText('Replaces the drawn leaf mark and the name in the header. Leave empty to keep them.'),
+                    ImageSlot::StoreLogo->fit(self::image('logo', 'Logo'))
+                        ->helperText('Replaces the drawn leaf mark and the name in the header. Leave empty to keep them. '.ImageSlot::StoreLogo->advice()),
                 ]),
 
             Section::make('Reaching the store')
@@ -77,6 +78,8 @@ class Store extends SettingsPage
 
             Section::make('Search and sharing')
                 ->description('What a search result or a link shared on Facebook or WhatsApp shows when a page has nothing of its own.')
+                ->collapsible()
+                ->collapsed()
                 ->columns(2)
                 ->schema([
                     Textarea::make('description')
@@ -85,8 +88,7 @@ class Store extends SettingsPage
                         ->maxLength(300)
                         ->columnSpanFull(),
 
-                    self::image('shareImage', 'Default share image')
-                        ->helperText('1200 × 630 works best on Facebook and WhatsApp.'),
+                    ImageSlot::ShareImage->fit(self::image('shareImage', 'Default share image')),
                 ]),
         ];
     }

@@ -171,9 +171,11 @@ class ProductsTable
             ->filters([
                 SelectFilter::make('category')
                     ->relationship('category', 'name')
+                    ->searchable()
                     ->preload(),
                 SelectFilter::make('brand')
                     ->relationship('brand', 'name')
+                    ->searchable()
                     ->preload(),
                 SelectFilter::make('status')
                     ->options(ProductStatus::class),

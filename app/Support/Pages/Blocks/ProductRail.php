@@ -62,16 +62,19 @@ class ProductRail extends PageBlock
             Select::make('category_id')
                 ->label('Category')
                 ->options(fn (): array => Category::query()->orderBy('sort_order')->pluck('name', 'id')->all())
+                ->searchable()
                 ->visible(fn (Get $get): bool => $get('source') === 'category')
                 ->required(fn (Get $get): bool => $get('source') === 'category'),
             Select::make('tag_id')
                 ->label('Tag')
                 ->options(fn (): array => Tag::query()->orderBy('sort_order')->pluck('name', 'id')->all())
+                ->searchable()
                 ->visible(fn (Get $get): bool => $get('source') === 'tag')
                 ->required(fn (Get $get): bool => $get('source') === 'tag'),
             Select::make('brand_id')
                 ->label('Brand')
                 ->options(fn (): array => Brand::query()->orderBy('name')->pluck('name', 'id')->all())
+                ->searchable()
                 ->visible(fn (Get $get): bool => $get('source') === 'brand')
                 ->required(fn (Get $get): bool => $get('source') === 'brand'),
             Select::make('product_ids')

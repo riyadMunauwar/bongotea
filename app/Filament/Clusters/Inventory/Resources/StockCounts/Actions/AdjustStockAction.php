@@ -13,23 +13,34 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 
 use function Illuminate\Support\enum_value;
 
 /**
- * The two quick verbs a Merchant reaches for on the Stock Adjustments screen:
- * **Increase (+)** and **Decrease (−)**.
+ * The three verbs a Merchant reaches for on the Stock Adjustments screen:
+ * **Set exact count**, **Increase (+)** and **Decrease (−)**, each opening the
+ * same small dialog — Product, the number and the reason on one row, a note.
  *
- * The everyday case a Merchant has is not a stocktake — it is "two got dropped,
- * take two off" and "five turned up, add five". Both are the exact-count form
- * doing the arithmetic *for* them: each opens a small modal (Product, Quantity,
- * Reason, Note), signs the typed magnitude by the button pressed, and hands it
- * to `StockLedger::recordAdjustment()`. The action writes nothing itself, the
- * way `CreateStockCount` hands off to `recordCount()` — the ledger stays the
- * single writer, and the whole behaviour lives behind its one tested seam.
+ * Set exact count is the stocktake: the number on the shelf, handed to
+ * `StockLedger::recordCount()`, which works the difference out. The everyday
+ * case is not a stocktake, though — it is "two got dropped, take two off" and
+ * "five turned up, add five". Increase and Decrease are the exact count doing
+ * the arithmetic *for* them: each signs the typed magnitude by the button
+ * pressed and hands it to `StockLedger::recordAdjustment()`. No action writes
+ * anything itself — the ledger stays the single writer, and the whole
+ * behaviour lives behind its one tested seam.
+ *
+ * Increase and Decrease show what is on hand the moment a Product is picked,
+ * so a Decrease that would cross zero is seen before anything is saved. Set
+ * exact count deliberately does not: a count is worth only what was arrived at
+ * independently of the figure it is checked against.
  *
  * Nobody types a sign. The button carries the direction, so the quantity is
  * always a plain positive number; Increase passes a positive delta, Decrease a
@@ -38,10 +49,9 @@ use function Illuminate\Support\enum_value;
  * The Reason is filtered and defaulted per direction, so a nonsensical record
  * cannot be made: an Increase offers only reasons that make sense for adding
  * (Found, Miscount), a Decrease only for removing (Damaged, Lost, Miscount),
- * and **Opening count** — the exact-count form's own default — is offered by
- * neither. The picked reason is resolved the way `CreateStockCount` resolves
- * it: a Select hands back its own default as the enum and a chosen option as
- * the string behind it, so `enum_value()` reads both.
+ * and **Opening count** — the exact count's own default — is offered by
+ * neither. A Select hands back its own default as the enum and a chosen option
+ * as the string behind it, so `enum_value()` reads both.
  *
  * A Decrease is guarded twice over. The typed magnitude is checked against live
  * On Hand before submit — refused where the Product was never counted, or where
@@ -58,6 +68,54 @@ use function Illuminate\Support\enum_value;
 class AdjustStockAction
 {
     /**
+     * Write down the number on the shelf. The ledger records the count and
+     * squares itself with it in one transaction; a first count adopts the
+     * Product, which is why Opening count is the default here.
+     */
+    public static function exactCount(): Action
+    {
+        return self::base('count', 'Set exact count', Heroicon::OutlinedClipboardDocumentCheck)
+            ->modalHeading('Set exact count')
+            ->modalDescription('Write down the number you are holding, not the difference. The ledger works out the rest.')
+            ->modalSubmitActionLabel('Save count')
+            /**
+             * The same dialog as the other two, less what the ledger holds: a
+             * counter who can see the expected answer is a counter being
+             * asked to agree with it, and the entire worth of a count is that
+             * it was arrived at independently.
+             */
+            ->schema([
+                self::product(),
+                Grid::make(['default' => 1, 'sm' => 2])->schema([
+                    TextInput::make('quantity')
+                        ->label('Counted')
+                        ->required()
+                        ->integer()
+                        ->minValue(0),
+                    self::reason(AdjustmentCause::OpeningCount, self::labelled(...AdjustmentCause::cases())),
+                ]),
+                self::note(),
+            ])
+            ->action(function (array $data): void {
+                app(StockLedger::class)->recordCount(
+                    product: Product::findOrFail($data['product_id']),
+                    counted: (int) $data['quantity'],
+                    cause: AdjustmentCause::from(enum_value($data['cause'])),
+                    note: $data['note'] ?? null,
+
+                    /** Who counted is taken from who is signed in, never from a field: an attributed figure nobody can choose the name on. */
+                    countedBy: auth()->user(),
+                );
+
+                Notification::make()
+                    ->title('Count saved')
+                    ->body('On hand now reads what you counted, and the difference is on the record with your name against it.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
      * Add units to what is held. A positive delta, adopting an uncounted
      * Product at the quantity if the ledger has never seen it.
      */
@@ -67,12 +125,10 @@ class AdjustStockAction
             ->modalHeading('Increase stock')
             ->modalDescription('Add units to what is on hand — five that turned up behind the counter. Type how many; the button carries the direction, so there is no sign to type.')
             ->modalSubmitActionLabel('Add to stock')
-            ->schema([
-                self::product(),
+            ->schema(self::dialog(
                 self::quantity(),
                 self::reason(AdjustmentCause::Found, self::increaseReasons()),
-                self::note(),
-            ])
+            ))
             ->action(fn (array $data) => self::record($data, sign: 1));
     }
 
@@ -87,22 +143,22 @@ class AdjustStockAction
             ->modalHeading('Decrease stock')
             ->modalDescription('Take units off what is on hand — two that were dropped and broken. Type how many; the button carries the direction, so there is no minus to type.')
             ->modalSubmitActionLabel('Remove from stock')
-            ->schema([
-                self::product(),
+            ->schema(self::dialog(
                 self::decreaseQuantity(),
                 self::reason(AdjustmentCause::Damaged, self::decreaseReasons()),
-                self::note(),
-            ])
+            ))
             ->action(fn (array $data) => self::record($data, sign: -1));
     }
 
     /**
-     * The shape both share before their direction is put on: a header action
-     * in the panel's own theme colour, gated on the cluster's `count stock`.
+     * The shape all three share before their verb is put on: a header action
+     * in the panel's own theme colour opening a medium dialog, gated on the
+     * cluster's `count stock`.
      *
-     * Both verbs wear `primary` rather than a green/red pair: adding and
-     * removing stock are the same everyday admin act from two sides, and the
-     * screen leads with the brand colour rather than a traffic light.
+     * Every verb wears `primary` rather than a green/red pair: counting,
+     * adding and removing stock are the same everyday admin act from three
+     * sides, and the screen leads with the brand colour rather than a traffic
+     * light.
      *
      * The gate sits on the action's own visibility as well as on the screen it
      * lives on, so a User without the Permission neither sees it nor can mount
@@ -114,7 +170,43 @@ class AdjustStockAction
             ->label($label)
             ->icon($icon)
             ->color('primary')
+            ->modalWidth(Width::Medium)
             ->visible(fn (): bool => InventoryCluster::canAccess());
+    }
+
+    /**
+     * The dialog Increase and Decrease open: the Product with what it holds
+     * under it, the number and the reason side by side, and the note.
+     *
+     * @return array<int, Component>
+     */
+    private static function dialog(TextInput $quantity, Select $reason): array
+    {
+        return [
+            self::product(),
+            self::onHand(),
+            Grid::make(['default' => 1, 'sm' => 2])->schema([$quantity, $reason]),
+            self::note(),
+        ];
+    }
+
+    /**
+     * What the ledger says is on the shelf for the picked Product, read live,
+     * so a Decrease that would cross zero is obvious before submit. One the
+     * ledger has never seen says so rather than reading as nothing.
+     */
+    private static function onHand(): TextEntry
+    {
+        return TextEntry::make('on_hand')
+            ->label('On hand now')
+            ->inlineLabel()
+            ->visible(fn (Get $get): bool => filled($get('product_id')))
+            ->state(function (Get $get): string {
+                $product = Product::withoutTrashed()->find($get('product_id'));
+                $onHand = $product === null ? null : app(StockLedger::class)->onHand($product);
+
+                return $onHand === null ? 'Not counted yet' : (string) $onHand;
+            });
     }
 
     /**
@@ -136,7 +228,7 @@ class AdjustStockAction
                 product: Product::findOrFail($data['product_id']),
                 delta: $sign * (int) $data['quantity'],
 
-                /** `enum_value()` because the Select hands its own default back as the enum and a chosen option as the string behind it, exactly as `CreateStockCount` reads it. */
+                /** `enum_value()` because the Select hands its own default back as the enum and a chosen option as the string behind it, exactly as the exact count reads it. */
                 cause: AdjustmentCause::from(enum_value($data['cause'])),
 
                 /** The optional note is the custom reason — anything the fixed list does not fit, in the Merchant's own words. */
@@ -165,10 +257,10 @@ class AdjustStockAction
     }
 
     /**
-     * The Product being adjusted. Trashed ones are not offered, the way the
-     * exact-count form does not offer them: one taken off the catalogue is not
-     * one anybody is standing in front of. Said here rather than left to a
-     * relation, because a header action holds no record to relate through.
+     * The Product being counted or adjusted. Trashed ones are not offered: one
+     * taken off the catalogue is not one anybody is standing in front of. Said
+     * here rather than left to a relation, because a header action holds no
+     * record to relate through. Live, so what it holds shows as it is picked.
      */
     private static function product(): Select
     {
@@ -176,6 +268,7 @@ class AdjustStockAction
             ->label('Product')
             ->options(fn (): array => Product::query()->withoutTrashed()->orderBy('name')->pluck('name', 'id')->all())
             ->searchable()
+            ->live()
             ->required();
     }
 
@@ -238,9 +331,9 @@ class AdjustStockAction
     }
 
     /**
-     * The Reason, filtered and defaulted per direction. The default is the enum
+     * The Reason, filtered and defaulted per verb. The default is the enum
      * instance, so an untouched Select hands it back as the enum for
-     * `enum_value()` to read — the arrangement `CreateStockCount` relies on.
+     * `enum_value()` to read.
      *
      * @param  array<string, string>  $options
      */
@@ -261,7 +354,7 @@ class AdjustStockAction
         return Textarea::make('note')
             ->label('Note')
             ->helperText('Optional — anything the reasons above do not cover, in your own words. It stays with the adjustment.')
-            ->rows(3);
+            ->rows(2);
     }
 
     /**

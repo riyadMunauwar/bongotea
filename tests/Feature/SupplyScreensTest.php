@@ -186,6 +186,22 @@ it('does not offer a supplier nobody is buying from any more', function () {
         ->and($options)->not->toContain('Bongo Packaging');
 });
 
+it('does not offer a product taken out of the catalogue on a delivery line', function () {
+    $stocked = Product::factory()->create(['name' => 'Winter Jacket']);
+    $withdrawn = Product::factory()->create(['name' => 'Clay mug']);
+
+    $withdrawn->delete();
+
+    $options = Livewire::test(CreateSupply::class)
+        ->instance()
+        ->getSchema('form')
+        ->getComponent(fn ($component): bool => $component instanceof Select && $component->getName() === 'product_id')
+        ->getOptions();
+
+    expect($options)->toContain($stocked->name)
+        ->and($options)->not->toContain($withdrawn->name);
+});
+
 /*
 |--------------------------------------------------------------------------
 | Reading what was bought

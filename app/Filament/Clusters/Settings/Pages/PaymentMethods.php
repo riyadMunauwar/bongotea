@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Settings\Pages;
 
+use App\Enums\ImageSlot;
 use App\Enums\PaymentMethod;
 use App\Support\Settings\PaymentSettings;
 use BackedEnum;
@@ -170,6 +171,8 @@ class PaymentMethods extends SettingsPage
 
         return Section::make('Coming later')
             ->description('These arrive with their own settings and cannot be switched on yet.')
+            ->collapsible()
+            ->collapsed()
             ->columns(1)
             ->visible($labels !== [])
             ->schema([
@@ -239,7 +242,7 @@ class PaymentMethods extends SettingsPage
      */
     private static function logo(PaymentMethod $method): FileUpload
     {
-        return FileUpload::make(PaymentSettings::property($method, 'Logo'))
+        return ImageSlot::PaymentLogo->fit(FileUpload::make(PaymentSettings::property($method, 'Logo')))
             ->label('Logo')
             ->disk(PaymentSettings::LOGO_DISK)
             ->directory(PaymentSettings::LOGO_DIRECTORY)
@@ -248,6 +251,6 @@ class PaymentMethods extends SettingsPage
             ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
             ->maxSize(512)
             ->imagePreviewHeight('60')
-            ->helperText('Replaces the default logo on every checkout that shows logos. Leave empty to keep the default.');
+            ->helperText('Replaces the default logo on every checkout that shows logos. Leave empty to keep the default. '.ImageSlot::PaymentLogo->advice());
     }
 }

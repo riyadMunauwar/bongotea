@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\ImageSlot;
 use App\Filament\Clusters\Settings\Pages\SettingsPage;
 use App\Filament\Resources\Pages\PageResource;
 use App\Models\Menu;
@@ -89,7 +90,7 @@ class Footer extends SettingsPage
             Section::make('Payment Banner')
                 ->description('One image of the ways your store takes payment, drawn across the footer above the © line. It shrinks to fit a phone and is never stretched wider than it is. With none, nothing is drawn.')
                 ->schema([
-                    FileUpload::make('paymentBanner')
+                    ImageSlot::PaymentBanner->fit(FileUpload::make('paymentBanner'))
                         ->hiddenLabel()
                         ->disk(FooterSettings::IMAGE_DISK)
                         ->directory(FooterSettings::IMAGE_DIRECTORY)

@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -50,7 +51,7 @@ class HeroCarousel extends PageBlock
                     TextInput::make('eyebrow')->maxLength(120),
                     TextInput::make('title')->required()->maxLength(160),
                     Textarea::make('text')->rows(2)->maxLength(400)->columnSpanFull(),
-                    self::imageInput('image')->columnSpanFull(),
+                    self::imageInput('image', ImageSlot::HeroSlide)->columnSpanFull(),
                     TextInput::make('primary_label')->label('Main button')->maxLength(60),
                     self::linkInput('primary_link', 'Main button link'),
                     TextInput::make('secondary_label')->label('Second button')->maxLength(60),

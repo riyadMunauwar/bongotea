@@ -3,14 +3,14 @@
 use App\Enums\CategoryTheme;
 use App\Enums\ProductStatus;
 use App\Filament\Resources\Brands\BrandResource;
-use App\Filament\Resources\Brands\Pages\CreateBrand;
-use App\Filament\Resources\Brands\Pages\EditBrand;
+use App\Filament\Resources\Brands\Pages\ManageBrands;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Categories\Pages\CreateCategory;
 use App\Filament\Resources\Categories\Pages\EditCategory;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
-use App\Filament\Resources\Tags\Pages\CreateTag;
+use App\Filament\Resources\Products\ProductResource;
+use App\Filament\Resources\Tags\Pages\ManageTags;
 use App\Filament\Resources\Tags\TagResource;
 use App\Models\Brand;
 use App\Models\Category;
@@ -19,6 +19,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Pricing\ProductPrices;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 use Illuminate\Contracts\Support\Arrayable;
@@ -148,35 +149,44 @@ it('offers deleting a Category only while no Product names it, those taken out i
 |--------------------------------------------------------------------------
 */
 
-it('creates a Brand with a logo on the public disk', function () {
+it('creates a Brand with a logo on the public disk, in a dialog over the list', function () {
     Storage::fake(Brand::LOGO_DISK, config('filesystems.disks.'.Brand::LOGO_DISK));
 
-    Livewire::test(CreateBrand::class)
-        ->fillForm([
+    Livewire::test(ManageBrands::class)
+        ->callAction('create', [
             'name' => 'Ispahani',
             'slug' => 'ispahani',
             'logo' => UploadedFile::fake()->image('logo.png'),
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertHasNoActionErrors();
 
     $brand = Brand::query()->where('slug', 'ispahani')->sole();
 
     Storage::disk(Brand::LOGO_DISK)->assertExists($brand->logo);
 });
 
-it('offers deleting a Brand only while no Product carries it', function () {
-    Product::factory()->for($this->brand)->create();
+it('renames a Brand in a dialog over the list', function () {
+    Livewire::test(ManageBrands::class)
+        ->callTableAction('edit', $this->brand, ['name' => 'Bongo Tea'])
+        ->assertHasNoTableActionErrors();
 
-    Livewire::test(EditBrand::class, ['record' => $this->brand->getKey()])
-        ->assertActionHidden('delete');
+    expect($this->brand->refresh()->name)->toBe('Bongo Tea');
 });
 
-it('creates a Tag with a sort order', function () {
-    Livewire::test(CreateTag::class)
-        ->fillForm(['name' => 'দুধ চা', 'slug' => 'milk', 'sort_order' => 1])
-        ->call('create')
-        ->assertHasNoFormErrors();
+it('offers deleting a Brand only while no Product carries it', function () {
+    $unused = Brand::factory()->create();
+
+    Product::factory()->for($this->brand)->create();
+
+    Livewire::test(ManageBrands::class)
+        ->assertTableActionHidden('delete', $this->brand)
+        ->assertTableActionVisible('delete', $unused);
+});
+
+it('creates a Tag with a sort order, in a dialog over the list', function () {
+    Livewire::test(ManageTags::class)
+        ->callAction('create', ['name' => 'দুধ চা', 'slug' => 'milk', 'sort_order' => 1])
+        ->assertHasNoActionErrors();
 
     expect(Tag::query()->where('slug', 'milk')->sole()->sort_order)->toBe(1);
 });
@@ -184,10 +194,18 @@ it('creates a Tag with a sort order', function () {
 it('refuses a slug already claimed by another Tag', function () {
     Tag::factory()->create(['slug' => 'milk']);
 
-    Livewire::test(CreateTag::class)
-        ->fillForm(['name' => 'Milk again', 'slug' => 'milk'])
-        ->call('create')
-        ->assertHasFormErrors(['slug' => 'unique']);
+    Livewire::test(ManageTags::class)
+        ->callAction('create', ['name' => 'Milk again', 'slug' => 'milk'])
+        ->assertHasActionErrors(['slug' => 'unique']);
+});
+
+it('deletes a Tag from the list', function () {
+    $milk = Tag::factory()->create();
+
+    Livewire::test(ManageTags::class)
+        ->callTableAction('delete', $milk);
+
+    expect(Tag::query()->find($milk->getKey()))->toBeNull();
 });
 
 /*
@@ -422,6 +440,21 @@ it('keeps price the first Tier\'s, and refuses a price set over Tiers it would c
         ->and(fn () => $laddered->update(['price' => 1]))->toThrow(LogicException::class);
 });
 
+it('says on the Product form what shape a photo draws well at', function () {
+    $this->get(ProductResource::getUrl('create'))
+        ->assertOk()
+        ->assertSee('1200 × 1200 px');
+});
+
+it('lets the Category, Brand and Tags of a Product be searched for, since each list grows', function () {
+    $form = Livewire::test(CreateProduct::class)->instance()->getSchema('form');
+
+    foreach (['category_id', 'brand_id', 'tags'] as $name) {
+        expect($form->getComponent(fn ($component): bool => $component instanceof Select && $component->getName() === $name)->isSearchable())
+            ->toBeTrue();
+    }
+});
+
 it('requires a Category and a Brand on every Product', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm(['name' => 'Orphan', 'slug' => 'orphan', 'category_id' => null, 'brand_id' => null])
@@ -567,6 +600,5 @@ it('refuses Categories, Brands and Tags to a panel User without manage catalogue
     $this->get(CategoryResource::getUrl('index'))->assertForbidden();
     $this->get(CategoryResource::getUrl('edit', ['record' => $this->category]))->assertForbidden();
     $this->get(BrandResource::getUrl('index'))->assertForbidden();
-    $this->get(BrandResource::getUrl('create'))->assertForbidden();
     $this->get(TagResource::getUrl('index'))->assertForbidden();
 });

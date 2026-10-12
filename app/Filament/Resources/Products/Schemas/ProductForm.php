@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Enums\ImageSlot;
 use App\Enums\ProductStatus;
 use App\Filament\Concerns\HasSeoFields;
 use App\Filament\Concerns\HasSlugField;
@@ -18,6 +19,7 @@ use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -26,6 +28,11 @@ use Filament\Schemas\Schema;
  * Everything a Product's page and card can show, and only the name, slug,
  * Category, Brand and Tiers required: every characteristic is optional, so a
  * Product can be published bare and enriched later.
+ *
+ * Drawn as the content on the left (what it is, its photos, its prices, its
+ * tea profile) and, beside it, the small cards a Merchant glances at: whether
+ * it is live, where it is filed, and what it says to search engines. On a
+ * phone the cards follow the content.
  */
 class ProductForm
 {
@@ -34,143 +41,181 @@ class ProductForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(['default' => 1, 'lg' => 3])
             ->components([
-                Section::make('Product')
+                Group::make([
+                    self::basicsSection(),
+                    self::imagesSection(),
+                    self::pricesSection(),
+                    self::teaProfileSection(),
+                ])->columnSpan(['lg' => 2]),
+
+                Group::make([
+                    self::publishingSection(),
+                    self::organisationSection(),
+                    self::seoSection(),
+                ])->columnSpan(['lg' => 1]),
+            ]);
+    }
+
+    private static function basicsSection(): Section
+    {
+        return Section::make('Basics')
+            ->columns(2)
+            ->schema([
+                self::nameInput(),
+
+                /**
+                 * Locked the first time the Product went live: a link to it
+                 * may already be in a post or a chat. A disabled field is not
+                 * dehydrated, so the save leaves the slug as it is; the model
+                 * refuses a change from anywhere else.
+                 */
+                self::slugInput(url('/tea').'/')
+                    ->disabled(fn (?Product $record): bool => $record?->isSlugLocked() ?? false)
+                    ->helperText(fn (?Product $record): string => $record?->isSlugLocked()
+                        ? 'Fixed since this Product first went live, so links to it never break. The name can still change.'
+                        : 'Lowercase English letters, digits and hyphens. Fixed once the Product is first published.'),
+
+                Textarea::make('short_description')
+                    ->label('Short description')
+                    ->helperText('One or two lines, shown on the card.')
+                    ->rows(2)
+                    ->maxLength(500)
+                    ->columnSpanFull(),
+
+                RichEditor::make('description')
+                    ->label('Long description')
+                    ->toolbarButtons([['bold', 'italic', 'link'], ['h2', 'h3'], ['bulletList', 'orderedList'], ['undo', 'redo']])
+                    ->columnSpanFull(),
+            ]);
+    }
+
+    private static function imagesSection(): Section
+    {
+        return Section::make('Images')
+            ->schema([
+                ImageSlot::ProductPhoto->fit(SpatieMediaLibraryFileUpload::make('gallery'))
+                    ->hiddenLabel()
+                    ->collection(Product::GALLERY_COLLECTION)
+                    ->multiple()
+                    ->reorderable()
+                    ->image()
+                    ->panelLayout('grid')
+                    ->helperText('Drag to reorder; the first image is the cover. '.ImageSlot::ProductPhoto->advice()),
+            ]);
+    }
+
+    /**
+     * What the tea is like, all optional; the Product page shows only what is
+     * filled in. The three short facts share a row, the phrases and the guide
+     * run the width, and the business tips stay folded until there are some.
+     */
+    private static function teaProfileSection(): Section
+    {
+        return Section::make('Tea profile')
+            ->description('All optional; the Product page shows only what is filled in.')
+            ->columns(['default' => 1, 'sm' => 3])
+            ->schema([
+                Select::make('strength')
+                    ->options(array_combine(range(1, Product::STRENGTH_MAX), range(1, Product::STRENGTH_MAX)))
+                    ->placeholder('Not set')
+                    ->helperText('1 is mild, 5 is the strongest liquor.'),
+
+                TextInput::make('liquor_colour')
+                    ->label('Liquor colour')
+                    ->maxLength(255),
+
+                TextInput::make('aroma')
+                    ->maxLength(255),
+
+                TextInput::make('cups_per_kilogram')
+                    ->label('Cups per kg')
+                    ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".')
+                    ->maxLength(255),
+
+                TextInput::make('not_best_for')
+                    ->label('Not best for')
+                    ->maxLength(255)
+                    ->columnSpan(['sm' => 2]),
+
+                TagsInput::make('best_for')
+                    ->label('Best for')
+                    ->helperText('Each phrase is one chip on the Product page. These narrow nothing; Tags do.')
+                    ->columnSpanFull(),
+
+                Textarea::make('brewing_guide')
+                    ->label('Brewing guide')
+                    ->rows(2)
+                    ->columnSpanFull(),
+
+                Section::make('Business tips')
+                    ->compact()
+                    ->collapsible()
+                    ->collapsed(fn (?Product $record): bool => blank($record?->business_tips))
                     ->columnSpanFull()
-                    ->columns(2)
                     ->schema([
-                        self::nameInput(),
-
-                        /**
-                         * Locked the first time the Product went live: a link
-                         * to it may already be in a post or a chat. A
-                         * disabled field is not dehydrated, so the save
-                         * leaves the slug as it is; the model refuses a
-                         * change from anywhere else.
-                         */
-                        self::slugInput(url('/tea').'/')
-                            ->disabled(fn (?Product $record): bool => $record?->isSlugLocked() ?? false)
-                            ->helperText(fn (?Product $record): string => $record?->isSlugLocked()
-                                ? 'Fixed since this Product first went live, so links to it never break. The name can still change.'
-                                : 'Lowercase English letters, digits and hyphens. Fixed once the Product is first published.'),
-
-                        Select::make('category_id')
-                            ->label('Category')
-                            ->relationship('category', 'name')
-                            ->preload()
-                            ->required(),
-
-                        Select::make('brand_id')
-                            ->label('Brand')
-                            ->relationship('brand', 'name')
-                            ->preload()
-                            ->required(),
-
-                        Select::make('tags')
-                            ->relationship('tags', 'name')
-                            ->multiple()
-                            ->preload(),
-
-                        TextInput::make('badge')
-                            ->helperText('A short ribbon on the card, e.g. "সবচেয়ে জনপ্রিয়". Blank shows none.')
-                            ->maxLength(60),
-
-                        Select::make('status')
-                            ->options(ProductStatus::class)
-                            ->default(ProductStatus::Draft->value)
-                            ->required()
-                            ->helperText('A draft is seen by nobody.'),
-
-                        Toggle::make('is_available')
-                            ->label('Available')
-                            ->default(true)
-                            ->helperText('Off keeps it on show, greyed, saying it cannot be had right now.'),
-                    ]),
-
-                self::pricesSection(),
-
-                Section::make('Description')
-                    ->columnSpanFull()
-                    ->schema([
-                        Textarea::make('short_description')
-                            ->label('Short description')
-                            ->helperText('One or two lines, shown on the card.')
-                            ->rows(2)
-                            ->maxLength(500),
-
-                        RichEditor::make('description')
-                            ->label('Long description')
-                            ->toolbarButtons([['bold', 'italic', 'link'], ['h2', 'h3'], ['bulletList', 'orderedList'], ['undo', 'redo']]),
-                    ]),
-
-                Section::make('Characteristics')
-                    ->description('All optional; the Product page shows only what is filled in.')
-                    ->columnSpanFull()
-                    ->columns(2)
-                    ->schema([
-                        Select::make('strength')
-                            ->options(array_combine(range(1, Product::STRENGTH_MAX), range(1, Product::STRENGTH_MAX)))
-                            ->placeholder('Not set')
-                            ->helperText('1 is mild, 5 is the strongest liquor.'),
-
-                        TextInput::make('liquor_colour')
-                            ->label('Liquor colour')
-                            ->maxLength(255),
-
-                        TextInput::make('aroma')
-                            ->maxLength(255),
-
-                        TextInput::make('cups_per_kilogram')
-                            ->label('Cups per kg')
-                            ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".')
-                            ->maxLength(255),
-
-                        TagsInput::make('best_for')
-                            ->label('Best for')
-                            ->helperText('Each phrase is one chip on the Product page. These narrow nothing; Tags do.'),
-
-                        TextInput::make('not_best_for')
-                            ->label('Not best for')
-                            ->maxLength(255),
-
-                        Textarea::make('brewing_guide')
-                            ->label('Brewing guide')
-                            ->rows(2)
-                            ->columnSpanFull(),
-
                         Repeater::make('business_tips')
-                            ->label('Business tips')
+                            ->hiddenLabel()
                             ->simple(Textarea::make('tip')->required()->rows(2)->maxLength(500))
                             ->defaultItems(0)
                             ->maxItems(Product::BUSINESS_TIPS_MAX)
                             ->reorderable()
-                            ->columnSpanFull(),
+                            ->addActionLabel('Add a tip'),
                     ]),
+            ]);
+    }
 
-                Section::make('Gallery')
-                    ->columnSpanFull()
-                    ->schema([
-                        SpatieMediaLibraryFileUpload::make('gallery')
-                            ->hiddenLabel()
-                            ->collection(Product::GALLERY_COLLECTION)
-                            ->multiple()
-                            ->reorderable()
-                            ->image()
-                            ->imageEditor()
-                            ->panelLayout('grid')
-                            ->helperText('Drag to reorder. The first image is the cover.'),
-                    ]),
+    private static function publishingSection(): Section
+    {
+        return Section::make('Publishing')
+            ->schema([
+                Select::make('status')
+                    ->options(ProductStatus::class)
+                    ->default(ProductStatus::Draft->value)
+                    ->required()
+                    ->helperText('A draft is seen by nobody.'),
 
-                Section::make('Search')
-                    ->columnSpanFull()
-                    ->schema([
-                        TagsInput::make('search_keywords')
-                            ->label('Search keywords')
-                            ->separator(',')
-                            ->helperText('Other words buyers might type for this tea, in Bangla or English.'),
-                    ]),
+                Toggle::make('is_available')
+                    ->label('Available')
+                    ->default(true)
+                    ->helperText('Off keeps it on show, greyed, saying it cannot be had right now.'),
 
-                self::seoSection(),
+                TextInput::make('badge')
+                    ->helperText('A short ribbon on the card, e.g. "সবচেয়ে জনপ্রিয়". Blank shows none.')
+                    ->maxLength(60),
+            ]);
+    }
+
+    /** Where the Product is filed and how buyers find it: each list grows, so each can be searched. */
+    private static function organisationSection(): Section
+    {
+        return Section::make('Organisation')
+            ->schema([
+                Select::make('category_id')
+                    ->label('Category')
+                    ->relationship('category', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+
+                Select::make('brand_id')
+                    ->label('Brand')
+                    ->relationship('brand', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+
+                Select::make('tags')
+                    ->relationship('tags', 'name')
+                    ->multiple()
+                    ->searchable()
+                    ->preload(),
+
+                TagsInput::make('search_keywords')
+                    ->label('Search keywords')
+                    ->separator(',')
+                    ->helperText('Other words buyers might type for this tea, in Bangla or English.'),
             ]);
     }
 

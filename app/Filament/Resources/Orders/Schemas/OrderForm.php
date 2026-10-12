@@ -87,7 +87,6 @@ class OrderForm
                             ->options(OrderStatus::class)
                             ->default(OrderStatus::New->value)
                             ->required()
-                            ->native(false)
                             ->hintIcon(
                                 Heroicon::OutlinedQuestionMarkCircle,
                                 tooltip: 'The confirmation call is the COD workflow — mark what happened so the same customer is not called twice, or missed. Cancelled means the order genuinely happened but will not be fulfilled.',
@@ -165,8 +164,7 @@ class OrderForm
                                 config('giopages.districts'),
                             ))
                             ->required()
-                            ->searchable()
-                            ->native(false),
+                            ->searchable(),
 
                         Textarea::make('customer_address')
                             ->label('Address')

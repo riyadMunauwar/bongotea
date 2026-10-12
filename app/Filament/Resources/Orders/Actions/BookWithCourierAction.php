@@ -208,7 +208,6 @@ class BookWithCourierAction
                             config('giopages.districts'),
                         ))
                         ->searchable()
-                        ->native(false)
                         ->placeholder(OrderDocument::NOT_ASKED),
 
                     Textarea::make('recipientAddress')
@@ -303,7 +302,6 @@ class BookWithCourierAction
             ->helperText("{$courier->getLabel()} will not take a parcel without one of its own areas. Guessed from the address — correct it if it is wrong.")
             ->required()
             ->searchable()
-            ->native(false)
             ->getSearchResultsUsing(fn (string $search): array => DeliveryArea::search($search, $courier->driver()->deliveryAreas()))
             ->getOptionLabelUsing(fn (mixed $value): ?string => DeliveryArea::find($value, $courier->driver()->deliveryAreas())?->label())
             ->columnSpanFull();
@@ -319,7 +317,6 @@ class BookWithCourierAction
                 ->label($field->label)
                 ->options($field->options)
                 ->selectablePlaceholder(false)
-                ->native(false)
                 ->required()
                 ->helperText($field->helperText);
         }

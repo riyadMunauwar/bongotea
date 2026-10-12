@@ -2,9 +2,7 @@
 
 namespace App\Filament\Resources\Brands;
 
-use App\Filament\Resources\Brands\Pages\CreateBrand;
-use App\Filament\Resources\Brands\Pages\EditBrand;
-use App\Filament\Resources\Brands\Pages\ListBrands;
+use App\Filament\Resources\Brands\Pages\ManageBrands;
 use App\Filament\Resources\Brands\Schemas\BrandForm;
 use App\Filament\Resources\Brands\Tables\BrandsTable;
 use App\Filament\Resources\Products\ProductResource;
@@ -50,9 +48,7 @@ class BrandResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListBrands::route('/'),
-            'create' => CreateBrand::route('/create'),
-            'edit' => EditBrand::route('/{record}/edit'),
+            'index' => ManageBrands::route('/'),
         ];
     }
 }

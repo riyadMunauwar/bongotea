@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\Brands\Tables;
 
 use App\Models\Brand;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -35,7 +37,12 @@ class BrandsTable
                     ->counts('products'),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->modalWidth(Width::Large),
+
+                /** Only for a Brand no Product carries, trashed ones included (`products()` is `withTrashed()`). */
+                DeleteAction::make()
+                    ->visible(fn (Brand $record): bool => ! $record->products()->exists()),
             ]);
     }
 }

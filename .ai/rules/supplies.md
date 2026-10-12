@@ -7,7 +7,7 @@ paths:
 # Supplies
 
 ## A Supply is recorded through the ledger, and never edited afterwards
-`CreateSupply::handleRecordCreation()` hands the form to `StockLedger::recordSupply()` and writes nothing itself — the same arrangement `CreateStockCount` uses, and for the same reason: the document and the movements it causes have to be one transaction, with no moment in between for anybody to forget.
+`CreateSupply::handleRecordCreation()` hands the form to `StockLedger::recordSupply()` and writes nothing itself — the same arrangement `AdjustStockAction::exactCount()` uses, and for the same reason: the document and the movements it causes have to be one transaction, with no moment in between for anybody to forget.
 
 The lines Repeater is deliberately **not** `->relationship()`; rows saved by the repeater would be a delivery on the record that the shelf never heard about. The same Product may appear on two lines (no `distinct()`) — a challan naming it twice at two prices is two arrivals of it.
 

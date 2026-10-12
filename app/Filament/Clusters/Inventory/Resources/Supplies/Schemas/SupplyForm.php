@@ -11,6 +11,7 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -163,25 +164,24 @@ class SupplyForm
                                         'unit_cost' => $get('unit_cost'),
                                     ]))),
                             ]),
-                    ]),
 
-                /**
-                 * Under the right edge of the lines, where an invoice puts
-                 * it, for the reason `OrderForm`'s "To collect at the door"
-                 * sits there: this is the figure being checked against the
-                 * document in somebody's hand.
-                 */
-                Section::make('What this delivery cost')
-                    ->columnStart(2)
-                    ->columns(1)
-                    ->inlineLabel()
-                    ->schema([
-                        TextEntry::make('total_cost')
-                            ->label('Total')
-                            ->alignment(Alignment::End)
-                            ->weight('bold')
-                            ->size(TextSize::Large)
-                            ->state(fn (Get $get): string => Money::format(self::totalCost($get))),
+                        /**
+                         * Directly under the Line cost column, where an
+                         * invoice puts it, in the same card as the lines it
+                         * adds up: this is the figure being checked against
+                         * the document in somebody's hand.
+                         */
+                        Grid::make(['default' => 1, 'md' => 4])->schema([
+                            TextEntry::make('total_cost')
+                                ->label('Total')
+                                ->inlineLabel()
+                                ->alignment(Alignment::End)
+                                ->weight('bold')
+                                ->size(TextSize::Large)
+                                ->columnStart(['md' => 3])
+                                ->columnSpan(['md' => 2])
+                                ->state(fn (Get $get): string => Money::format(self::totalCost($get))),
+                        ]),
                     ]),
             ]);
     }

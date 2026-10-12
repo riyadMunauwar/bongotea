@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages;
 
+use App\Enums\ImageSlot;
 use App\Models\Page;
 use App\Support\Storefront\StorefrontMenus;
 use Filament\Forms\Components\Builder\Block;
@@ -159,16 +160,16 @@ abstract class PageBlock
             ->helperText('A path here (/pricing), or an http(s), tel: or mailto: address.');
     }
 
-    protected static function imageInput(string $name, string $label = 'Image'): FileUpload
+    /** Sized to where the Block draws it: the slot says the shape and opens the crop editor at it. */
+    protected static function imageInput(string $name, ImageSlot $slot, string $label = 'Image'): FileUpload
     {
-        return FileUpload::make($name)
+        return $slot->fit(FileUpload::make($name))
             ->label($label)
             ->disk(self::IMAGE_DISK)
             ->directory(self::IMAGE_DIRECTORY)
             ->visibility('public')
             ->image()
-            ->maxSize(4096)
-            ->imagePreviewHeight('80');
+            ->maxSize(4096);
     }
 
     protected static function videoInput(string $name, string $label = 'YouTube video'): TextInput

@@ -240,7 +240,7 @@ class Couriers extends SettingsPage
                 Select::make(CourierSettings::property($courier, 'PickupStore'))
                     ->label('Default pickup store')
                     ->options(fn (Get $get): array => CourierSettings::storeOptions($get($registered)))
-                    ->native(false)
+                    ->searchable()
                     ->helperText('Where a parcel goes from when nobody chooses. With one store registered nobody is ever asked; with two, the send dialog opens on this one and a change there applies to that parcel alone.'),
             ]);
     }

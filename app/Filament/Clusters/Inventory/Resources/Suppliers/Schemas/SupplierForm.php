@@ -13,7 +13,7 @@ class SupplierForm
     {
         return $schema
             ->components([
-                /** One section across the full width, for the reason `StockCountForm`'s is. */
+                /** One section across the full width: a lone section at Filament's default span sits in the left half with the right half blank. */
                 Section::make('Who you buy from')
                     ->description('Recorded once, so that everything ever bought from them reads as one buying history.')
                     ->columnSpanFull()

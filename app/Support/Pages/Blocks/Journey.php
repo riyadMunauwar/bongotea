@@ -2,9 +2,11 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Group;
 use Filament\Support\Icons\Heroicon;
 
 /**
@@ -39,9 +41,11 @@ class Journey extends PageBlock
                 ->defaultItems(4)
                 ->columns(2)
                 ->schema([
-                    TextInput::make('title')->required()->maxLength(120),
-                    TextInput::make('text')->maxLength(300),
-                    self::imageInput('image')->columnSpanFull(),
+                    Group::make([
+                        TextInput::make('title')->required()->maxLength(120),
+                        TextInput::make('text')->maxLength(300),
+                    ]),
+                    self::imageInput('image', ImageSlot::PortraitCard),
                 ]),
         ];
     }

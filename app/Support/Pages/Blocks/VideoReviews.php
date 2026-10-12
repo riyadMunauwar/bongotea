@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -48,7 +49,7 @@ class VideoReviews extends PageBlock
                     TextInput::make('duration')->placeholder('১:২৪')->maxLength(10),
                     TextInput::make('quote')->required()->maxLength(120)->columnSpanFull(),
                     self::videoInput('video')->required(),
-                    self::imageInput('image', 'Cover image'),
+                    self::imageInput('image', ImageSlot::PortraitCard, 'Cover image'),
                 ]),
         ];
     }

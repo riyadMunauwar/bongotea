@@ -52,7 +52,6 @@ class Sms extends SettingsPage
                         /** By stored name rather than the enum, which Filament would hand back as a case where the group holds a string. */
                         ->options(collect(SmsGateway::cases())->mapWithKeys(fn (SmsGateway $gateway): array => [$gateway->value => $gateway->getLabel()]))
                         ->required()
-                        ->native(false)
                         ->live()
                         ->columnSpanFull(),
 

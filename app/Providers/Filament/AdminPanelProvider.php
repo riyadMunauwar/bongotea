@@ -8,6 +8,8 @@ use App\Http\Middleware\AuthenticateAdmin;
 use App\Support\Settings\GeneralSettings;
 use BladeUI\Icons\Factory as IconFactory;
 use Filament\FontProviders\BunnyFontProvider;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -16,6 +18,7 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -61,6 +64,17 @@ class AdminPanelProvider extends PanelProvider
          * Storage stays UTC; only the display moves.
          */
         FilamentTimezone::set(fn (): string => app(GeneralSettings::class)->timezone);
+
+        /**
+         * Every picker in the panel is the panel's own dropdown, never the
+         * browser's: one look on every screen, and a dropdown a long list can
+         * be searched in. Set here once rather than on each field, so a form
+         * written later is drawn the same way without anybody remembering to.
+         * A field may still ask for `native()` on purpose.
+         */
+        Select::configureUsing(fn (Select $select): Select => $select->native(false));
+        DateTimePicker::configureUsing(fn (DateTimePicker $picker): DateTimePicker => $picker->native(false));
+        SelectFilter::configureUsing(fn (SelectFilter $filter): SelectFilter => $filter->native(false));
     }
 
     public function panel(Panel $panel): Panel

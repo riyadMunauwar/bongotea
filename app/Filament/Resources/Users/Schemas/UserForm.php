@@ -32,7 +32,6 @@ class UserForm
         return $schema
             ->components([
                 Section::make('Person')
-                    ->columnSpanFull()
                     ->columns(1)
                     ->schema([
                         TextInput::make('name')
@@ -59,7 +58,6 @@ class UserForm
 
                 Section::make('Roles')
                     ->description('A User may hold any number; what they may do is everything their Roles allow between them. A User with no Roles is suspended — they cannot sign in, but they stay in the list and come back the moment a Role is given.')
-                    ->columnSpanFull()
                     ->columns(1)
                     ->schema([
                         CheckboxList::make('roles')

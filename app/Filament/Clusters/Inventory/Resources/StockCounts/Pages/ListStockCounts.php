@@ -11,15 +11,15 @@ class ListStockCounts extends ListRecords
     protected static string $resource = StockCountResource::class;
 
     /**
-     * The two everyday verbs a Merchant reaches for — **Increase (+)** and
-     * **Decrease (−)** — each doing the arithmetic for them off live On Hand.
-     * The exact-count form still exists behind the create route (a stocktake,
-     * or adopting a Product into the ledger), but it is no longer surfaced as a
-     * header button here.
+     * The three verbs a Merchant reaches for — **Set exact count**, **Increase
+     * (+)** and **Decrease (−)** — side by side, each opening the same dialog.
+     * There is no create page: a count is one Product and one number, which a
+     * dialog over the list it lands in holds.
      */
     protected function getHeaderActions(): array
     {
         return [
+            AdjustStockAction::exactCount(),
             AdjustStockAction::increase(),
             AdjustStockAction::decrease(),
         ];

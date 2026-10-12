@@ -3,14 +3,11 @@
 namespace App\Filament\Clusters\Inventory\Resources\StockCounts;
 
 use App\Filament\Clusters\Inventory\InventoryCluster;
-use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\ListStockCounts;
-use App\Filament\Clusters\Inventory\Resources\StockCounts\Schemas\StockCountForm;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Tables\StockCountsTable;
 use App\Models\StockCount;
 use BackedEnum;
 use Filament\Resources\Resource;
-use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -63,11 +60,6 @@ class StockCountResource extends Resource
      */
     protected static ?int $navigationSort = 0;
 
-    public static function form(Schema $schema): Schema
-    {
-        return StockCountForm::configure($schema);
-    }
-
     public static function table(Table $table): Table
     {
         return StockCountsTable::configure($table);
@@ -83,11 +75,14 @@ class StockCountResource extends Resource
         return InventoryCluster::canAccess();
     }
 
+    /**
+     * The list alone: a count is taken in a dialog over it (`AdjustStockAction`),
+     * never on a page of its own.
+     */
     public static function getPages(): array
     {
         return [
             'index' => ListStockCounts::route('/'),
-            'create' => CreateStockCount::route('/create'),
         ];
     }
 

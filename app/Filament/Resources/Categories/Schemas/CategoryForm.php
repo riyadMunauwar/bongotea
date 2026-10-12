@@ -9,10 +9,16 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
+/**
+ * A Category's name and story on the left; beside it, how it is shown (its
+ * place in the order and the Theme it wears) and what it says to search
+ * engines. On a phone the cards follow the content.
+ */
 class CategoryForm
 {
     use HasSeoFields, HasSlugField;
@@ -20,55 +26,66 @@ class CategoryForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(['default' => 1, 'lg' => 3])
             ->components([
-                Section::make('Category')
-                    ->columnSpanFull()
-                    ->columns(2)
-                    ->schema([
-                        self::nameInput(),
+                Group::make([
+                    Section::make('Basics')
+                        ->columns(2)
+                        ->schema([
+                            self::nameInput(),
 
-                        self::slugInput(url('/category').'/'),
+                            self::slugInput(url('/category').'/'),
 
-                        TextInput::make('note')
-                            ->helperText('The short line under the name in menus.')
-                            ->maxLength(255),
+                            TextInput::make('note')
+                                ->label('Menu note')
+                                ->helperText('The short line under the name in menus.')
+                                ->maxLength(255)
+                                ->columnSpanFull(),
+                        ]),
 
-                        TextInput::make('quality_headline')
-                            ->label('Quality headline')
-                            ->maxLength(255),
+                    Section::make('Category story')
+                        ->schema([
+                            TextInput::make('quality_headline')
+                                ->label('Quality headline')
+                                ->maxLength(255),
 
-                        Textarea::make('about')
-                            ->rows(3)
-                            ->columnSpanFull(),
+                            Textarea::make('about')
+                                ->rows(3),
 
-                        Repeater::make('why_points')
-                            ->label('Why choose it')
-                            ->simple(TextInput::make('point')->required()->maxLength(255))
-                            ->defaultItems(3)
-                            ->maxItems(3)
-                            ->reorderable()
-                            ->columnSpanFull(),
+                            /**
+                             * Always three, drawn side by side as three boxes
+                             * rather than a list to manage: nothing to drag,
+                             * and the add button goes once three are written.
+                             */
+                            Repeater::make('why_points')
+                                ->label('Why choose it')
+                                ->simple(TextInput::make('point')->required()->maxLength(255))
+                                ->defaultItems(3)
+                                ->maxItems(3)
+                                ->grid(['default' => 1, 'md' => 3])
+                                ->reorderable(false),
+                        ]),
+                ])->columnSpan(['lg' => 2]),
 
-                        TextInput::make('sort_order')
-                            ->label('Sort order')
-                            ->integer()
-                            ->minValue(0)
-                            ->default(0)
-                            ->required(),
-                    ]),
+                Group::make([
+                    Section::make('Display')
+                        ->schema([
+                            TextInput::make('sort_order')
+                                ->label('Sort order')
+                                ->integer()
+                                ->minValue(0)
+                                ->default(0)
+                                ->required(),
 
-                Section::make('Category Theme')
-                    ->description('The colours this Category wears wherever it is drawn. Themes are designed whole; pick one.')
-                    ->columnSpanFull()
-                    ->schema([
-                        Radio::make('theme_key')
-                            ->hiddenLabel()
-                            ->options(self::themeSwatches())
-                            ->required()
-                            ->inline(),
-                    ]),
+                            Radio::make('theme_key')
+                                ->label('Theme')
+                                ->helperText('The colours this Category wears wherever it is drawn. Themes are designed whole; pick one.')
+                                ->options(self::themeSwatches())
+                                ->required(),
+                        ]),
 
-                self::seoSection(),
+                    self::seoSection(),
+                ])->columnSpan(['lg' => 1]),
             ]);
     }
 

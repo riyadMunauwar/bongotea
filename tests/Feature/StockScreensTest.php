@@ -5,7 +5,6 @@ use App\Enums\OrderStatus;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Filament\Clusters\Inventory\InventoryCluster;
-use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\CreateStockCount;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\Pages\ListStockCounts;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\StockCountResource;
 use App\Filament\Clusters\Inventory\Resources\Suppliers\SupplierResource;
@@ -27,6 +26,7 @@ use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Forms\Components\Select;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Livewire\Livewire;
@@ -62,15 +62,14 @@ beforeEach(function (): void {
 it('records a count and squares the ledger with it, without anybody typing a difference', function () {
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
 
-    Livewire::test(CreateStockCount::class)
-        ->fillForm([
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', [
             'product_id' => $product->getKey(),
             'quantity' => 30,
             'cause' => AdjustmentCause::OpeningCount->value,
             'note' => 'Two boxes in the back',
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertHasNoActionErrors();
 
     $count = StockCount::sole();
 
@@ -88,14 +87,13 @@ it('counts again and writes a second adjustment measured against the first', fun
 
     $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
 
-    Livewire::test(CreateStockCount::class)
-        ->fillForm([
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', [
             'product_id' => $product->getKey(),
             'quantity' => 22,
             'cause' => AdjustmentCause::Damaged->value,
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertHasNoActionErrors();
 
     expect($this->ledger->onHand($product))->toBe(22)
         ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([30, -8]);
@@ -105,10 +103,9 @@ it('takes the first count as an opening count without anybody choosing one', fun
     $product = Product::factory()->create();
 
     /** The cause left as the form offers it, which is the ordinary case when a Merchant adopts stock. */
-    Livewire::test(CreateStockCount::class)
-        ->fillForm(['product_id' => $product->getKey(), 'quantity' => 12])
-        ->call('create')
-        ->assertHasNoFormErrors();
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', ['product_id' => $product->getKey(), 'quantity' => 12])
+        ->assertHasNoActionErrors();
 
     expect(StockCount::sole()->cause)->toBe(AdjustmentCause::OpeningCount)
         ->and($this->ledger->onHand($product))->toBe(12);
@@ -120,21 +117,51 @@ it('does not offer a product nobody can be standing in front of', function () {
 
     $withdrawn->delete();
 
-    $options = Livewire::test(CreateStockCount::class)
-        ->instance()
-        ->getSchema('form')
-        ->getComponent(fn ($component): bool => $component instanceof Select && $component->getName() === 'product_id')
-        ->getOptions();
+    Livewire::test(ListStockCounts::class)
+        ->mountAction('count')
+        ->assertSchemaComponentExists(
+            'product_id',
+            checkComponentUsing: fn (Select $product): bool => in_array($stocked->name, $product->getOptions(), true)
+                && ! in_array($withdrawn->name, $product->getOptions(), true),
+        );
+});
 
-    expect($options)->toContain($stocked->name)
-        ->and($options)->not->toContain($withdrawn->name);
+it('shows what is on hand as soon as a product is picked, so the gap is seen before saving', function (string $verb) {
+    $product = Product::factory()->create();
+
+    $this->ledger->recordCount($product, 42, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    Livewire::test(ListStockCounts::class)
+        ->mountAction($verb)
+        ->assertSchemaComponentHidden('on_hand')
+        ->fillForm(['product_id' => $product->getKey()])
+        ->assertSchemaComponentExists('on_hand', checkComponentUsing: fn (TextEntry $onHand): bool => $onHand->getState() === '42');
+})->with(['increase', 'decrease']);
+
+it('keeps an exact count blind to what the ledger expects, so the number is counted rather than agreed with', function () {
+    $product = Product::factory()->create();
+
+    $this->ledger->recordCount($product, 42, AdjustmentCause::OpeningCount, null, $this->counter);
+
+    Livewire::test(ListStockCounts::class)
+        ->mountAction('count')
+        ->fillForm(['product_id' => $product->getKey()])
+        ->assertSchemaComponentDoesNotExist('on_hand');
+});
+
+it('says a product has not been counted yet rather than showing it as empty', function () {
+    $product = Product::factory()->create();
+
+    Livewire::test(ListStockCounts::class)
+        ->mountAction('decrease')
+        ->fillForm(['product_id' => $product->getKey()])
+        ->assertSchemaComponentExists('on_hand', checkComponentUsing: fn (TextEntry $onHand): bool => $onHand->getState() === 'Not counted yet');
 });
 
 it('asks for a product, a quantity and a cause, and refuses a count without them', function () {
-    Livewire::test(CreateStockCount::class)
-        ->fillForm(['product_id' => null, 'quantity' => null, 'cause' => null])
-        ->call('create')
-        ->assertHasFormErrors(['product_id' => 'required', 'quantity' => 'required', 'cause' => 'required']);
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', ['product_id' => null, 'quantity' => null, 'cause' => null])
+        ->assertHasActionErrors(['product_id' => 'required', 'quantity' => 'required', 'cause' => 'required']);
 
     expect(StockCount::count())->toBe(0)
         ->and(StockMovement::count())->toBe(0);
@@ -143,14 +170,13 @@ it('asks for a product, a quantity and a cause, and refuses a count without them
 it('refuses a counted quantity below nothing, which is a figure the ledger concludes rather than one anybody asserts', function () {
     $product = Product::factory()->create();
 
-    Livewire::test(CreateStockCount::class)
-        ->fillForm([
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', [
             'product_id' => $product->getKey(),
             'quantity' => -5,
             'cause' => AdjustmentCause::Lost->value,
         ])
-        ->call('create')
-        ->assertHasFormErrors(['quantity']);
+        ->assertHasActionErrors(['quantity']);
 });
 
 it('lists what has been counted, with what the ledger did about each one', function () {
@@ -195,15 +221,19 @@ it('offers no way to edit or delete a count', function () {
 |--------------------------------------------------------------------------
 */
 
-it('offers Increase and Decrease in the theme colour, and no exact-count header button, gated on count stock', function () {
+it('offers Set exact count, Increase and Decrease side by side in the theme colour, gated on count stock', function () {
     Livewire::test(ListStockCounts::class)
+        ->assertActionVisible('count')
         ->assertActionVisible('increase')
         ->assertActionVisible('decrease')
-        /** Both verbs wear the panel's own colour rather than a green/red pair. */
+        /** All three verbs wear the panel's own colour rather than a green/red pair. */
+        ->assertActionHasColor('count', 'primary')
         ->assertActionHasColor('increase', 'primary')
         ->assertActionHasColor('decrease', 'primary')
-        /** The exact-count form is left behind its route; it is not surfaced as a header button. */
+        /** The exact count opens in a dialog like the other two; there is no create page behind a button. */
         ->assertActionDoesNotExist('create');
+
+    expect(StockCountResource::getPages())->not->toHaveKey('create');
 
     /** The actions ride on `count stock` through the cluster: without it the screen they live on is forbidden. */
     $this->actingAs(User::factory()->create());
