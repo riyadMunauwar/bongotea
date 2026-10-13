@@ -1,6 +1,6 @@
 # Bongo Tea
 
-A wholesale tea store. Bongo Tea sells tea by the kilogram to businesses — tea stalls, restaurants, hotels, offices — and takes their orders online.
+A wholesale tea store. Bongo Tea sells tea by the kilogram to businesses — tea stalls, restaurants, hotels, offices — and takes their orders online. Some of its teas are also sold in Packs, to people buying for themselves.
 
 > This glossary is being rewritten from GioPages, the landing-page system this codebase began as. Terms below not yet revisited still describe GioPages.
 
@@ -27,11 +27,15 @@ The part of an address that names one Page, Product or Category, and its permane
 _Avoid_: permalink, path, URL
 
 **Product**:
-Something a Customer can order, sold by the Kilogram, carrying a price in every Tier and no variations. Every Product has a public address of its own at its Slug, where it is described in full. A Product taken out of the catalogue keeps its address and says it is no longer sold there, because links to it in old posts and chats outlive it.
+Something a Customer can order, always sold by the Kilogram and carrying a price in every Tier, and sold in Packs as well once the Merchant gives it any — a Product with at least one Pack is open to retail, and there is no retail-only Product. Every Product has a public address of its own at its Slug, where it is described in full. A Product taken out of the catalogue keeps its address and says it is no longer sold there, because links to it in old posts and chats outlive it.
 _Avoid_: item, SKU, variant, listing
 
+**Pack**:
+A sealed retail size of one Product — 100 g, 200 g, 250 g — sold whole and counted, never weighed out. A Product may come in several Packs, each with a weight, an MRP and a Pack Price of its own; only a Product the Merchant has opened to retail has any. A Pack Price never exceeds its Pack's MRP, and the saving is read off the two, never typed. A Pack is known by its weight and nothing else — no two Packs of one Product weigh the same, and its name is its weight, never typed — and its weights are set on its Product, from no store-wide list of sizes. There is no quantity break on Packs: five cost five times one. A Pack has no stock of its own: it is weighed out of its Product's stock when the order is packed, so a Pack shipped takes its weight off the same shelf a Kilogram does. A Pack is not a Product of its own and not a Kilogram: it is how the same tea is sold to somebody buying for their own cup rather than for a business. A Customer reads it as প্যাকেট, and the retail Cart as the প্যাকেট ঝুড়ি; nothing on the bulk side is renamed to make room for it.
+_Avoid_: variant, size option, SKU, unit, sachet
+
 **Available**:
-Said of a Product that can be ordered right now — a decision the Merchant makes by hand, and never one the stock ledger makes for them, because a shelf nobody has counted is not an empty one. An unavailable Product is still shown wherever it would be, greyed and saying it cannot be had at the moment, because a regular buyer looks for the tea they always buy. Not the same as taken out of the catalogue, which is for good; unavailable is for now.
+Said of a Product that can be ordered right now — a decision the Merchant makes by hand, and never one the stock ledger makes for them, because a shelf nobody has counted is not an empty one. An unavailable Product is still shown wherever it would be, greyed and saying it cannot be had at the moment, because a regular buyer looks for the tea they always buy. Not the same as taken out of the catalogue, which is for good; unavailable is for now. A Pack is Available too, by its own switch, and only while its Product is: a Product made unavailable takes every Pack with it, but a Pack switched off — the pouches ran out — leaves the Product and its bulk sale untouched.
 _Avoid_: in stock, out of stock, enabled, active, sold out
 
 **Category**:
@@ -75,7 +79,7 @@ One of a Product's ranges of the cart's total Kilograms — across every Product
 _Avoid_: slab, step, level, bracket, price break, quantity discount, default tiers
 
 **MRP**:
-A Product's maximum retail price for one Kilogram — the figure a shopkeeper knows from the pack — that every discount a Customer is shown is measured against. Every Product has one, and no Tier Price may exceed it; a first Tier priced at the MRP simply offers nothing off until a cheaper Tier is reached. It is not a price anything is charged at; the Tier Prices are. A discount is only ever read off the two — the MRP less a Tier Price — and never typed or kept, so moving the MRP changes what a Customer is told they save, never what they pay.
+A Product's maximum retail price for one Kilogram — or a Pack's, for that Pack — the figure a shopkeeper knows from the pack — that every discount a Customer is shown is measured against. Every Product has one, and no Tier Price may exceed it; a first Tier priced at the MRP simply offers nothing off until a cheaper Tier is reached. It is not a price anything is charged at; the Tier Prices are. A discount is only ever read off the two — the MRP less a Tier Price — and never typed or kept, so moving the MRP changes what a Customer is told they save, never what they pay.
 _Avoid_: Regular Price, base price, list price, compare-at price, original price
 
 **Saving**:
@@ -87,17 +91,17 @@ What one Kilogram of a Product costs in one of its Tiers, typed by the Merchant 
 _Avoid_: unit price (as a stored figure), bulk price, wholesale price, rate, tier discount
 
 **Checkout**:
-The step that turns a Cart into an Order: it asks where to send it — a name, a mobile number, a District and an address, and optionally a shop's name and a note — and how it will be paid, then captures it in one submission. There is one Checkout for the whole store and it is the same form for everybody; a Customer is never asked to sign in to use it. An online payment happens after Capture, never before it.
+The step that turns a Cart into an Order: it asks where to send it — a name, a mobile number, a District and an address, and optionally a shop's name and a note — and how it will be paid, then captures it in one submission. There is one Checkout for the whole store and it is the same form for everybody, opened for one Cart at a time — bulk or retail, never both at once, so each Capture empties only the Cart it took; a Customer is never asked to sign in to use it. An online payment happens after Capture, never before it.
 _Avoid_: cart, basket, funnel, order form
 
 ### Orders
 
 **Order**:
-A Customer's committed request for Products, captured from their Cart at an agreed price. An Order records everything it needs to be fulfilled without consulting anything else. It is known by its order number — BT- and six characters drawn at random from ones that cannot be misheard or misread for each other — short enough to say down a phone and impossible to guess the next one of, because an order number alone is enough to open the Order Complete Page.
+A Customer's committed request for Products, captured from their Cart at an agreed price. An Order records everything it needs to be fulfilled without consulting anything else. It is known by its order number — BT- and six characters drawn at random from ones that cannot be misheard or misread for each other — short enough to say down a phone and impossible to guess the next one of, because an order number alone is enough to open the Order Complete Page. An Order is either bulk — Kilograms, priced by Tiers — or retail — Packs — and never both, because each comes from a Cart of its own; everything after Capture, from Payment to Shipment, treats the two alike. Which it is is settled at Capture and never changes, even by a User editing it: the two are priced by different rules, and Repricing a retail Order reads today's Pack Prices and the retail Delivery Charge. A Price Override on a Pack line follows the same rules as any other, and never exceeds that Pack's MRP.
 _Avoid_: purchase, transaction, sale, lead
 
 **Order Line**:
-One Product's worth of an Order, recording what was sold, at what unit price, against what MRP, in what quantity and at what unit cost, as agreed at Capture — and which of its Product's Tiers that price came from, as the range stood then, because the Product's ranges may move and "why did they pay that?" must still have an answer. A line under a Price Override records no Tier; its reason says why instead. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
+One Product's worth of an Order — or, on a retail Order, one Pack's, recording the Pack's weight as it stood at Capture — recording what was sold, at what unit price, against what MRP, in what quantity and at what unit cost, as agreed at Capture — and which of its Product's Tiers that price came from, as the range stood then, because the Product's ranges may move and "why did they pay that?" must still have an answer. A line under a Price Override records no Tier; its reason says why instead. A Product is a reference from an Order Line, never a source of truth for it. The cost is the weighted average the stock ledger held at that instant, stamped beside the price because **Sales** is counted at Capture too — a margin whose two halves were counted at different moments would swing for reasons that have nothing to do with the business. It never moves afterwards, whatever is bought later, and a Product nothing has been recorded buying stamps none: unknown, never nothing. A line captured before costs were recorded at all keeps none, because a cost invented from today's average would be a figure tracing to no delivery.
 _Avoid_: line item, order item, cart item
 
 **Capture**:
@@ -113,7 +117,7 @@ A Tier Price a User sets by hand on one line of an Order — a deal agreed with 
 _Avoid_: discount, manual price, custom price, negotiated price
 
 **Cart**:
-The Products and Kilograms a Customer is gathering before they order, kept by their own browser and nowhere else. It belongs to the browser and not to the Customer: signing in elsewhere does not bring it along, and nothing about it is known to the store until Capture. Every figure it shows is worked out afresh as it changes, so adding a Kilogram that crosses into another Tier reprices every line in it at once. There is only ever one: the bulk order form, the price calculator and every product card's stepper are views of the same Cart, never separate quantities that could disagree.
+The Products and Kilograms a Customer is gathering before they order, kept by their own browser and nowhere else. It belongs to the browser and not to the Customer: signing in elsewhere does not bring it along, and nothing about it is known to the store until Capture. Every figure it shows is worked out afresh as it changes, so adding a Kilogram that crosses into another Tier reprices every line in it at once. A browser holds two, which never meet: the bulk Cart of Kilograms and the retail Cart of Packs. There is only ever one bulk Cart: the bulk order form, the price calculator and every product card's stepper are views of it, never separate quantities that could disagree. The retail Cart owes nothing to the Tiers.
 _Avoid_: basket, bag, order (before Capture), quote
 
 **Quote**:
@@ -157,15 +161,15 @@ The district an Order is delivered to, one of the country's sixty-four, chosen f
 _Avoid_: zone, area, thana, city
 
 **Kilogram**:
-The one unit everything is sold in. Every quantity a Customer asks for is a whole number of kilograms of one Product, and every figure that depends on how much is bought — the Delivery Charge among them — is read from kilograms, never from a count of lines or parcels.
-_Avoid_: unit, piece, pack, item, quantity (as a unit)
+The unit bulk is sold in. Every quantity a bulk Customer asks for is a whole number of kilograms of one Product, and every bulk figure that depends on how much is bought — the Tier and the Delivery Charge among them — is read from kilograms, never from a count of lines or parcels. Retail is sold in Packs instead. Stock is held in grams beneath both, so a Kilogram and a Pack of the same tea come off one shelf.
+_Avoid_: unit, piece, item, quantity (as a unit)
 
 **Delivery Band**:
 A range of an Order's total kilograms and the Delivery Charge for it — 1–5 kg ৳120, 51 kg and over free. The bands cover every whole kilogram from one upwards without gap or overlap, are the same for the whole country, and are set in Settings. They are their own table and owe nothing to how Products are priced: where a band's edges fall says nothing about where a price changes.
 _Avoid_: delivery option, shipping tier, zone, rate, slab
 
 **Delivery Charge**:
-The amount added to an Order for getting the parcel to the door, taken from the Delivery Band its total kilograms fall in. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order. There is nothing for a Customer to choose: the weight decides it.
+The amount added to an Order for getting the parcel to the door, taken from the Delivery Band its total kilograms fall in. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order. There is nothing for a Customer to choose: the weight decides it. A retail Order owes nothing to the Delivery Bands: it pays one flat retail charge set in Settings, waived once its total reaches a threshold set beside it.
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
@@ -349,7 +353,7 @@ The span of days every report figure is counted over, chosen once for a whole sc
 _Avoid_: date range, period, filter, timeframe
 
 **Report**:
-Figures a Merchant reads at length, on a screen of their own. A report is asked either of the whole installation — what the couriers did, what the Products sold, what is on the shelf. Nearly every one is counted over a Reporting Window and obeys it, and every figure on such a report answers for the same span of days, which is what makes two of them worth reading side by side. The exception is a report whose question has no span behind it at all: what is held right now is a fact about this moment, so the Stock Report is drawn with no window control rather than one that changes nothing — a dead control is worse than none, because a Merchant who moves it reads the same figures as the answer to a different question. A to-do list is not a report either way: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn.
+Figures a Merchant reads at length, on a screen of their own. A report is asked either of the whole installation — what the couriers did, what the Products sold, what is on the shelf. Nearly every one is counted over a Reporting Window and obeys it, and every figure on such a report answers for the same span of days, which is what makes two of them worth reading side by side. The exception is a report whose question has no span behind it at all: what is held right now is a fact about this moment, so the Stock Report is drawn with no window control rather than one that changes nothing — a dead control is worse than none, because a Merchant who moves it reads the same figures as the answer to a different question. A to-do list is not a report either way: it names what somebody must act on as things stand and ignores the window on purpose, because a backlog drawn under a window a Merchant has narrowed is a backlog that quietly shrinks. Where a figure and a to-do list share a screen, the one that ignores the window says so where it is drawn. A report counts bulk and retail Orders together unless the Merchant narrows it to one, because Sales is the business's whole takings, not one channel's.
 _Avoid_: analytics, insights, metrics, stats, BI
 
 **Orders (as a figure)**:
@@ -369,7 +373,7 @@ A Customer who bought in a Reporting Window and had bought before it began; one 
 _Avoid_: repeat buyer, loyal customer, existing customer, retained customer
 
 **Kilograms Sold**:
-The weight side of a Reporting Window: the Kilograms on every Order counted in Sales, the same Orders and the same moment. Drawn beside Sales wherever Sales is drawn, because a wholesale tea business measures itself in kilograms as much as in taka, and the two move apart whenever the Tiers do their work.
+The weight side of a Reporting Window: the Kilograms on every Order counted in Sales, the same Orders and the same moment — a retail Order's Packs counted by their weight, so the figure may fall between whole kilograms. Drawn beside Sales wherever Sales is drawn, because a wholesale tea business measures itself in kilograms as much as in taka, and the two move apart whenever the Tiers do their work.
 _Avoid_: volume, units sold, quantity, tonnage
 
 **Cancellation Rate**:
@@ -435,7 +439,7 @@ The Moment a Product's own page is opened. Seeing a Product in a list, a rail or
 _Avoid_: view content, impression, product view, page view
 
 **Added to Cart**:
-The Moment a Product goes from none to some in a Cart — once per Product per Cart, however many Kilograms follow it. Raising a quantity already there is not it. It happens in the browser, because that is where the Cart is.
+The Moment a Product goes from none to some in a Cart — once per Product per Cart, however many Kilograms follow it; in the retail Cart, once per Pack, however many of it follow. Every Moment says which Cart it came from, but a Pack is reported as its Product, so the ad platforms see one tea whichever way it is sold. Raising a quantity already there is not it. It happens in the browser, because that is where the Cart is.
 _Avoid_: add to basket, cart event, cart update
 
 **Provider**:
