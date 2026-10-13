@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Observers\OrderLineObserver;
+use App\Support\Bangla;
 use App\Support\Inventory\Grams;
 use Database\Factories\OrderLineFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -38,9 +39,16 @@ use Illuminate\Support\Facades\DB;
  * from, as the range stood when it was priced (ADR-0031). A line under a Price
  * Override records no Tier: `price_override_reason` and `price_overridden_by`
  * say why and who instead, and its `unit_price` is kept through any Repricing.
+ *
+ * On a retail Order a line is one Pack's worth (ADR-0034): `pack_id` names the
+ * Pack, `pack_grams` keeps its weight as it stood at Capture, `quantity` is
+ * how many, `unit_price` the Pack Price, `mrp` the Pack's MRP and `unit_cost`
+ * what one Pack's weight cost; it records no Tier. A Pack deleted later leaves
+ * the line whole: the reference goes null and the weight stays. Both are null
+ * on a bulk line.
  */
 #[ObservedBy(OrderLineObserver::class)]
-#[Fillable(['product_id', 'category_id', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
+#[Fillable(['product_id', 'category_id', 'pack_id', 'pack_grams', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
 class OrderLine extends Model
 {
     /** @use HasFactory<OrderLineFactory> */
@@ -56,6 +64,7 @@ class OrderLine extends Model
             'line_total' => 'integer',
             'tier_min' => 'integer',
             'tier_max' => 'integer',
+            'pack_grams' => 'integer',
         ];
     }
 
@@ -93,6 +102,49 @@ class OrderLine extends Model
     public function priceOverriddenBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'price_overridden_by')->withTrashed();
+    }
+
+    /**
+     * The Pack this line sold, while it still exists; its weight is on the
+     * line regardless.
+     *
+     * @return BelongsTo<Pack, $this>
+     */
+    public function pack(): BelongsTo
+    {
+        return $this->belongsTo(Pack::class);
+    }
+
+    /** Whether this line is one Pack's worth rather than Kilograms. */
+    public function isPack(): bool
+    {
+        return $this->pack_grams !== null;
+    }
+
+    /**
+     * The line as the admin names it: "Assam, 250 g × 2" for a Pack, the
+     * Product's name alone for Kilograms.
+     */
+    public function description(): string
+    {
+        return $this->isPack() ? "{$this->product_name}, ".Pack::nameFor($this->pack_grams)." × {$this->quantity}" : $this->product_name;
+    }
+
+    /**
+     * The line as the Customer reads it on the Order Complete Page: "Assam,
+     * ২৫০ গ্রাম × ২" for a Pack, "Assam × ৮ কেজি" for Kilograms.
+     */
+    public function banglaDescription(): string
+    {
+        if (! $this->isPack()) {
+            return $this->product_name.' × '.Bangla::number($this->quantity).' কেজি';
+        }
+
+        $size = $this->pack_grams < Grams::PER_KILOGRAM
+            ? Bangla::number($this->pack_grams).' গ্রাম'
+            : Bangla::digits(Grams::toKilograms($this->pack_grams)).' কেজি';
+
+        return "{$this->product_name}, {$size} × ".Bangla::number($this->quantity);
     }
 
     /** Whether a User set this line's price by hand, which only an override's reason says. */

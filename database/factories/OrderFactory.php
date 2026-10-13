@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Customer;
@@ -31,6 +32,12 @@ class OrderFactory extends Factory
             'payment_method' => PaymentMethod::CashOnDelivery,
             'status' => OrderStatus::New,
         ];
+    }
+
+    /** A retail Order (ADR-0034); give it Pack lines with `OrderLineFactory::ofPack()`. */
+    public function retail(): static
+    {
+        return $this->state(fn (): array => ['kind' => OrderKind::Retail, 'delivery_label' => 'Retail delivery']);
     }
 
     public function confirmed(): static

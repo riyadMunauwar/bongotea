@@ -303,6 +303,7 @@ export const bn = {
         none: 'এই নম্বরে এখনো কোনো অর্ডার নেই।',
         orderNow: 'চা বেছে নিন',
         line: (name: string, kilograms: string) => `${name} ${kilograms} কেজি`,
+        packLine: (name: string, size: string, count: string) => `${name}, ${size} × ${count}`,
         kilograms: (kilograms: string) => `${kilograms} কেজি`,
         inProgress: (step: string) => `${step} (চলছে)`,
         cancelled: 'বাতিল',

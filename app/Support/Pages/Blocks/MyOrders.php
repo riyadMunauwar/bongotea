@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\Auth;
  * Read off the Customer's row by number, never off `orders.customer_phone`,
  * so an Order a User moved to another number follows the number it is under
  * now. Dated by the Merchant's day, not the server's. Figures go in minor
- * units and Kilograms; no Shipment detail beyond the
+ * units and Kilograms — a Pack line by its weight and count instead
+ * (ADR-0034); no Shipment detail beyond the
  * Progress worked out from it is ever sent.
  */
 class MyOrders extends PageBlock
@@ -64,7 +65,7 @@ class MyOrders extends PageBlock
     }
 
     /**
-     * @return list<array{number: string, placedOn: string, lines: list<array{name: string, kilograms: int}>, kilograms: int, total: int, progress: string}>
+     * @return list<array{number: string, placedOn: string, lines: list<array{name: string, kilograms: int}|array{name: string, packGrams: int, count: int}>, kilograms: int, total: int, progress: string}>
      */
     private static function ordersOf(Customer $customer): array
     {
@@ -79,7 +80,9 @@ class MyOrders extends PageBlock
                 'number' => $order->order_number,
                 'placedOn' => $order->created_at->setTimezone($timezone)->toDateString(),
                 'lines' => $order->lines
-                    ->map(fn (OrderLine $line): array => ['name' => $line->product_name, 'kilograms' => $line->quantity])
+                    ->map(fn (OrderLine $line): array => $line->isPack()
+                        ? ['name' => $line->product_name, 'packGrams' => $line->pack_grams, 'count' => $line->quantity]
+                        : ['name' => $line->product_name, 'kilograms' => $line->quantity])
                     ->values()
                     ->all(),
                 'kilograms' => $order->total_kilograms,

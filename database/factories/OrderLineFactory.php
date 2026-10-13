@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Pack;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -33,5 +34,20 @@ class OrderLineFactory extends Factory
             'unit_price' => fn (array $attributes): int => Product::find($attributes['product_id'])->price,
             'quantity' => 1,
         ];
+    }
+
+    /** One Pack's worth, copied from the Pack the way retail Capture copies it. */
+    public function ofPack(Pack $pack, int $count = 1): static
+    {
+        return $this->state(fn (): array => [
+            'product_id' => $pack->product_id,
+            'category_id' => $pack->product->category_id,
+            'product_name' => $pack->product->name,
+            'pack_id' => $pack->id,
+            'pack_grams' => $pack->grams,
+            'unit_price' => $pack->price,
+            'mrp' => $pack->mrp,
+            'quantity' => $count,
+        ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\OrderKind;
 use App\Enums\Permission;
 use App\Filament\Resources\Orders\Actions\BookBatchWithCourierAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
@@ -21,6 +22,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -57,6 +59,11 @@ class OrdersTable
                     ->searchable()
                     ->copyable()
                     ->weight('bold'),
+
+                /** Bulk or retail (ADR-0034): a retail Order is weighed out into Packs, so it is packed differently. */
+                TextColumn::make('kind')
+                    ->badge()
+                    ->sortable(),
 
                 TextColumn::make('created_at')
                     ->label('Taken')
@@ -183,6 +190,10 @@ class OrdersTable
                     ->toggle()
                     ->query(fn (Builder $query): Builder => $query->notYetSent()),
 
+                /** Bulk or retail, which spans every status like the toggles above. */
+                SelectFilter::make('kind')
+                    ->options(OrderKind::class),
+
                 /**
                  * "What came in today" is the question this screen is opened
                  * to answer, so the date range is the filter that matters.
@@ -304,7 +315,7 @@ class OrdersTable
     /**
      * The filters that ask something the status tabs cannot answer from where
      * they stand: "Paid but cancelled" is a Cancelled-only question, and
-     * "Unpaid online orders" and "Not yet sent to a courier" span all three.
+     * "Unpaid online orders", "Not yet sent to a courier" and the kind span all three.
      * Deliberately not every filter — the date range and TrashedFilter say
      * nothing about status, so an empty table under one of those must not be
      * blamed on the tab, and offering to move to All would only trade a named
@@ -312,7 +323,7 @@ class OrdersTable
      *
      * @var list<string>
      */
-    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', self::NOT_YET_SENT_FILTER];
+    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', self::NOT_YET_SENT_FILTER, 'kind'];
 
     private static function isNarrowedAcrossStatuses(Table $table): bool
     {

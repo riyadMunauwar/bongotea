@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentState;
@@ -32,6 +33,7 @@ use Spatie\Activitylog\Support\LogOptions;
  */
 #[ObservedBy([OrderObserver::class, OrderTextObserver::class])]
 #[Fillable([
+    'kind',
     'customer_id',
     'customer_name',
     'customer_phone',
@@ -94,12 +96,16 @@ class Order extends Model
         'total_kilograms' => 0,
         'total' => 0,
         'status' => OrderStatus::New->value,
+        'kind' => OrderKind::Bulk->value,
     ];
 
     protected function casts(): array
     {
         return [
             'status' => OrderStatus::class,
+
+            /** Bulk or retail, settled at Capture and refused any change after it (ADR-0034). */
+            'kind' => OrderKind::class,
 
             /**
              * How the Customer said they would pay, by name. Its own axis:
@@ -505,6 +511,22 @@ class Order extends Model
         return (int) $this->lines->sum(fn (OrderLine $line): int => $line->mrp === null ? 0 : max(0, $line->mrp - $line->unit_price) * $line->quantity);
     }
 
+    public function isRetail(): bool
+    {
+        return $this->kind === OrderKind::Retail;
+    }
+
+    /**
+     * The Kilograms on the Order's bulk lines. A Pack line holds a count of
+     * Packs, not Kilograms, so it adds nothing here, and a retail Order's
+     * `total_kilograms` is nought; its weight is read off its lines' grams
+     * (ADR-0035).
+     */
+    public function bulkKilograms(): int
+    {
+        return (int) $this->lines()->whereNull('pack_grams')->sum('quantity');
+    }
+
     /**
      * Re-derive the subtotal and the total Kilograms from the lines.
      *
@@ -516,7 +538,7 @@ class Order extends Model
     public function recalculateSubtotal(): void
     {
         $this->subtotal = (int) $this->lines()->sum('line_total');
-        $this->total_kilograms = (int) $this->lines()->sum('quantity');
+        $this->total_kilograms = $this->bulkKilograms();
 
         $this->save();
     }

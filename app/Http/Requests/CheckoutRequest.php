@@ -3,9 +3,11 @@
 namespace App\Http\Requests;
 
 use App\Enums\PaymentMethod;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Support\Bangla;
 use App\Support\Orders\Quote;
+use App\Support\Orders\RetailQuote;
 use App\Support\PhoneNumber;
 use App\Support\Settings\PaymentSettings;
 use Closure;
@@ -14,7 +16,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the Checkout: the delivery details, the Cart's lines and the
- * Quote the buyer was shown.
+ * Quote the buyer was shown, for whichever Cart it was opened for — the bulk
+ * Cart by default, or the packet basket (ADR-0034). A request carrying both
+ * kinds of line is refused: an Order is one kind or the other.
  *
  * Nothing here decides a price. The lines are which Products and how many
  * Kilograms; the Quote is only shape-checked, because comparing it is
@@ -24,6 +28,9 @@ class CheckoutRequest extends FormRequest
 {
     /** Whole Kilograms of one tea, as the Cart allows. */
     public const MAX_KILOGRAMS = 999;
+
+    /** Packs of one size, as the packet basket allows. */
+    public const MAX_PACKS = 99;
 
     /** Nobody signs in to order; there is no user to authorize. */
     public function authorize(): bool
@@ -60,17 +67,55 @@ class CheckoutRequest extends FormRequest
                 ? ['required', 'string', Rule::in(PaymentMethod::names($this->offeredMethods()))]
                 : ['nullable'],
 
-            'lines' => ['required', 'array', 'list'],
-            'lines.*.productId' => ['required', 'integer', 'distinct', Rule::exists(Product::class, 'id')],
-            'lines.*.kilograms' => ['required', 'integer', 'min:1', 'max:'.self::MAX_KILOGRAMS],
+            'cart' => ['nullable', 'string', Rule::in(['bulk', 'retail'])],
+
+            ...($this->isRetail() ? self::retailRules() : self::bulkRules()),
 
             'quote' => ['required', 'array'],
             'quote.lines' => ['required', 'array', 'list'],
-            'quote.lines.*.productId' => ['required', 'integer', 'distinct'],
-            'quote.lines.*.tierPrice' => ['required', 'integer', 'min:0'],
             'quote.deliveryCharge' => ['required', 'integer', 'min:0'],
             'quote.total' => ['required', 'integer', 'min:0'],
         ];
+    }
+
+    /**
+     * @return array<string, list<mixed>>
+     */
+    private static function bulkRules(): array
+    {
+        return [
+            'packs' => ['prohibited'],
+            'lines' => ['required', 'array', 'list'],
+            'lines.*.productId' => ['required', 'integer', 'distinct', Rule::exists(Product::class, 'id')],
+            'lines.*.kilograms' => ['required', 'integer', 'min:1', 'max:'.self::MAX_KILOGRAMS],
+            'quote.lines.*.productId' => ['required', 'integer', 'distinct'],
+            'quote.lines.*.tierPrice' => ['required', 'integer', 'min:0'],
+        ];
+    }
+
+    /**
+     * A Pack is not checked to exist here: one removed since it was added is
+     * Capture's to refuse, with the basket as it is now.
+     *
+     * @return array<string, list<mixed>>
+     */
+    private static function retailRules(): array
+    {
+        return [
+            'lines' => ['prohibited'],
+            'packs' => ['required', 'array', 'list'],
+            'packs.*.packId' => ['required', 'integer', 'min:1', 'distinct'],
+            'packs.*.productId' => ['required', 'integer', 'min:1'],
+            'packs.*.count' => ['required', 'integer', 'min:1', 'max:'.self::MAX_PACKS],
+            'quote.lines.*.packId' => ['required', 'integer', 'distinct'],
+            'quote.lines.*.packPrice' => ['required', 'integer', 'min:0'],
+        ];
+    }
+
+    /** Whether the Checkout was opened for the packet basket rather than the bulk Cart. */
+    public function isRetail(): bool
+    {
+        return $this->input('cart') === 'retail';
     }
 
     /**
@@ -88,6 +133,10 @@ class CheckoutRequest extends FormRequest
             'payment_method.in' => 'তালিকা থেকে টাকা দেওয়ার উপায় বেছে নিন।',
             'lines.required' => 'কার্টে কোনো চা নেই।',
             'lines.*' => 'কার্টের পরিমাণ ঠিক নেই। কার্ট দেখে আবার চেষ্টা করুন।',
+            'packs.required' => 'প্যাকেট ঝুড়িতে কোনো প্যাকেট নেই।',
+            'packs.*' => 'প্যাকেট ঝুড়ির হিসাব ঠিক নেই। ঝুড়ি দেখে আবার চেষ্টা করুন।',
+            'lines.prohibited' => 'বাল্ক ও প্যাকেট একসাথে অর্ডার করা যায় না।',
+            'packs.prohibited' => 'বাল্ক ও প্যাকেট একসাথে অর্ডার করা যায় না।',
             'quote.*' => 'দামের হিসাব পাওয়া যায়নি। পাতাটি আবার খুলুন।',
             'max' => 'লেখাটি অনেক বড়।',
         ];
@@ -113,6 +162,35 @@ class CheckoutRequest extends FormRequest
             'product' => $products[(int) $line['productId']],
             'kilograms' => (int) $line['kilograms'],
         ], $lines);
+    }
+
+    /**
+     * The packet basket's lines, each with its Pack where it still exists:
+     * whether a buyer can order it is Capture's to answer.
+     *
+     * @return list<array{packId: int, productId: int, pack: Pack|null, count: int}>
+     */
+    public function retailLines(): array
+    {
+        $lines = $this->validated('packs');
+
+        $packs = Pack::query()
+            ->with('product')
+            ->whereKey(array_column($lines, 'packId'))
+            ->get()
+            ->keyBy('id');
+
+        return array_map(fn (array $line): array => [
+            'packId' => (int) $line['packId'],
+            'productId' => (int) $line['productId'],
+            'pack' => $packs->get((int) $line['packId']),
+            'count' => (int) $line['count'],
+        ], $lines);
+    }
+
+    public function retailQuote(): RetailQuote
+    {
+        return RetailQuote::fromArray($this->validated('quote'));
     }
 
     /**

@@ -87,13 +87,17 @@
             <div class="lines">
                 @foreach ($order->lines as $line)
                     <p class="row">
-                        <span>{{ $line->product_name }} × {{ Bangla::number($line->quantity) }} কেজি</span>
+                        <span>{{ $line->banglaDescription() }}</span>
                         <b>{{ Bangla::taka($line->line_total) }}</b>
                     </p>
                 @endforeach
             </div>
 
-            <p class="row"><span>মোট পরিমাণ</span><b>{{ Bangla::number($order->total_kilograms) }} কেজি</b></p>
+            @if ($order->isRetail())
+                <p class="row"><span>মোট প্যাকেট</span><b>{{ Bangla::number((int) $order->lines->sum('quantity')) }}টি</b></p>
+            @else
+                <p class="row"><span>মোট পরিমাণ</span><b>{{ Bangla::number($order->total_kilograms) }} কেজি</b></p>
+            @endif
             <p class="row"><span>চায়ের দাম</span><b>{{ Bangla::taka($order->subtotal) }}</b></p>
             <p class="row">
                 <span>ডেলিভারি চার্জ</span>

@@ -247,7 +247,8 @@ export type MyOrdersProps = {
         number: string;
         /** The Merchant's day it was placed, as YYYY-MM-DD. */
         placedOn: string;
-        lines: { name: string; kilograms: number }[];
+        /** A Pack line names its weight and count instead of Kilograms. */
+        lines: ({ name: string; kilograms: number } | { name: string; packGrams: number; count: number })[];
         kilograms: number;
         total: number;
         progress: OrderProgress;

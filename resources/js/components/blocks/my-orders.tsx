@@ -1,5 +1,6 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { packName } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { formatPhone, toBanglaDigits, toLatinDigits } from '@/lib/bangla';
 import { useTaka } from '@/lib/use-taka';
@@ -217,7 +218,7 @@ function OrderCard({ order, open, onToggle }: { order: Order; open: boolean; onT
                         </span>
                     </div>
                     <span className="text-[13px] text-muted">
-                        {placedOn(order.placedOn)} · {bn.myOrders.kilograms(toBanglaDigits(order.kilograms))} · {taka(order.total)}
+                        {placedOn(order.placedOn)} · {quantityOf(order.lines, order.kilograms)} · {taka(order.total)}
                     </span>
                 </div>
                 <span aria-hidden className="flex size-8 flex-none items-center justify-center rounded-full border border-input text-[18px] text-primary">
@@ -228,7 +229,7 @@ function OrderCard({ order, open, onToggle }: { order: Order; open: boolean; onT
             {open && (
                 <div className="flex flex-col gap-4 px-[18px] pt-1 pb-5">
                     <span className="rounded-[8px] bg-surface px-3 py-[10px] text-[14px] text-ink">
-                        {order.lines.map((line) => bn.myOrders.line(line.name, toBanglaDigits(line.kilograms))).join(', ')}
+                        {order.lines.map((line) => ('packGrams' in line ? bn.myOrders.packLine(line.name, packName(line.packGrams), toBanglaDigits(line.count)) : bn.myOrders.line(line.name, toBanglaDigits(line.kilograms)))).join(', ')}
                     </span>
                     {cancelled ? <span className="text-[14px] text-error">{bn.myOrders.cancelledNote}</span> : <Tracker done={done} />}
                     {store.hotline && <span className="text-[13px] text-muted">{bn.myOrders.questions(formatPhone(store.hotline.number))}</span>}
@@ -280,4 +281,11 @@ function placedOn(date: string): string {
     const [year, month, day] = date.split('-').map(Number);
 
     return bn.myOrders.placedOn(toBanglaDigits(day), bn.myOrders.months[month - 1], toBanglaDigits(year));
+}
+
+/** An Order's size in the list: its Kilograms, or for a retail Order how many Packs. */
+function quantityOf(lines: MyOrdersProps['orders'][number]['lines'], kilograms: number): string {
+    const packs = lines.reduce((sum, line) => sum + ('count' in line ? line.count : 0), 0);
+
+    return packs > 0 ? bn.packs.countOf(toBanglaDigits(packs)) : bn.myOrders.kilograms(toBanglaDigits(kilograms));
 }

@@ -11,6 +11,7 @@ use App\Models\TrackingContext;
 use App\Support\Orders\OrderCapture;
 use App\Support\Orders\OrderOwnership;
 use App\Support\Orders\QuoteRefused;
+use App\Support\Orders\RetailQuoteRefused;
 use App\Support\Payments\PaymentStarter;
 use App\Support\Payments\PaymentStillPending;
 use App\Support\PhoneNumber;
@@ -52,11 +53,13 @@ class CheckoutController extends Controller
      * drawn only where more than one method is offered. A Customer Signed in
      * finds their number already typed; nobody is asked to sign in.
      */
-    public function create(Catalogue $catalogue, PaymentSettings $payments): InertiaResponse
+    public function create(Request $request, Catalogue $catalogue, PaymentSettings $payments): InertiaResponse
     {
         $signedIn = Auth::guard('customer')->user();
 
         return Inertia::render('checkout', [
+            /** Which Cart the Checkout is opened for (ADR-0034): the packet basket's link names it, and anything else is the bulk Cart. */
+            'cart' => $request->query('cart') === 'retail' ? 'retail' : 'bulk',
             'signedInPhone' => $signedIn === null ? null : PhoneNumber::asDialled($signedIn->phone),
             'districts' => config('giopages.districts'),
             'paymentMethods' => PaymentMethod::withLogos($payments->offeredMethods()),
@@ -77,13 +80,13 @@ class CheckoutController extends Controller
     public function store(CheckoutRequest $request, OrderCapture $capture): JsonResponse
     {
         try {
-            $order = $capture->capture($request->cartLines(), $request->details(), $request->quote());
+            $order = $request->isRetail()
+                ? $capture->captureRetail($request->retailLines(), $request->details(), $request->retailQuote())
+                : $capture->capture($request->cartLines(), $request->details(), $request->quote());
         } catch (QuoteRefused $refusal) {
-            return response()->json([
-                'message' => 'দাম বা প্রাপ্যতা বদলেছে। নতুন হিসাব দেখে আবার নিশ্চিত করুন।',
-                'current' => $refusal->current->toArray(),
-                'unavailable' => $refusal->unavailableProductIds,
-            ], ResponseCode::HTTP_CONFLICT);
+            return self::refused($refusal->current->toArray(), $refusal->unavailableProductIds);
+        } catch (RetailQuoteRefused $refusal) {
+            return self::refused($refusal->current->toArray(), $refusal->unavailablePackIds);
         }
 
         /**
@@ -111,6 +114,23 @@ class CheckoutController extends Controller
         return response()
             ->json(['redirect' => $this->payments->start($order) ?? $order->followingPageUrl()], ResponseCode::HTTP_CREATED)
             ->withCookie(OrderOwnership::fromRequest($request)->placing($order->order_number)->cookie());
+    }
+
+    /**
+     * A Capture refused because the Quote no longer agrees: 409, the figures
+     * as they are now, and what the buyer can no longer have — Products for
+     * the bulk Cart, Packs for the packet basket.
+     *
+     * @param  array<string, mixed>  $current
+     * @param  list<int>  $unavailable
+     */
+    private static function refused(array $current, array $unavailable): JsonResponse
+    {
+        return response()->json([
+            'message' => 'দাম বা প্রাপ্যতা বদলেছে। নতুন হিসাব দেখে আবার নিশ্চিত করুন।',
+            'current' => $current,
+            'unavailable' => $unavailable,
+        ], ResponseCode::HTTP_CONFLICT);
     }
 
     /**

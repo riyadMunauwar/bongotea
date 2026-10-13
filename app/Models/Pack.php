@@ -74,7 +74,13 @@ class Pack extends Model
     /** A Pack's name is its weight, never typed: "250 g", "1 kg", "1.5 kg". */
     public function name(): string
     {
-        return $this->grams < Grams::PER_KILOGRAM ? "{$this->grams} g" : Grams::format($this->grams);
+        return self::nameFor($this->grams);
+    }
+
+    /** The name a Pack of this weight goes by, for a line that outlived its Pack. */
+    public static function nameFor(int $grams): string
+    {
+        return $grams < Grams::PER_KILOGRAM ? "{$grams} g" : Grams::format($grams);
     }
 
     /**

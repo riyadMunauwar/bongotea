@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Order;
+use LogicException;
 
 class OrderObserver
 {
@@ -15,6 +16,18 @@ class OrderObserver
     {
         if (blank($order->order_number)) {
             $order->order_number = Order::generateNumber();
+        }
+    }
+
+    /**
+     * An Order is bulk or retail for life (ADR-0034): the two are priced by
+     * rules that cannot share an Order, so no edit, however it arrives, may
+     * turn one into the other.
+     */
+    public function updating(Order $order): void
+    {
+        if ($order->isDirty('kind')) {
+            throw new LogicException("Order {$order->order_number} cannot change its kind after Capture.");
         }
     }
 
@@ -44,7 +57,7 @@ class OrderObserver
 
         /** The weight is the lines' too, for the same reason. */
         if ($order->exists && ! $order->isDirty('total_kilograms')) {
-            $order->total_kilograms = (int) $order->lines()->sum('quantity');
+            $order->total_kilograms = $order->bulkKilograms();
         }
 
         $order->total = (int) $order->subtotal + (int) $order->delivery_charge;

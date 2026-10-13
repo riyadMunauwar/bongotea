@@ -1,15 +1,18 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { deliveryNote, discountLabel, feeText } from '@/components/cart/figures';
+import { deliveryNote, discountLabel, feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
-import { useCart } from '@/lib/use-cart';
+import { useCart, type UseCart } from '@/lib/use-cart';
 import { useMoments } from '@/lib/use-moments';
+import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 
 type CheckoutPageProps = {
+    /** Which Cart the Checkout was opened for (ADR-0034): the bulk Cart, or the packet basket. */
+    cart: 'bulk' | 'retail';
     /** Every district a parcel can go to, by the name the store stores. */
     districts: string[];
     /** The methods offered, by stored name with the logo to draw; a choice is drawn only where there is more than one. */
@@ -53,11 +56,18 @@ type Refusal = {
  * moved, a tea can no longer be had — nothing is placed: the store's figures
  * are fetched afresh, the summary redraws from them, and the buyer confirms
  * again having seen the new total.
+ *
+ * Opened for the packet basket instead (ADR-0034), the form is the same and
+ * the summary lists its Packs with the retail Delivery Charge; the request
+ * carries Pack lines and a retail Quote, and only the packet basket is
+ * emptied once the Order is placed.
  */
 export default function CheckoutPage() {
-    const { districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
+    const { cart: kind, districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
     const { links } = usePage().props;
     const cart = useCart();
+    const retail = useRetailCart();
+    const isRetail = kind === 'retail';
     const taka = useTaka();
     const [districtTyped, setDistrictTyped] = useState('');
     const [refusal, setRefusal] = useState<{ text: string } | null>(null);
@@ -86,7 +96,8 @@ export default function CheckoutPage() {
         payment_method: paymentMethods.length > 1 ? '' : paymentMethods[0].name,
     });
 
-    const { priced, isEmpty } = cart;
+    const { priced } = cart;
+    const isEmpty = isRetail ? retail.isEmpty : cart.isEmpty;
     const { checkoutStarted } = useMoments();
     const startReported = useRef(false);
 
@@ -96,36 +107,45 @@ export default function CheckoutPage() {
      * the first draw is the server's empty one.
      */
     useEffect(() => {
-        if (!isEmpty && !startReported.current) {
+        if (!isRetail && !isEmpty && !startReported.current) {
             startReported.current = true;
             checkoutStarted(priced);
         }
-    }, [isEmpty, priced, checkoutStarted]);
+    }, [isRetail, isEmpty, priced, checkoutStarted]);
 
     const nameOf = (productId: number) => productNames[productId] ?? '';
+
+    /** A Pack the store still sends, named as the basket names it; one removed has no name left to give. */
+    const packNameOf = (packId: number) => {
+        const pack = retail.lines.find((line) => line.pack.id === packId)?.pack ?? retail.unorderable.find((line) => line.packId === packId)?.pack ?? null;
+
+        return pack === null ? '' : `${pack.productName} ${packName(pack.grams)}`;
+    };
 
     function submit(event: React.FormEvent) {
         event.preventDefault();
         setRefusal(null);
         setFailed(false);
 
-        const quotedTotal = priced.total;
+        const quotedTotal = isRetail ? retail.priced.total : priced.total;
 
         form.transform((data) => ({
             ...data,
             phone: toLatinDigits(data.phone),
-            lines: priced.lines.map((line) => ({ productId: line.productId, kilograms: line.kilograms })),
-            quote: {
-                lines: priced.lines.map((line) => ({ productId: line.productId, tierPrice: line.tierPrice })),
-                deliveryCharge: priced.deliveryCharge,
-                total: priced.total,
-            },
+            ...(isRetail ? retailPayload(retail) : bulkPayload(cart)),
         }));
 
         form.post(links.checkout, {
             onSuccess: (response) => {
                 setPlaced(true);
-                cart.clear();
+
+                /** Only the Cart this Order was placed from: the other one is still the buyer's. */
+                if (isRetail) {
+                    retail.clear();
+                } else {
+                    cart.clear();
+                }
+
                 window.location.assign(response.redirect);
             },
             onHttpException: (response) => {
@@ -136,7 +156,7 @@ export default function CheckoutPage() {
                 }
 
                 const answer = JSON.parse(response.data) as Refusal;
-                const gone = answer.unavailable.map(nameOf).filter((name) => name !== '');
+                const gone = answer.unavailable.map(isRetail ? packNameOf : nameOf).filter((name) => name !== '');
 
                 setRefusal({
                     text: [
@@ -150,7 +170,7 @@ export default function CheckoutPage() {
 
                 /** The store's prices as they are now, which the summary redraws from. */
                 setRepricing(true);
-                router.reload({ only: ['pricing'], onFinish: () => setRepricing(false) });
+                router.reload({ only: [isRetail ? 'retailPricing' : 'pricing'], onFinish: () => setRepricing(false) });
             },
             onNetworkError: () => setFailed(true),
         }).catch(() => {
@@ -165,23 +185,24 @@ export default function CheckoutPage() {
     if (isEmpty) {
         return (
             <div className="shell-container flex flex-col items-center gap-3 py-16 text-center md:py-24">
-                <h1 className="m-0 text-[clamp(22px,3vw,30px)] font-semibold text-ink">{bn.checkout.empty}</h1>
-                <p className="m-0 text-[15px] text-muted">{bn.checkout.emptyHint}</p>
-                <Link href={links.bulkOrder} className="mt-2 rounded-[10px] bg-primary px-6 py-3 text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white">
-                    {bn.checkout.chooseTea}
+                <h1 className="m-0 text-[clamp(22px,3vw,30px)] font-semibold text-ink">{isRetail ? bn.packs.empty : bn.checkout.empty}</h1>
+                <p className="m-0 text-[15px] text-muted">{isRetail ? bn.packs.emptyHint : bn.checkout.emptyHint}</p>
+                <Link
+                    href={isRetail ? '/' : links.bulkOrder}
+                    className="mt-2 rounded-[10px] bg-primary px-6 py-3 text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white"
+                >
+                    {isRetail ? bn.packs.shop : bn.checkout.chooseTea}
                 </Link>
             </div>
         );
     }
 
-    const note = deliveryNote(priced);
-
     /** A refusal of the Cart's lines or Quote rather than of a field the buyer typed in. */
-    const cartError = Object.entries(form.errors as Record<string, string | undefined>).find(([key]) => key.startsWith('lines') || key.startsWith('quote'))?.[1];
+    const cartError = Object.entries(form.errors as Record<string, string | undefined>).find(([key]) => key.startsWith('lines') || key.startsWith('packs') || key.startsWith('quote'))?.[1];
 
     return (
         <div className="shell-container pt-6 pb-14 md:pt-10">
-            <Link href={links.bulkOrder} className="mb-[6px] inline-block py-[6px] text-[14px] font-semibold text-primary no-underline">
+            <Link href={isRetail ? links.packetBasket : links.bulkOrder} className="mb-[6px] inline-block py-[6px] text-[14px] font-semibold text-primary no-underline">
                 {bn.checkout.back}
             </Link>
             <h1 className="m-0 mb-5 text-[clamp(24px,3.4vw,40px)] leading-[1.35] font-semibold text-ink">{bn.checkout.heading}</h1>
@@ -288,34 +309,7 @@ export default function CheckoutPage() {
 
                 <aside className="flex flex-col gap-3 rounded-[14px] border border-border p-[clamp(18px,2vw,24px)] md:sticky md:top-[150px]">
                     <span className="text-[19px] font-semibold text-ink">{bn.checkout.summary}</span>
-                    <div className="flex flex-col gap-2 border-b border-divider pb-3">
-                        {priced.lines.map((line) => (
-                            <div key={line.productId} className="flex justify-between gap-3 text-[14px]">
-                                <span>
-                                    {nameOf(line.productId)}{' '}
-                                    <span className="text-muted">{bn.checkout.lineAt(toBanglaDigits(line.kilograms), taka(line.tierPrice))}</span>
-                                    {line.tierPrice < line.mrp && (
-                                        <>
-                                            <s className="ml-1 text-muted opacity-75">{taka(line.mrp)}</s>
-                                            <span className="ml-1 text-[12px] font-semibold text-primary">{discountLabel(line.mrp, line.tierPrice, taka)}</span>
-                                        </>
-                                    )}
-                                </span>
-                                <span className="font-semibold">{taka(line.lineTotal)}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <SummaryLine label={bn.bulkOrder.totalQuantity} value={bn.cart.kilogramsOf(toBanglaDigits(priced.totalKilograms))} />
-                    <SummaryLine label={bn.bulkOrder.average} value={taka(priced.averagePerKilogram ?? 0)} />
-                    <SummaryLine label={bn.bulkOrder.teaPrice} value={taka(priced.subtotal)} />
-                    <SummaryLine label={bn.bulkOrder.delivery} value={feeText(priced.deliveryCharge, taka)} accent />
-                    {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
-                    <div className="flex items-baseline justify-between border-t border-divider pt-3">
-                        <span className="text-[16px] font-medium">{bn.bulkOrder.total}</span>
-                        <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
-                    </div>
-                    <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
-                    {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.bulkOrder.saving(taka(priced.savings))}</span>}
+                    {isRetail ? <RetailSummary retail={retail} /> : <BulkSummary cart={cart} nameOf={nameOf} />}
                     <button
                         type="submit"
                         disabled={form.processing || repricing}
@@ -383,4 +377,105 @@ function SummaryLine({ label, value, accent = false }: { label: string; value: s
             <b className={cn('font-semibold', accent && 'text-primary')}>{value}</b>
         </div>
     );
+}
+
+/**
+ * What a bulk Order's lines, kilograms and figures add up to.
+ */
+function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: number) => string }) {
+    const taka = useTaka();
+    const { priced } = cart;
+    const note = deliveryNote(priced);
+
+    return (
+        <>
+            <div className="flex flex-col gap-2 border-b border-divider pb-3">
+                {priced.lines.map((line) => (
+                    <div key={line.productId} className="flex justify-between gap-3 text-[14px]">
+                        <span>
+                            {nameOf(line.productId)}{' '}
+                            <span className="text-muted">{bn.checkout.lineAt(toBanglaDigits(line.kilograms), taka(line.tierPrice))}</span>
+                            {line.tierPrice < line.mrp && (
+                                <>
+                                    <s className="ml-1 text-muted opacity-75">{taka(line.mrp)}</s>
+                                    <span className="ml-1 text-[12px] font-semibold text-primary">{discountLabel(line.mrp, line.tierPrice, taka)}</span>
+                                </>
+                            )}
+                        </span>
+                        <span className="font-semibold">{taka(line.lineTotal)}</span>
+                    </div>
+                ))}
+            </div>
+            <SummaryLine label={bn.bulkOrder.totalQuantity} value={bn.cart.kilogramsOf(toBanglaDigits(priced.totalKilograms))} />
+            <SummaryLine label={bn.bulkOrder.average} value={taka(priced.averagePerKilogram ?? 0)} />
+            <SummaryLine label={bn.bulkOrder.teaPrice} value={taka(priced.subtotal)} />
+            <SummaryLine label={bn.bulkOrder.delivery} value={feeText(priced.deliveryCharge, taka)} accent />
+            {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
+            <div className="flex items-baseline justify-between border-t border-divider pt-3">
+                <span className="text-[16px] font-medium">{bn.bulkOrder.total}</span>
+                <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
+            </div>
+            <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
+            {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.bulkOrder.saving(taka(priced.savings))}</span>}
+        </>
+    );
+}
+
+/** What the packet basket's Packs and the retail Delivery Charge add up to (ADR-0034). */
+function RetailSummary({ retail }: { retail: UseRetailCart }) {
+    const taka = useTaka();
+    const { priced } = retail;
+    const note = retailDeliveryNote(priced, taka);
+
+    return (
+        <>
+            <div className="flex flex-col gap-2 border-b border-divider pb-3">
+                {retail.lines.map(({ pack, count }) => (
+                    <div key={pack.id} className="flex justify-between gap-3 text-[14px]">
+                        <span>
+                            {pack.productName} {packName(pack.grams)}{' '}
+                            <span className="text-muted">{bn.packs.lineAt(toBanglaDigits(count), taka(pack.price))}</span>
+                            {pack.price < pack.mrp && <s className="ml-1 text-muted opacity-75">{taka(pack.mrp)}</s>}
+                        </span>
+                        <span className="font-semibold">{taka(pack.price * count)}</span>
+                    </div>
+                ))}
+            </div>
+            <SummaryLine label={bn.packs.packCount} value={bn.packs.countOf(toBanglaDigits(priced.packCount))} />
+            <SummaryLine label={bn.packs.subtotal} value={taka(priced.subtotal)} />
+            <SummaryLine label={bn.packs.delivery} value={feeText(priced.deliveryCharge, taka)} accent />
+            {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
+            <div className="flex items-baseline justify-between border-t border-divider pt-3">
+                <span className="text-[16px] font-medium">{bn.packs.total}</span>
+                <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
+            </div>
+            <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
+            {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.packs.totalSaving(taka(priced.savings))}</span>}
+        </>
+    );
+}
+
+/** What the request carries for the bulk Cart: its lines and the Quote shown. */
+function bulkPayload({ priced }: UseCart) {
+    return {
+        lines: priced.lines.map((line) => ({ productId: line.productId, kilograms: line.kilograms })),
+        quote: {
+            lines: priced.lines.map((line) => ({ productId: line.productId, tierPrice: line.tierPrice })),
+            deliveryCharge: priced.deliveryCharge,
+            total: priced.total,
+        },
+    };
+}
+
+/** What the request carries for the packet basket: its Packs, each with its Product, and the retail Quote shown. */
+function retailPayload({ lines, priced }: UseRetailCart) {
+    return {
+        cart: 'retail',
+        packs: lines.map(({ pack, count }) => ({ packId: pack.id, productId: pack.productId, count })),
+        quote: {
+            lines: priced.lines.map((line) => ({ packId: line.packId, packPrice: line.packPrice })),
+            deliveryCharge: priced.deliveryCharge,
+            total: priced.total,
+        },
+    };
 }

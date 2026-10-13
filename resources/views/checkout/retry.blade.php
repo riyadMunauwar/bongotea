@@ -79,7 +79,7 @@
             <tbody>
                 @foreach ($order->lines as $line)
                     <tr>
-                        <td>{{ $line->product_name }}</td>
+                        <td>{{ $line->description() }}</td>
                         <td class="numeric">{{ $line->quantity }}</td>
                         <td class="numeric">{{ \App\Support\Money::format($line->line_total) }}</td>
                     </tr>
