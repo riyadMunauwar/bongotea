@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Log;
  * does `with()` for a row that never came through the page, because the
  * pricing module assumes it. The defaults are the mockup's table, like the
  * other storefront groups' content defaults.
+ *
+ * The retail Delivery Charge sits beside the bands and owes nothing to them
+ * (ADR-0034): one flat charge on a retail Cart, read through
+ * `RetailPriceBook::current()`, waived once the Cart's subtotal reaches the
+ * threshold and never waived while the threshold is empty.
  */
 class DeliveryChargeSettings extends SettingsGroup
 {
@@ -27,8 +32,17 @@ class DeliveryChargeSettings extends SettingsGroup
      */
     public array $deliveryBands;
 
+    /** The one charge on a retail Cart, in minor units. */
+    public int $retailDeliveryCharge;
+
+    /** The retail subtotal at which delivery is free, in minor units; null for never. */
+    public ?int $retailFreeDeliveryFrom;
+
     public function __construct()
     {
+        $this->retailDeliveryCharge = Money::toMinorUnits(60);
+        $this->retailFreeDeliveryFrom = Money::toMinorUnits(1000);
+
         $this->deliveryBands = [
             ['min' => 1, 'max' => 5, 'fee' => Money::toMinorUnits(120)],
             ['min' => 6, 'max' => 10, 'fee' => Money::toMinorUnits(150)],
@@ -52,12 +66,23 @@ class DeliveryChargeSettings extends SettingsGroup
      * The bands normalised to whole numbers before `parent::with()` assigns
      * them, and a table that does not cover every kilogram once read as the
      * table this group already has. A row must never throw, and a gap here
-     * would leave a Cart with no Delivery Charge.
+     * would leave a Cart with no Delivery Charge. A retail amount that is not
+     * a whole number of minor units at or above nothing is read as the one
+     * already in force, for the same reason.
      *
      * @param  array<string, mixed>  $values
      */
     public function with(array $values): static
     {
+        foreach (['retailDeliveryCharge', 'retailFreeDeliveryFrom'] as $property) {
+            $amount = $values[$property] ?? null;
+
+            if ($amount !== null && (filter_var($amount, FILTER_VALIDATE_INT) === false || (int) $amount < 0)) {
+                Log::warning('A stored retail delivery amount is not a whole amount at or above nothing and is read as the one already in force.', ['property' => $property]);
+                unset($values[$property]);
+            }
+        }
+
         if (array_key_exists('deliveryBands', $values)) {
             $bands = self::normaliseBands($values['deliveryBands']);
 

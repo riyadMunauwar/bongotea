@@ -1,0 +1,151 @@
+{
+    "about": "Worked examples of retail pricing (ADR-0034), run by Pest against App\\Support\\Pricing\\RetailPriceBook and by Vitest against resources/js/lib/retail-pricing.ts. Each line is its Pack Price times its count, with no Tier and no quantity break; its Saving is measured from the Pack's MRP. The Cart pays one flat retail Delivery Charge, waived once the subtotal reaches the threshold, never waived while the threshold is null, and nothing while the Cart holds no Pack. Money is in minor units. An example names only what it changes from the defaults.",
+    "defaults": {
+        "deliveryCharge": 6000,
+        "freeDeliveryFrom": 100000,
+        "packs": [
+            { "id": 1, "mrp": 30000, "price": 27000 },
+            { "id": 2, "mrp": 12000, "price": 12000 },
+            { "id": 3, "mrp": 55000, "price": 50000 }
+        ]
+    },
+    "examples": [
+        {
+            "name": "two of one Pack, short of the threshold, pay the flat charge and are told how far free delivery is",
+            "lines": [
+                { "packId": 1, "count": 2 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 1, "count": 2, "mrp": 30000, "packPrice": 27000, "overridden": false, "lineTotal": 54000, "savings": 6000 }
+                ],
+                "packCount": 2,
+                "subtotal": 54000,
+                "savings": 6000,
+                "deliveryCharge": 6000,
+                "total": 60000,
+                "amountToFreeDelivery": 46000
+            }
+        },
+        {
+            "name": "several lines past the threshold are delivered free, each Saving its own",
+            "lines": [
+                { "packId": 1, "count": 1 },
+                { "packId": 2, "count": 3 },
+                { "packId": 3, "count": 1 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 1, "count": 1, "mrp": 30000, "packPrice": 27000, "overridden": false, "lineTotal": 27000, "savings": 3000 },
+                    { "packId": 2, "count": 3, "mrp": 12000, "packPrice": 12000, "overridden": false, "lineTotal": 36000, "savings": 0 },
+                    { "packId": 3, "count": 1, "mrp": 55000, "packPrice": 50000, "overridden": false, "lineTotal": 50000, "savings": 5000 }
+                ],
+                "packCount": 5,
+                "subtotal": 113000,
+                "savings": 8000,
+                "deliveryCharge": 0,
+                "total": 113000,
+                "amountToFreeDelivery": null
+            }
+        },
+        {
+            "name": "a subtotal exactly at the threshold has reached it",
+            "lines": [
+                { "packId": 3, "count": 2 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 3, "count": 2, "mrp": 55000, "packPrice": 50000, "overridden": false, "lineTotal": 100000, "savings": 10000 }
+                ],
+                "packCount": 2,
+                "subtotal": 100000,
+                "savings": 10000,
+                "deliveryCharge": 0,
+                "total": 100000,
+                "amountToFreeDelivery": null
+            }
+        },
+        {
+            "name": "with no threshold, delivery is never free and there is nothing to reach",
+            "freeDeliveryFrom": null,
+            "lines": [
+                { "packId": 3, "count": 4 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 3, "count": 4, "mrp": 55000, "packPrice": 50000, "overridden": false, "lineTotal": 200000, "savings": 20000 }
+                ],
+                "packCount": 4,
+                "subtotal": 200000,
+                "savings": 20000,
+                "deliveryCharge": 6000,
+                "total": 206000,
+                "amountToFreeDelivery": null
+            }
+        },
+        {
+            "name": "a Pack Price equal to its MRP saves nothing",
+            "lines": [
+                { "packId": 2, "count": 1 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 2, "count": 1, "mrp": 12000, "packPrice": 12000, "overridden": false, "lineTotal": 12000, "savings": 0 }
+                ],
+                "packCount": 1,
+                "subtotal": 12000,
+                "savings": 0,
+                "deliveryCharge": 6000,
+                "total": 18000,
+                "amountToFreeDelivery": 88000
+            }
+        },
+        {
+            "name": "five of a Pack cost five times one: there is no quantity break",
+            "lines": [
+                { "packId": 1, "count": 5 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 1, "count": 5, "mrp": 30000, "packPrice": 27000, "overridden": false, "lineTotal": 135000, "savings": 15000 }
+                ],
+                "packCount": 5,
+                "subtotal": 135000,
+                "savings": 15000,
+                "deliveryCharge": 0,
+                "total": 135000,
+                "amountToFreeDelivery": null
+            }
+        },
+        {
+            "name": "an empty Cart owes nothing, not even delivery",
+            "lines": [],
+            "expected": {
+                "lines": [],
+                "packCount": 0,
+                "subtotal": 0,
+                "savings": 0,
+                "deliveryCharge": 0,
+                "total": 0,
+                "amountToFreeDelivery": 100000
+            }
+        },
+        {
+            "name": "a Price Override replaces the Pack Price, and its Saving is still measured from the MRP",
+            "lines": [
+                { "packId": 1, "count": 2, "overridePrice": 25000 }
+            ],
+            "expected": {
+                "lines": [
+                    { "packId": 1, "count": 2, "mrp": 30000, "packPrice": 25000, "overridden": true, "lineTotal": 50000, "savings": 10000 }
+                ],
+                "packCount": 2,
+                "subtotal": 50000,
+                "savings": 10000,
+                "deliveryCharge": 6000,
+                "total": 56000,
+                "amountToFreeDelivery": 50000
+            }
+        }
+    ]
+}

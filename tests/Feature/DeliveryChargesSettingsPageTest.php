@@ -4,6 +4,7 @@ use App\Filament\Clusters\Settings\Pages\DeliveryCharges;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Pricing\PriceBook;
+use App\Support\Pricing\RetailPriceBook;
 use App\Support\Settings\DeliveryChargeSettings;
 use Filament\Support\Icons\Heroicon;
 use Livewire\Livewire;
@@ -91,4 +92,36 @@ it('reads a stored table that leaves a weight uncharged as the defaults, and ign
     ]]);
 
     expect(app(DeliveryChargeSettings::class)->deliveryBands)->toHaveCount(5);
+});
+
+it('saves the retail Delivery Charge and threshold beside the bands, which every retail Cart is then charged by', function () {
+    Livewire::test(DeliveryCharges::class)
+        ->fillForm(['retailDeliveryCharge' => '70', 'retailFreeDeliveryFrom' => '1500'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(DeliveryChargeSettings::class);
+    $book = RetailPriceBook::current();
+
+    expect($book->deliveryCharge)->toBe(7000)
+        ->and($book->freeDeliveryFrom)->toBe(150000)
+        ->and(PriceBook::current()->deliveryBands)->toHaveCount(5);
+});
+
+it('reads an empty free-delivery threshold as retail delivery never being free', function () {
+    Livewire::test(DeliveryCharges::class)
+        ->fillForm(['retailFreeDeliveryFrom' => ''])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    app()->forgetInstance(DeliveryChargeSettings::class);
+
+    expect(RetailPriceBook::current()->freeDeliveryFrom)->toBeNull();
+});
+
+it('refuses a negative retail Delivery Charge', function () {
+    Livewire::test(DeliveryCharges::class)
+        ->fillForm(['retailDeliveryCharge' => '-1'])
+        ->call('save')
+        ->assertHasFormErrors(['retailDeliveryCharge']);
 });

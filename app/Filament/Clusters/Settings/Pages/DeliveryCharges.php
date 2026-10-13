@@ -59,7 +59,32 @@ class DeliveryCharges extends SettingsPage
                                 ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
                         ]),
                 ]),
+
+            Section::make('Retail delivery')
+                ->description('What a packet basket pays for delivery: one flat charge, owing nothing to the Delivery Bands above, waived once its subtotal reaches the threshold.')
+                ->columns(2)
+                ->schema([
+                    self::takaField('retailDeliveryCharge')
+                        ->label('Retail Delivery Charge')
+                        ->required(),
+
+                    self::takaField('retailFreeDeliveryFrom')
+                        ->label('Free delivery from')
+                        ->helperText('Leave empty and retail delivery is never free.')
+                        ->dehydrateStateUsing(fn (mixed $state): ?int => $state === null || $state === '' ? null : Money::toMinorUnits((int) $state)),
+                ]),
         ];
+    }
+
+    /** Whole taka on screen, minor units in the row, like every other amount. */
+    private static function takaField(string $name): TextInput
+    {
+        return TextInput::make($name)
+            ->integer()
+            ->minValue(0)
+            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
+            ->formatStateUsing(fn (mixed $state): mixed => is_numeric($state) ? Money::toWholeMajorString((int) $state) : $state)
+            ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state));
     }
 
     /**
