@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Customers\RelationManagers;
 
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Support\Kilograms;
 use App\Support\Money;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -36,7 +37,7 @@ class OrdersRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('order_number')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                ->withSum('lines as kilograms', 'quantity')
+                ->withSum('lines as grams', OrderLine::grams())
                 ->withPaidFlag()
                 ->with('activeShipment'))
             ->defaultSort('created_at', 'desc')
@@ -68,8 +69,8 @@ class OrdersRelationManager extends RelationManager
                     ->description(fn (Order $record): ?string => $record->activeShipment?->courier->getLabel()),
 
                 TextColumn::make('kilograms')
-                    ->state(fn (Order $record): int => (int) $record->getAttribute('kilograms'))
-                    ->formatStateUsing(fn (int $state): string => Kilograms::format($state))
+                    ->state(fn (Order $record): int|float => Kilograms::fromGrams((int) $record->getAttribute('grams')))
+                    ->formatStateUsing(fn (int|float $state): string => Kilograms::format($state))
                     ->alignEnd(),
 
                 TextColumn::make('total')

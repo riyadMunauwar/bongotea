@@ -58,9 +58,9 @@ class CustomersTable
 
                 TextColumn::make('kilograms')
                     ->label('Kilograms Sold')
-                    ->state(fn (Customer $record): int => (int) $record->getAttribute('kilograms'))
-                    ->formatStateUsing(fn (int $state): string => Kilograms::format($state))
-                    ->sortable()
+                    ->state(fn (Customer $record): int|float => Kilograms::fromGrams((int) $record->getAttribute('grams')))
+                    ->formatStateUsing(fn (int|float $state): string => Kilograms::format($state))
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('grams', $direction))
                     ->alignEnd(),
 
                 TextColumn::make('sales')

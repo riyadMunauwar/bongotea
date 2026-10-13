@@ -65,7 +65,7 @@ class CustomerInfolist
 
                         TextEntry::make('kilograms')
                             ->label('Kilograms Sold')
-                            ->state(fn (Customer $record): string => Kilograms::format((int) $record->getAttribute('kilograms'))),
+                            ->state(fn (Customer $record): string => Kilograms::format(Kilograms::fromGrams((int) $record->getAttribute('grams')))),
 
                         TextEntry::make('sales')
                             ->state(fn (Customer $record): string => Money::format((int) $record->getAttribute('sales'))),

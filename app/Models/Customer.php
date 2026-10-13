@@ -115,7 +115,8 @@ class Customer extends Model implements AuthenticatableContract
                 'orders as cancelled_count' => fn (Builder $query): Builder => $query->where('status', OrderStatus::Cancelled->value),
             ])
             ->withSum(['orders as sales' => $notCancelled], 'total')
-            ->withSum(['orderLines as kilograms' => $linesNotCancelled], 'order_lines.quantity')
+            /** In grams, so a Pack counts by its weight (ADR-0035); drawn as Kilograms through `Kilograms::fromGrams()`. */
+            ->withSum(['orderLines as grams' => $linesNotCancelled], OrderLine::grams())
             ->withMin('orders as first_ordered_at', 'created_at')
             ->withMax('orders as last_ordered_at', 'created_at');
     }

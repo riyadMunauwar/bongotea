@@ -5,6 +5,7 @@ use App\Filament\Clusters\Reports\Pages\BuyingReport;
 use App\Filament\Clusters\Reports\Pages\MarginReport;
 use App\Filament\Pages\Dashboard;
 use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Pack;
@@ -97,4 +98,11 @@ it('offers the kind beside the window on the screens that count Orders, and not 
     Livewire::test(Dashboard::class)->assertSee('Bulk and retail');
     Livewire::test(MarginReport::class)->assertSee('Bulk and retail');
     Livewire::test(BuyingReport::class)->assertDontSee('Bulk and retail');
+});
+
+it('counts a Customer\'s Packs by their weight on the Customers screen', function () {
+    $customer = $this->retail->customer;
+
+    expect(Customer::query()->withOrderFigures()->whereKey($customer->getKey())->sole()->getAttribute('grams'))->toEqual(750)
+        ->and(Kilograms::format(Kilograms::fromGrams(750)))->toBe('0.75 kg');
 });
