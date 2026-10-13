@@ -91,7 +91,7 @@ What one Kilogram of a Product costs in one of its Tiers, typed by the Merchant 
 _Avoid_: unit price (as a stored figure), bulk price, wholesale price, rate, tier discount
 
 **Checkout**:
-The step that turns a Cart into an Order: it asks where to send it — a name, a mobile number, a District and an address, and optionally a shop's name and a note — and how it will be paid, then captures it in one submission. There is one Checkout for the whole store and it is the same form for everybody, opened for one Cart at a time — bulk or retail, never both at once, so each Capture empties only the Cart it took; a Customer is never asked to sign in to use it. A retail buyer is taken to it the moment they add a Pack, so for retail it is also where the Cart is changed — counts raised, lowered or removed — rather than only read. An online payment happens after Capture, never before it.
+The step that turns a Cart into an Order: it asks where to send it — a name, a mobile number, a District and an address, and optionally a shop's name and a note — and how it will be paid, then captures it in one submission. There is one Checkout for the whole store and it is the same form for everybody, opened for one Cart at a time — bulk or retail, never both at once, so each Capture empties only the Cart it took; a Customer is never asked to sign in to use it. An online payment happens after Capture, never before it.
 _Avoid_: cart, basket, funnel, order form
 
 ### Orders
@@ -117,7 +117,7 @@ A Tier Price a User sets by hand on one line of an Order — a deal agreed with 
 _Avoid_: discount, manual price, custom price, negotiated price
 
 **Cart**:
-The Products and Kilograms a Customer is gathering before they order, kept by their own browser and nowhere else. It belongs to the browser and not to the Customer: signing in elsewhere does not bring it along, and nothing about it is known to the store until Capture. Every figure it shows is worked out afresh as it changes, so adding a Kilogram that crosses into another Tier reprices every line in it at once. A browser holds two, which never meet: the bulk Cart of Kilograms and the retail Cart of Packs. There is only ever one bulk Cart: the bulk order form, the price calculator and every product card's stepper are views of it, never separate quantities that could disagree. The retail Cart owes nothing to the Tiers. A Customer reads them as the পাইকারি কার্ট and the খুচরা কার্ট — one noun for both, never ঝুড়ি.
+The Products and Kilograms a Customer is gathering before they order, kept by their own browser and nowhere else. It belongs to the browser and not to the Customer: signing in elsewhere does not bring it along, and nothing about it is known to the store until Capture. Every figure it shows is worked out afresh as it changes, so adding a Kilogram that crosses into another Tier reprices every line in it at once. A browser holds two, which never meet: the bulk Cart of Kilograms and the retail Cart of Packs. There is only ever one bulk Cart: the bulk order form, the price calculator and every product card's stepper are views of it, never separate quantities that could disagree. The retail Cart owes nothing to the Tiers. A Customer reads them as the পাইকারি কার্ট and the খুচরা কার্ট — one noun for both, never ঝুড়ি. A retail buyer is taken to the খুচরা কার্ট the moment they add a Pack, because it is the one place a retail Cart is checked and changed before Checkout; adding Kilograms leaves a bulk buyer where they are.
 _Avoid_: basket, bag, order (before Capture), quote
 
 **Quote**:

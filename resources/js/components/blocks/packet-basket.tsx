@@ -1,8 +1,10 @@
 import { Link, router, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import { feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
 import { PackStepper } from '@/components/cart/pack-chooser';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
+import { returnPath } from '@/lib/return-path';
 import type { HeldPack } from '@/lib/retail-cart';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
@@ -15,12 +17,14 @@ import { Picture, SectionHeading } from './shared';
  * tea, size, Pack Price, a stepper, a remove button and its line total; what
  * can no longer be ordered flagged and left out of every figure; and beside
  * it the subtotal, the retail Delivery Charge, the total and how far free
- * delivery is. An empty basket points back to the shop. Every figure comes
+ * delivery is. "আরও চা যোগ করুন" goes back to the page the last Pack was
+ * bought from. An empty basket points back to the shop. Every figure comes
  * from the retail pricing mirror, never from the bulk Cart.
  */
 export function PacketBasket({ heading, text }: PacketBasketProps) {
     const retail = useRetailCart();
     const isBare = retail.isEmpty && retail.unorderable.length === 0;
+    const back = useReturnPath();
 
     return (
         <section className="pt-6 pb-10 md:pt-10 md:pb-14">
@@ -38,6 +42,9 @@ export function PacketBasket({ heading, text }: PacketBasketProps) {
                             {retail.unorderable.map((line) => (
                                 <UnorderableLine key={line.packId} name={line.pack === null ? null : `${line.pack.productName} · ${packName(line.pack.grams)}`} onRemove={() => retail.remove(line.packId)} />
                             ))}
+                            <Link href={back} className="self-start py-1 text-[14px] font-semibold text-primary no-underline">
+                                + {bn.packs.addMore}
+                            </Link>
                         </div>
                         <Summary retail={retail} />
                     </div>
@@ -45,6 +52,15 @@ export function PacketBasket({ heading, text }: PacketBasketProps) {
             </div>
         </section>
     );
+}
+
+/** Where "আরও চা যোগ করুন" goes; the home page until mounted, because the server has no address bar to read. */
+function useReturnPath(): string {
+    const [back, setBack] = useState('/');
+
+    useEffect(() => setBack(returnPath(window.location.search)), []);
+
+    return back;
 }
 
 function EmptyBasket() {

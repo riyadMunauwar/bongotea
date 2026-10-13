@@ -1,11 +1,9 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { deliveryNote, discountLabel, feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
-import { PackStepper } from '@/components/cart/pack-chooser';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
-import { returnPath } from '@/lib/return-path';
 import { useCart, type UseCart } from '@/lib/use-cart';
 import { useMoments } from '@/lib/use-moments';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
@@ -195,7 +193,7 @@ export default function CheckoutPage() {
                 <h1 className="m-0 text-[clamp(22px,3vw,30px)] font-semibold text-ink">{isRetail ? bn.packs.empty : bn.checkout.empty}</h1>
                 <p className="m-0 text-[15px] text-muted">{isRetail ? bn.packs.emptyHint : bn.checkout.emptyHint}</p>
                 <Link
-                    href={isRetail ? returnPath(window.location.search) : links.bulkOrder}
+                    href={isRetail ? '/' : links.bulkOrder}
                     className="mt-2 rounded-[10px] bg-primary px-6 py-3 text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white"
                 >
                     {isRetail ? bn.packs.shop : bn.checkout.chooseTea}
@@ -428,12 +426,7 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
     );
 }
 
-/**
- * What the খুচরা কার্ট's Packs and the retail Delivery Charge add up to
- * (ADR-0034). A retail buyer arrives here the moment they add a Pack, so each
- * line can be changed or removed here, and "আরও চা যোগ করুন" goes back to the
- * page they bought from. Only ever drawn after mount, so `window` is there.
- */
+/** What the packet basket's Packs and the retail Delivery Charge add up to (ADR-0034). */
 function RetailSummary({ retail }: { retail: UseRetailCart }) {
     const taka = useTaka();
     const { priced } = retail;
@@ -443,26 +436,15 @@ function RetailSummary({ retail }: { retail: UseRetailCart }) {
         <>
             <div className="flex flex-col gap-2 border-b border-divider pb-3">
                 {retail.lines.map(({ pack, count }) => (
-                    <div key={pack.id} className="flex flex-col gap-[6px] text-[14px]">
-                        <div className="flex justify-between gap-3">
-                            <span>
-                                {pack.productName} {packName(pack.grams)}{' '}
-                                <span className="text-muted">{bn.packs.lineAt(toBanglaDigits(count), taka(pack.price))}</span>
-                                {pack.price < pack.mrp && <s className="ml-1 text-muted opacity-75">{taka(pack.mrp)}</s>}
-                            </span>
-                            <span className="font-semibold">{taka(pack.price * count)}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <PackStepper count={count} onChange={(next) => retail.set(pack.id, next)} />
-                            <button type="button" onClick={() => retail.remove(pack.id)} className="cursor-pointer border-0 bg-transparent p-0 text-[13px] font-semibold text-muted underline">
-                                {bn.packs.remove}
-                            </button>
-                        </div>
+                    <div key={pack.id} className="flex justify-between gap-3 text-[14px]">
+                        <span>
+                            {pack.productName} {packName(pack.grams)}{' '}
+                            <span className="text-muted">{bn.packs.lineAt(toBanglaDigits(count), taka(pack.price))}</span>
+                            {pack.price < pack.mrp && <s className="ml-1 text-muted opacity-75">{taka(pack.mrp)}</s>}
+                        </span>
+                        <span className="font-semibold">{taka(pack.price * count)}</span>
                     </div>
                 ))}
-                <Link href={returnPath(window.location.search)} className="self-start py-1 text-[14px] font-semibold text-primary no-underline">
-                    + {bn.packs.addMore}
-                </Link>
             </div>
             <SummaryLine label={bn.packs.packCount} value={bn.packs.countOf(toBanglaDigits(priced.packCount))} />
             <SummaryLine label={bn.packs.subtotal} value={taka(priced.subtotal)} />

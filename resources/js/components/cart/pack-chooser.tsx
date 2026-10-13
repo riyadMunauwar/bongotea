@@ -4,7 +4,7 @@ import { BagIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { MAX_PACKS, type CartPack } from '@/lib/retail-cart';
-import { retailCheckoutUrl } from '@/lib/return-path';
+import { withReturnPath } from '@/lib/return-path';
 import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ import { packName } from './figures';
 /**
  * The খুচরা কিনুন button, for a Product open to retail and nothing else
  * (ADR-0034): it opens the pack chooser, which puts the chosen Packs in the
- * খুচরা কার্ট and goes straight on to the Checkout. A Product with no Packs
+ * খুচরা কার্ট and goes straight on to it. A Product with no Packs
  * draws nothing. The kilogram stepper
  * beside it is the bulk Cart's and is not touched.
  */
@@ -84,7 +84,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
         }
     }, [packs]);
 
-    /** Adds the chosen Pack and goes straight on to the retail Checkout, remembering this page for "আরও চা যোগ করুন". */
+    /** Adds the chosen Pack and goes straight on to the খুচরা কার্ট, remembering this page for "আরও চা যোগ করুন". */
     const buyNow = () => {
         if (chosen === null) {
             return;
@@ -92,7 +92,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
         retail.set(chosen, retail.countOf(chosen) + count);
         onClose();
-        router.visit(retailCheckoutUrl(links.checkout, url));
+        router.visit(withReturnPath(links.packetBasket, url));
     };
 
     return (
