@@ -323,7 +323,7 @@ class Facebook implements Provider
      */
     private function customDataSource(string $selection, bool $contentDetail): string
     {
-        $line = 'function (l) { return {"id": l.id, "quantity": l.quantity, "item_price": l.unitPrice}; }';
+        $line = 'function (l) { var c = {"id": l.id, "quantity": l.quantity, "item_price": l.unitPrice}; if (l.variant) { c.variant = l.variant; } return c; }';
 
         $fields = array_filter([
             '"value": s.value',
@@ -333,6 +333,7 @@ class Facebook implements Provider
             $contentDetail ? '"content_ids": (s.lines || []).map(function (l) { return l.id; })' : null,
             '"num_items": s.count',
             '"delivery_category": '.$this->encode(self::DELIVERY_CATEGORY),
+            '"cart": s.cart',
         ], fn (?string $field): bool => $field !== null);
 
         return '(function (s) { return {'.implode(', ', $fields).'}; })('.$selection.')';
@@ -519,6 +520,9 @@ class Facebook implements Provider
                 'id' => $line['id'],
                 'quantity' => $line['quantity'],
                 'item_price' => Money::toMajor($line['unit_price']),
+
+                /** A Pack's weight: the size it was sold in, of the Product the id names (ADR-0034). */
+                ...(isset($line['variant']) ? ['variant' => $line['variant']] : []),
             ], $lines) : null,
             'content_ids' => $contentDetail ? array_column($lines, 'id') : null,
 
@@ -527,6 +531,9 @@ class Facebook implements Provider
 
             'num_items' => $selection->quantity(),
             'delivery_category' => self::DELIVERY_CATEGORY,
+
+            /** Which Cart it came from, so a Merchant can split bulk from retail in Events Manager. */
+            'cart' => $selection->cart,
         ], fn (mixed $value): bool => $value !== null);
     }
 

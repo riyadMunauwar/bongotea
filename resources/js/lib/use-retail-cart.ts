@@ -13,11 +13,12 @@ import {
     type HeldPack,
 } from './retail-cart';
 import { priceRetailCart, type PricedRetailCart } from './retail-pricing';
+import { useMoments } from './use-moments';
 
 export type UseRetailCart = {
     /** How many of a Pack the Cart holds; nought for one a buyer cannot order now. */
     countOf: (packId: number) => number;
-    /** Sets a Pack's count, clamped to 0–99; refused for a Pack a buyer cannot order now. */
+    /** Sets a Pack's count, clamped to 0–99; refused for a Pack a buyer cannot order now. From none to some is an Added to Cart. */
     set: (packId: number, count: number) => void;
     /** Takes a Pack out, the unorderable ones included. */
     remove: (packId: number) => void;
@@ -42,6 +43,7 @@ export type UseRetailCart = {
 export function useRetailCart(): UseRetailCart {
     const { retailPricing } = usePage().props;
     const cart = useSyncExternalStore(subscribeToRetailCart, readRetailCart, () => EMPTY_RETAIL_CART);
+    const moments = useMoments();
 
     return useMemo(() => {
         const lines = retailLines(cart, retailPricing.packs);
@@ -51,8 +53,21 @@ export function useRetailCart(): UseRetailCart {
         return {
             countOf: (packId: number) => held.get(packId) ?? 0,
             set: (packId: number, count: number) => {
-                if (orderable.has(packId)) {
-                    writeRetailCart(withCount(onlyOrderablePacks(readRetailCart(), retailPricing.packs), packId, count));
+                if (!orderable.has(packId)) {
+                    return;
+                }
+
+                const before = onlyOrderablePacks(readRetailCart(), retailPricing.packs);
+                const after = withCount(before, packId, count);
+
+                writeRetailCart(after);
+
+                if ((before[packId] ?? 0) === 0 && (after[packId] ?? 0) > 0) {
+                    const pack = retailPricing.packs.find((candidate) => candidate.id === packId);
+
+                    if (pack !== undefined) {
+                        moments.packAdded(pack, after[packId], Object.keys(before).length === 0);
+                    }
                 }
             },
             remove: (packId: number) => writeRetailCart(withCount(readRetailCart(), packId, 0)),
@@ -63,5 +78,5 @@ export function useRetailCart(): UseRetailCart {
             isEmpty: lines.length === 0,
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
-    }, [cart, retailPricing]);
+    }, [cart, retailPricing, moments]);
 }

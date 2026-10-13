@@ -98,7 +98,7 @@ export default function CheckoutPage() {
 
     const { priced } = cart;
     const isEmpty = isRetail ? retail.isEmpty : cart.isEmpty;
-    const { checkoutStarted } = useMoments();
+    const { checkoutStarted, retailCheckoutStarted } = useMoments();
     const startReported = useRef(false);
 
     /**
@@ -107,11 +107,16 @@ export default function CheckoutPage() {
      * the first draw is the server's empty one.
      */
     useEffect(() => {
-        if (!isRetail && !isEmpty && !startReported.current) {
+        if (!isEmpty && !startReported.current) {
             startReported.current = true;
-            checkoutStarted(priced);
+
+            if (isRetail) {
+                retailCheckoutStarted(retail.priced, retail.lines.map((line) => line.pack));
+            } else {
+                checkoutStarted(priced);
+            }
         }
-    }, [isRetail, isEmpty, priced, checkoutStarted]);
+    }, [isRetail, isEmpty, priced, retail, checkoutStarted, retailCheckoutStarted]);
 
     const nameOf = (productId: number) => productNames[productId] ?? '';
 

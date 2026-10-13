@@ -4,11 +4,16 @@ namespace App\Support\Tracking;
 
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Support\Pricing\CartLine;
+use App\Support\Pricing\PackPrices;
 use App\Support\Pricing\PriceBook;
 use App\Support\Pricing\PricedLine;
+use App\Support\Pricing\PricedPackLine;
 use App\Support\Pricing\ProductPrices;
+use App\Support\Pricing\RetailLine;
+use App\Support\Pricing\RetailPriceBook;
 use Illuminate\Support\Collection;
 
 /**
@@ -26,16 +31,27 @@ use Illuminate\Support\Collection;
  *
  * Money is minor units throughout, as everywhere else in the system; a driver
  * converts at the wire.
+ *
+ * Every Selection says which Cart it came from, `bulk` or `retail`
+ * (ADR-0034). A Pack is reported as its Product — the Product's id, the Pack
+ * count as the quantity, the Pack Price as the unit price — with its weight
+ * as the line's `variant`, so the ad platforms see one tea however it is sold.
  */
 final class Selection
 {
+    public const string BULK = 'bulk';
+
+    public const string RETAIL = 'retail';
+
     /**
-     * @param  list<array{id: string, quantity: int, unit_price: int}>  $lines
+     * @param  list<array{id: string, quantity: int, unit_price: int, variant?: string}>  $lines
      * @param  int  $value  what the event reports as its worth, in minor units
+     * @param  string  $cart  which Cart it came from: `bulk` or `retail`
      */
     private function __construct(
         public readonly array $lines,
         public readonly int $value,
+        public readonly string $cart = self::BULK,
     ) {}
 
     /**
@@ -47,7 +63,7 @@ final class Selection
      */
     public static function forOrder(Order $order): self
     {
-        return self::forLines($order->lines, (int) $order->total);
+        return self::forLines($order->lines, (int) $order->total, $order->isRetail() ? self::RETAIL : self::BULK);
     }
 
     /**
@@ -57,15 +73,16 @@ final class Selection
      *
      * @param  Collection<int, OrderLine>  $lines
      */
-    public static function forLines(Collection $lines, ?int $value = null): self
+    public static function forLines(Collection $lines, ?int $value = null, string $cart = self::BULK): self
     {
         $selection = $lines->map(fn (OrderLine $line): array => [
             'id' => self::identify($line->product_id, $line->product_name),
             'quantity' => (int) $line->quantity,
             'unit_price' => (int) $line->unit_price,
+            ...($line->isPack() ? ['variant' => Pack::nameFor($line->pack_grams)] : []),
         ])->values()->all();
 
-        return new self($selection, $value ?? self::sum($selection));
+        return new self($selection, $value ?? self::sum($selection), $cart);
     }
 
     /**
@@ -108,6 +125,34 @@ final class Selection
     }
 
     /**
+     * What a visitor has in their packet basket: the Packs named, each at the
+     * count given, priced by retail pricing (ADR-0034) and reported as their
+     * Products. Like `forProducts()`, prices are read here and never taken
+     * from whoever named the Packs, and no Delivery Charge rides on top.
+     *
+     * @param  Collection<int, Pack>  $packs
+     * @param  array<int, int>  $counts  how many of each, keyed by Pack id
+     */
+    public static function forPacks(Collection $packs, array $counts): self
+    {
+        $packs = $packs->values();
+
+        $priced = RetailPriceBook::current()->price($packs->map(fn (Pack $pack): RetailLine => new RetailLine(
+            PackPrices::of($pack),
+            max(1, (int) ($counts[$pack->getKey()] ?? 1)),
+        ))->all());
+
+        $lines = array_map(fn (PricedPackLine $line, Pack $pack): array => [
+            'id' => self::identify($pack->product_id, null),
+            'quantity' => $line->count,
+            'unit_price' => $line->packPrice,
+            'variant' => $pack->name(),
+        ], $priced->lines, $packs->all());
+
+        return new self($lines, $priced->subtotal, self::RETAIL);
+    }
+
+    /**
      * A stored Selection, read totally and forgivingly like every other
      * stored shape here: a line missing what a line needs is dropped, and
      * anything that is not a Selection at all is nothing to report.
@@ -132,18 +177,22 @@ final class Selection
                 'id' => (string) $line['id'],
                 'quantity' => (int) $line['quantity'],
                 'unit_price' => (int) $line['unit_price'],
+                ...(is_string($line['variant'] ?? null) ? ['variant' => $line['variant']] : []),
             ];
         }
 
-        return new self($lines, (int) ($stored['value'] ?? self::sum($lines)));
+        /** A row written before Selections named their Cart was bulk, which is all there was. */
+        $cart = ($stored['cart'] ?? null) === self::RETAIL ? self::RETAIL : self::BULK;
+
+        return new self($lines, (int) ($stored['value'] ?? self::sum($lines)), $cart);
     }
 
     /**
-     * @return array{lines: list<array{id: string, quantity: int, unit_price: int}>, value: int}
+     * @return array{lines: list<array{id: string, quantity: int, unit_price: int, variant?: string}>, value: int, cart: string}
      */
     public function toArray(): array
     {
-        return ['lines' => $this->lines, 'value' => $this->value];
+        return ['lines' => $this->lines, 'value' => $this->value, 'cart' => $this->cart];
     }
 
     /** How many things are being bought: the quantities summed, not the lines counted. */

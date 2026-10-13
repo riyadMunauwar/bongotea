@@ -257,6 +257,21 @@ abstract class ProviderScript
     abstract public function contentsOf(array $event): array;
 
     /**
+     * Which Cart the Moment came from, `bulk` or `retail` (ADR-0034).
+     *
+     * @param  array<string, mixed>  $event
+     */
+    abstract public function cartOf(array $event): ?string;
+
+    /**
+     * Each line's variant — a Pack's weight — or null on a line that has none.
+     *
+     * @param  array<string, mixed>  $event
+     * @return list<string|null>
+     */
+    abstract public function variantsOf(array $event): array;
+
+    /**
      * Whether the event carries the match-key block this Provider requires on
      * every event. Meta refuses a whole batch for one event missing it, so a
      * row with nothing to match on still has to send an empty one.

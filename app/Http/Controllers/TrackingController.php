@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\TrackingMoment;
 use App\Http\Requests\CheckoutRequest;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\TrackingContext;
 use App\Support\Tracking\MomentRecorder;
@@ -140,24 +141,40 @@ class TrackingController extends Controller
     {
         $items = $request->input('items');
 
+        $retail = $request->input('cart') === Selection::RETAIL;
+
         if (! is_string($items) || strlen($items) > self::MAX_SELECTION_LENGTH) {
-            return Selection::forProducts(collect(), []);
+            return $retail ? Selection::forPacks(collect(), []) : Selection::forProducts(collect(), []);
         }
 
-        $kilograms = $this->kilograms($items);
+        if ($retail) {
+            $counts = $this->quantities($items, CheckoutRequest::MAX_PACKS);
+
+            /** Only Packs of Products the store sells, as `forProducts()` reads only published Products. */
+            $packs = Pack::query()
+                ->whereKey(array_keys($counts))
+                ->whereHas('product', fn ($products) => $products->published())
+                ->orderBy('id')
+                ->get();
+
+            return Selection::forPacks($packs, $counts);
+        }
+
+        $kilograms = $this->quantities($items, CheckoutRequest::MAX_KILOGRAMS);
 
         return Selection::forProducts(Product::query()->published()->findMany(array_keys($kilograms)), $kilograms);
     }
 
     /**
-     * The `id:kilograms` pairs the browser posted, read forgivingly: a pair
-     * that is not two numbers is dropped, and Kilograms outside what a Cart
-     * holds are brought back inside it. A Moment reported with one Product's
+     * The `id:quantity` pairs the browser posted — Products and Kilograms, or
+     * for the packet basket Packs and counts — read forgivingly: a pair that
+     * is not two numbers is dropped, and a quantity outside what its Cart
+     * holds is brought back inside it. A Moment reported with one Product's
      * count corrected is still the Moment that happened.
      *
      * @return array<int, int>
      */
-    private function kilograms(string $items): array
+    private function quantities(string $items, int $most): array
     {
         $kilograms = [];
 
@@ -168,7 +185,7 @@ class TrackingController extends Controller
                 continue;
             }
 
-            $kilograms[(int) $product] = max(1, min(CheckoutRequest::MAX_KILOGRAMS, ctype_digit($weight) ? (int) $weight : 1));
+            $kilograms[(int) $product] = max(1, min($most, ctype_digit($weight) ? (int) $weight : 1));
         }
 
         return $kilograms;

@@ -402,6 +402,23 @@ class FacebookScript extends ProviderScript
     /**
      * @param  array<string, mixed>  $event
      */
+    public function cartOf(array $event): ?string
+    {
+        return $event['custom_data']['cart'] ?? null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     * @return list<string|null>
+     */
+    public function variantsOf(array $event): array
+    {
+        return array_map(fn (array $item): ?string => $item['variant'] ?? null, $event['custom_data']['contents'] ?? []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
     public function carriesMatchKeyBlock(array $event): bool
     {
         return array_key_exists('user_data', $event);
