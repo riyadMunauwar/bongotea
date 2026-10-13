@@ -34,7 +34,7 @@ it('opens a demo install on its System Pages and demo Pages, each drawn from its
             'hero_carousel', 'promise_strip', 'category_tiles', 'category_panels', 'how_to_order', 'video_reviews', 'text_reviews',
         ])
         ->where('page.blocks.0.props.slides.0.title', 'আপনার ব্যবসার জন্য ভালো চা, সহজে অর্ডার করুন')
-        ->where('page.blocks.0.props.slides.0.primary', ['label' => 'বাল্ক অর্ডার করুন', 'href' => '/bulk-order'])
+        ->where('page.blocks.0.props.slides.0.primary', ['label' => 'পাইকারি অর্ডার করুন', 'href' => '/bulk-order'])
         ->where('page.blocks.1.props.items.0.text', '২০+ কেজিতে ডিস্ট্রিবিউটর দাম')
         ->where('page.blocks.3.anchor', 'products')
         ->where('page.blocks.3.props.categories.0.slug', 'tea-stall-premium')

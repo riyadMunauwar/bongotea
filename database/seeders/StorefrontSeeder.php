@@ -98,7 +98,7 @@ class StorefrontSeeder extends Seeder
             'eyebrow' => $eyebrow,
             'title' => $title,
             'text' => $text,
-            'primary_label' => 'বাল্ক অর্ডার করুন',
+            'primary_label' => 'পাইকারি অর্ডার করুন',
             'primary_link' => self::BULK_ORDER_LINK,
             'secondary_label' => 'চায়ের দাম দেখুন',
             'secondary_link' => self::PRICING_LINK,
