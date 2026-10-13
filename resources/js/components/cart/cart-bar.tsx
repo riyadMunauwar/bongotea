@@ -19,7 +19,7 @@ export function CartBar() {
     }
 
     return (
-        <div className="sticky bottom-4 z-10 mx-auto box-border flex w-[calc(100%-32px)] max-w-[560px] items-center gap-3 rounded-[14px] bg-ink py-[10px] pr-[10px] pl-[18px] text-white shadow-cart-bar">
+        <div className="sticky bottom-4 z-10 mx-auto mb-4 box-border flex w-[calc(100%-32px)] max-w-[560px] items-center gap-3 rounded-[14px] bg-ink py-[10px] pr-[10px] pl-[18px] text-white shadow-cart-bar">
             <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-[12px] text-night-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
                 <b className="text-[18px] font-bold">{taka(priced.total)}</b>
