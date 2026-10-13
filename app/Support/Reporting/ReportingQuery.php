@@ -323,7 +323,7 @@ final class ReportingQuery
                     ->from('orders as latest')
                     ->whereNull('latest.deleted_at')
                     ->where('latest.status', '!=', OrderStatus::Cancelled->value)
-                    ->when($window->kind, fn ($latest, OrderKind $kind) => $latest->where('latest.kind', $kind->value))
+                    ->when($window->kind, fn (Builder $latest, OrderKind $kind): Builder => $latest->where('latest.kind', $kind->value))
                     ->where('latest.created_at', '>=', $window->start->toDateTimeString())
                     ->where('latest.created_at', '<', $window->end->toDateTimeString())
                     ->select('latest.customer_name')

@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\TrackingContext;
 use App\Support\Tracking\MomentRecorder;
 use App\Support\Tracking\Selection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
@@ -153,7 +154,7 @@ class TrackingController extends Controller
             /** Only Packs of Products the store sells, as `forProducts()` reads only published Products. */
             $packs = Pack::query()
                 ->whereKey(array_keys($counts))
-                ->whereHas('product', fn ($products) => $products->published())
+                ->whereHas('product', fn (Builder $products): Builder => $products->published())
                 ->orderBy('id')
                 ->get();
 

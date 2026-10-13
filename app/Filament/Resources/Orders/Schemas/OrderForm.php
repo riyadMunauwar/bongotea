@@ -11,6 +11,7 @@ use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Orders\OrderCapture;
 use App\Support\Orders\Repricing;
 use App\Support\Orders\RetailRepricing;
 use App\Support\PhoneNumber;
@@ -32,6 +33,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use WeakMap;
@@ -485,7 +487,7 @@ class OrderForm
 
         return Pack::query()
             ->with('product')
-            ->where(fn ($query) => $query->whereKey($held)->orWhere('is_available', true))
+            ->where(fn (Builder $query): Builder => $query->whereKey($held)->orWhere('is_available', true))
             ->get()
             ->filter(fn (Pack $pack): bool => $held->contains($pack->getKey()) || $pack->isOrderable())
             ->sortBy(fn (Pack $pack): string => $pack->product->name.sprintf('%08d', $pack->grams))
@@ -607,7 +609,7 @@ class OrderForm
             'repriced' => true,
             'subtotal' => $preview['cart']->subtotal,
             'delivery' => $preview['cart']->deliveryCharge,
-            'band' => 'Retail delivery',
+            'band' => OrderCapture::RETAIL_DELIVERY_LABEL,
             'total' => $preview['cart']->total,
             'lines' => array_map(fn (PricedPackLine $line): array => [
                 'price' => $line->packPrice,

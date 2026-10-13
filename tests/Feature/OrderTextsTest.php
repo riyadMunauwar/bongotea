@@ -1,10 +1,13 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Models\Order;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Orders\OrderCapture;
 use App\Support\Settings\SmsSettings;
 use App\Support\Sms\SendText;
 use App\Support\Storefront\StorefrontShell;
@@ -178,4 +181,15 @@ it('gives up on a text the gateway refused, without failing the job', function (
     $job->handle();
 
     $job->assertNotReleased()->assertNotFailed();
+});
+
+it('gives a retail Order\'s weight from its Packs, not their count', function () {
+    $pack = Pack::factory()->create(['grams' => 250, 'mrp' => 30000, 'price' => 30000]);
+
+    $order = app(OrderCapture::class)->captureRetail(
+        [['packId' => $pack->id, 'productId' => $pack->product_id, 'pack' => $pack, 'count' => 2]],
+        ['name' => 'Rahim Uddin', 'phone' => '01712345678', 'address' => 'Banani', 'district' => 'Dhaka', 'payment_method' => PaymentMethod::CashOnDelivery],
+    );
+
+    expect($this->gateway->sent()[0]['message'])->toStartWith("Rahim Uddin | {$order->order_number} | ০.৫ | ");
 });

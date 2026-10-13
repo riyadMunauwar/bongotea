@@ -176,6 +176,13 @@ class RetailRepricing
             if (! $packs->has($line->packId)) {
                 throw new InvalidArgumentException("Pack [{$line->packId}] does not exist.");
             }
+
+            /** A line may keep a Pack it already holds; a Pack newly put on the Order must be one a Customer could order now. */
+            $kept = self::keptLine($line, $stored);
+
+            if (($kept === null || (int) $kept->pack_id !== $line->packId) && ! $packs[$line->packId]->isOrderable()) {
+                throw new InvalidArgumentException("Pack [{$line->packId}] cannot be ordered now.");
+            }
         }
 
         $cart = self::price($lines, $packs);

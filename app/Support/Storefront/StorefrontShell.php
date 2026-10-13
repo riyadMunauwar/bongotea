@@ -13,6 +13,7 @@ use App\Support\Pricing\RetailPriceBook;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\StoreSettings;
+use Illuminate\Support\Collection;
 
 /**
  * Everything the storefront's header, drawer and footer draw, as the props
@@ -147,7 +148,7 @@ class StorefrontShell
             'deliveryCharge' => $book->deliveryCharge,
             'freeDeliveryFrom' => $book->freeDeliveryFrom,
             'packs' => $this->catalogue->products()
-                ->flatMap(fn (Product $product) => $product->packs->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
+                ->flatMap(fn (Product $product): Collection => $product->packs->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
                 ->values()
                 ->all(),
         ];

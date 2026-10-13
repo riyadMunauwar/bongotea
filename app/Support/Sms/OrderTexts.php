@@ -6,6 +6,8 @@ use App\Enums\OrderText;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Support\Bangla;
+use App\Support\Inventory\Grams;
+use App\Support\Kilograms;
 use App\Support\Settings\SmsSettings;
 use App\Support\Storefront\StorefrontShell;
 use Closure;
@@ -86,10 +88,23 @@ class OrderTexts
         return str_replace(self::PLACEHOLDERS, [
             $order->order_number,
             Bangla::taka($order->total),
-            Bangla::number((int) $order->lines()->sum('quantity')),
+            self::kilograms($order),
             url(StorefrontShell::MY_ORDERS_PATH),
             (string) $order->customer_name,
         ], $template);
+    }
+
+    /**
+     * What the Order weighs, in Kilograms as the storefront draws them: read
+     * through its lines' grams, so a retail Order of Packs is its Packs'
+     * weight (ADR-0035) and not their count, with decimals only where a part
+     * of a kilogram is held.
+     */
+    private static function kilograms(Order $order): string
+    {
+        $kilograms = Kilograms::fromGrams($order->grams());
+
+        return is_int($kilograms) ? Bangla::number($kilograms) : Bangla::digits(Grams::toKilograms($order->grams()));
     }
 
     /**

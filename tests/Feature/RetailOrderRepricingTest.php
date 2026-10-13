@@ -11,6 +11,7 @@ use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Orders\RetailRepricing;
 use App\Support\Settings\DeliveryChargeSettings;
 use Livewire\Livewire;
 
@@ -175,3 +176,10 @@ it('shows each Pack line\'s weight and count on the order', function () {
     Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
         ->assertSeeText('2 × 250 g');
 });
+
+it('refuses to put a Pack that cannot be ordered now on a retail order, however the line is sent', function () {
+    $order = retailOrderAgreedAt(quarterKiloOfAssam(), 2, 27000);
+    $switchedOff = quarterKiloOfAssam(['grams' => 100, 'mrp' => 12000, 'price' => 12000, 'is_available' => false]);
+
+    app(RetailRepricing::class)->apply($order, [['pack_id' => $switchedOff->getKey(), 'count' => 1]], auth()->user());
+})->throws(InvalidArgumentException::class);
