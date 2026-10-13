@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Inventory\Resources\StockCounts\Tables;
 
 use App\Enums\AdjustmentCause;
 use App\Models\StockCount;
+use App\Support\Inventory\Grams;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -32,7 +33,7 @@ class StockCountsTable
 
                 TextColumn::make('quantity')
                     ->label('Counted')
-                    ->numeric()
+                    ->formatStateUsing(fn (int $state): string => Grams::toKilograms($state))
                     ->sortable(),
 
                 /**
@@ -50,8 +51,8 @@ class StockCountsTable
                     ->state(fn (StockCount $record): ?int => $record->stockMovements->first()?->quantity)
                     ->formatStateUsing(fn (?int $state): ?string => match (true) {
                         $state === null => null,
-                        $state > 0 => '+'.$state,
-                        default => (string) $state,
+                        $state > 0 => '+'.Grams::toKilograms($state),
+                        default => Grams::toKilograms($state),
                     })
                     ->color(fn (?int $state): ?string => match (true) {
                         $state === null => null,

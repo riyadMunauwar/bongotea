@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Reports\Widgets;
 
 use App\Filament\Widgets\Concerns\PaginatesRows;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\StockHoldingRow;
@@ -70,7 +71,7 @@ class StockHoldingsTable extends TableWidget
 
                 TextColumn::make('on_hand')
                     ->label('On hand')
-                    ->numeric()
+                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Grams::toKilograms($state))
                     ->placeholder('—')
                     ->color(fn (array $record): ?string => self::belowNothing($record['on_hand']) ? 'danger' : null)
                     ->weight(fn (array $record): ?FontWeight => self::belowNothing($record['on_hand']) ? FontWeight::Bold : null)

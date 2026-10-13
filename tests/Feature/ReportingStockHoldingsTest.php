@@ -67,12 +67,12 @@ it('lists what every Product holds and what it is worth, the most capital first'
     $tea = Product::factory()->create(['name' => 'Sylhet tea']);
     $mug = Product::factory()->create(['name' => 'Clay mug']);
 
-    deliveredIntoStock($tea, 10, 20000);
-    deliveredIntoStock($mug, 4, 15000);
+    deliveredIntoStock($tea, 10000, 20000);
+    deliveredIntoStock($mug, 4000, 15000);
 
     expect(stockHoldingRows(stockHoldings()))->toBe([
-        ['Sylhet tea', 10, 200000],
-        ['Clay mug', 4, 60000],
+        ['Sylhet tea', 10000, 200000],
+        ['Clay mug', 4000, 60000],
     ]);
 });
 
@@ -81,8 +81,8 @@ it('adds up what is held altogether, over the Products whose worth is known', fu
     $mug = Product::factory()->create(['name' => 'Clay mug']);
     Product::factory()->create(['name' => 'Uncounted candle']);
 
-    deliveredIntoStock($tea, 10, 20000);
-    deliveredIntoStock($mug, 4, 15000);
+    deliveredIntoStock($tea, 10000, 20000);
+    deliveredIntoStock($mug, 4000, 15000);
 
     expect(stockHoldings()->valueHeld)->toBe(260000);
 });
@@ -108,9 +108,9 @@ it('holds an empty shelf somebody counted apart from a shelf nobody has visited'
 it('says a counted Product nothing was ever bought for is worth an unknown rather than nothing', function () {
     $product = Product::factory()->create(['name' => 'Counted candle']);
 
-    app(StockLedger::class)->recordCount($product, 6, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($product, 6000, AdjustmentCause::OpeningCount);
 
-    expect(stockHoldingRows(stockHoldings()))->toBe([['Counted candle', 6, null]])
+    expect(stockHoldingRows(stockHoldings()))->toBe([['Counted candle', 6000, null]])
         ->and(stockHoldings()->valueHeld)->toBeNull();
 });
 
@@ -120,7 +120,7 @@ it('goes back to an unknown worth when the only delivery behind it is voided', f
     $supply = app(StockLedger::class)->recordSupply(
         supplier: Supplier::factory()->create(),
         suppliedOn: '2026-09-05',
-        lines: [['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 20000]],
+        lines: [['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 20000]],
     );
 
     app(StockLedger::class)->voidSupply($supply);
@@ -132,7 +132,7 @@ it('goes back to an unknown worth when the only delivery behind it is voided', f
 it('keeps a Product withdrawn from the catalogue while it still holds units, and says it is deleted', function () {
     $retired = Product::factory()->create(['name' => 'Retired candle']);
 
-    deliveredIntoStock($retired, 5, 10000);
+    deliveredIntoStock($retired, 5000, 10000);
 
     $retired->delete();
 
@@ -140,7 +140,7 @@ it('keeps a Product withdrawn from the catalogue while it still holds units, and
 
     expect($row->name())->toBe('Retired candle')
         ->and($row->isDeleted())->toBeTrue()
-        ->and($row->onHand)->toBe(5)
+        ->and($row->onHand)->toBe(5000)
         ->and($row->valueAtCost)->toBe(50000)
         ->and(stockHoldings()->valueHeld)->toBe(50000);
 });

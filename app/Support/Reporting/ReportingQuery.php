@@ -20,6 +20,7 @@ use App\Models\Supply;
 use App\Models\SupplyLine;
 use App\Models\VisitCount;
 use App\Support\Inventory\DaysOfCover;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Inventory\ThinShelf;
 use App\Support\Settings\TrackingSettings;
@@ -696,14 +697,14 @@ final class ReportingQuery
                 'bought.supplier_id as supplier_id, '
                 .'count(distinct supply_lines.supply_id) as deliveries, '
                 .'sum(quantity) as units, '
-                .'sum(quantity * unit_cost) as cost',
+                .'sum('.Grams::LINE_COST.') as cost',
             )
             ->groupBy('bought.supplier_id')
             ->get();
 
         $perProduct = SupplyLine::query()
             ->joinSub($this->deliveriesIn($window)->select('id'), 'bought', 'bought.id', '=', 'supply_lines.supply_id')
-            ->selectRaw('product_id, sum(quantity) as units, sum(quantity * unit_cost) as cost')
+            ->selectRaw('product_id, sum(quantity) as units, sum('.Grams::LINE_COST.') as cost')
             ->groupBy('product_id')
             ->get();
 

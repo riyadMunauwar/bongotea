@@ -3,11 +3,12 @@
 namespace App\Support\Inventory;
 
 use App\Enums\OrderStatus;
+use App\Models\OrderLine;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * How many units of a Product are already spoken for.
+ * How many grams of a Product are already spoken for.
  *
  * Deliberately not part of `StockLedger`, and deliberately not a movement.
  * Committed is a fact about Orders rather than about a warehouse — nothing
@@ -63,7 +64,8 @@ class CommittedStock
                     ->where('status', OrderStatus::Confirmed)
                     ->notYetSent(),
             )],
-            'quantity',
+            /** Each line's weight read where the ledger reads it, so what is spoken for and what leaves are the same grams. */
+            OrderLine::grams(),
         );
     }
 }

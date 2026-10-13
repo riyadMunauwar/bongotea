@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Inventory\Resources\Supplies\Pages;
 
 use App\Filament\Clusters\Inventory\Resources\Supplies\SupplyResource;
 use App\Models\Supplier;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -40,10 +41,10 @@ class CreateSupply extends CreateRecord
             supplier: Supplier::findOrFail($data['supplier_id']),
             suppliedOn: $data['supplied_on'],
 
-            /** Keyed by the repeater's own item keys, which the ledger has no use for. */
+            /** Keyed by the repeater's own item keys, which the ledger has no use for; typed in kilograms and recorded in grams (ADR-0035). */
             lines: array_map(fn (array $line): array => [
                 'product_id' => (int) $line['product_id'],
-                'quantity' => (int) $line['quantity'],
+                'quantity' => Grams::fromKilograms($line['quantity']),
                 'unit_cost' => (int) $line['unit_cost'],
             ], array_values($lines)),
 

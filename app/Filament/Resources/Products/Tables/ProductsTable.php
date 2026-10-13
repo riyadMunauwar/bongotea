@@ -6,6 +6,7 @@ use App\Enums\ProductStatus;
 use App\Models\Product;
 use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\DaysOfCover;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use Filament\Actions\BulkActionGroup;
@@ -82,7 +83,8 @@ class ProductsTable
                  */
                 TextColumn::make(StockLedger::ON_HAND)
                     ->label('On hand')
-                    ->numeric()
+                    /** Grams in the ledger, kilograms on the screen (ADR-0035). */
+                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Grams::toKilograms($state))
                     ->sortable()
                     ->placeholder('—')
                     ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
@@ -138,7 +140,7 @@ class ProductsTable
                  */
                 TextColumn::make(CommittedStock::COMMITTED)
                     ->label('Committed')
-                    ->numeric()
+                    ->formatStateUsing(fn (?int $state): string => Grams::toKilograms((int) $state))
                     ->sortable()
                     ->default(0),
 

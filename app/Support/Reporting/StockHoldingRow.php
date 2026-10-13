@@ -34,9 +34,9 @@ final readonly class StockHoldingRow
     public function __construct(
         /** The Product this is about, trashed included. */
         public Product $product,
-        /** Units held: the sum of the Product's movements, and null where it has none. */
+        /** Grams held: the sum of the Product's movements, and null where it has none. */
         public ?int $onHand,
-        /** What those units cost, summed off the movements themselves, and null where nothing costed has moved. */
+        /** What those grams cost, summed off the movements themselves, and null where nothing costed has moved. */
         public ?int $valueAtCost,
     ) {}
 

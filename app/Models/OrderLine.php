@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Observers\OrderLineObserver;
+use App\Support\Inventory\Grams;
 use Database\Factories\OrderLineFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Query\Expression;
+use Illuminate\Support\Facades\DB;
 
 /**
  * One Product's worth of an Order: what was sold, at what unit price, and in
@@ -96,5 +99,19 @@ class OrderLine extends Model
     public function isPriceOverridden(): bool
     {
         return $this->price_override_reason !== null;
+    }
+
+    /**
+     * How many grams a line takes off its Product's shelf, as a column
+     * expression over `order_lines`.
+     *
+     * The one place the ledger reads a line's weight — booking, a Return, a
+     * Partial Return, a write-off and Committed all sum this (ADR-0035). Today
+     * every line is bulk, so it is the line's Kilograms × 1000; a line of
+     * another kind changes this and nothing that reads it.
+     */
+    public static function grams(): Expression
+    {
+        return DB::raw('order_lines.quantity * '.Grams::PER_KILOGRAM);
     }
 }

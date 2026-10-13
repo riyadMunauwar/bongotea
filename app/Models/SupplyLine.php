@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Inventory\Grams;
 use Database\Factories\SupplyLineFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use LogicException;
 
 /**
- * One Product's worth of a Supply: how many units arrived and what each one
- * cost.
+ * One Product's worth of a Supply: how many grams arrived and what a
+ * kilogram of them cost (ADR-0035).
  *
  * An `Order Line` read from the buying side. It is what a Stock Movement
  * points at when it says a Supply caused it — one line, one movement — rather
@@ -83,10 +84,11 @@ class SupplyLine extends Model
     }
 
     /**
-     * What this line cost altogether, in minor units.
+     * What this line cost altogether, in minor units: its grams at its cost
+     * per kilogram.
      */
     public function lineCost(): int
     {
-        return $this->quantity * $this->unit_cost;
+        return Grams::cost($this->quantity, $this->unit_cost);
     }
 }

@@ -6,6 +6,7 @@ use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Support\Inventory\DaysOfCover;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use BackedEnum;
@@ -65,7 +66,9 @@ class ProductStockHistory extends ManageRelatedRecords
         $value = $ledger->valueAtCost($product);
         $cover = app(DaysOfCover::class)->forProduct($product);
 
-        return 'On hand: '.($ledger->onHand($product) ?? '—')
+        $onHand = $ledger->onHand($product);
+
+        return 'On hand: '.($onHand === null ? '—' : Grams::toKilograms($onHand))
             .' · Value at cost: '.($value === null ? '—' : Money::format($value))
             .' · Days of cover: '.($cover === null ? '—' : number_format($cover, 1));
     }
@@ -86,10 +89,10 @@ class ProductStockHistory extends ManageRelatedRecords
                     ->label('Reason')
                     ->badge(),
 
-                /** Signed, because which way it went is the whole of what a movement says. */
+                /** Signed, because which way it went is the whole of what a movement says; grams drawn as kilograms (ADR-0035). */
                 TextColumn::make('quantity')
                     ->label('Quantity')
-                    ->formatStateUsing(fn (int $state): string => $state > 0 ? '+'.$state : (string) $state)
+                    ->formatStateUsing(fn (int $state): string => ($state > 0 ? '+' : '').Grams::toKilograms($state))
                     ->color(fn (int $state): string => match (true) {
                         $state > 0 => 'success',
                         $state < 0 => 'danger',
@@ -97,7 +100,7 @@ class ProductStockHistory extends ManageRelatedRecords
                     }),
 
                 /**
-                 * What a unit was worth as it moved, stamped at the time and
+                 * What a kilogram was worth as it moved, stamped at the time and
                  * never recomputed (ADR-0022). Nothing where no average was
                  * known — a Product nobody has supplied must not read as
                  * free.
@@ -126,7 +129,7 @@ class ProductStockHistory extends ManageRelatedRecords
                     ->label('Value')
                     ->state(fn (StockMovement $record): ?int => $record->unit_cost === null
                         ? null
-                        : $record->quantity * $record->unit_cost)
+                        : Grams::cost($record->quantity, $record->unit_cost))
                     ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::format($state))
                     ->color(fn (?int $state): string => match (true) {
                         $state > 0 => 'success',

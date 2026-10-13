@@ -5,6 +5,7 @@ namespace App\Filament\Clusters\Inventory\Resources\Supplies\Actions;
 use App\Enums\Permission;
 use App\Models\Supply;
 use App\Models\SupplyLine;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Inventory\SupplyAlreadyVoided;
 use App\Support\Money;
@@ -105,7 +106,7 @@ class VoidSupplyAction
         $lines = $record->lines()
             ->with('product')
             ->get()
-            ->map(fn (SupplyLine $line): string => "{$line->quantity} × {$line->product->name}")
+            ->map(fn (SupplyLine $line): string => Grams::toKilograms($line->quantity)." × {$line->product->name}")
             ->join(', ', ' and ');
 
         return "This takes {$lines} back out of stock, at what they came in at — "

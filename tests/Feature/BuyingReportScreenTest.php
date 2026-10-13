@@ -54,7 +54,7 @@ function merchantDay(int $daysAgo = 0): string
 /**
  * One delivery through the ledger, the way a User records one.
  *
- * @param  list<array{Product, int, int}>  $lines  Product, quantity, unit cost.
+ * @param  list<array{Product, int, int}>  $lines  Product, kilograms, unit cost per kilogram.
  */
 function deliveryRecorded(Supplier $supplier, string $day, array $lines): Supply
 {
@@ -64,7 +64,8 @@ function deliveryRecorded(Supplier $supplier, string $day, array $lines): Supply
         lines: array_map(
             fn (array $line): array => [
                 'product_id' => $line[0]->getKey(),
-                'quantity' => $line[1],
+                /** Kilograms here, as a Merchant types them; the ledger records grams (ADR-0035). */
+                'quantity' => $line[1] * 1000,
                 'unit_cost' => $line[2],
             ],
             $lines,
@@ -171,13 +172,13 @@ it('reads the window by Supplier, biggest spend first, and by Product beside it'
     aWeekOfDeliveries();
 
     expect(buyingSupplierRows())->toBe([
-        ['Dhaka Traders', 2, 16, 332000],
-        ['Sylhet Supply', 1, 5, 70000],
+        ['Dhaka Traders', 2, 16000, 332000],
+        ['Sylhet Supply', 1, 5000, 70000],
     ]);
 
     expect(buyingProductRows())->toBe([
-        ['Sylhet tea', 16, 20750, 332000],
-        ['Clay mug', 5, 14000, 70000],
+        ['Sylhet tea', 16000, 20750, 332000],
+        ['Clay mug', 5000, 14000, 70000],
     ]);
 
     /** Drawn as well as counted: a row's own link is evaluated as the table renders, not when the rows are built. */
@@ -208,13 +209,13 @@ it('leaves a Voided delivery out of every figure on the screen', function () {
 
     $mistake = deliveryRecorded($dhaka, merchantDay(1), [[$tea, 500, 20000]]);
 
-    expect(buyingSupplierRows()[0])->toBe(['Dhaka Traders', 3, 516, 10332000]);
+    expect(buyingSupplierRows()[0])->toBe(['Dhaka Traders', 3, 516000, 10332000]);
 
     app(StockLedger::class)->voidSupply($mistake);
 
     expect(buyingSupplierRows())->toBe([
-        ['Dhaka Traders', 2, 16, 332000],
-        ['Sylhet Supply', 1, 5, 70000],
+        ['Dhaka Traders', 2, 16000, 332000],
+        ['Sylhet Supply', 1, 5000, 70000],
     ]);
 });
 
@@ -228,7 +229,7 @@ it('narrows every figure when the window narrows, and keeps the choice for the n
     Livewire::test(BuyingReport::class)
         ->assertSchemaStateSet([ReportingWindow::PRESET_FILTER => 'today'], 'filtersForm');
 
-    expect(buyingSupplierRows('today'))->toBe([['Dhaka Traders', 1, 6, 132000]]);
+    expect(buyingSupplierRows('today'))->toBe([['Dhaka Traders', 1, 6000, 132000]]);
 });
 
 it('reads a window that bought nothing as an empty table rather than an error', function () {

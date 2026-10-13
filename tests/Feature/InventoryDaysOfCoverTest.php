@@ -94,7 +94,7 @@ it('reads a shelf already in deficit as cover below nothing rather than as nothi
     /** More went out than anybody had counted on: the shelf is below nothing and says so. */
     parcelShippedOn($short, 8, reportingNow()->subDays(1));
 
-    expect(app(StockLedger::class)->onHand($short))->toBe(-4)
+    expect(app(StockLedger::class)->onHand($short))->toBe(-4000)
         ->and(coverOf($short))->toBe(-14.0);
 });
 

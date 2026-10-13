@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Inventory\Resources\Supplies\Tables;
 
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -49,7 +50,8 @@ class SuppliesTable
             /** What a delivery cost is the sum of its lines, summed in the query the list already runs rather than a row at a time. */
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum(
                 'lines as '.self::TOTAL_COST,
-                DB::raw('quantity * unit_cost'),
+                /** Each line rounded as `SupplyLine::lineCost()` rounds it, so the list and the document add up alike. */
+                DB::raw(Grams::LINE_COST),
             ))
             ->columns([
                 TextColumn::make('supplied_on')

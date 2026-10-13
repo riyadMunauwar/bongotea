@@ -5,6 +5,7 @@ namespace App\Support\Inventory;
 use App\Enums\AdjustmentCause;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
+use App\Models\OrderLine;
 use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\StockCount;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -73,7 +75,7 @@ class StockLedger
     public const VALUE_AT_COST = 'value_at_cost';
 
     /**
-     * How many units of a Product are held, or null where nobody has ever
+     * How many grams of a Product are held, or null where nobody has ever
      * counted it.
      *
      * Null is not zero and the difference is the point: a zero is an
@@ -114,8 +116,12 @@ class StockLedger
     }
 
     /**
-     * What one unit of a Product is worth right now, in minor units, or null
-     * where nothing bought has ever been recorded.
+     * What one kilogram of a Product is worth right now, in minor units, or
+     * null where nothing bought has ever been recorded.
+     *
+     * Per kilogram although the ledger counts grams (ADR-0035): every cost is
+     * stamped per kilogram, and Σ(grams × cost) ÷ Σ(grams) is a cost per
+     * kilogram without converting anything.
      *
      * The average is not stored anywhere and never was (ADR-0022). It is the
      * money the ledger holds divided by the units it holds, read off the rows
@@ -251,7 +257,7 @@ class StockLedger
     {
         $ledger = $this->totals($product);
 
-        return (int) $ledger->costed > 0 ? (int) $ledger->value : null;
+        return (int) $ledger->costed > 0 ? Grams::costOfSum($ledger->value) : null;
     }
 
     /**
@@ -262,15 +268,28 @@ class StockLedger
      * same unknown `valueAtCost()` answers with — the two readers agree
      * without either of them having to say so.
      *
+     * Grams × cost per kilogram is summed and divided once in the query
+     * (`Grams::SUMMED_COST`), so the column carries minor units, rounded
+     * exactly where `valueAtCost()` rounds. A subquery of its own rather than
+     * `withSum()`, because `withSum()` can only wrap its column in `sum()` and
+     * the division has to sit outside it.
+     *
      * @param  Builder<Product>  $products
      * @return Builder<Product>
      */
     public function withValueAtCost(Builder $products): Builder
     {
-        return $products->withSum(
-            /** The standing rows, so this reads the same unknown `valueAtCost()` does on a Product whose only delivery was voided. */
-            ['stockMovements as '.self::VALUE_AT_COST => fn (Builder $query): Builder => $query->standing()],
-            DB::raw('quantity * unit_cost'),
+        if ($products->getQuery()->columns === null) {
+            $products->select($products->qualifyColumn('*'));
+        }
+
+        return $products->selectSub(
+            StockMovement::query()
+                /** The standing rows, so this reads the same unknown `valueAtCost()` does on a Product whose only delivery was voided. */
+                ->standing()
+                ->whereColumn('stock_movements.product_id', $products->qualifyColumn('id'))
+                ->selectRaw(Grams::SUMMED_COST),
+            self::VALUE_AT_COST,
         );
     }
 
@@ -293,6 +312,9 @@ class StockLedger
      * stamped with what that line actually paid, and the Product's weighted
      * average rolls forward as a consequence of the row being there rather
      * than as a figure anybody writes down.
+     *
+     * A line's quantity is in grams and its cost is per kilogram (ADR-0035);
+     * the Supply form converts the kilograms a Merchant types.
      *
      * @param  list<array{product_id: int|string, quantity: int, unit_cost: int}>  $lines
      */
@@ -565,6 +587,7 @@ class StockLedger
 
         return $this->unitsPerProduct(
             $order->lines()->whereKey($orderLineIds)->whereNotNull('product_id')->toBase(),
+            OrderLine::grams(),
         );
     }
 
@@ -774,17 +797,20 @@ class StockLedger
                 ->whereMorphedTo('source', $shipment)
                 ->where('reason', StockMovementReason::PartialReturn)
                 ->toBase(),
+            'quantity',
         );
     }
 
     /**
-     * How many units each Product accounts for across a set of rows, keyed by
+     * How many grams each Product accounts for across a set of rows, keyed by
      * Product.
      *
      * The one shape three questions share: what an Order's lines carry, what
      * the lines a User ticked carry, and what a parcel has already put back.
-     * Each of them is "so many of this Product" read off rows carrying a
-     * `product_id` and a `quantity`, and each of them is summed per Product
+     * Each of them is "so many grams of this Product" read off rows carrying a
+     * `product_id` and a weight — a movement's own `quantity`, or an Order
+     * Line's weight read through `OrderLine::grams()`, the one place that says
+     * how much a line weighs — and each of them is summed per Product
      * rather than taken a row at a time — because the ledger's key is one
      * cause, one Product, one direction, and an Order naming the same Product
      * twice is still one Product in one box.
@@ -792,13 +818,17 @@ class StockLedger
      * Handed a query already dropped to the base builder, so the caller says
      * which rows and this says only how they are counted.
      *
-     * @param  QueryBuilder  $rows  Rows carrying `product_id` and `quantity`.
+     * @param  QueryBuilder  $rows  Rows carrying `product_id` and a weight.
+     * @param  Expression|string  $grams  What one row weighs, in grams: an expression or a column.
      * @return array<int, int>
      */
-    private function unitsPerProduct(QueryBuilder $rows): array
+    private function unitsPerProduct(QueryBuilder $rows, Expression|string $grams): array
     {
+        $grammar = $rows->getGrammar();
+        $weight = $grams instanceof Expression ? $grams->getValue($grammar) : $grammar->wrap($grams);
+
         return $rows
-            ->selectRaw('product_id, sum(quantity) as units')
+            ->selectRaw("product_id, sum({$weight}) as units")
             ->groupBy('product_id')
             ->pluck('units', 'product_id')
             ->map(fn (mixed $units): int => (int) $units)
@@ -848,7 +878,7 @@ class StockLedger
             return [];
         }
 
-        return $this->unitsPerProduct($order->lines()->whereNotNull('product_id')->toBase());
+        return $this->unitsPerProduct($order->lines()->whereNotNull('product_id')->toBase(), OrderLine::grams());
     }
 
     /**
@@ -860,6 +890,9 @@ class StockLedger
      * difference between what was counted and what the ledger held — worked
      * out here, because nobody in this system ever types a quantity or a
      * difference.
+     *
+     * What was counted is in grams (ADR-0035); the count form converts the
+     * kilograms a Merchant types.
      *
      * A Product nobody has counted holds an unknown rather than zero, and the
      * first count is measured against zero all the same: what the count finds
@@ -904,7 +937,7 @@ class StockLedger
     }
 
     /**
-     * Add or remove a known number of units, and let a count do the arithmetic.
+     * Add or remove a known number of grams, and let a count do the arithmetic.
      *
      * The friendlier face of `recordCount()`, for the everyday case a Merchant
      * has rather than a stocktake: two got dropped, five turned up behind the

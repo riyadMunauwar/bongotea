@@ -85,7 +85,7 @@ it('lists suppliers with how much has come from each', function () {
     $unused = Supplier::factory()->create(['name' => 'Bongo Packaging']);
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], null, $this->buyer);
 
     Livewire::test(ListSuppliers::class)
@@ -130,8 +130,8 @@ it('records a multi-line delivery and raises what is held by it', function () {
         ->and($supply->lines)->toHaveCount(2)
         /** Typed in whole currency, stored in minor units like every other money figure. */
         ->and($supply->lines->firstWhere('product_id', $jacket->getKey())->unit_cost)->toBe(90000)
-        ->and($this->ledger->onHand($jacket))->toBe(40)
-        ->and($this->ledger->onHand($mug))->toBe(12)
+        ->and($this->ledger->onHand($jacket))->toBe(40000)
+        ->and($this->ledger->onHand($mug))->toBe(12000)
         ->and(StockMovement::count())->toBe(2)
         ->and(StockMovement::query()->where('reason', StockMovementReason::Supply)->count())->toBe(2);
 });
@@ -213,11 +213,11 @@ it('lists deliveries newest first, with what each one cost', function () {
     $elsewhere = Supplier::factory()->create(['name' => 'Bongo Packaging']);
 
     $older = $this->ledger->recordSupply($this->supplier, '2026-09-01', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], 'INV-1', $this->buyer);
 
     $newer = $this->ledger->recordSupply($elsewhere, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 5, 'unit_cost' => 20000],
+        ['product_id' => $product->getKey(), 'quantity' => 5000, 'unit_cost' => 20000],
     ], 'INV-2', $this->buyer);
 
     Livewire::test(ListSupplies::class)
@@ -236,7 +236,7 @@ it('reads one delivery as the document it came on', function () {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
 
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $jacket->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $jacket->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], 'INV-2291', $this->buyer);
 
     Livewire::test(ViewSupply::class, ['record' => $supply->getKey()])
@@ -252,7 +252,7 @@ it('offers no way to edit or delete a delivery', function () {
     $product = Product::factory()->create();
 
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], null, $this->buyer);
 
     expect(SupplyResource::getPages())->not->toHaveKey('edit')
@@ -279,11 +279,11 @@ it('offers no way to edit or delete a delivery', function () {
 it('voids a wrong delivery from the document it was recorded on, and puts the shelf back', function () {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
 
-    $this->ledger->recordCount($jacket, 12, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($jacket, 12000, AdjustmentCause::OpeningCount, null, $this->buyer);
 
     /** 500 where somebody meant 50. */
     $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $jacket->getKey(), 'quantity' => 500, 'unit_cost' => 90000],
+        ['product_id' => $jacket->getKey(), 'quantity' => 500000, 'unit_cost' => 90000],
     ], 'INV-2291', $this->buyer);
 
     $document = Livewire::test(ViewSupply::class, ['record' => $mistake->getKey()])
@@ -300,14 +300,14 @@ it('voids a wrong delivery from the document it was recorded on, and puts the sh
 
     expect($mistake->isVoided())->toBeTrue()
         ->and($mistake->voidedBy->name)->toBe('Nasrin Akter')
-        ->and($this->ledger->onHand($jacket))->toBe(12);
+        ->and($this->ledger->onHand($jacket))->toBe(12000);
 });
 
 it('offers no way to void a delivery a second time', function () {
     $product = Product::factory()->create();
 
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $product->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     $this->ledger->voidSupply($supply, $this->buyer);
@@ -323,7 +323,7 @@ it('offers no way to void a delivery a second time', function () {
 
 it('draws no void action for a User who counts but may not void', function () {
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     /** `count stock` opens the document; `void supplies` is the rung this User lacks. */
@@ -337,7 +337,7 @@ it('draws no void action for a User who counts but may not void', function () {
 
 it('draws the void action for a User who holds void supplies', function () {
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => Product::factory()->create()->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     $this->actingAs(User::factory()->voidingSupplies()->create());
@@ -350,11 +350,11 @@ it('keeps a voided delivery on the list, and lets a buyer read past it', functio
     $product = Product::factory()->create();
 
     $standing = $this->ledger->recordSupply($this->supplier, '2026-09-01', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], 'INV-1', $this->buyer);
 
     $struck = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 20000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 20000],
     ], 'INV-2', $this->buyer);
 
     $this->ledger->voidSupply($struck, $this->buyer);
@@ -374,11 +374,11 @@ it('leaves a voided delivery out of what a supplier has delivered', function () 
     $product = Product::factory()->create();
 
     $this->ledger->recordSupply($this->supplier, '2026-09-01', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], 'INV-1', $this->buyer);
 
     $struck = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 20000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 20000],
     ], 'INV-2', $this->buyer);
 
     $this->ledger->voidSupply($struck, $this->buyer);
@@ -392,7 +392,7 @@ it('reads both the delivery and its reversal in the product\'s own history', fun
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
 
     $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $product->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     $this->ledger->voidSupply($supply, $this->buyer);
@@ -418,14 +418,14 @@ it('shows what each product is worth at cost, beside what is held', function () 
     $counted = Product::factory()->create(['name' => 'Clay mug']);
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $bought->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $bought->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     /** Counted but never bought: units held, and nobody knows what they cost. */
-    $this->ledger->recordCount($counted, 12, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($counted, 12000, AdjustmentCause::OpeningCount, null, $this->buyer);
 
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet(StockLedger::ON_HAND, 40, $bought)
+        ->assertTableColumnStateSet(StockLedger::ON_HAND, 40000, $bought)
         ->assertTableColumnStateSet(StockLedger::VALUE_AT_COST, 40 * 90000, $bought)
         ->assertSeeText(Money::format(40 * 90000))
         /** Unknown rather than free, the same choice On Hand makes against `0`. */
@@ -437,8 +437,8 @@ it('sorts the catalogue by what it is worth, though the figure is in no column',
     $dear = Product::factory()->create();
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $cheap->getKey(), 'quantity' => 2, 'unit_cost' => 10000],
-        ['product_id' => $dear->getKey(), 'quantity' => 40, 'unit_cost' => 90000],
+        ['product_id' => $cheap->getKey(), 'quantity' => 2000, 'unit_cost' => 10000],
+        ['product_id' => $dear->getKey(), 'quantity' => 40000, 'unit_cost' => 90000],
     ], null, $this->buyer);
 
     Livewire::test(ListProducts::class)
@@ -452,11 +452,11 @@ it('explains the money figure from the product\'s own history, movement by movem
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
 
     $this->ledger->recordSupply($this->supplier, '2026-09-01', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], null, $this->buyer);
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 30, 'unit_cost' => 20000],
+        ['product_id' => $product->getKey(), 'quantity' => 30000, 'unit_cost' => 20000],
     ], null, $this->buyer);
 
     Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
@@ -483,12 +483,12 @@ it('reaches a product\'s movements from the delivery that caused them', function
     $product = Product::factory()->create();
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 10000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 10000],
     ], null, $this->buyer);
 
     $line = SupplyLine::sole();
 
-    expect($line->stockMovements->sole()->quantity)->toBe(10)
+    expect($line->stockMovements->sole()->quantity)->toBe(10000)
         ->and(StockMovement::sole()->source->is($line))->toBeTrue();
 });
 

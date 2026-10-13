@@ -4,6 +4,7 @@ namespace App\Filament\Clusters\Inventory\Resources\Supplies\Schemas;
 
 use App\Models\Supply;
 use App\Models\SupplyLine;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -101,7 +102,7 @@ class SupplyInfolist
                                 TextEntry::make('quantity')
                                     ->label('Quantity')
                                     ->alignment(Alignment::End)
-                                    ->numeric(),
+                                    ->formatStateUsing(fn (int $state): string => Grams::toKilograms($state)),
 
                                 TextEntry::make('unit_cost')
                                     ->label('Unit cost')

@@ -42,12 +42,12 @@ function aShelfOfStock(): array
     $mug = Product::factory()->create(['name' => 'Clay mug']);
     $candle = Product::factory()->create(['name' => 'Uncounted candle']);
 
-    app(StockLedger::class)->recordCount($mug, 3, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($mug, 3000, AdjustmentCause::OpeningCount);
 
     app(StockLedger::class)->recordSupply(
         supplier: Supplier::factory()->create(['name' => 'Dhaka Traders']),
         suppliedOn: '2026-09-05',
-        lines: [['product_id' => $tea->getKey(), 'quantity' => 10, 'unit_cost' => 20000]],
+        lines: [['product_id' => $tea->getKey(), 'quantity' => 10000, 'unit_cost' => 20000]],
     );
 
     return [$tea, $mug, $candle];
@@ -122,7 +122,7 @@ it('says what is held altogether, and how much of the catalogue that covers', fu
 });
 
 it('says the worth of an installation that has recorded no buying is unknown, never nothing', function () {
-    app(StockLedger::class)->recordCount(Product::factory()->create(), 5, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount(Product::factory()->create(), 5000, AdjustmentCause::OpeningCount);
 
     Livewire::test(StockValueStat::class)
         ->assertSee('Not known')

@@ -23,7 +23,7 @@ class SupplyLineFactory extends Factory
         return [
             'supply_id' => Supply::factory(),
             'product_id' => Product::factory(),
-            'quantity' => fake()->numberBetween(1, 100),
+            'quantity' => fake()->numberBetween(1, 100) * 1000,
             'unit_cost' => fake()->numberBetween(1, 500) * 100,
         ];
     }

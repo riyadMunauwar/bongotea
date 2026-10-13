@@ -73,19 +73,19 @@ it('records a count and squares the ledger with it, without anybody typing a dif
 
     $count = StockCount::sole();
 
-    expect($count->quantity)->toBe(30)
+    expect($count->quantity)->toBe(30000)
         ->and($count->cause)->toBe(AdjustmentCause::OpeningCount)
         ->and($count->note)->toBe('Two boxes in the back')
         /** Attributed to whoever is signed in, never to a field anybody could choose a name in. */
         ->and($count->user->is($this->counter))->toBeTrue()
-        ->and($this->ledger->onHand($product))->toBe(30)
-        ->and(StockMovement::sole()->quantity)->toBe(30);
+        ->and($this->ledger->onHand($product))->toBe(30000)
+        ->and(StockMovement::sole()->quantity)->toBe(30000);
 });
 
 it('counts again and writes a second adjustment measured against the first', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 30000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->callAction('count', [
@@ -95,8 +95,8 @@ it('counts again and writes a second adjustment measured against the first', fun
         ])
         ->assertHasNoActionErrors();
 
-    expect($this->ledger->onHand($product))->toBe(22)
-        ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([30, -8]);
+    expect($this->ledger->onHand($product))->toBe(22000)
+        ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([30000, -8000]);
 });
 
 it('takes the first count as an opening count without anybody choosing one', function () {
@@ -108,7 +108,23 @@ it('takes the first count as an opening count without anybody choosing one', fun
         ->assertHasNoActionErrors();
 
     expect(StockCount::sole()->cause)->toBe(AdjustmentCause::OpeningCount)
-        ->and($this->ledger->onHand($product))->toBe(12);
+        ->and($this->ledger->onHand($product))->toBe(12000);
+});
+
+it('takes a count with part of a kilogram to the gram, and draws it back the way it was typed', function () {
+    $product = Product::factory()->create(['name' => 'Winter Jacket']);
+
+    /** Typed in kilograms, as everything a Merchant types is; the ledger counts grams (ADR-0035). */
+    Livewire::test(ListStockCounts::class)
+        ->callAction('count', ['product_id' => $product->getKey(), 'quantity' => '2.5'])
+        ->assertHasNoActionErrors();
+
+    expect(StockCount::sole()->quantity)->toBe(2500)
+        ->and($this->ledger->onHand($product))->toBe(2500);
+
+    Livewire::test(ProductStockHistory::class, ['record' => $product->getKey()])
+        ->assertSeeText('On hand: 2.5')
+        ->assertSeeText('+2.5');
 });
 
 it('does not offer a product nobody can be standing in front of', function () {
@@ -129,19 +145,19 @@ it('does not offer a product nobody can be standing in front of', function () {
 it('shows what is on hand as soon as a product is picked, so the gap is seen before saving', function (string $verb) {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 42, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 42000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->mountAction($verb)
         ->assertSchemaComponentHidden('on_hand')
         ->fillForm(['product_id' => $product->getKey()])
-        ->assertSchemaComponentExists('on_hand', checkComponentUsing: fn (TextEntry $onHand): bool => $onHand->getState() === '42');
+        ->assertSchemaComponentExists('on_hand', checkComponentUsing: fn (TextEntry $onHand): bool => $onHand->getState() === '42 kg');
 })->with(['increase', 'decrease']);
 
 it('keeps an exact count blind to what the ledger expects, so the number is counted rather than agreed with', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 42, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 42000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->mountAction('count')
@@ -183,9 +199,9 @@ it('lists what has been counted, with what the ledger did about each one', funct
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
     $mug = Product::factory()->create(['name' => 'Clay mug']);
 
-    $opening = $this->ledger->recordCount($jacket, 30, AdjustmentCause::OpeningCount, null, $this->counter);
-    $damaged = $this->ledger->recordCount($jacket, 22, AdjustmentCause::Damaged, null, $this->counter);
-    $elsewhere = $this->ledger->recordCount($mug, 4, AdjustmentCause::OpeningCount, null, $this->counter);
+    $opening = $this->ledger->recordCount($jacket, 30000, AdjustmentCause::OpeningCount, null, $this->counter);
+    $damaged = $this->ledger->recordCount($jacket, 22000, AdjustmentCause::Damaged, null, $this->counter);
+    $elsewhere = $this->ledger->recordCount($mug, 4000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->assertCanSeeTableRecords([$damaged, $opening, $elsewhere])
@@ -243,7 +259,7 @@ it('offers Set exact count, Increase and Decrease side by side in the theme colo
 it('increases on hand by exactly what was typed, as one adjustment carrying the reason, note and counter', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 10000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->callAction('increase', [
@@ -257,9 +273,9 @@ it('increases on hand by exactly what was typed, as one adjustment carrying the 
     $adjustment = StockMovement::query()->where('reason', StockMovementReason::Adjustment)->latest('id')->first();
     $count = StockCount::query()->latest('id')->first();
 
-    expect($this->ledger->onHand($product))->toBe(15)
+    expect($this->ledger->onHand($product))->toBe(15000)
         /** One Adjustment movement of exactly the delta, never the resulting absolute. */
-        ->and($adjustment->quantity)->toBe(5)
+        ->and($adjustment->quantity)->toBe(5000)
         ->and($count->cause)->toBe(AdjustmentCause::Found)
         ->and($count->note)->toBe('Found behind the counter')
         /** Attributed to whoever is signed in, never to a field. */
@@ -274,7 +290,7 @@ it('defaults an increase reason to Found, and adopts an uncounted product at the
         ->callAction('increase', ['product_id' => $product->getKey(), 'quantity' => 3])
         ->assertHasNoActionErrors();
 
-    expect($this->ledger->onHand($product))->toBe(3)
+    expect($this->ledger->onHand($product))->toBe(3000)
         /** The reason left as the modal offers it resolves to the enum behind the Select's own default. */
         ->and(StockCount::query()->latest('id')->first()->cause)->toBe(AdjustmentCause::Found);
 });
@@ -282,7 +298,7 @@ it('defaults an increase reason to Found, and adopts an uncounted product at the
 it('decreases on hand by exactly what was typed, defaulting the reason to Damaged', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 10000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->callAction('decrease', ['product_id' => $product->getKey(), 'quantity' => 2])
@@ -290,8 +306,8 @@ it('decreases on hand by exactly what was typed, defaulting the reason to Damage
 
     $adjustment = StockMovement::query()->where('reason', StockMovementReason::Adjustment)->latest('id')->first();
 
-    expect($this->ledger->onHand($product))->toBe(8)
-        ->and($adjustment->quantity)->toBe(-2)
+    expect($this->ledger->onHand($product))->toBe(8000)
+        ->and($adjustment->quantity)->toBe(-2000)
         ->and(StockCount::query()->latest('id')->first()->cause)->toBe(AdjustmentCause::Damaged);
 });
 
@@ -321,7 +337,7 @@ it('filters the reasons per direction and offers Opening count on neither', func
 it('refuses a decrease that would take on hand below zero, and writes nothing', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 3, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 3000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListStockCounts::class)
         ->callAction('decrease', ['product_id' => $product->getKey(), 'quantity' => 5])
@@ -329,7 +345,7 @@ it('refuses a decrease that would take on hand below zero, and writes nothing', 
         ->assertHasActionErrors(['quantity']);
 
     /** The count and its opening Adjustment are all that stand: nothing was written by the refused decrease. */
-    expect($this->ledger->onHand($product))->toBe(3)
+    expect($this->ledger->onHand($product))->toBe(3000)
         ->and(StockCount::query()->count())->toBe(1)
         ->and(StockMovement::query()->count())->toBe(1);
 });
@@ -371,11 +387,11 @@ it('shows what each product holds on the products list', function () {
     $counted = Product::factory()->create(['name' => 'Winter Jacket']);
     $uncounted = Product::factory()->create(['name' => 'Clay mug']);
 
-    $this->ledger->recordCount($counted, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($counted, 30000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     Livewire::test(ListProducts::class)
         ->assertCanSeeTableRecords([$counted, $uncounted])
-        ->assertTableColumnStateSet(StockLedger::ON_HAND, 30, $counted)
+        ->assertTableColumnStateSet(StockLedger::ON_HAND, 30000, $counted)
         /** A Product nobody has counted holds an unknown, which the column draws as nothing rather than as zero. */
         ->assertTableColumnStateSet(StockLedger::ON_HAND, null, $uncounted)
         ->assertTableColumnExists(
@@ -389,7 +405,7 @@ it('shows what is already spoken for beside what is held', function () {
     $wanted = Product::factory()->create(['name' => 'Winter Jacket']);
     $quiet = Product::factory()->create(['name' => 'Clay mug']);
 
-    $this->ledger->recordCount($wanted, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($wanted, 30000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     orderFor($wanted, 4, OrderStatus::Confirmed);
     orderFor($wanted, 7, OrderStatus::Confirmed);
@@ -399,8 +415,8 @@ it('shows what is already spoken for beside what is held', function () {
     orderFor($wanted, 9, OrderStatus::Cancelled);
 
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet(StockLedger::ON_HAND, 30, $wanted)
-        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 11, $wanted)
+        ->assertTableColumnStateSet(StockLedger::ON_HAND, 30000, $wanted)
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 11000, $wanted)
 
         /**
          * Nothing spoken for reads as nothing spoken for, where On Hand beside
@@ -416,7 +432,7 @@ it('stops counting an order as spoken for once a courier is carrying it', functi
     $order = orderFor($product, 4, OrderStatus::Confirmed);
 
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4, $product);
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4000, $product);
 
     /** The units are in a van rather than on a shelf, and the ledger has them as gone (ADR-0021). */
     Shipment::factory()->for($order)->create();
@@ -442,15 +458,15 @@ it('counts an order as spoken for again when its parcel comes back', function ()
 
     /** A parcel that came back is an Order to send again, which is the same answer the queue gives about it (ADR-0018). */
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4, $product);
+        ->assertTableColumnStateSet(CommittedStock::COMMITTED, 4000, $product);
 });
 
 it('sorts the catalogue by what is held, though the figure is in no column', function () {
     $few = Product::factory()->create();
     $many = Product::factory()->create();
 
-    $this->ledger->recordCount($few, 3, AdjustmentCause::OpeningCount, null, $this->counter);
-    $this->ledger->recordCount($many, 40, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($few, 3000, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($many, 40000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     /** The sum is an alias on the query the list runs, and ordering by it is what proves the alias survives the sort. */
     Livewire::test(ListProducts::class)
@@ -510,11 +526,11 @@ it('says nothing rather than zero or for ever where there is no cover to report'
 it('draws what is held below nothing loudly, because an unrecorded supply must announce itself', function () {
     $product = Product::factory()->create();
 
-    StockMovement::factory()->for($product)->create(['quantity' => 2]);
-    StockMovement::factory()->for($product)->create(['quantity' => -5]);
+    StockMovement::factory()->for($product)->create(['quantity' => 2000]);
+    StockMovement::factory()->for($product)->create(['quantity' => -5000]);
 
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet(StockLedger::ON_HAND, -3, $product)
+        ->assertTableColumnStateSet(StockLedger::ON_HAND, -3000, $product)
         ->assertTableColumnExists(
             StockLedger::ON_HAND,
             fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'danger'
@@ -533,9 +549,9 @@ it('reads every movement of one product, with its reason, quantity, date and the
     $product = Product::factory()->create(['name' => 'Winter Jacket']);
     $elsewhere = Product::factory()->create(['name' => 'Clay mug']);
 
-    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
-    $this->ledger->recordCount($product, 22, AdjustmentCause::Damaged, null, $this->counter);
-    $this->ledger->recordCount($elsewhere, 4, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 30000, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 22000, AdjustmentCause::Damaged, null, $this->counter);
+    $this->ledger->recordCount($elsewhere, 4000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     $movements = $product->stockMovements()->orderBy('id')->get();
 
@@ -559,7 +575,7 @@ it('reads a written-off parcel as money rather than as a quantity to multiply', 
     OrderLine::factory()->for($order)->for($product)->create(['quantity' => 3]);
 
     $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 40000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 40000],
     ]);
 
     $shipment = Shipment::factory()->create([
@@ -590,7 +606,7 @@ it('names the User who said which items came back, beside what those units were 
     $line = OrderLine::factory()->for($order)->for($product)->create(['quantity' => 3]);
 
     $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
-        ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 40000],
+        ['product_id' => $product->getKey(), 'quantity' => 10000, 'unit_cost' => 40000],
     ]);
 
     $parcel = Shipment::factory()->create([
@@ -640,7 +656,7 @@ it('says how long the shelf will last on the screen a shelf running out opens on
 it('keeps a soft-deleted product\'s history readable', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 14, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 14000, AdjustmentCause::OpeningCount, null, $this->counter);
 
     $product->delete();
 

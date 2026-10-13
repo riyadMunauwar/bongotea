@@ -422,7 +422,8 @@ function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordere
 
     $product = $order->lines()->sole()->product;
 
-    app(StockLedger::class)->recordCount($product, $held, AdjustmentCause::OpeningCount);
+    /** Held and ordered are both kilograms; the ledger counts grams (ADR-0035). */
+    app(StockLedger::class)->recordCount($product, $held * 1000, AdjustmentCause::OpeningCount);
 
     return [$order->refresh(), $product];
 }
@@ -441,8 +442,9 @@ function shelfOf(string $name, ?int $counted = null): Product
 {
     $product = Product::factory()->create(['name' => $name]);
 
+    /** Counted in kilograms, recorded in the ledger's grams (ADR-0035). */
     if ($counted !== null) {
-        app(StockLedger::class)->recordCount($product, $counted, AdjustmentCause::OpeningCount);
+        app(StockLedger::class)->recordCount($product, $counted * 1000, AdjustmentCause::OpeningCount);
     }
 
     return $product;

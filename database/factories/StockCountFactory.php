@@ -27,7 +27,7 @@ class StockCountFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
-            'quantity' => fake()->numberBetween(0, 200),
+            'quantity' => fake()->numberBetween(0, 200) * 1000,
             'cause' => AdjustmentCause::OpeningCount,
             'note' => null,
             'user_id' => User::factory(),

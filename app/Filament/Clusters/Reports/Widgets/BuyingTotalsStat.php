@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Reports\Widgets;
 
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use App\Support\Reporting\ReportingQuery;
 use App\Support\Reporting\ReportingWindow;
@@ -51,7 +52,7 @@ class BuyingTotalsStat extends StatsOverviewWidget
                 ->description('At what each line was bought for')
                 ->descriptionColor('gray'),
 
-            Stat::make('Units bought', number_format($buying->units))
+            Stat::make('Units bought', Grams::toKilograms($buying->units))
                 ->description('Across every Product delivered')
                 ->descriptionColor('gray'),
 

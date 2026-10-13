@@ -29,7 +29,7 @@ class StockMovementFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
-            'quantity' => fake()->numberBetween(1, 50),
+            'quantity' => fake()->numberBetween(1, 50) * 1000,
             'reason' => StockMovementReason::Adjustment,
             'unit_cost' => null,
             'user_id' => User::factory(),

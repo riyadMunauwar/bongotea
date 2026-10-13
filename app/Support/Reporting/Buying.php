@@ -40,7 +40,7 @@ final readonly class Buying
         /** Deliveries recorded inside the window that stand. */
         public int $deliveries,
 
-        /** Units that arrived across all of them. */
+        /** Grams that arrived across all of them. */
         public int $units,
 
         /** What the window cost altogether. */

@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Inventory\Resources\Supplies\Schemas;
 
 use App\Models\Product;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
 use Filament\Forms\Components\DatePicker;
@@ -127,15 +128,24 @@ class SupplyForm
                                     ->searchable()
                                     ->required(),
 
+                                /**
+                                 * Kilograms, as the challan says them. The
+                                 * ledger counts grams (ADR-0035), so a part of
+                                 * a kilogram is welcome to the gram and
+                                 * `CreateSupply` converts.
+                                 */
                                 TextInput::make('quantity')
                                     ->label('Quantity')
                                     ->required()
-                                    ->integer()
-                                    ->minValue(1)
+                                    ->numeric()
+                                    ->step(0.001)
+                                    ->minValue(0.001)
+                                    ->rule('decimal:0,3')
+                                    ->suffix('kg')
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 /**
-                                 * What was paid for one of them, typed in
+                                 * What was paid for a kilogram, typed in
                                  * whole currency and stored in minor units
                                  * like every other money figure
                                  * (`Product::price`, `Order::total`). This is
@@ -198,7 +208,12 @@ class SupplyForm
      */
     private static function lineCost(array $line): int
     {
-        return (int) ($line['quantity'] ?? 0) * Money::toMinorUnits($line['unit_cost'] ?? 0);
+        $kilograms = $line['quantity'] ?? 0;
+
+        return Grams::cost(
+            Grams::fromKilograms(is_numeric($kilograms) ? $kilograms : 0),
+            Money::toMinorUnits($line['unit_cost'] ?? 0),
+        );
     }
 
     /**

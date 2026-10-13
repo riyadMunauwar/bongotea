@@ -6,6 +6,7 @@ use App\Enums\AdjustmentCause;
 use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Models\Product;
 use App\Support\Inventory\AdjustmentBelowZero;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Inventory\StockNotCounted;
 use Closure;
@@ -87,10 +88,9 @@ class AdjustStockAction
             ->schema([
                 self::product(),
                 Grid::make(['default' => 1, 'sm' => 2])->schema([
-                    TextInput::make('quantity')
+                    self::kilograms(TextInput::make('quantity'))
                         ->label('Counted')
                         ->required()
-                        ->integer()
                         ->minValue(0),
                     self::reason(AdjustmentCause::OpeningCount, self::labelled(...AdjustmentCause::cases())),
                 ]),
@@ -99,7 +99,7 @@ class AdjustStockAction
             ->action(function (array $data): void {
                 app(StockLedger::class)->recordCount(
                     product: Product::findOrFail($data['product_id']),
-                    counted: (int) $data['quantity'],
+                    counted: Grams::fromKilograms($data['quantity']),
                     cause: AdjustmentCause::from(enum_value($data['cause'])),
                     note: $data['note'] ?? null,
 
@@ -205,7 +205,7 @@ class AdjustStockAction
                 $product = Product::withoutTrashed()->find($get('product_id'));
                 $onHand = $product === null ? null : app(StockLedger::class)->onHand($product);
 
-                return $onHand === null ? 'Not counted yet' : (string) $onHand;
+                return $onHand === null ? 'Not counted yet' : Grams::format($onHand);
             });
     }
 
@@ -226,7 +226,7 @@ class AdjustStockAction
         try {
             app(StockLedger::class)->recordAdjustment(
                 product: Product::findOrFail($data['product_id']),
-                delta: $sign * (int) $data['quantity'],
+                delta: $sign * Grams::fromKilograms($data['quantity']),
 
                 /** `enum_value()` because the Select hands its own default back as the enum and a chosen option as the string behind it, exactly as the exact count reads it. */
                 cause: AdjustmentCause::from(enum_value($data['cause'])),
@@ -273,17 +273,30 @@ class AdjustStockAction
     }
 
     /**
-     * The magnitude, always a plain positive whole number. The button says the
-     * direction, so a sign is neither typed nor accepted.
+     * The magnitude, always a plain positive number of kilograms. The button
+     * says the direction, so a sign is neither typed nor accepted.
      */
     private static function quantity(): TextInput
     {
-        return TextInput::make('quantity')
+        return self::kilograms(TextInput::make('quantity'))
             ->label('Quantity')
-            ->helperText('How many units to move — a plain positive number.')
+            ->helperText('How many kilograms to move — a plain positive number.')
             ->required()
-            ->integer()
-            ->minValue(1);
+            ->minValue(0.001);
+    }
+
+    /**
+     * A field a Merchant types kilograms into. The ledger counts grams
+     * (ADR-0035), so a part of a kilogram is taken to the gram and converted
+     * on the way to the ledger.
+     */
+    private static function kilograms(TextInput $field): TextInput
+    {
+        return $field
+            ->numeric()
+            ->step(0.001)
+            ->rule('decimal:0,3')
+            ->suffix('kg');
     }
 
     /**
@@ -323,8 +336,10 @@ class AdjustStockAction
                         return;
                     }
 
-                    if ($onHand - (int) $value < 0) {
-                        $fail("Only {$onHand} on hand, so removing ".(int) $value.' would take it below zero. Set an exact count instead.');
+                    $removing = Grams::fromKilograms($value);
+
+                    if ($onHand - $removing < 0) {
+                        $fail('Only '.Grams::format($onHand).' on hand, so removing '.Grams::format($removing).' would take it below zero. Set an exact count instead.');
                     }
                 },
             ]);

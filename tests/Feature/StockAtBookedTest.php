@@ -58,12 +58,12 @@ it('takes the units out of the ledger when a courier takes the parcel', function
 
     sendWithCourier($order, $script)->assertHasNoActionErrors();
 
-    expect($this->ledger->onHand($product))->toBe(7);
+    expect($this->ledger->onHand($product))->toBe(7000);
 
     $movement = saleMovements()->sole();
 
     /** Out, caused by the parcel itself — which is what makes a second telling of the same booking harmless. */
-    expect($movement->quantity)->toBe(-3)
+    expect($movement->quantity)->toBe(-3000)
         ->and($movement->source->is(Shipment::sole()))->toBeTrue()
 
         /**
@@ -80,7 +80,7 @@ it('stamps what a unit was worth as it left, so the shelf loses exactly what it 
 
     /** Bought at 400.00 each, which is what puts this Product in the ledger and what gives it an average at all. */
     $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
-        ['product_id' => $product->getKey(), 'quantity' => 5, 'unit_cost' => 40000],
+        ['product_id' => $product->getKey(), 'quantity' => 5000, 'unit_cost' => 40000],
     ]);
 
     $script->fakeBooked();
@@ -91,7 +91,7 @@ it('stamps what a unit was worth as it left, so the shelf loses exactly what it 
 
     /** The average in force at the moment it moved, stamped on the row and never recomputed (ADR-0022). */
     expect($movement->unit_cost)->toBe(40000)
-        ->and($this->ledger->onHand($product))->toBe(4)
+        ->and($this->ledger->onHand($product))->toBe(4000)
         ->and($this->ledger->valueAtCost($product))->toBe(160000);
 })->with('courier scripts');
 
@@ -119,7 +119,7 @@ it('moves nothing when the courier refuses the parcel, because it never left', f
     /** A refused booking records no attempt at all (ADR-0020), so there is nothing for the ledger to be asked about. */
     expect(Shipment::count())->toBe(0)
         ->and(saleMovements()->count())->toBe(0)
-        ->and($this->ledger->onHand($product))->toBe(10);
+        ->and($this->ledger->onHand($product))->toBe(10000);
 })->with('courier scripts');
 
 /*
@@ -136,7 +136,7 @@ it('moves nothing for a parcel written down and handed to nobody yet', function 
     /** Awaiting Dispatch: the row exists and the box is still on the shelf, because nobody has been handed anything. */
     expect(Shipment::sole()->status)->toBe(ShipmentStatus::Written)
         ->and(saleMovements()->count())->toBe(0)
-        ->and($this->ledger->onHand($product))->toBe(10);
+        ->and($this->ledger->onHand($product))->toBe(10000);
 })->with('courier scripts');
 
 it('takes the units when the sweep hands a written parcel over', function (CourierScript $script) {
@@ -151,7 +151,7 @@ it('takes the units when the sweep hands a written parcel over', function (Couri
 
     expect(Shipment::sole()->status)->toBe(ShipmentStatus::Booked)
         ->and(saleMovements()->count())->toBe(1)
-        ->and($this->ledger->onHand($product))->toBe(7);
+        ->and($this->ledger->onHand($product))->toBe(7000);
 })->with('courier scripts');
 
 it('moves nothing for a parcel a courier refused out of a batch', function (CourierScript $script) {
@@ -170,7 +170,7 @@ it('moves nothing for a parcel a courier refused out of a batch', function (Cour
     expect($parcel->refused_at)->not->toBeNull()
         ->and($parcel->wasHandedOver())->toBeFalse()
         ->and(saleMovements()->count())->toBe(0)
-        ->and($this->ledger->onHand($product))->toBe(10);
+        ->and($this->ledger->onHand($product))->toBe(10000);
 })->with('courier scripts');
 
 /*
@@ -197,7 +197,7 @@ it('takes the units once, however far the parcel then gets', function (CourierSc
     /** The parcel moved on and the shelf did not: the units left once, when the Courier took them. */
     expect(Shipment::sole()->status)->not->toBe(ShipmentStatus::Booked)
         ->and(saleMovements()->count())->toBe(1)
-        ->and($this->ledger->onHand($product))->toBe(7);
+        ->and($this->ledger->onHand($product))->toBe(7000);
 })->with('courier scripts');
 
 it('takes the units once when a webhook and a poll report the same booking', function (CourierScript $script) {
@@ -221,5 +221,5 @@ it('takes the units once when a webhook and a poll report the same booking', fun
     $this->artisan('couriers:sweep')->assertSuccessful();
 
     expect(saleMovements()->count())->toBe(1)
-        ->and($this->ledger->onHand($product))->toBe(7);
+        ->and($this->ledger->onHand($product))->toBe(7000);
 })->with('announcing couriers');

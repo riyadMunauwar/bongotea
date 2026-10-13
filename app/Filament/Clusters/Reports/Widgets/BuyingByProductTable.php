@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters\Reports\Widgets;
 
 use App\Filament\Widgets\Concerns\PaginatesRows;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use App\Support\Reporting\BuyingProductRow;
 use App\Support\Reporting\ReportingQuery;
@@ -73,7 +74,7 @@ class BuyingByProductTable extends TableWidget
 
                 TextColumn::make('units')
                     ->label('Units bought')
-                    ->numeric()
+                    ->formatStateUsing(fn (int $state): string => Grams::toKilograms($state))
                     ->alignEnd(),
 
                 TextColumn::make('average_unit_cost')

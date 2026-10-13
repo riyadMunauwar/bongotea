@@ -27,9 +27,9 @@ final readonly class BuyingSupplierRow
         public Supplier $supplier,
         /** Deliveries that stand: a Voided one is a delivery that did not happen. */
         public int $deliveries,
-        /** Units arrived across those deliveries. */
+        /** Grams arrived across those deliveries. */
         public int $units,
-        /** What they cost: every line's quantity at the price that line was bought at. */
+        /** What they cost: every line's grams at the price per kilogram that line was bought at. */
         public int $cost,
     ) {}
 

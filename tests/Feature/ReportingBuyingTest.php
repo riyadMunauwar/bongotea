@@ -32,9 +32,9 @@ function buyingOf(ReportingPreset $preset = ReportingPreset::Last7Days): Buying
 
 /**
  * A delivery, the way a User records one: a Supplier, the day it came, and a
- * line per Product with a quantity and what each unit cost.
+ * line per Product with a quantity in grams and what a kilogram cost.
  *
- * @param  list<array{Product, int, int}>  $lines  Product, quantity, unit cost.
+ * @param  list<array{Product, int, int}>  $lines  Product, grams, cost per kilogram.
  */
 function boughtOn(Supplier $supplier, string $day, array $lines): Supply
 {
@@ -92,11 +92,11 @@ function aWeekOfBuying(): array
     $tea = Product::factory()->create(['name' => 'Sylhet tea']);
     $mug = Product::factory()->create(['name' => 'Clay mug']);
 
-    boughtOn($dhaka, '2026-09-05', [[$tea, 10, 20000], [$mug, 4, 15000]]);
-    boughtOn($dhaka, '2026-09-08', [[$tea, 6, 22000]]);
-    boughtOn($sylhet, '2026-09-04', [[$mug, 5, 14000]]);
+    boughtOn($dhaka, '2026-09-05', [[$tea, 10000, 20000], [$mug, 4000, 15000]]);
+    boughtOn($dhaka, '2026-09-08', [[$tea, 6000, 22000]]);
+    boughtOn($sylhet, '2026-09-04', [[$mug, 5000, 14000]]);
 
-    boughtOn($dhaka, '2026-09-02', [[$tea, 100, 20000]]);
+    boughtOn($dhaka, '2026-09-02', [[$tea, 100000, 20000]]);
 
     return [$dhaka, $sylhet, $tea, $mug];
 }
@@ -105,8 +105,8 @@ it('reads the window by Supplier — how many deliveries, how many units and wha
     aWeekOfBuying();
 
     expect(buyingBySupplier(buyingOf()))->toBe([
-        ['Dhaka Traders', 2, 20, 392000],
-        ['Sylhet Supply', 1, 5, 70000],
+        ['Dhaka Traders', 2, 20000, 392000],
+        ['Sylhet Supply', 1, 5000, 70000],
     ]);
 });
 
@@ -116,8 +116,8 @@ it('reads the same window by Product, with what a unit averaged', function () {
     $buying = buyingOf();
 
     expect(buyingByProduct($buying))->toBe([
-        ['Sylhet tea', 16, 332000],
-        ['Clay mug', 9, 130000],
+        ['Sylhet tea', 16000, 332000],
+        ['Clay mug', 9000, 130000],
     ]);
 
     expect($buying->byProduct[0]->averageUnitCost())->toBe(20750)
@@ -130,7 +130,7 @@ it('totals the window across every Supplier and Product alike', function () {
     $buying = buyingOf();
 
     expect($buying->deliveries)->toBe(3)
-        ->and($buying->units)->toBe(25)
+        ->and($buying->units)->toBe(25000)
         ->and($buying->cost)->toBe(462000);
 });
 
@@ -138,31 +138,31 @@ it('cuts on the day the goods came, in the Merchant\'s own timezone', function (
     aWeekOfBuying();
 
     /** The 2nd is the day before the window opens, and its hundred units are nowhere in it. */
-    expect(buyingOf()->units)->toBe(25);
+    expect(buyingOf()->units)->toBe(25000);
 
     /** Only the 8th falls in yesterday. */
     expect(buyingBySupplier(buyingOf(ReportingPreset::Yesterday)))->toBe([
-        ['Dhaka Traders', 1, 6, 132000],
+        ['Dhaka Traders', 1, 6000, 132000],
     ]);
 });
 
 it('leaves a Voided delivery out of every buying figure', function () {
     [$dhaka, , $tea] = aWeekOfBuying();
 
-    $mistake = boughtOn($dhaka, '2026-09-06', [[$tea, 500, 20000]]);
+    $mistake = boughtOn($dhaka, '2026-09-06', [[$tea, 500000, 20000]]);
 
-    expect(buyingOf()->units)->toBe(525);
+    expect(buyingOf()->units)->toBe(525000);
 
     app(StockLedger::class)->voidSupply($mistake);
 
     $buying = buyingOf();
 
-    expect($buying->units)->toBe(25)
+    expect($buying->units)->toBe(25000)
         ->and($buying->cost)->toBe(462000)
         ->and($buying->deliveries)->toBe(3)
         ->and(buyingBySupplier($buying))->toBe([
-            ['Dhaka Traders', 2, 20, 392000],
-            ['Sylhet Supply', 1, 5, 70000],
+            ['Dhaka Traders', 2, 20000, 392000],
+            ['Sylhet Supply', 1, 5000, 70000],
         ]);
 });
 
@@ -187,7 +187,7 @@ it('keeps a Product withdrawn from the catalogue under what was bought of it, an
 
     expect($row)->not->toBeNull()
         ->and($row->isDeleted())->toBeTrue()
-        ->and($row->units)->toBe(9);
+        ->and($row->units)->toBe(9000);
 });
 
 it('reads a window that bought nothing as no rows and nothing spent', function () {

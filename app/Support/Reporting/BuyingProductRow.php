@@ -3,6 +3,7 @@
 namespace App\Support\Reporting;
 
 use App\Models\Product;
+use App\Support\Inventory\Grams;
 
 /**
  * One line of the Buying report read by Product: what was bought of it inside
@@ -30,9 +31,9 @@ final readonly class BuyingProductRow
 {
     public function __construct(
         public Product $product,
-        /** Units arrived inside the window, across every Supplier. */
+        /** Grams arrived inside the window, across every Supplier. */
         public int $units,
-        /** What they cost: every line's quantity at the price that line was bought at. */
+        /** What they cost: every line's grams at the price per kilogram that line was bought at. */
         public int $cost,
     ) {}
 
@@ -52,8 +53,8 @@ final readonly class BuyingProductRow
     }
 
     /**
-     * What one unit averaged over the window, in minor units — the cost
-     * divided by the units, and null where no units arrived at all.
+     * What one kilogram averaged over the window, in minor units — the cost
+     * divided by the kilograms, and null where nothing arrived at all.
      *
      * Null rather than nought for the reason every other absent figure in
      * this module is: nothing bought has no price, and a zero in a money
@@ -61,6 +62,6 @@ final readonly class BuyingProductRow
      */
     public function averageUnitCost(): ?int
     {
-        return $this->units === 0 ? null : (int) round($this->cost / $this->units);
+        return $this->units === 0 ? null : (int) round($this->cost * Grams::PER_KILOGRAM / $this->units);
     }
 }

@@ -65,7 +65,7 @@ function parcelPartlyDelivered(CourierScript $script, int $held = 10): array
         'quantity' => 2,
     ]);
 
-    app(StockLedger::class)->recordCount($refused, $held, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($refused, $held * 1000, AdjustmentCause::OpeningCount);
 
     $parcel = parcelReportedAs($order->refresh(), $script, $script->partlyDeliveredWording());
 
@@ -135,8 +135,8 @@ it('writes nothing of its own when the courier says the parcel was partly delive
         ->and(parcelMovements(StockMovementReason::Unsold)->count())->toBe(0)
 
         /** The units left on the parcel and nothing has brought them back: neither returned nor lost. */
-        ->and($this->ledger->onHand($kept))->toBe(7)
-        ->and($this->ledger->onHand($refused))->toBe(8)
+        ->and($this->ledger->onHand($kept))->toBe(7000)
+        ->and($this->ledger->onHand($refused))->toBe(8000)
 
         /** And the question is open, which is what puts the Order in front of a User. */
         ->and($parcel->answered_at)->toBeNull();
@@ -155,7 +155,7 @@ it('puts back the lines a User says came back, and nothing for the rest', functi
 
     $movement = parcelMovements(StockMovementReason::PartialReturn)->sole();
 
-    expect($movement->quantity)->toBe(2)
+    expect($movement->quantity)->toBe(2000)
         ->and($movement->product->is($refused))->toBeTrue()
         ->and($movement->source->is($parcel))->toBeTrue()
 
@@ -168,8 +168,8 @@ it('puts back the lines a User says came back, and nothing for the rest', functi
         ->and($movement->user_id)->toBe($this->answering->getKey())
 
         /** Two of them back on the shelf, and the three the Customer kept still gone. */
-        ->and($this->ledger->onHand($refused))->toBe(10)
-        ->and($this->ledger->onHand($kept))->toBe(7)
+        ->and($this->ledger->onHand($refused))->toBe(10000)
+        ->and($this->ledger->onHand($kept))->toBe(7000)
 
         /** Answered, so the question is closed and whoever closed it is on the record. */
         ->and($parcel->refresh()->answered_at)->not->toBeNull()
@@ -182,7 +182,7 @@ it('brings the units back at what they left at, however the price has moved sinc
 
     /** Bought at 400.00 each, which is the average in force when the parcel goes out. */
     $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
-        ['product_id' => $product->getKey(), 'quantity' => 5, 'unit_cost' => 40000],
+        ['product_id' => $product->getKey(), 'quantity' => 5000, 'unit_cost' => 40000],
     ]);
 
     $script->fakeBooked();
@@ -190,7 +190,7 @@ it('brings the units back at what they left at, however the price has moved sinc
 
     /** And a second delivery at 600.00 lands while the parcel is out. */
     $this->ledger->recordSupply(Supplier::factory()->create(), now(), [
-        ['product_id' => $product->getKey(), 'quantity' => 5, 'unit_cost' => 60000],
+        ['product_id' => $product->getKey(), 'quantity' => 5000, 'unit_cost' => 60000],
     ]);
 
     answeringAfresh();
@@ -203,7 +203,7 @@ it('brings the units back at what they left at, however the price has moved sinc
 
     /** What came back is what went out: the figure stamped on the Sale, not the blend the shelf holds today (ADR-0022). */
     expect(parcelMovements(StockMovementReason::PartialReturn)->sole()->unit_cost)->toBe(40000)
-        ->and($this->ledger->onHand($product))->toBe(10)
+        ->and($this->ledger->onHand($product))->toBe(10000)
         ->and($this->ledger->valueAtCost($product))->toBe(500000)
         ->and($this->ledger->averageCost($product))->toBe(50000);
 })->with('courier scripts');
@@ -219,8 +219,8 @@ it('closes the question with nothing where nothing came back', function (Courier
     sayWhatCameBack($order, []);
 
     expect(parcelMovements(StockMovementReason::PartialReturn)->count())->toBe(0)
-        ->and($this->ledger->onHand($kept))->toBe(7)
-        ->and($this->ledger->onHand($refused))->toBe(8)
+        ->and($this->ledger->onHand($kept))->toBe(7000)
+        ->and($this->ledger->onHand($refused))->toBe(8000)
         ->and($parcel->refresh()->answered_at)->not->toBeNull();
 })->with('courier scripts');
 
@@ -257,7 +257,7 @@ it('answers the same parcel once, whoever asks and however often', function (Cou
     expect(fn () => $this->ledger->recordPartialReturn($parcel->refresh(), [lineFor($order, $refused)->getKey()], $this->answering))
         ->toThrow(ParcelNotAwaitingAnswer::class)
         ->and(parcelMovements(StockMovementReason::PartialReturn)->count())->toBe(1)
-        ->and($this->ledger->onHand($refused))->toBe(10);
+        ->and($this->ledger->onHand($refused))->toBe(10000);
 })->with('courier scripts');
 
 it('asks nothing of a parcel that arrived whole or came back whole', function (CourierScript $script) {
@@ -292,7 +292,7 @@ it('puts back only the rest when the courier later says the whole parcel came ba
      * Customer was holding comes back now.
      */
     expect(Shipment::sole()->status)->toBe(ShipmentStatus::Returned)
-        ->and(parcelMovements(StockMovementReason::Return)->sole()->quantity)->toBe(3)
-        ->and($this->ledger->onHand($kept))->toBe(10)
-        ->and($this->ledger->onHand($refused))->toBe(10);
+        ->and(parcelMovements(StockMovementReason::Return)->sole()->quantity)->toBe(3000)
+        ->and($this->ledger->onHand($kept))->toBe(10000)
+        ->and($this->ledger->onHand($refused))->toBe(10000);
 })->with('announcing couriers');
