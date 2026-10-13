@@ -305,7 +305,7 @@ class PaymentSettings extends SettingsGroup
     {
         $path = $this->logoPathFor($method);
 
-        return $path === null ? asset($method->logoPath()) : Storage::disk(self::LOGO_DISK)->url($path);
+        return $path === null ? asset($method->logoPath()) : url(Storage::disk(self::LOGO_DISK)->url($path));
     }
 
     /**

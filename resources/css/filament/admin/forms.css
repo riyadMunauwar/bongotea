@@ -166,6 +166,21 @@
 }
 
 /*
+ * `ImageSlot` draws an upload at its slot's shape, and a shape alone fills the
+ * column: a 4:5 card or a square logo spanning a full-width section is a
+ * preview taller than the screen. The width is capped instead, so every shape
+ * keeps its proportions at the size of a thumbnail. A gallery's items take a
+ * fixed width rather than a half or third of the section for the same reason.
+ */
+.fi-fo-file-upload .filepond--root[data-style-panel-layout='integrated'] {
+    max-width: 16rem;
+}
+
+.fi-fo-file-upload .filepond--root[data-style-panel-layout='grid'] .filepond--item {
+    width: 10rem;
+}
+
+/*
  * The date picker's panel floats, and `components.css` has already handed it
  * back its shadow. Its surface and edge are still its own.
  */

@@ -162,7 +162,7 @@ it('draws the default logo until a replacement is stored, then the replacement f
     storePaymentSettings(['sslcommerzLogo' => 'payment-methods/mine.svg']);
 
     expect(app(PaymentSettings::class)->logoPathFor(PaymentMethod::SslCommerz))->toBe('payment-methods/mine.svg')
-        ->and(PaymentMethod::SslCommerz->logoUrl())->toBe(Storage::disk(PaymentSettings::LOGO_DISK)->url('payment-methods/mine.svg'))
+        ->and(PaymentMethod::SslCommerz->logoUrl())->toBe(url('/storage/payment-methods/mine.svg'))
         ->and(PaymentMethod::CashOnDelivery->logoUrl())->toBe(asset('images/payment-methods/cash-on-delivery.svg'));
 });
 

@@ -41,11 +41,17 @@ return [
          * disk's images cannot carry — they are frozen into static pages that
          * outlive any signature — and it would answer /storage, which the
          * document-root link below already answers by reading the file.
+         *
+         * The 'url' is root-relative, not built from APP_URL. The admin's
+         * upload preview fetches it, and a fetch is blocked outright when
+         * APP_URL is http:// on an https:// site or names another host, so the
+         * preview spins forever. Whatever needs an absolute address wraps it
+         * in url(), which takes the host the visitor actually came in on.
          */
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

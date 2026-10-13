@@ -299,7 +299,7 @@ it('stores a replacement logo on the public local disk, keeps only its path in t
 
     Storage::disk(PaymentSettings::LOGO_DISK)->assertExists($path);
 
-    expect(PaymentMethod::SslCommerz->logoUrl())->toBe(Storage::disk(PaymentSettings::LOGO_DISK)->url($path))
+    expect(PaymentMethod::SslCommerz->logoUrl())->toBe(url("/storage/{$path}"))
         ->and(PaymentMethod::CashOnDelivery->logoUrl())->toBe(asset(PaymentMethod::CashOnDelivery->logoPath()));
 
     /** The row holds the path and nothing else about the file. */
