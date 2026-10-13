@@ -11,7 +11,7 @@ import type { PacketBasketProps } from '@/types/blocks';
 import { Picture, SectionHeading } from './shared';
 
 /**
- * The packet basket (প্যাকেট ঝুড়ি) as a page (ADR-0034): each Pack with its
+ * The packet basket (খুচরা কার্ট) as a page (ADR-0034): each Pack with its
  * tea, size, Pack Price, a stepper, a remove button and its line total; what
  * can no longer be ordered flagged and left out of every figure; and beside
  * it the subtotal, the retail Delivery Charge, the total and how far free

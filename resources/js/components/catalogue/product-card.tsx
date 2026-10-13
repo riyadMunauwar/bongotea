@@ -121,7 +121,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             className="box-border flex w-full cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 bg-primary px-[6px] py-[10px] text-[13px] font-semibold text-white hover:bg-primary-dark md:rounded-[10px] md:p-3 md:text-[15px] md:font-bold"
                         >
                             <CartIcon size={18} className="max-md:hidden" />
-                            {bn.cart.add}
+                            {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
                         </button>
                     ) : (
                         <Stepper

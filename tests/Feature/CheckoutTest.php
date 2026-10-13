@@ -258,7 +258,7 @@ it('asks for the details an order cannot go without, in Bangla', function () {
             'phone' => 'মোবাইল নম্বর লিখুন।',
             'district' => 'জেলা বেছে নিন।',
             'address' => 'ঠিকানা লিখুন।',
-            'lines' => 'কার্টে কোনো চা নেই।',
+            'lines' => 'পাইকারি কার্টে কোনো চা নেই।',
         ]);
 });
 

@@ -7,7 +7,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * A live Block: the retail Cart (প্যাকেট ঝুড়ি) as a page — each Pack with a
+ * A live Block: the retail Cart (খুচরা কার্ট) as a page — each Pack with a
  * stepper and a remove button, the subtotal, the retail Delivery Charge, the
  * total and how far free delivery is (ADR-0034). The Merchant writes only the
  * wording; the Packs and every figure come from the shared `retailPricing`

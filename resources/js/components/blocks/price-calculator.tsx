@@ -1,6 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
 import { currentStepRange, discountLabel, feeText } from '@/components/cart/figures';
+import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -52,42 +52,6 @@ export function PriceCalculator({ heading, text, categories }: PriceCalculatorPr
 
             <Panel cart={cart} products={categories.flatMap((category) => category.products)} />
         </section>
-    );
-}
-
-/** "সব মুছুন", which empties the whole Cart only once the buyer says yes. */
-function ClearAll({ cart }: { cart: UseCart }) {
-    const [confirming, setConfirming] = useState(false);
-
-    if (cart.isEmpty) {
-        return null;
-    }
-
-    if (!confirming) {
-        return (
-            <button type="button" onClick={() => setConfirming(true)} className="cursor-pointer border-0 bg-transparent px-0 py-[6px] text-[13px] font-semibold text-primary">
-                {bn.calculator.clearAll}
-            </button>
-        );
-    }
-
-    return (
-        <span role="alertdialog" aria-label={bn.calculator.confirmClear} className="flex flex-wrap items-center justify-end gap-2 text-[13px]">
-            <span className="text-ink">{bn.calculator.confirmClear}</span>
-            <button
-                type="button"
-                onClick={() => {
-                    cart.clear();
-                    setConfirming(false);
-                }}
-                className="cursor-pointer rounded-[8px] border-0 bg-error px-3 py-[6px] font-semibold text-white"
-            >
-                {bn.calculator.confirmYes}
-            </button>
-            <button type="button" onClick={() => setConfirming(false)} className="cursor-pointer rounded-[8px] border border-input bg-white px-3 py-[6px] font-semibold text-ink">
-                {bn.calculator.confirmNo}
-            </button>
-        </span>
     );
 }
 

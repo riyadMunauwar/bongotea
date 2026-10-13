@@ -1,19 +1,20 @@
-import { usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { MenuAnchor } from '@/components/storefront/menu-anchor';
 import { BagIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { MAX_PACKS, type CartPack } from '@/lib/retail-cart';
+import { retailCheckoutUrl } from '@/lib/return-path';
 import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import { packName } from './figures';
 
 /**
- * The প্যাকেট কিনুন button, for a Product open to retail and nothing else
+ * The খুচরা কিনুন button, for a Product open to retail and nothing else
  * (ADR-0034): it opens the pack chooser, which puts the chosen Packs in the
- * packet basket. A Product with no Packs draws nothing. The kilogram stepper
+ * খুচরা কার্ট and goes straight on to the Checkout. A Product with no Packs
+ * draws nothing. The kilogram stepper
  * beside it is the bulk Cart's and is not touched.
  */
 export function PackChooserButton({ productId, productName, className }: { productId: number; productName: string; className?: string }) {
@@ -38,7 +39,13 @@ export function PackChooserButton({ productId, productName, className }: { produ
                 )}
             >
                 <BagIcon size={18} className="max-md:hidden" />
-                {held > 0 ? bn.packs.inBasket(toBanglaDigits(held)) : bn.packs.buy}
+                {held > 0 ? (
+                    bn.packs.inBasket(toBanglaDigits(held))
+                ) : (
+                    <>
+                        {bn.packs.buy} <span className="font-normal opacity-80">· {bn.packs.buyUnit}</span>
+                    </>
+                )}
             </button>
             <PackChooser productName={productName} packs={open ? packs : null} onClose={() => setOpen(false)} />
         </>
@@ -52,12 +59,12 @@ export function PackChooserButton({ productId, productName, className }: { produ
  */
 function PackChooser({ productName, packs, onClose }: { productName: string; packs: CartPack[] | null; onClose: () => void }) {
     const dialog = useRef<HTMLDialogElement>(null);
-    const { links } = usePage().props;
+    const { props, url } = usePage();
+    const { links } = props;
     const retail = useRetailCart();
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);
-    const [added, setAdded] = useState(false);
 
     useEffect(() => {
         const element = dialog.current;
@@ -69,7 +76,6 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
         if (packs && !element.open) {
             setChosen(packs.find((pack) => pack.isOrderable)?.id ?? null);
             setCount(1);
-            setAdded(false);
             element.showModal();
         }
 
@@ -78,13 +84,15 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
         }
     }, [packs]);
 
-    const add = () => {
+    /** Adds the chosen Pack and goes straight on to the retail Checkout, remembering this page for "আরও চা যোগ করুন". */
+    const buyNow = () => {
         if (chosen === null) {
             return;
         }
 
         retail.set(chosen, retail.countOf(chosen) + count);
-        setAdded(true);
+        onClose();
+        router.visit(retailCheckoutUrl(links.checkout, url));
     };
 
     return (
@@ -115,10 +123,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
                                 role="radio"
                                 aria-checked={chosen === pack.id}
                                 disabled={!pack.isOrderable}
-                                onClick={() => {
-                                    setChosen(pack.id);
-                                    setAdded(false);
-                                }}
+                                onClick={() => setChosen(pack.id)}
                                 className={cn(
                                     'flex cursor-pointer items-center justify-between gap-3 rounded-[10px] border bg-white px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50',
                                     chosen === pack.id ? 'border-primary bg-green-50' : 'border-border',
@@ -147,23 +152,14 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
                         <PackStepper count={count} onChange={(next) => setCount(Math.min(MAX_PACKS, Math.max(1, next)))} />
                     </div>
 
-                    {added ? (
-                        <MenuAnchor
-                            href={links.packetBasket}
-                            className="rounded-[10px] bg-gold-accent px-4 py-[13px] text-center text-[15px] font-bold text-ink no-underline hover:bg-gold-hover hover:text-ink"
-                        >
-                            {bn.packs.added} · {bn.packs.viewBasket}
-                        </MenuAnchor>
-                    ) : (
-                        <button
-                            type="button"
-                            disabled={chosen === null}
-                            onClick={add}
-                            className="cursor-pointer rounded-[10px] border-0 bg-primary px-4 py-[13px] text-[15px] font-bold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
-                        >
-                            {bn.packs.add}
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        disabled={chosen === null}
+                        onClick={buyNow}
+                        className="cursor-pointer rounded-[10px] border-0 bg-primary px-4 py-[13px] text-[15px] font-bold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
+                    >
+                        {bn.packs.add}
+                    </button>
                 </div>
             )}
         </dialog>

@@ -1,5 +1,5 @@
 /**
- * The retail Cart, the প্যাকেট ঝুড়ি (ADR-0034): `{packId: count}` kept in this
+ * The retail Cart, the খুচরা কার্ট (ADR-0034): `{packId: count}` kept in this
  * browser's `localStorage` beside the bulk Cart (`lib/cart.ts`) and never
  * merged with it, under a key of its own. Every view of it — the pack
  * chooser, the header's bag, the packet basket page, the cart bar — reads and

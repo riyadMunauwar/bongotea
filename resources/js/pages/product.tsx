@@ -170,7 +170,7 @@ export default function ProductPage() {
                                     }}
                                     className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
                                 >
-                                    {bn.product.addToOrder}
+                                    {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
                                 </button>
                             </span>
                         ) : (

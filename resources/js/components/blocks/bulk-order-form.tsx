@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { deliveryNote, discountLabel, feeText, nextDropText, stepName } from '@/components/cart/figures';
+import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -26,7 +27,8 @@ const FLASH_MILLISECONDS = 1600;
  * price now — the MRP struck through and what is off it whenever the price
  * is below it — what it will cost at its next cheaper Tier, −/+, a
  * typed quantity and quick-set chips, and its line total. Beside it (below
- * on a phone, as a bar at the bottom) the summary of the whole Cart. A row
+ * on a phone, as a bar at the bottom) the summary of the whole Cart, and
+ * above the rows "সব মুছুন" while there is anything to clear. A row
  * named in the address (`#tea-12`, from a Product page's add button) is
  * scrolled to and flashed.
  */
@@ -52,6 +54,11 @@ export function BulkOrderForm({ heading, text, quickChips, showTierList, categor
 
                 <div className="grid items-start gap-8 pb-5 md:grid-cols-[minmax(0,1fr)_360px] md:pb-14">
                     <div className="flex flex-col gap-2 min-[1100px]:gap-[10px]">
+                        {!cart.isEmpty && (
+                            <div className="flex justify-end">
+                                <ClearAll cart={cart} />
+                            </div>
+                        )}
                         {categories.map((category) => (
                             <div key={category.id} style={themeStyle(category.theme)} className="flex flex-col gap-2 min-[1100px]:gap-[10px]">
                                 <div className="flex items-baseline gap-2 px-[2px] pt-[6px]">
