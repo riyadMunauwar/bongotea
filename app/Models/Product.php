@@ -29,9 +29,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * and the Product is still shown greyed), and the soft delete, which is
  * "taken out of the catalogue" — for good, while its address keeps
  * answering. Every Characteristic is optional, so a Product can be published
- * bare and enriched later: nine fixed ones in columns of their own, and
+ * bare and enriched later: ten fixed ones in columns of their own, and
  * `custom_characteristics`, the Merchant's own `{label, value}` rows for this
- * Product alone, drawn after them.
+ * Product alone, drawn after them. `storage_tips` are the Product's own
+ * `{heading, explanation}` rows on keeping its tea, which a new Product's form
+ * starts with the common four of.
  *
  * `tiers` are the Product's own Tiers (ADR-0031): `{min, max|null, price}`
  * in minor units, covering every kilogram from one once and never rising in
@@ -43,9 +45,9 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
-    'tiers', 'strength', 'tea_type', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
+    'tiers', 'strength', 'tea_type', 'grade', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
     'cups_per_kilogram', 'package_weight', 'custom_characteristics', 'best_for', 'not_best_for',
-    'brewing_steps', 'business_tips', 'badge', 'search_keywords', 'status', 'is_available',
+    'brewing_steps', 'business_tips', 'storage_tips', 'badge', 'search_keywords', 'status', 'is_available',
     'seo_title', 'seo_description', 'seo_image',
 ])]
 class Product extends Model implements HasMedia
@@ -80,6 +82,7 @@ class Product extends Model implements HasMedia
             'best_for' => 'array',
             'brewing_steps' => 'array',
             'business_tips' => 'array',
+            'storage_tips' => 'array',
             'status' => ProductStatus::class,
             'first_published_at' => 'datetime',
             'is_available' => 'boolean',
@@ -161,6 +164,22 @@ class Product extends Model implements HasMedia
     public function priceTiers(): array
     {
         return ProductTiers::from($this->tiers ?? ProductTiers::flat((int) $this->price));
+    }
+
+    /**
+     * The four Storage tips nearly every tea shares, which a new Product
+     * starts with and the Merchant changes only for a tea kept differently.
+     *
+     * @return list<array{heading: string, explanation: string}>
+     */
+    public static function commonStorageTips(): array
+    {
+        return [
+            ['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => 'ঠান্ডা ও আর্দ্রতামুক্ত স্থানে রাখুন।'],
+            ['heading' => 'বায়ুরোধী পাত্রে রাখুন', 'explanation' => 'প্যাকেট খোলার পর মুখ বন্ধ রাখুন।'],
+            ['heading' => 'রোদ থেকে দূরে রাখুন', 'explanation' => 'সূর্যালোক ও অতিরিক্ত তাপ এড়িয়ে চলুন।'],
+            ['heading' => 'তীব্র গন্ধ থেকে দূরে রাখুন', 'explanation' => 'মসলা, সাবান ও সুগন্ধি থেকে আলাদা রাখুন।'],
+        ];
     }
 
     public function isSlugLocked(): bool

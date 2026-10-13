@@ -20,6 +20,7 @@ use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -110,45 +111,76 @@ class ProductForm
 
     /**
      * What the tea is like, all optional; the Product page shows only what is
-     * filled in. The nine fixed Characteristics sit three to a row in the
-     * order the page draws them, the Merchant's own follow, and the phrases,
-     * the brewing steps and the business tips run the width, the tips folded
-     * until there are some.
+     * filled in. The Characteristics are grouped and ordered exactly as the
+     * page draws them — the basics, the quality, the Merchant's own, then the
+     * Storage tips — so a Merchant fills them in the order a Customer reads
+     * them. The phrases, the brewing steps and the business tips follow, the
+     * tips folded until there are some.
      */
     private static function teaProfileSection(): Section
     {
         return Section::make('Tea profile')
             ->description('All optional; the Product page shows only what is filled in.')
-            ->columns(['default' => 1, 'sm' => 3])
+            ->columns(1)
             ->schema([
-                Select::make('strength')
-                    ->options(Strength::class)
-                    ->placeholder('Not set')
-                    ->helperText('৫+ is the strongest liquor, ২+ the mildest.'),
-
-                self::characteristicInput('tea_type', 'Tea type'),
-                self::characteristicInput('particle_size', 'Tea particle size'),
-                self::characteristicInput('liquor_colour', 'Liquor colour'),
-                self::characteristicInput('liquor_body', 'Liquor body'),
-                self::characteristicInput('aroma', 'Aroma'),
-                self::characteristicInput('infusion', 'Infusion')
-                    ->helperText('How long it steeps, e.g. "৩–৪ মিনিট".'),
-                self::characteristicInput('cups_per_kilogram', 'Cups per kg')
-                    ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".'),
-                self::characteristicInput('package_weight', 'Weight / package'),
-
-                Repeater::make('custom_characteristics')
-                    ->label('More characteristics')
-                    ->helperText('Anything else about this tea alone, shown after the ones above.')
+                Fieldset::make('Basics')
+                    ->columns(['default' => 1, 'sm' => 2])
                     ->schema([
-                        TextInput::make('label')->required()->maxLength(60),
-                        TextInput::make('value')->required()->maxLength(255),
-                    ])
-                    ->columns(2)
-                    ->defaultItems(0)
-                    ->reorderable()
-                    ->addActionLabel('Add a characteristic')
-                    ->columnSpanFull(),
+                        self::characteristicInput('package_weight', 'Weight / package'),
+                        self::characteristicInput('tea_type', 'Tea type'),
+                        self::characteristicInput('particle_size', 'Particle size')
+                            ->helperText('How big the grain looks, e.g. "মাঝারি".'),
+                        self::characteristicInput('cups_per_kilogram', 'Cups per kg')
+                            ->helperText('As buyers should read it, e.g. "প্রায় ৪০০–৪৫০ কাপ".'),
+                    ]),
+
+                Fieldset::make('Quality')
+                    ->columns(['default' => 1, 'sm' => 2])
+                    ->schema([
+                        Select::make('strength')
+                            ->options(Strength::class)
+                            ->placeholder('Not set')
+                            ->helperText('৫+ is the strongest liquor, ২+ the mildest. Shown as সামগ্রিক রেটিং.'),
+                        self::characteristicInput('grade', 'Grade')
+                            ->helperText('The trade name, e.g. "লিফ", "BOP", "ডাস্ট".'),
+                        self::characteristicInput('liquor_colour', 'Liquor colour'),
+                        self::characteristicInput('aroma', 'Aroma'),
+                        self::characteristicInput('liquor_body', 'Liquor body'),
+                        self::characteristicInput('infusion', 'Infusion')
+                            ->helperText('e.g. "৩–৪ মিনিট".'),
+                    ]),
+
+                Fieldset::make('Other')
+                    ->columns(1)
+                    ->schema([
+                        Repeater::make('custom_characteristics')
+                            ->hiddenLabel()
+                            ->helperText('Anything else about this tea alone, shown under অন্যান্য.')
+                            ->schema([
+                                TextInput::make('label')->required()->maxLength(60),
+                                TextInput::make('value')->required()->maxLength(255),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->reorderable()
+                            ->addActionLabel('Add a characteristic'),
+                    ]),
+
+                Fieldset::make('Storage')
+                    ->columns(1)
+                    ->schema([
+                        Repeater::make('storage_tips')
+                            ->hiddenLabel()
+                            ->helperText('How to keep this tea, shown in this order. A new Product starts with the four common tips.')
+                            ->schema([
+                                TextInput::make('heading')->required()->maxLength(60),
+                                TextInput::make('explanation')->required()->maxLength(255),
+                            ])
+                            ->columns(2)
+                            ->default(Product::commonStorageTips())
+                            ->reorderable()
+                            ->addActionLabel('Add a storage tip'),
+                    ]),
 
                 TagsInput::make('best_for')
                     ->label('Best for')

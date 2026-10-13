@@ -232,7 +232,8 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
             'description' => '<p>বাগানের কচি পাতা।</p>',
             'strength' => Strength::FourMinus->value,
             'tea_type' => 'সিটিসি',
-            'particle_size' => 'বিওপি',
+            'grade' => 'বিওপি',
+            'particle_size' => 'মাঝারি',
             'liquor_colour' => 'গাঢ় লালচে বাদামি',
             'liquor_body' => 'ঘন লিকার',
             'aroma' => 'তীব্র সুগন্ধ',
@@ -252,6 +253,7 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ->set('data.custom_characteristics', [['label' => 'বাগান', 'value' => 'সিলেট'], ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ']])
         ->set('data.brewing_steps', [['step' => 'পানি ফুটিয়ে নিন।'], ['step' => 'প্রতি কাপে ২ গ্রাম দিন।'], ['step' => '৩ মিনিট রাখুন।']])
         ->set('data.business_tips', [['tip' => 'এক'], ['tip' => 'দুই'], ['tip' => 'তিন'], ['tip' => 'চার']])
+        ->set('data.storage_tips', [['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => 'ঠান্ডা স্থানে রাখুন।']])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -261,12 +263,15 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ->and($product->brand->is($this->brand))->toBeTrue()
         ->and($product->tags->modelKeys())->toEqualCanonicalizing([$milk->getKey(), $hotel->getKey()])
         ->and($product->strength)->toBe(Strength::FourMinus)
+        ->and($product->grade)->toBe('বিওপি')
+        ->and($product->particle_size)->toBe('মাঝারি')
         ->and($product->liquor_body)->toBe('ঘন লিকার')
         ->and($product->package_weight)->toBe('১ কেজি প্যাকেট')
         ->and($product->custom_characteristics)->toBe([['label' => 'বাগান', 'value' => 'সিলেট'], ['label' => 'সংগ্রহ', 'value' => 'দ্বিতীয় ফ্লাশ']])
         ->and($product->best_for)->toBe(['দুধ চা', 'মালাই চা'])
         ->and($product->brewing_steps)->toBe(['পানি ফুটিয়ে নিন।', 'প্রতি কাপে ২ গ্রাম দিন।', '৩ মিনিট রাখুন।'])
         ->and($product->business_tips)->toBe(['এক', 'দুই', 'তিন', 'চার'])
+        ->and($product->storage_tips)->toBe([['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => 'ঠান্ডা স্থানে রাখুন।']])
         ->and($product->search_keywords)->toBe('premium,kodom')
         ->and($product->is_available)->toBeFalse()
         ->and($product->status)->toBe(ProductStatus::Published)
@@ -289,6 +294,11 @@ it('publishes a Product with nothing but its name, slug, Category, Brand, MRP an
         ->assertHasNoFormErrors();
 
     expect(Product::query()->where('slug', 'bare')->sole()->strength)->toBeNull();
+});
+
+it('starts a new Product with the four common Storage tips, which the Merchant may change', function () {
+    Livewire::test(CreateProduct::class)
+        ->assertSet('data.storage_tips', fn (array $tips): bool => array_values($tips) === Product::commonStorageTips());
 });
 
 /*
@@ -475,7 +485,7 @@ it('requires a Category and a Brand on every Product', function () {
         ->assertHasFormErrors(['category_id' => 'required', 'brand_id' => 'required']);
 });
 
-it('refuses a strength that is not one of the grades and a custom Characteristic missing its label or value', function () {
+it('refuses a strength that is not one of the grades, and a custom Characteristic or Storage tip missing half of itself', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Too much',
@@ -485,8 +495,9 @@ it('refuses a strength that is not one of the grades and a custom Characteristic
             'strength' => 11,
         ])
         ->set('data.custom_characteristics', [['label' => 'বাগান', 'value' => ''], ['label' => '', 'value' => 'সিলেট']])
+        ->set('data.storage_tips', [['heading' => '', 'explanation' => 'ঠান্ডা স্থানে রাখুন।'], ['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => '']])
         ->call('create')
-        ->assertHasFormErrors(['strength', 'custom_characteristics.0.value', 'custom_characteristics.1.label']);
+        ->assertHasFormErrors(['strength', 'custom_characteristics.0.value', 'custom_characteristics.1.label', 'storage_tips.0.heading', 'storage_tips.1.explanation']);
 });
 
 it('keeps the slug of a Product taken out of the catalogue claimed', function () {

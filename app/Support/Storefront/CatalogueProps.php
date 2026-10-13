@@ -124,6 +124,7 @@ class CatalogueProps
                 ->values()
                 ->all(),
             'teaType' => self::text($product->tea_type),
+            'grade' => self::text($product->grade),
             'particleSize' => self::text($product->particle_size),
             'liquorColour' => self::text($product->liquor_colour),
             'liquorBody' => self::text($product->liquor_body),
@@ -136,6 +137,7 @@ class CatalogueProps
             'notBestFor' => self::text($product->not_best_for),
             'brewingSteps' => self::texts($product->brewing_steps),
             'businessTips' => self::texts($product->business_tips),
+            'storageTips' => self::storageTips($product->storage_tips),
         ];
     }
 
@@ -243,6 +245,32 @@ class CatalogueProps
         }
 
         return $characteristics;
+    }
+
+    /**
+     * The Product's Storage tips, in its order; a tip missing its heading or
+     * its explanation is half a sentence, so it is not sent.
+     *
+     * @return list<array{heading: string, explanation: string}>
+     */
+    private static function storageTips(mixed $rows): array
+    {
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $tips = [];
+
+        foreach ($rows as $row) {
+            $heading = self::text($row['heading'] ?? null);
+            $explanation = self::text($row['explanation'] ?? null);
+
+            if ($heading !== null && $explanation !== null) {
+                $tips[] = ['heading' => $heading, 'explanation' => $explanation];
+            }
+        }
+
+        return $tips;
     }
 
     /**

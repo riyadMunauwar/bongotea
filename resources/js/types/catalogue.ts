@@ -54,6 +54,7 @@ export type ProductDetail = ProductCard & {
     /** In order; the first is the cover. */
     gallery: string[];
     teaType: string | null;
+    grade: string | null;
     particleSize: string | null;
     liquorColour: string | null;
     liquorBody: string | null;
@@ -61,13 +62,15 @@ export type ProductDetail = ProductCard & {
     infusion: string | null;
     cupsPerKilogram: string | null;
     packageWeight: string | null;
-    /** The Merchant's own, for this Product alone, drawn after the fixed ones. */
+    /** The Merchant's own, for this Product alone, drawn under অন্যান্য. */
     customCharacteristics: { label: string; value: string }[];
     bestFor: string[];
     notBestFor: string | null;
     /** In order; numbered on the page. */
     brewingSteps: string[];
     businessTips: string[];
+    /** In order; each a heading and the line explaining it. */
+    storageTips: { heading: string; explanation: string }[];
 };
 
 export type CategoryDetail = CategoryReference & {

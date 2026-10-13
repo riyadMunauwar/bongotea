@@ -1,5 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
 import { OtherTeas } from '@/components/catalogue/other-teas';
@@ -22,7 +23,9 @@ type ProductPageProps = {
 
 /**
  * A Product at its own address: its gallery, what it is like, where it does
- * best, how to brew and sell it, its own Tier ladder, and other teas. Every
+ * best, how to brew, keep and sell it, its own Tier ladder, and other teas.
+ * Its Characteristics are drawn in groups — the basics, the quality, the
+ * Merchant's own under অন্যান্য — and then its Storage tips. Every
  * characteristic the Merchant left blank is simply not drawn.
  */
 export default function ProductPage() {
@@ -40,20 +43,28 @@ export default function ProductPage() {
     const first = firstTierPrice(product.tiers);
     const lowest = lowestPrice(product.tiers);
 
-    const characteristics = (
-        [
-            { label: bn.product.teaType, value: product.teaType },
-            { label: bn.product.particleSize, value: product.particleSize },
-            { label: bn.product.liquorColour, value: product.liquorColour },
-            { label: bn.product.liquorBody, value: product.liquorBody },
-            { label: bn.product.aroma, value: product.aroma },
-            { label: bn.product.infusion, value: product.infusion },
-            { label: bn.product.cups, value: product.cupsPerKilogram },
-            { label: bn.product.packageWeight, value: product.packageWeight },
-            ...product.customCharacteristics,
-        ] as { label: string; value: string | null }[]
-    ).filter((item): item is { label: string; value: string } => item.value !== null);
-    const hasCharacteristics = product.strength !== null || characteristics.length > 0;
+    const basics = filled([
+        { label: bn.product.packageWeight, value: product.packageWeight },
+        { label: bn.product.teaType, value: product.teaType },
+        { label: bn.product.particleSize, value: product.particleSize },
+        { label: bn.product.cups, value: product.cupsPerKilogram },
+    ]);
+    const quality = filled([
+        {
+            label: bn.product.strength,
+            value: product.strength && (
+                <span className="flex items-center gap-2">
+                    <StrengthBar bars={product.strength.bars} size="page" />
+                    <b className="text-[14px] font-semibold text-ink">{product.strength.grade}</b>
+                </span>
+            ),
+        },
+        { label: bn.product.grade, value: product.grade },
+        { label: bn.product.liquorColour, value: product.liquorColour },
+        { label: bn.product.aroma, value: product.aroma },
+        { label: bn.product.liquorBody, value: product.liquorBody },
+        { label: bn.product.infusion, value: product.infusion },
+    ]);
 
     return (
         <div style={themeStyle(product.category.theme)} className="shell-container flex flex-col gap-8 pt-5 pb-10 md:gap-12 md:pt-8 md:pb-[72px]">
@@ -83,25 +94,20 @@ export default function ProductPage() {
                         <span className="self-start rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">{bn.catalogue.unavailable}</span>
                     )}
 
-                    {hasCharacteristics && (
-                        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[12px] border border-border bg-border">
-                            {product.strength !== null && (
-                                <div className="flex flex-col gap-2 bg-white px-4 py-[14px]">
-                                    <span className="text-[13px] text-muted">{bn.catalogue.strength}</span>
-                                    <span className="flex items-center gap-2">
-                                        <StrengthBar bars={product.strength.bars} size="page" />
-                                        <b className="text-[14px] font-semibold text-ink">{product.strength.grade}</b>
-                                    </span>
-                                </div>
-                            )}
-                            {characteristics.map((item, index) => (
-                                <div key={index} className="flex flex-col gap-1 bg-white px-4 py-[14px]">
-                                    <span className="text-[13px] text-muted">{item.label}</span>
-                                    <b className="text-[15px] font-semibold text-ink">{item.value}</b>
-                                </div>
-                            ))}
-                            {(characteristics.length + (product.strength !== null ? 1 : 0)) % 2 === 1 && <div className="bg-white" />}
-                        </div>
+                    <CharacteristicGroup heading={bn.product.basicsHeading} characteristics={basics} />
+                    <CharacteristicGroup heading={bn.product.qualityHeading} characteristics={quality} />
+                    <CharacteristicGroup heading={bn.product.otherCharacteristicsHeading} characteristics={product.customCharacteristics} />
+
+                    {product.storageTips.length > 0 && (
+                        <HeadedCard heading={bn.product.storageHeading}>
+                            <ul className="m-0 flex list-none flex-col divide-y divide-border overflow-hidden rounded-[12px] border border-border bg-white p-0">
+                                {product.storageTips.map((tip, index) => (
+                                    <li key={index} className="px-4 py-3 text-[15px] leading-[1.6] text-ink">
+                                        <b className="font-semibold">{tip.heading}:</b> <span className="text-muted">{tip.explanation}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </HeadedCard>
                     )}
 
                     {(product.bestFor.length > 0 || product.notBestFor) && (
@@ -200,6 +206,47 @@ export default function ProductPage() {
 
             <OtherTeas products={others} />
         </div>
+    );
+}
+
+type Characteristic = { label: string; value: ReactNode };
+
+/** The Characteristics that have something to say; a blank one is not drawn. */
+function filled(characteristics: Characteristic[]): Characteristic[] {
+    return characteristics.filter((item) => item.value !== null);
+}
+
+/**
+ * One group of Characteristics as its own card under its heading, two to a
+ * row. A group with nothing in it is not drawn at all, heading included.
+ */
+function CharacteristicGroup({ heading, characteristics }: { heading: string; characteristics: Characteristic[] }) {
+    if (characteristics.length === 0) {
+        return null;
+    }
+
+    return (
+        <HeadedCard heading={heading}>
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[12px] border border-border bg-border">
+                {characteristics.map((item, index) => (
+                    <div key={index} className="flex flex-col gap-1 bg-white px-4 py-[14px]">
+                        <span className="text-[13px] text-muted">{item.label}</span>
+                        {typeof item.value === 'string' ? <b className="text-[15px] font-semibold text-ink">{item.value}</b> : item.value}
+                    </div>
+                ))}
+                {characteristics.length % 2 === 1 && <div className="bg-white" />}
+            </div>
+        </HeadedCard>
+    );
+}
+
+/** A card on the Product's page with its heading above it. */
+function HeadedCard({ heading, children }: { heading: string; children: ReactNode }) {
+    return (
+        <section className="flex flex-col gap-2">
+            <h2 className="m-0 text-[15px] font-semibold text-ink">{heading}</h2>
+            {children}
+        </section>
     );
 }
 

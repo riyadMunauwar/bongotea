@@ -47,15 +47,23 @@ A use a Product is good for — milk tea, plain tea, strong liquor, hotels — t
 _Avoid_: label, attribute, use case, category, filter
 
 **Characteristic**:
-One fact about what a Product's tea is like — its strength, its tea type, its particle size, its liquor colour and body, its aroma, its infusion, how many cups a Kilogram makes, how it is packed — shown on the Product's own page and nowhere a list is narrowed. Nine are fixed: every Product has room for each, under the same name and in the same order, so the same fact always reads the same way from one tea to the next. Beside them a Merchant may write any number of custom Characteristics on one Product alone, each a name and a value of their own, drawn after the fixed ones; one that turns out to belong on every Product is made a fixed one rather than retyped. A Characteristic left blank is simply not shown. Not a Tag: a Tag narrows a list, a Characteristic only describes.
+One fact about what a Product's tea is like — how it is packed, its tea type, its Particle size, how many cups a Kilogram makes, its strength, its Grade, its liquor colour, aroma and body, its infusion — shown on the Product's own page and nowhere a list is narrowed, the first four under মৌলিক তথ্য and the rest under চায়ের গুণগত মানের বিবরণ. Ten are fixed: every Product has room for each, under the same name and in the same order, so the same fact always reads the same way from one tea to the next. Beside them a Merchant may write any number of custom Characteristics on one Product alone, each a name and a value of their own, drawn after the fixed ones under অন্যান্য; one that turns out to belong on every Product is made a fixed one rather than retyped. A Characteristic left blank is simply not shown. Not a Tag: a Tag narrows a list, a Characteristic only describes.
 _Avoid_: attribute, spec, property, feature, custom field
 
+**Storage tip**:
+One piece of advice on how a Customer should keep a Product's tea once it arrives — a short heading and a line explaining it, such as শুষ্ক স্থানে রাখুন: ঠান্ডা ও আর্দ্রতামুক্ত স্থানে রাখুন। Each Product holds its own, in its own order; a new Product starts with the four common ones already written, and the Merchant changes them only where a tea needs keeping differently. Not a Characteristic: a Characteristic says what the tea is like, a Storage tip tells the Customer what to do with it.
+_Avoid_: storage instruction, care note, attribute
+
 **Grade**:
-The size of a tea's particles as the trade names it — Leaf, BOP, PD, Dust, CD — which decides how fast it brews, how quickly its colour comes and what it is good for. It is the fixed Characteristic for particle size, read by its trade name, and never a Category: a Category is who a tea is made for, a Grade is what its leaf is like, and one Category may hold teas of several Grades.
-_Avoid_: particle size (to a Customer), segment, quality, category
+The size of a tea's particles as the trade names it — Leaf, BOP, PD, Dust, CD — which decides how fast it brews, how quickly its colour comes and what it is good for. It is a fixed Characteristic read by its trade name, and not the Particle size: a Grade is the trade's name for the cut, a Particle size is how big the grain looks to a Customer, and the two sit side by side. Never a Category: a Category is who a tea is made for, a Grade is what its leaf is like, and one Category may hold teas of several Grades.
+_Avoid_: particle size, segment, quality, category
+
+**Particle size**:
+How big a tea's grain looks, in the plain words a Customer uses — ছোট, মাঝারি, বড় — shown as দানার আকার. A fixed Characteristic beside the Grade, never instead of it: "Leaf" and "মাঝারি" answer different questions about the same tea.
+_Avoid_: grade, cut, granule
 
 **Strength**:
-How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words.
+How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words. On the Product's own page it is labelled সামগ্রিক রেটিং, and elsewhere কড়া ভাব; the label differs, the meaning never does — it is how strong the liquor is, not how good the tea is.
 _Avoid_: strength score, rating, level, intensity
 
 **Brand**:

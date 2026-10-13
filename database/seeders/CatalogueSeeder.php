@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
  * under — টি স্টল প্রিমিয়াম, টি স্টল ক্লাসিক and ফ্যামিলি ব্লেন্ড — with their
  * Themes, the four Tags, and fifteen Products: each tea-stall line in all
  * five Grades (লিফ, BOP, PD, ডাস্ট, CD) and five teas for the family table.
+ * Each tea's Particle size follows its Grade — a leaf বড়, BOP মাঝারি, PD and
+ * CD ছোট, ডাস্ট খুব ছোট — and every one keeps the common Storage tips.
  *
  * It is sample stock for a store that has none: seeded whole, in one
  * transaction, and only while the store has no catalogue at all. So running
@@ -143,6 +145,7 @@ class CatalogueSeeder extends Seeder
                 'brand_id' => $brand->id,
                 'status' => ProductStatus::Published,
                 'is_available' => true,
+                'storage_tips' => Product::commonStorageTips(),
             ]);
 
             $created->tags()->attach(array_map(fn (string $slug): int => $tags[$slug]->id, $product['tags']));
@@ -252,7 +255,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'মাঝারি দানার প্রিমিয়াম লিফ চা — চায়ের দোকান, হোটেল ও রেস্টুরেন্টে নিয়মিত দুধ চা ও রং চায়ের জন্য ভারসাম্যপূর্ণ স্বাদ ও রং।',
                 'strength' => Strength::Four,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'লিফ',
+                'grade' => 'লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'উজ্জ্বল লালচে বাদামি',
                 'liquor_body' => 'মাঝারি ভরাট, মসৃণ',
                 'aroma' => 'পরিষ্কার, তাজা চায়ের ঘ্রাণ',
@@ -261,7 +265,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯৫–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ চা ও রং চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -285,7 +288,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'বড় ভাঙা দানার প্রিমিয়াম BOP চা — রেস্টুরেন্ট ও চায়ের দোকানে রং চা, লেবু চা ও দুধ চায়ের জন্য পরিষ্কার স্বাদ ও লালচে সোনালি রং।',
                 'strength' => Strength::FourPlus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'BOP',
+                'grade' => 'BOP',
+                'particle_size' => 'মাঝারি',
                 'liquor_colour' => 'লালচে সোনালি',
                 'liquor_body' => 'মাঝারি, পরিষ্কার',
                 'aroma' => 'হালকা মিষ্টি, পরিষ্কার ঘ্রাণ',
@@ -294,7 +298,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯৫–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'রং চা ও লেবু চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -318,7 +321,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'মাঝারি-ছোট দানার প্রিমিয়াম PD চা — দ্রুত ব্রিউ, গাঢ় লাল লিকার ও কড়া দুধ চা। ব্যস্ত চায়ের দোকান ও রেস্টুরেন্টের জন্য।',
                 'strength' => Strength::FiveMinus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'PD',
+                'grade' => 'PD',
+                'particle_size' => 'ছোট',
                 'liquor_colour' => 'গাঢ় লাল',
                 'liquor_body' => 'ঘন',
                 'aroma' => 'কড়া, উষ্ণ ঘ্রাণ',
@@ -327,7 +331,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯০–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -351,7 +354,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'ছোট দানার প্রিমিয়াম ডাস্ট চা — দ্রুত রং, ঘন কালচে লাল লিকার ও কড়া দুধ চা। চায়ের দোকানের ব্যস্ত সময়ের জন্য।',
                 'strength' => Strength::Five,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'ডাস্ট',
+                'grade' => 'ডাস্ট',
+                'particle_size' => 'খুব ছোট',
                 'liquor_colour' => 'ঘন কালচে লাল',
                 'liquor_body' => 'ভারী, ঘন',
                 'aroma' => 'কড়া, ঝাঁঝালো',
@@ -360,7 +364,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯০–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'কড়া দুধ চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী কৌটায়, আর্দ্রতা থেকে দূরে'],
                 ],
             ],
             [
@@ -384,7 +387,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'খুব ছোট দানার প্রিমিয়াম CD চা — মুহূর্তে রং, সবচেয়ে কড়া লিকার। বেশি গতিতে কাপ প্রস্তুতির চায়ের দোকানের জন্য।',
                 'strength' => Strength::FivePlus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'CD',
+                'grade' => 'CD',
+                'particle_size' => 'ছোট',
                 'liquor_colour' => 'গাঢ় কালচে লাল',
                 'liquor_body' => 'খুব ঘন, ভারী',
                 'aroma' => 'তীব্র, ঝাঁঝালো',
@@ -393,7 +397,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯০–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'কড়া দুধ চা ও কনডেন্সড মিল্ক চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী কৌটায়, আর্দ্রতা থেকে দূরে'],
                 ],
             ],
         ];
@@ -428,7 +431,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'সাশ্রয়ী দামের ক্লাসিক লিফ চা — প্রতিদিনের দুধ চা ও রং চায়ে চেনা, ভারসাম্যপূর্ণ স্বাদ। চায়ের দোকান, অফিস ও ক্যান্টিনের জন্য।',
                 'strength' => Strength::FourMinus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'লিফ',
+                'grade' => 'লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'মাঝারি লাল',
                 'liquor_body' => 'মাঝারি',
                 'aroma' => 'চেনা, স্বাভাবিক চায়ের ঘ্রাণ',
@@ -437,7 +441,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯৫–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'প্রতিদিনের দুধ চা ও রং চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -461,7 +464,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'সাশ্রয়ী দামের ক্লাসিক BOP চা — উজ্জ্বল লাল লিকার ও পরিষ্কার স্বাদ। রং চা, লেবু চা ও দুধ চায়ের জন্য।',
                 'strength' => Strength::Four,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'BOP',
+                'grade' => 'BOP',
+                'particle_size' => 'মাঝারি',
                 'liquor_colour' => 'উজ্জ্বল লাল',
                 'liquor_body' => 'মাঝারি, পরিষ্কার',
                 'aroma' => 'সতেজ, হালকা ঘ্রাণ',
@@ -493,7 +497,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'সাশ্রয়ী দামের ক্লাসিক PD চা — দ্রুত ব্রিউ, গাঢ় লাল লিকার ও কড়া দুধ চা। ব্যস্ত দোকান ও ক্যান্টিনের জন্য।',
                 'strength' => Strength::FourPlus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'PD',
+                'grade' => 'PD',
+                'particle_size' => 'ছোট',
                 'liquor_colour' => 'গাঢ় লাল',
                 'liquor_body' => 'ঘন',
                 'aroma' => 'কড়া ঘ্রাণ',
@@ -502,7 +507,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯০–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -527,7 +531,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'সাশ্রয়ী দামের ক্লাসিক ডাস্ট চা — দ্রুত রং, কড়া লিকার, কম খরচে বেশি কাপ। টং দোকান, মেস ও হোস্টেলের জন্য।',
                 'strength' => Strength::FiveMinus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'ডাস্ট',
+                'grade' => 'ডাস্ট',
+                'particle_size' => 'খুব ছোট',
                 'liquor_colour' => 'ঘন লাল',
                 'liquor_body' => 'ঘন',
                 'aroma' => 'কড়া, ঝাঁঝালো',
@@ -536,7 +541,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯০–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'কড়া দুধ চা ও মালাই চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী কৌটায়, আর্দ্রতা থেকে দূরে'],
                 ],
             ],
             [
@@ -560,7 +564,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'সাশ্রয়ী দামের ক্লাসিক CD চা — মুহূর্তে রং, অল্প পাতায় কড়া লিকার। বাজার, স্টেশন ও ক্যান্টিনের দ্রুত কাপ প্রস্তুতির জন্য।',
                 'strength' => Strength::Five,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'CD',
+                'grade' => 'CD',
+                'particle_size' => 'ছোট',
                 'liquor_colour' => 'ঘন কালচে লাল',
                 'liquor_body' => 'খুব ঘন',
                 'aroma' => 'তীব্র, ঝাঁঝালো',
@@ -603,7 +608,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'পরিবারের দৈনন্দিন চায়ের জন্য বাছাই করা বঙ্গ টি লিফ — মসৃণ, ভারসাম্যপূর্ণ স্বাদ; সকালের দুধ চা থেকে বিকেলের রং চা।',
                 'strength' => Strength::FourMinus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'লিফ',
+                'grade' => 'লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'উজ্জ্বল লালচে বাদামি',
                 'liquor_body' => 'মাঝারি, মসৃণ',
                 'aroma' => 'মোলায়েম, মিষ্টি ঘ্রাণ',
@@ -612,7 +618,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯৫–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'সকালের দুধ চা ও বিকেলের রং চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'শুকনো, বায়ুরোধী ও গন্ধমুক্ত পাত্রে'],
                 ],
             ],
             [
@@ -637,7 +642,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'নির্বাচিত ক্লোন চা গাছের পাতা থেকে তৈরি প্রিমিয়াম চা — মসৃণ স্বাদ, সোনালি-লাল লিকার ও দীর্ঘস্থায়ী সুবাস।',
                 'strength' => Strength::ThreePlus,
                 'tea_type' => 'ব্ল্যাক টি',
-                'particle_size' => 'লিফ',
+                'grade' => 'লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'উজ্জ্বল সোনালি-লাল',
                 'liquor_body' => 'মসৃণ, পরিপূর্ণ',
                 'aroma' => 'দীর্ঘস্থায়ী মিষ্টি সুবাস',
@@ -652,7 +658,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৯৫–১০০°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'চিনি ছাড়া বা কম চিনির রং চা'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী পাত্রে, সরাসরি রোদ থেকে দূরে'],
                 ],
             ],
             [
@@ -677,7 +682,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'মৌসুমের শুরুর কোমল নতুন পাতা থেকে তৈরি ফার্স্ট ফ্লাশ চা — হালকা সোনালি লিকার, সতেজ ও সূক্ষ্ম স্বাদ।',
                 'strength' => Strength::Three,
                 'tea_type' => 'ব্ল্যাক টি (ফার্স্ট ফ্লাশ)',
-                'particle_size' => 'হোল লিফ',
+                'grade' => 'হোল লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'হালকা সোনালি',
                 'liquor_body' => 'হালকা, সূক্ষ্ম',
                 'aroma' => 'কচি পাতা ও ফুলের মতো সুবাস',
@@ -692,7 +698,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'সংগ্রহের সময়', 'value' => 'চা মৌসুমের শুরুর দিক'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ ছাড়া, কম চিনিতে'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী পাত্রে, আর্দ্রতা ও রোদ থেকে দূরে'],
                 ],
             ],
             [
@@ -716,7 +721,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'কম অক্সিডেশনে প্রস্তুত বঙ্গ গ্রিন টি — হালকা, সতেজ ও উদ্ভিজ্জ স্বাদ। ৭০–৮৫°C পানিতে ২–৩ মিনিটে তৈরি, দুধ ছাড়া উপভোগ করুন।',
                 'strength' => Strength::ThreeMinus,
                 'tea_type' => 'গ্রিন টি',
-                'particle_size' => 'হোল লিফ',
+                'grade' => 'হোল লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'হালকা সবুজাভ সোনালি',
                 'liquor_body' => 'হালকা',
                 'aroma' => 'তাজা পাতার উদ্ভিজ্জ সুবাস',
@@ -731,7 +737,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৭০–৮৫°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ ছাড়া, ইচ্ছে হলে লেবু বা মধু দিয়ে'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী পাত্রে, আলো ও আর্দ্রতা থেকে দূরে'],
                 ],
             ],
             [
@@ -755,7 +760,8 @@ class CatalogueSeeder extends Seeder
                 'seo_description' => 'স্বতন্ত্র বৈশিষ্ট্যের বঙ্গ ইয়েলো টি — হলুদাভ সোনালি লিকার, মোলায়েম ও হালকা মিষ্টি স্বাদ। ভিন্ন চায়ের অভিজ্ঞতার জন্য বিশেষ নির্বাচন।',
                 'strength' => Strength::TwoPlus,
                 'tea_type' => 'ইয়েলো টি',
-                'particle_size' => 'হোল লিফ',
+                'grade' => 'হোল লিফ',
+                'particle_size' => 'বড়',
                 'liquor_colour' => 'উজ্জ্বল হলুদাভ সোনালি',
                 'liquor_body' => 'হালকা, মোলায়েম',
                 'aroma' => 'কোমল, হালকা মিষ্টি সুবাস',
@@ -770,7 +776,6 @@ class CatalogueSeeder extends Seeder
                 'custom_characteristics' => [
                     ['label' => 'পানির তাপমাত্রা', 'value' => 'প্রায় ৭৫–৮৫°C'],
                     ['label' => 'সেরা পরিবেশন', 'value' => 'দুধ ও চিনি ছাড়া'],
-                    ['label' => 'সংরক্ষণ', 'value' => 'বায়ুরোধী পাত্রে, আলো ও আর্দ্রতা থেকে দূরে'],
                 ],
             ],
         ];

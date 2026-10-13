@@ -88,13 +88,23 @@ it('stocks the demo catalogue: three themed Categories, its Tags, and fifteen Pr
         ->and($leaf->tags()->orderBy('sort_order')->pluck('name')->all())->toBe(['দুধ চায়ের জন্য', 'রং চায়ের জন্য', 'রেস্টুরেন্ট ও হোটেল']);
 
     /** Every fixed Characteristic is filled, and custom ones follow them. */
-    foreach (['strength', 'tea_type', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion', 'cups_per_kilogram', 'package_weight'] as $characteristic) {
+    foreach (['strength', 'tea_type', 'grade', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion', 'cups_per_kilogram', 'package_weight'] as $characteristic) {
         expect($leaf->{$characteristic})->not->toBeNull();
     }
 
-    expect($leaf->particle_size)->toBe('লিফ')
+    expect($leaf->grade)->toBe('লিফ')
+        ->and($leaf->particle_size)->toBe('বড়')
         ->and($leaf->custom_characteristics)->not->toBeEmpty()
         ->and($leaf->custom_characteristics[0])->toHaveKeys(['label', 'value']);
+
+    /** Every demo tea is sized from its Grade and keeps the common Storage tips, not a custom row saying the same. */
+    expect(Product::query()->where('slug', 'tea-stall-premium-dust')->sole()->particle_size)->toBe('খুব ছোট');
+
+    Product::query()->each(function (Product $product): void {
+        expect($product->particle_size)->not->toBeNull()
+            ->and($product->storage_tips)->toBe(Product::commonStorageTips())
+            ->and(collect($product->custom_characteristics)->pluck('label'))->not->toContain('সংরক্ষণ');
+    });
 });
 
 /**

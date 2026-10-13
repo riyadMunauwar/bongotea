@@ -32,7 +32,8 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
         ],
         'strength' => Strength::FourPlus,
         'tea_type' => 'সিটিসি',
-        'particle_size' => 'বিওপি',
+        'grade' => 'বিওপি',
+        'particle_size' => 'মাঝারি',
         'liquor_colour' => 'গাঢ় লাল',
         'liquor_body' => 'ঘন লিকার',
         'aroma' => 'তীব্র',
@@ -48,6 +49,11 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
         'not_best_for' => 'হালকা চা যারা পছন্দ করেন',
         'brewing_steps' => ['পানি ফুটিয়ে নিন।', '', 'প্রতি কাপে ২ গ্রাম দিন।'],
         'business_tips' => ['এয়ারটাইট কৌটায় রাখুন।'],
+        'storage_tips' => [
+            ['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => 'ঠান্ডা ও আর্দ্রতামুক্ত স্থানে রাখুন।'],
+            ['heading' => '  ', 'explanation' => 'শিরোনাম নেই।'],
+            ['heading' => 'রোদ থেকে দূরে রাখুন', 'explanation' => 'সূর্যালোক ও অতিরিক্ত তাপ এড়িয়ে চলুন।'],
+        ],
         'search_keywords' => 'primium',
     ]);
 
@@ -73,7 +79,8 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
             ])
             ->where('product.strength', ['grade' => '৪+', 'bars' => 4])
             ->where('product.teaType', 'সিটিসি')
-            ->where('product.particleSize', 'বিওপি')
+            ->where('product.grade', 'বিওপি')
+            ->where('product.particleSize', 'মাঝারি')
             ->where('product.liquorColour', 'গাঢ় লাল')
             ->where('product.liquorBody', 'ঘন লিকার')
             ->where('product.aroma', 'তীব্র')
@@ -88,6 +95,10 @@ it('shows a Product with its Brand, Category, characteristics and its own Tier l
             ->where('product.notBestFor', 'হালকা চা যারা পছন্দ করেন')
             ->where('product.brewingSteps', ['পানি ফুটিয়ে নিন।', 'প্রতি কাপে ২ গ্রাম দিন।'])
             ->where('product.businessTips', ['এয়ারটাইট কৌটায় রাখুন।'])
+            ->where('product.storageTips', [
+                ['heading' => 'শুষ্ক স্থানে রাখুন', 'explanation' => 'ঠান্ডা ও আর্দ্রতামুক্ত স্থানে রাখুন।'],
+                ['heading' => 'রোদ থেকে দূরে রাখুন', 'explanation' => 'সূর্যালোক ও অতিরিক্ত তাপ এড়িয়ে চলুন।'],
+            ])
             ->where('product.gallery', [])
             ->where('minorUnitsPerTaka', 100)
             ->where('seo.title', 'প্রিমিয়াম চা — Bongotea')
@@ -107,6 +118,7 @@ it('sends every characteristic left blank as empty, so none is drawn', function 
         'custom_characteristics' => null,
         'brewing_steps' => null,
         'business_tips' => null,
+        'storage_tips' => null,
     ]);
 
     $this->get('/tea/bare-tea')
@@ -117,6 +129,7 @@ it('sends every characteristic left blank as empty, so none is drawn', function 
             ->where('product.badge', null)
             ->where('product.strength', null)
             ->where('product.teaType', null)
+            ->where('product.grade', null)
             ->where('product.particleSize', null)
             ->where('product.liquorColour', null)
             ->where('product.liquorBody', null)
@@ -129,6 +142,7 @@ it('sends every characteristic left blank as empty, so none is drawn', function 
             ->where('product.notBestFor', null)
             ->where('product.brewingSteps', [])
             ->where('product.businessTips', [])
+            ->where('product.storageTips', [])
         );
 });
 
