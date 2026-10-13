@@ -42,6 +42,9 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * read it; the model writes one from the other. `mrp` is what every Saving
  * is measured from, required, and no Tier Price may exceed it.
  * What a Kilogram costs in a Cart is only ever worked out by `PriceBook`.
+ *
+ * A Product with any `packs` is open to retail as well (ADR-0034); one with
+ * none is bulk-only.
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
@@ -223,6 +226,18 @@ class Product extends Model implements HasMedia
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class);
+    }
+
+    /**
+     * The Product's Packs (ADR-0034), in the Merchant's order and smallest
+     * first where none was set. A Product with any is open to retail; one
+     * with none is bulk-only.
+     *
+     * @return HasMany<Pack, $this>
+     */
+    public function packs(): HasMany
+    {
+        return $this->hasMany(Pack::class)->orderBy('sort')->orderBy('grams');
     }
 
     /**

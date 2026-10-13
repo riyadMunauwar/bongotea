@@ -34,7 +34,7 @@ class ProductsTable
             /** Every stock figure is summed into the query the list already runs, so a catalogue of any size costs one of them. */
             ->modifyQueryUsing(function (Builder $query) use ($cover): Builder {
                 $ledger = app(StockLedger::class);
-                $query->with(['category', 'brand']);
+                $query->with(['category', 'brand'])->withExists('packs');
 
                 return $cover->withUnitsShipped(
                     app(CommittedStock::class)->withCommitted(
@@ -59,6 +59,11 @@ class ProductsTable
 
                 IconColumn::make('is_available')
                     ->label('Available')
+                    ->boolean(),
+
+                /** Open to retail is having any Pack (ADR-0034); a Product with none is bulk-only. */
+                IconColumn::make('packs_exists')
+                    ->label('Retail')
                     ->boolean(),
 
                 TextColumn::make('price')
@@ -183,6 +188,12 @@ class ProductsTable
                     ->options(ProductStatus::class),
                 TernaryFilter::make('is_available')
                     ->label('Available'),
+                TernaryFilter::make('packs')
+                    ->label('Open to retail')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->has('packs'),
+                        false: fn (Builder $query): Builder => $query->doesntHave('packs'),
+                    ),
                 /** Taken out of the catalogue is the soft delete; this is how to find those again. */
                 TrashedFilter::make()
                     ->label('Taken out of the catalogue'),

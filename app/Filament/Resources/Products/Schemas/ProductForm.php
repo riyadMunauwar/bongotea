@@ -49,6 +49,7 @@ class ProductForm
                     self::basicsSection(),
                     self::imagesSection(),
                     self::pricesSection(),
+                    self::packsSection(),
                     self::teaProfileSection(),
                 ])->columnSpan(['lg' => 2]),
 
@@ -335,6 +336,73 @@ class ProductForm
                             ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
                     ]),
             ]);
+    }
+
+    /**
+     * The Product's Packs (ADR-0034): giving it any opens it to retail, and
+     * leaving none keeps it bulk-only. A Pack is named by its weight, so the
+     * weight is all that tells two apart and no two may share one; its Pack
+     * Price never exceeds its MRP. Money is typed in whole taka and stored in
+     * minor units, as on the Tiers.
+     */
+    private static function packsSection(): Section
+    {
+        return Section::make('Packs')
+            ->description('Sealed retail sizes of this tea. Give it any and it is sold in Packs as well; leave none and it stays bulk-only.')
+            ->columnSpanFull()
+            ->schema([
+                Repeater::make('packs')
+                    ->hiddenLabel()
+                    ->relationship()
+                    ->orderColumn('sort')
+                    ->reorderable()
+                    ->defaultItems(0)
+                    ->columns(['default' => 1, 'sm' => 4])
+                    ->addActionLabel('Add a Pack')
+                    ->schema([
+                        TextInput::make('grams')
+                            ->label('Weight')
+                            ->required()
+                            ->integer()
+                            ->minValue(1)
+                            ->distinct()
+                            ->suffix('g'),
+
+                        TextInput::make('mrp')
+                            ->label('MRP')
+                            ->required()
+                            ->integer()
+                            ->minValue(1)
+                            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
+                            ->formatStateUsing(fn (mixed $state): mixed => is_numeric($state) ? Money::toWholeMajorString((int) $state) : $state)
+                            ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
+
+                        TextInput::make('price')
+                            ->label('Pack Price')
+                            ->required()
+                            ->integer()
+                            ->minValue(1)
+                            ->rules([self::packPriceCanBeSaved()])
+                            ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
+                            ->formatStateUsing(fn (mixed $state): mixed => is_numeric($state) ? Money::toWholeMajorString((int) $state) : $state)
+                            ->dehydrateStateUsing(fn (mixed $state): int => Money::toMinorUnits((int) $state)),
+
+                        Toggle::make('is_available')
+                            ->label('Available')
+                            ->default(true)
+                            ->inline(false),
+                    ]),
+            ]);
+    }
+
+    /** Both are still in whole taka here, as typed, so they compare directly. */
+    private static function packPriceCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            if (is_numeric($value) && is_numeric($get('mrp')) && $value > $get('mrp')) {
+                $fail('A Pack Price cannot be above its MRP; nothing is sold above it.');
+            }
+        };
     }
 
     /** Both are still in whole taka here, as typed, so they compare directly. */
