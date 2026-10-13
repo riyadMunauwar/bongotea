@@ -243,7 +243,7 @@ class CourierBooker
             'recipient_address' => $order->customer_address ?: self::PLACEHOLDER_ADDRESS,
             'recipient_district' => $order->customer_district,
             'recipient_note' => $details->noteOr($order->deliveryNote()),
-            'parcel_details' => $this->parcelDetails($courier, $details),
+            'parcel_details' => $this->parcelDetails($order, $courier, $details),
         ]);
     }
 
@@ -263,13 +263,13 @@ class CourierBooker
      *
      * @throws DeliveryAreaNotResolved when the Courier names areas and this parcel names none.
      */
-    private function parcelDetails(Courier $courier, ParcelDetails $details): array
+    private function parcelDetails(Order $order, Courier $courier, ParcelDetails $details): array
     {
         $driver = $courier->driver();
         $resolved = $driver->needsAreaResolution() ? $this->deliveryArea($driver, $details)->asParcelDetails() : [];
 
         foreach ($driver->parcelFields() as $field) {
-            $resolved[$field->name] = $field->valueFor($details->answerTo($field->name), $this->settings);
+            $resolved[$field->name] = $field->valueFor($details->answerTo($field->name), $this->settings, $order);
         }
 
         return $resolved;

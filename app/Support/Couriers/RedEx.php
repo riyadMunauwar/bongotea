@@ -339,7 +339,7 @@ class RedEx implements CourierDriver
         return [
             ParcelField::pickupStore($this->courier(), $this->settings),
 
-            ParcelField::number(
+            ParcelField::weight(
                 self::PARCEL_WEIGHT,
                 'Weight (kg)',
                 CourierSettings::property($this->courier(), 'ParcelWeight'),

@@ -517,6 +517,15 @@ class Order extends Model
     }
 
     /**
+     * What the Order weighs, in grams: every line through `OrderLine::grams()`,
+     * the one place a line's weight is said (ADR-0035).
+     */
+    public function grams(): int
+    {
+        return (int) $this->lines()->sum(OrderLine::grams());
+    }
+
+    /**
      * The Kilograms on the Order's bulk lines. A Pack line holds a count of
      * Packs, not Kilograms, so it adds nothing here, and a retail Order's
      * `total_kilograms` is nought; its weight is read off its lines' grams

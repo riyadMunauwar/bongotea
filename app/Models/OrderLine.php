@@ -158,12 +158,12 @@ class OrderLine extends Model
      * expression over `order_lines`.
      *
      * The one place the ledger reads a line's weight — booking, a Return, a
-     * Partial Return, a write-off and Committed all sum this (ADR-0035). Today
-     * every line is bulk, so it is the line's Kilograms × 1000; a line of
-     * another kind changes this and nothing that reads it.
+     * Partial Return, a write-off and Committed all sum this (ADR-0035). A bulk
+     * line is its Kilograms × 1000, and a Pack line its Pack's weight as
+     * stamped at Capture × its count, so both leave the same shelf.
      */
     public static function grams(): Expression
     {
-        return DB::raw('order_lines.quantity * '.Grams::PER_KILOGRAM);
+        return DB::raw('coalesce(order_lines.pack_grams, '.Grams::PER_KILOGRAM.') * order_lines.quantity');
     }
 }

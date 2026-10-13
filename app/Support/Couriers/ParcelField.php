@@ -3,6 +3,8 @@
 namespace App\Support\Couriers;
 
 use App\Enums\Courier;
+use App\Models\Order;
+use App\Support\Inventory\Grams;
 use App\Support\Settings\CourierSettings;
 
 /**
@@ -46,6 +48,7 @@ final class ParcelField
         public readonly ?array $options,
         public readonly bool $isNumeric,
         public readonly ?string $helperText,
+        public readonly bool $isWeight = false,
     ) {}
 
     /** Anything the User cares to type: a Courier that takes free text for this. */
@@ -58,6 +61,17 @@ final class ParcelField
     public static function number(string $name, string $label, string $settingsProperty, ?string $helperText = null): self
     {
         return new self($name, $label, $settingsProperty, null, true, $helperText);
+    }
+
+    /**
+     * The parcel's weight in kilograms. The Merchant's default stands for a
+     * bulk Order, as it always has; a retail Order is weighed from its Packs
+     * instead (ADR-0034), because a basket of 250 g Packs is nothing like the
+     * parcel a Merchant has in mind when they set one figure for every Order.
+     */
+    public static function weight(string $name, string $label, string $settingsProperty, ?string $helperText = null): self
+    {
+        return new self($name, $label, $settingsProperty, null, true, $helperText, isWeight: true);
     }
 
     /**
@@ -114,9 +128,16 @@ final class ParcelField
         return ! $this->isChoice() || count($this->options) > 1;
     }
 
-    /** What the Merchant decided once for the whole installation. */
-    public function default(CourierSettings $settings): string
+    /**
+     * What the Merchant decided once for the whole installation — except a
+     * retail Order's weight, which is what its Packs weigh, in kilograms.
+     */
+    public function default(CourierSettings $settings, ?Order $order = null): string
     {
+        if ($this->isWeight && $order !== null && $order->isRetail()) {
+            return rtrim(rtrim(number_format($order->grams() / Grams::PER_KILOGRAM, 3, '.', ''), '0'), '.');
+        }
+
         return (string) $settings->{$this->settingsProperty};
     }
 
@@ -128,14 +149,14 @@ final class ParcelField
      * name, so a value posted at a question that was never on screen cannot
      * reach a Courier.
      */
-    public function valueFor(mixed $given, CourierSettings $settings): string
+    public function valueFor(mixed $given, CourierSettings $settings, ?Order $order = null): string
     {
         if (! $this->isWorthAsking() || ! is_scalar($given)) {
-            return $this->default($settings);
+            return $this->default($settings, $order);
         }
 
         $given = trim((string) $given);
 
-        return $given === '' ? $this->default($settings) : $given;
+        return $given === '' ? $this->default($settings, $order) : $given;
     }
 }

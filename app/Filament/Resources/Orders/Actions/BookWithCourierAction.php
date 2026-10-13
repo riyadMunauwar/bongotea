@@ -370,7 +370,7 @@ class BookWithCourierAction
             $driver = $courier->driver();
 
             foreach ($driver->parcelFields() as $field) {
-                $filled[$courier->value][$field->name] = $field->default($settings);
+                $filled[$courier->value][$field->name] = $field->default($settings, $record);
             }
 
             /** A guess and not a default: it is read off this Order's own address rather than off anything a Merchant decided. */

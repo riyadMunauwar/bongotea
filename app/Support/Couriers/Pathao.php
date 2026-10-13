@@ -376,7 +376,7 @@ class Pathao implements CourierDriver
                 ],
             ),
 
-            ParcelField::number(
+            ParcelField::weight(
                 self::PARCEL_WEIGHT,
                 'Weight (kg)',
                 CourierSettings::property($this->courier(), 'ParcelWeight'),
