@@ -12,6 +12,7 @@ use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Support\Orders\Repricing;
+use App\Support\Orders\RetailRepricing;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -122,7 +123,7 @@ class EditOrder extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lines'] = Repricing::stateOf($this->getRecord());
+        $data['lines'] = $this->getRecord()->isRetail() ? RetailRepricing::stateOf($this->getRecord()) : Repricing::stateOf($this->getRecord());
 
         return $data;
     }
@@ -140,12 +141,18 @@ class EditOrder extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         $lines = $data['lines'] ?? null;
-        unset($data['lines']);
+        unset($data['lines'], $data['kind']);
 
         return DB::transaction(function () use ($record, $data, $lines): Order {
             $record->update($data);
 
-            if (is_array($lines) && Repricing::changes($record, $lines)) {
+            if (! is_array($lines)) {
+                return $record;
+            }
+
+            if ($record->isRetail() && RetailRepricing::changes($record, $lines)) {
+                app(RetailRepricing::class)->apply($record, $lines, auth()->user());
+            } elseif (! $record->isRetail() && Repricing::changes($record, $lines)) {
                 app(Repricing::class)->apply($record, $lines, auth()->user());
             }
 

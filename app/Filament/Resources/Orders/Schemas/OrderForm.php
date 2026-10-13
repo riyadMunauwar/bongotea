@@ -2,16 +2,20 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\Permission;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
 use App\Support\Orders\Repricing;
+use App\Support\Orders\RetailRepricing;
 use App\Support\PhoneNumber;
 use App\Support\Pricing\PricedLine;
+use App\Support\Pricing\PricedPackLine;
 use App\Support\Pricing\Tier;
 use App\Support\Settings\GeneralSettings;
 use Closure;
@@ -20,6 +24,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -47,6 +52,11 @@ use WeakMap;
  * (`Repricing`), showing the old total beside the new one before it is saved.
  * What was agreed is what gets collected at the door, so the User reads the
  * new figure to the Customer before committing it.
+ *
+ * An Order is bulk or retail (ADR-0034), chosen first when one is taken by
+ * phone and never changed after: a bulk Order's lines are Products and
+ * Kilograms repriced by `Repricing`, a retail Order's are Packs and counts
+ * repriced by `RetailRepricing`.
  */
 class OrderForm
 {
@@ -76,6 +86,23 @@ class OrderForm
 
                 Section::make('Order')
                     ->schema([
+                        /** Chosen first, because it decides what a line is; fixed from Capture on. */
+                        ToggleButtons::make('kind')
+                            ->options(OrderKind::class)
+                            ->default(OrderKind::Bulk->value)
+                            ->inline()
+                            ->required()
+                            ->live()
+                            /** A line of one kind means nothing as the other, so the rows start again; never on a captured Order, whose kind is fixed. */
+                            ->afterStateUpdated(fn (callable $set, ?Order $record): mixed => $record === null ? $set('lines', [[]]) : null)
+                            ->helperText('Bulk is sold by the kilogram at its Tiers; retail in Packs at their Pack Prices. It cannot be changed once the order is taken.')
+                            ->visibleOn('create'),
+
+                        TextEntry::make('kind')
+                            ->badge()
+                            ->state(fn (?Order $record): ?OrderKind => $record?->kind)
+                            ->visibleOn('edit'),
+
                         TextEntry::make('order_number')
                             ->label('Order number')
                             ->state(fn (?Order $record): ?string => $record?->order_number)
@@ -213,7 +240,7 @@ class OrderForm
                             ->minItems(1)
                             ->defaultItems(1)
                             ->reorderable(false)
-                            ->addActionLabel('Add a tea')
+                            ->addActionLabel(fn (Get $get, ?Order $record): string => self::isRetail($get('kind'), $record) ? 'Add a pack' : 'Add a tea')
                             ->disabled(fn (?Order $record): bool => $record?->hasAnyShipment() ?? false)
                             ->columns(4)
                             ->schema([
@@ -226,6 +253,7 @@ class OrderForm
                                     ->searchable()
                                     ->distinct()
                                     ->live()
+                                    ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
                                     ->columnSpan(2),
 
@@ -236,12 +264,34 @@ class OrderForm
                                     ->minValue(1)
                                     ->maxValue(CheckoutRequest::MAX_KILOGRAMS)
                                     ->suffix('kg')
+                                    ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
+                                    ->live(debounce: self::RECOMPUTE_DEBOUNCE),
+
+                                /** A retail line: one of the Packs a Customer could order now, or one the Order already holds. */
+                                Select::make('pack_id')
+                                    ->label('Pack')
+                                    ->options(fn (?Order $record): array => self::packOptions($record))
+                                    ->required()
+                                    ->searchable()
+                                    ->distinct()
+                                    ->live()
+                                    ->visible(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
+                                    ->columnSpan(2),
+
+                                TextInput::make('count')
+                                    ->label('How many')
+                                    ->required()
+                                    ->integer()
+                                    ->minValue(1)
+                                    ->maxValue(CheckoutRequest::MAX_PACKS)
+                                    ->visible(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 TextEntry::make('price_per_kilogram')
-                                    ->label('Price per kg')
+                                    ->label(fn (Get $get, ?Order $record): string => self::isRetail($get('../../kind'), $record) ? 'Pack Price' : 'Price per kg')
                                     ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::linePrice(
-                                        self::figures($livewire, $get('../../lines'), $record)['lines'][self::itemKey($component)] ?? null,
+                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'))['lines'][self::itemKey($component)] ?? null,
                                     )),
 
                                 /**
@@ -256,7 +306,7 @@ class OrderForm
                                     ->integer()
                                     ->minValue(0)
                                     ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
-                                    ->suffix('per kg')
+                                    ->suffix(fn (Get $get, ?Order $record): string => self::isRetail($get('../../kind'), $record) ? 'per pack' : 'per kg')
                                     ->visible(fn (): bool => self::canOverridePrices())
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE)
@@ -275,7 +325,7 @@ class OrderForm
                                 TextEntry::make('line_total')
                                     ->label('Line total')
                                     ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::money(
-                                        self::figures($livewire, $get('../../lines'), $record)['lines'][self::itemKey($component)]['total'] ?? null,
+                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'))['lines'][self::itemKey($component)]['total'] ?? null,
                                     )),
                             ]),
                     ]),
@@ -292,7 +342,7 @@ class OrderForm
                     ->schema([
                         TextEntry::make('subtotal')
                             ->alignment(Alignment::End)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['subtotal'])),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['subtotal'])),
 
                         /**
                          * Never typed: the Delivery Band the Order's total
@@ -302,8 +352,8 @@ class OrderForm
                         TextEntry::make('delivery_charge')
                             ->label('Delivery')
                             ->alignment(Alignment::End)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['delivery']))
-                            ->hint(fn (Get $get, Component $livewire, ?Order $record): ?string => self::figures($livewire, $get('lines'), $record)['band']),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['delivery']))
+                            ->hint(fn (Get $get, Component $livewire, ?Order $record): ?string => self::figures($livewire, $get('lines'), $record, $get('kind'))['band']),
 
                         /** Includes delivery, so nobody does arithmetic against a cash payment. */
                         TextEntry::make('total')
@@ -311,7 +361,7 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->weight('bold')
                             ->size(TextSize::Large)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record)['total'])),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['total'])),
 
                         /**
                          * What a User reads out on the confirmation call
@@ -323,11 +373,11 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->color('warning')
                             ->weight('bold')
-                            ->visible(fn (Get $get, Component $livewire, ?Order $record): bool => $record !== null && self::figures($livewire, $get('lines'), $record)['repriced'])
+                            ->visible(fn (Get $get, Component $livewire, ?Order $record): bool => $record !== null && self::figures($livewire, $get('lines'), $record, $get('kind'))['repriced'])
                             ->state(fn (Get $get, Component $livewire, ?Order $record): ?string => $record === null ? null : sprintf(
                                 'was %s → now %s',
                                 Money::format($record->total),
-                                self::money(self::figures($livewire, $get('lines'), $record)['total']),
+                                self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['total']),
                             )),
                     ]),
             ]);
@@ -343,6 +393,12 @@ class OrderForm
     private static function nullWhenBlank(): Closure
     {
         return fn (?string $state): ?string => filled($state) ? $state : null;
+    }
+
+    /** Whether the Order is retail: as it was captured, or as the User has chosen while taking one. */
+    private static function isRetail(mixed $kind, ?Order $record): bool
+    {
+        return $record?->isRetail() ?? ($kind === OrderKind::Retail || $kind === OrderKind::Retail->value);
     }
 
     private static function canOverridePrices(): bool
@@ -368,21 +424,26 @@ class OrderForm
                 return;
             }
 
-            if ($record !== null && ! Repricing::changes($record, is_array($lines) ? $lines : [])) {
+            $retail = self::isRetail($get('../../kind'), $record);
+            $lines = is_array($lines) ? $lines : [];
+
+            if ($record !== null && ! ($retail ? RetailRepricing::changes($record, $lines) : Repricing::changes($record, $lines))) {
                 return;
             }
 
-            $row = ['id' => $get('id'), 'product_id' => $get('product_id'), 'kilograms' => $get('kilograms')];
+            $row = $retail
+                ? ['id' => $get('id'), 'pack_id' => $get('pack_id'), 'count' => $get('count')]
+                : ['id' => $get('id'), 'product_id' => $get('product_id'), 'kilograms' => $get('kilograms')];
 
             if ($isOverrideField) {
                 $row += ['override_price' => $value, 'override_reason' => $get('override_reason')];
             }
 
-            $above = Repricing::overrideAboveMrp($record, $row, $user);
+            $above = $retail ? RetailRepricing::overrideAboveMrp($record, $row, $user) : Repricing::overrideAboveMrp($record, $row, $user);
 
             if ($above !== null) {
                 $fail($isOverrideField
-                    ? 'Above this tea\'s MRP of '.Money::format($above['mrp']).'; nothing is sold above it.'
+                    ? 'Above its MRP of '.Money::format($above['mrp']).'; nothing is sold above it.'
                     : 'Its price set by hand, '.Money::format($above['override']).', is above the MRP of '.Money::format($above['mrp']).'. Someone who may set prices must change it first.');
             }
         };
@@ -413,6 +474,26 @@ class OrderForm
     }
 
     /**
+     * The Packs a retail line may hold: every Pack a Customer could order now,
+     * and whatever this Order's lines already hold, named by tea and weight.
+     *
+     * @return array<int, string>
+     */
+    private static function packOptions(?Order $record): array
+    {
+        $held = $record === null ? collect() : $record->lines()->pluck('pack_id')->filter();
+
+        return Pack::query()
+            ->with('product')
+            ->where(fn ($query) => $query->whereKey($held)->orWhere('is_available', true))
+            ->get()
+            ->filter(fn (Pack $pack): bool => $held->contains($pack->getKey()) || $pack->isOrderable())
+            ->sortBy(fn (Pack $pack): string => $pack->product->name.sprintf('%08d', $pack->grams))
+            ->mapWithKeys(fn (Pack $pack): array => [$pack->getKey() => "{$pack->product->name} — {$pack->name()}"])
+            ->all();
+    }
+
+    /**
      * The figures the form shows, as it currently stands. An Order whose
      * lines are untouched shows what was agreed at Capture, whatever its
      * Products cost today; a new Order, or one whose lines have moved, shows
@@ -424,15 +505,16 @@ class OrderForm
      *
      * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
      */
-    private static function figures(Component $livewire, mixed $lines, ?Order $record): array
+    private static function figures(Component $livewire, mixed $lines, ?Order $record, mixed $kind = null): array
     {
         $lines = is_array($lines) ? $lines : [];
+        $retail = self::isRetail($kind, $record);
         self::$figures ??= new WeakMap;
         $worked = self::$figures[$livewire] ?? [];
-        $key = md5(serialize($lines));
+        $key = md5(serialize([$retail, $lines]));
 
         if (! array_key_exists($key, $worked)) {
-            $worked[$key] = self::workOutFigures($lines, $record);
+            $worked[$key] = $retail ? self::workOutRetailFigures($lines, $record) : self::workOutFigures($lines, $record);
             self::$figures[$livewire] = $worked;
         }
 
@@ -487,6 +569,50 @@ class OrderForm
                 'price' => $line->tierPrice,
                 'total' => $line->lineTotal,
                 'note' => self::lineNote($line->overridden, $line->tier),
+            ], $preview['lines']),
+        ];
+    }
+
+    /**
+     * The retail Order's figures: as captured while its lines are untouched,
+     * else priced afresh at today's Pack Prices and retail Delivery Charge.
+     *
+     * @param  array<array-key, mixed>  $lines
+     * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
+     */
+    private static function workOutRetailFigures(array $lines, ?Order $record): array
+    {
+        if ($record !== null && ! RetailRepricing::changes($record, $lines)) {
+            $stored = $record->lines()->get()->keyBy('id');
+            $byKey = [];
+
+            foreach ($lines as $key => $row) {
+                $line = $stored->get($row['id'] ?? null);
+
+                if ($line !== null) {
+                    $byKey[$key] = ['price' => $line->unit_price, 'total' => $line->line_total, 'note' => $line->isPriceOverridden() ? 'set by hand' : null];
+                }
+            }
+
+            return ['repriced' => false, 'subtotal' => $record->subtotal, 'delivery' => $record->delivery_charge, 'band' => $record->delivery_label, 'total' => $record->total, 'lines' => $byKey];
+        }
+
+        $preview = app(RetailRepricing::class)->preview($lines);
+
+        if ($preview === null) {
+            return ['repriced' => true, 'subtotal' => null, 'delivery' => null, 'band' => null, 'total' => null, 'lines' => []];
+        }
+
+        return [
+            'repriced' => true,
+            'subtotal' => $preview['cart']->subtotal,
+            'delivery' => $preview['cart']->deliveryCharge,
+            'band' => 'Retail delivery',
+            'total' => $preview['cart']->total,
+            'lines' => array_map(fn (PricedPackLine $line): array => [
+                'price' => $line->packPrice,
+                'total' => $line->lineTotal,
+                'note' => $line->overridden ? 'set by hand' : null,
             ], $preview['lines']),
         ];
     }

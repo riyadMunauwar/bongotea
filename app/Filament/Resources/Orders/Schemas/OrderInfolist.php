@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Pack;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -136,9 +137,11 @@ class OrderInfolist
                                         ? 'Set by hand'.($record->priceOverriddenBy ? " by {$record->priceOverriddenBy->name}" : '').": {$record->price_override_reason}"
                                         : null),
 
+                                /** A Pack line is counted in Packs of its weight (ADR-0034), so the size is what gets weighed out. */
                                 TextEntry::make('quantity')
                                     ->label('Qty')
-                                    ->alignment(Alignment::End),
+                                    ->alignment(Alignment::End)
+                                    ->formatStateUsing(fn (int $state, OrderLine $record): string => $record->isPack() ? "{$state} × ".Pack::nameFor($record->pack_grams) : "{$state} kg"),
 
                                 TextEntry::make('line_total')
                                     ->label('Line total')

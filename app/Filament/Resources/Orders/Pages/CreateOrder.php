@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Enums\OrderKind;
 use App\Enums\PaymentMethod;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Support\Orders\Repricing;
+use App\Support\Orders\RetailRepricing;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * answers to (the Checkout's Capture moves onto it with the Quote, #15). The
  * Customer is resolved from
  * the phone number exactly as Capture resolves one, and the Order is Cash on
- * Delivery, because nobody pays online over a phone call.
+ * Delivery, because nobody pays online over a phone call. Its kind is chosen
+ * first and priced accordingly: Products and Kilograms for bulk, Packs for
+ * retail (ADR-0034).
  */
 class CreateOrder extends CreateRecord
 {
@@ -41,11 +45,14 @@ class CreateOrder extends CreateRecord
         return DB::transaction(function () use ($customer, $data, $lines): Order {
             $order = $customer->orders()->create([
                 ...$data,
+                'kind' => $data['kind'] ?? OrderKind::Bulk,
                 'customer_phone' => $customer->phone,
                 'payment_method' => PaymentMethod::CashOnDelivery,
             ]);
 
-            app(Repricing::class)->apply($order, $lines, auth()->user());
+            $order->isRetail()
+                ? app(RetailRepricing::class)->apply($order, $lines, auth()->user())
+                : app(Repricing::class)->apply($order, $lines, auth()->user());
 
             return $order->refresh();
         });
