@@ -118,7 +118,7 @@ class PaymentMethodMixChart extends ChartWidget implements GatedOnDashboard
                 ],
                 [
                     'label' => 'Kilograms Sold',
-                    'data' => $mix->series(fn (PaymentMixRow $row): int => $row->kilograms),
+                    'data' => $mix->series(fn (PaymentMixRow $row): int|float => $row->kilograms),
                     'backgroundColor' => self::KILOGRAMS_COLOR,
                     'yAxisID' => 'y2',
                 ],

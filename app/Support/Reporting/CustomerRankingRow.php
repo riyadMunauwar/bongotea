@@ -21,7 +21,7 @@ final readonly class CustomerRankingRow
         public ?string $latestName,
         /** Their Orders in the window counted in Sales. */
         public int $orders,
-        public int $kilograms,
+        public int|float $kilograms,
         public int $sales,
         /** Whether they had bought before the window began: a Returning Customer, and otherwise a New one. */
         public bool $isReturning,

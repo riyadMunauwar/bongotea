@@ -2,6 +2,8 @@
 
 namespace App\Support\Reporting;
 
+use App\Support\Kilograms;
+
 /**
  * The counts one span of Orders comes to, by the glossary's rules: a whole
  * Reporting Window, its comparison window, or one bucket of it. Every
@@ -23,7 +25,7 @@ final readonly class OverviewFigures
         /** The totals, Delivery Charge included, of the Orders not Cancelled. */
         public int $sales,
         /** Kilograms Sold: the Kilograms on those very Orders, the weight side of `$sales`. */
-        public int $kilograms,
+        public int|float $kilograms,
         public int $cancelled,
         /** An online method and no Paid Payment, as `Order::unpaid()` reads it. */
         public int $unpaid,
@@ -87,7 +89,7 @@ final readonly class OverviewFigures
         return new self(
             $this->orders + $other->orders,
             $this->sales + $other->sales,
-            $this->kilograms + $other->kilograms,
+            Kilograms::sum([$this->kilograms, $other->kilograms]),
             $this->cancelled + $other->cancelled,
             $this->unpaid + $other->unpaid,
             $this->new + $other->new,

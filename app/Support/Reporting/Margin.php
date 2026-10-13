@@ -2,6 +2,8 @@
 
 namespace App\Support\Reporting;
 
+use App\Support\Kilograms;
+
 /**
  * What the Margin report draws: what a Reporting Window actually earned
  * rather than what it turned over, read per Product and added up across
@@ -57,8 +59,8 @@ final readonly class Margin
 
             /** Unknown where not one unit in the window was stamped, and never a nought standing in for it. */
             cost: $costed === [] ? null : (int) array_sum(array_map(fn (MarginRow $row): int => (int) $row->cost, $costed)),
-            units: (int) array_sum(array_map(fn (MarginRow $row): int => $row->units, $rows)),
-            costedUnits: (int) array_sum(array_map(fn (MarginRow $row): int => $row->costedUnits, $rows)),
+            units: Kilograms::sum(array_map(fn (MarginRow $row): int|float => $row->units, $rows)),
+            costedUnits: Kilograms::sum(array_map(fn (MarginRow $row): int|float => $row->costedUnits, $rows)),
         );
     }
 
@@ -95,10 +97,10 @@ final readonly class Margin
         public ?int $cost,
 
         /** Kilograms sold across every row: Kilograms Sold over the window, since the rows are every Line of the Orders `Sales` counts. */
-        public int $units,
+        public int|float $units,
 
         /** How many of them carried a stamped cost. */
-        public int $costedUnits,
+        public int|float $costedUnits,
     ) {}
 
     /**
@@ -150,6 +152,6 @@ final readonly class Margin
      */
     public function everythingCosted(): bool
     {
-        return $this->costedUnits === $this->units;
+        return $this->costedUnits == $this->units;
     }
 }

@@ -22,7 +22,7 @@ final readonly class ProductRankingRow
         /** The name the Lines recorded at Capture: the attribution that survives a hard delete. */
         public string $recordedName,
         /** Units sold: the quantities of every Line, over the Orders not Cancelled. */
-        public int $units,
+        public int|float $units,
         /** The Lines' totals, which is what those units earned. */
         public int $revenue,
     ) {}

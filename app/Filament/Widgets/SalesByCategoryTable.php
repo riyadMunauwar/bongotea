@@ -71,7 +71,7 @@ class SalesByCategoryTable extends TableWidget implements GatedOnDashboard
 
                 TextColumn::make('kilograms')
                     ->label('Kilograms Sold')
-                    ->formatStateUsing(fn (int $state): string => Kilograms::format($state))
+                    ->formatStateUsing(fn (int|float $state): string => Kilograms::format($state))
                     ->alignEnd(),
 
                 TextColumn::make('share')

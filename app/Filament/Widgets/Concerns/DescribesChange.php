@@ -10,13 +10,13 @@ namespace App\Filament\Widgets\Concerns;
  */
 trait DescribesChange
 {
-    protected function change(int $current, int $previous): string
+    protected function change(int|float $current, int|float $previous): string
     {
-        if ($current === $previous) {
+        if ($current == $previous) {
             return 'No change';
         }
 
-        if ($previous === 0) {
+        if ($previous == 0) {
             return 'Up from none';
         }
 

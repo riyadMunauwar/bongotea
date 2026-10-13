@@ -2,6 +2,7 @@
 
 namespace App\Support\Reporting;
 
+use App\Enums\OrderKind;
 use App\Support\Settings\GeneralSettings;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -33,6 +34,9 @@ final class ReportingWindow
 
     public const string UNTIL_FILTER = 'until';
 
+    /** Bulk, Retail, or nothing for All (ADR-0034). */
+    public const string KIND_FILTER = 'kind';
+
     private function __construct(
         /** The first instant inside the window, in UTC. */
         public readonly CarbonImmutable $start,
@@ -41,7 +45,20 @@ final class ReportingWindow
         public readonly ReportingPreset $preset,
         /** The PHP timezone identifier the days were cut in. */
         public readonly string $timezone,
+
+        /**
+         * Which kind of Order the window counts, or null for both (ADR-0034).
+         * A report counts bulk and retail together unless narrowed, because
+         * Sales is the business's whole takings.
+         */
+        public readonly ?OrderKind $kind = null,
     ) {}
+
+    /** The same days, counting only Orders of this kind, or both where null. */
+    public function forKind(?OrderKind $kind): self
+    {
+        return new self($this->start, $this->end, $this->preset, $this->timezone, $kind);
+    }
 
     /**
      * What a screen shows before a Merchant picks anything: today and the
@@ -91,6 +108,14 @@ final class ReportingWindow
      * @param  array<string, mixed>|null  $filters
      */
     public static function fromFilters(?array $filters, ?CarbonInterface $now = null): self
+    {
+        return self::daysFromFilters($filters, $now)->forKind(OrderKind::tryFrom((string) ($filters[self::KIND_FILTER] ?? '')));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $filters
+     */
+    private static function daysFromFilters(?array $filters, ?CarbonInterface $now): self
     {
         $preset = ReportingPreset::tryFrom((string) ($filters[self::PRESET_FILTER] ?? '')) ?? ReportingPreset::Last7Days;
 
@@ -154,7 +179,7 @@ final class ReportingWindow
     {
         $first = $this->localStart()->subDays($this->days());
 
-        return new self($first->utc(), $this->start, $this->preset, $this->timezone);
+        return new self($first->utc(), $this->start, $this->preset, $this->timezone, $this->kind);
     }
 
     /**

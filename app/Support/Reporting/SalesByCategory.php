@@ -2,6 +2,8 @@
 
 namespace App\Support\Reporting;
 
+use App\Support\Kilograms;
+
 /**
  * Sales and Kilograms Sold read once per Category, most Kilograms first.
  *
@@ -23,8 +25,8 @@ final readonly class SalesByCategory
     /**
      * Every Category's Kilograms together: the window's Kilograms Sold.
      */
-    public function kilograms(): int
+    public function kilograms(): int|float
     {
-        return array_sum(array_map(fn (SalesByCategoryRow $row): int => $row->kilograms, $this->rows));
+        return Kilograms::sum(array_map(fn (SalesByCategoryRow $row): int|float => $row->kilograms, $this->rows));
     }
 }

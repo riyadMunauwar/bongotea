@@ -28,7 +28,7 @@ final readonly class PaymentMixRow
         /** The totals, Delivery Charge included, of those Orders not Cancelled. */
         public int $sales,
         /** Kilograms Sold: the Kilograms on those same Orders not Cancelled. */
-        public int $kilograms,
+        public int|float $kilograms,
         /** Of an online method's Orders, those with no Paid Payment; null for Cash on Delivery. */
         public ?int $unpaid,
     ) {}

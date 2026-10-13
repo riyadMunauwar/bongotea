@@ -80,7 +80,7 @@ class MarginByProductTable extends TableWidget
 
                 TextColumn::make('units')
                     ->label('Kilograms sold')
-                    ->formatStateUsing(fn (int $state): string => Kilograms::format($state))
+                    ->formatStateUsing(fn (int|float $state): string => Kilograms::format($state))
                     ->alignEnd(),
 
                 TextColumn::make('revenue')

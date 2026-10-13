@@ -96,7 +96,7 @@ class SalesOverTimeChart extends ChartWidget implements GatedOnDashboard
                 ],
                 [
                     'label' => 'Kilograms Sold',
-                    'data' => $salesOverTime->series(fn (SalesOverTimePoint $point): int => $point->kilograms),
+                    'data' => $salesOverTime->series(fn (SalesOverTimePoint $point): int|float => $point->kilograms),
                     'yAxisID' => 'y2',
                     'tension' => 0.3,
                     'borderColor' => self::KILOGRAMS_LINE_COLOR,

@@ -39,13 +39,13 @@ final readonly class MarginRow
         /** The name the Lines recorded at Capture: the attribution that survives a hard delete. */
         public string $recordedName,
         /** Units sold: the quantities of every Line, over the Orders not Cancelled. */
-        public int $units,
+        public int|float $units,
         /** The Lines' totals, which is what those units earned. Delivery Charge is not in it. */
         public int $revenue,
         /** What the stamped units cost, and null where not one of them was stamped. */
         public ?int $cost,
         /** How many of the units carried a stamped cost at all. */
-        public int $costedUnits,
+        public int|float $costedUnits,
     ) {}
 
     /**

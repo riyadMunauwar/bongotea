@@ -3,6 +3,7 @@
 namespace App\Support\Reporting;
 
 use App\Enums\Courier;
+use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PlaceKind;
@@ -23,11 +24,13 @@ use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Inventory\ThinShelf;
+use App\Support\Kilograms;
 use App\Support\Settings\TrackingSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The one seam every report widget calls, and the only place the glossary's
@@ -86,7 +89,7 @@ final class ReportingQuery
      * Binds the Cancelled status once, like `SALES`, and is always selected
      * beside it so the two can never be cut over different Orders.
      */
-    private const string KILOGRAMS_SOLD = 'sum(case when status != ? then coalesce(order_kilograms, 0) else 0 end) as kilograms';
+    private const string KILOGRAMS_SOLD = 'sum(case when status != ? then coalesce(order_grams, 0) else 0 end) as grams';
 
     /**
      * How many Orders hold one status. Binds that status once.
@@ -146,7 +149,7 @@ final class ReportingQuery
                 bucket: $bucket,
                 orders: (int) ($row->order_count ?? 0),
                 sales: (int) ($row->sales ?? 0),
-                kilograms: (int) ($row->kilograms ?? 0),
+                kilograms: Kilograms::fromGrams((int) ($row->grams ?? 0)),
             );
         }
 
@@ -250,7 +253,7 @@ final class ReportingQuery
                 method: $method,
                 orders: (int) $row->order_count,
                 sales: (int) $row->sales,
-                kilograms: (int) $row->kilograms,
+                kilograms: Kilograms::fromGrams((int) $row->grams),
                 unpaid: $method->isOnline() ? (int) ($unpaid->get($method->value)?->unpaid ?? 0) : null,
             );
         }
@@ -274,7 +277,7 @@ final class ReportingQuery
     {
         $rows = OrderLine::query()
             ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
-            ->selectRaw('product_id, min(product_name) as product_name, sum(quantity) as units, sum(line_total) as revenue')
+            ->selectRaw('product_id, min(product_name) as product_name, sum('.self::lineGrams().') as grams, sum(line_total) as revenue')
             ->groupByRaw("product_id, (case when product_id is null then product_name else '' end)")
             ->get();
 
@@ -286,7 +289,7 @@ final class ReportingQuery
             ->map(fn (object $row): ProductRankingRow => new ProductRankingRow(
                 product: $row->product_id === null ? null : $products->get((int) $row->product_id),
                 recordedName: (string) $row->product_name,
-                units: (int) $row->units,
+                units: Kilograms::fromGrams((int) $row->grams),
                 revenue: (int) $row->revenue,
             ))
             ->sortBy([
@@ -312,7 +315,7 @@ final class ReportingQuery
     public function topCustomers(ReportingWindow $window): CustomerRanking
     {
         $rows = $this->weighed($this->notCancelledIn($window))
-            ->selectRaw('customer_id, count(*) as order_count, sum(total) as sales, sum(coalesce(order_kilograms, 0)) as kilograms')
+            ->selectRaw('customer_id, count(*) as order_count, sum(total) as sales, sum(coalesce(order_grams, 0)) as grams')
             ->selectSub(
                 /** The name on the Customer's latest counted Order of the window, latest by when it was captured. */
                 Order::query()
@@ -320,6 +323,7 @@ final class ReportingQuery
                     ->from('orders as latest')
                     ->whereNull('latest.deleted_at')
                     ->where('latest.status', '!=', OrderStatus::Cancelled->value)
+                    ->when($window->kind, fn ($latest, OrderKind $kind) => $latest->where('latest.kind', $kind->value))
                     ->where('latest.created_at', '>=', $window->start->toDateTimeString())
                     ->where('latest.created_at', '<', $window->end->toDateTimeString())
                     ->select('latest.customer_name')
@@ -342,6 +346,7 @@ final class ReportingQuery
         $returning = array_flip(Order::query()
             ->whereIn('customer_id', $customerIds)
             ->where('status', '!=', OrderStatus::Cancelled->value)
+            ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value))
             ->where('created_at', '<', $window->start->toDateTimeString())
             ->distinct()
             ->pluck('customer_id')
@@ -353,7 +358,7 @@ final class ReportingQuery
                 customer: $customers->get((int) $row->customer_id),
                 latestName: $latestNames->get($row->customer_id),
                 orders: (int) $row->order_count,
-                kilograms: (int) $row->kilograms,
+                kilograms: Kilograms::fromGrams((int) $row->grams),
                 sales: (int) $row->sales,
                 isReturning: isset($returning[(int) $row->customer_id]),
             ))
@@ -391,9 +396,9 @@ final class ReportingQuery
                 category: $row->category_id === null ? null : $categories->get((int) $row->category_id),
                 orders: (int) $row->order_count,
                 sales: (int) $row->sales,
-                kilograms: (int) $row->kilograms,
+                kilograms: Kilograms::fromGrams((int) $row->grams),
                 previousSales: (int) ($previous->get($row->category_id)?->sales ?? 0),
-                previousKilograms: (int) ($previous->get($row->category_id)?->kilograms ?? 0),
+                previousKilograms: Kilograms::fromGrams((int) ($previous->get($row->category_id)?->grams ?? 0)),
             ))
             ->sortBy([
                 fn (SalesByCategoryRow $a, SalesByCategoryRow $b): int => $b->kilograms <=> $a->kilograms,
@@ -421,7 +426,7 @@ final class ReportingQuery
         return OrderLine::query()
             ->toBase()
             ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
-            ->selectRaw('category_id, count(distinct order_lines.order_id) as order_count, sum(line_total) as sales, sum(quantity) as kilograms')
+            ->selectRaw('category_id, count(distinct order_lines.order_id) as order_count, sum(line_total) as sales, sum('.self::lineGrams().') as grams')
             ->groupBy('category_id')
             ->get();
     }
@@ -579,10 +584,10 @@ final class ReportingQuery
             ->joinSub($this->notCancelledIn($window)->select('id'), 'counted', 'counted.id', '=', 'order_lines.order_id')
             ->selectRaw(
                 'product_id, min(product_name) as product_name, '
-                .'sum(quantity) as units, '
+                .'sum('.self::lineGrams().') as grams, '
                 .'sum(line_total) as revenue, '
                 .'sum(case when unit_cost is null then 0 else quantity * unit_cost end) as cost, '
-                .'sum(case when unit_cost is null then 0 else quantity end) as costed_units',
+                .'sum(case when unit_cost is null then 0 else '.self::lineGrams().' end) as costed_grams',
             )
             ->groupByRaw("product_id, (case when product_id is null then product_name else '' end)")
             ->get();
@@ -595,12 +600,12 @@ final class ReportingQuery
             ->map(fn (object $row): MarginRow => new MarginRow(
                 product: $row->product_id === null ? null : $products->get((int) $row->product_id),
                 recordedName: (string) $row->product_name,
-                units: (int) $row->units,
+                units: Kilograms::fromGrams((int) $row->grams),
                 revenue: (int) $row->revenue,
 
                 /** Unknown where not one unit of it was stamped, rather than the nought the sum came to. */
-                cost: (int) $row->costed_units === 0 ? null : (int) $row->cost,
-                costedUnits: (int) $row->costed_units,
+                cost: (int) $row->costed_grams === 0 ? null : (int) $row->cost,
+                costedUnits: Kilograms::fromGrams((int) $row->costed_grams),
             ))
             ->sortBy([
                 /** A Product nobody has priced has not made nothing, so it sorts below every Product that has made something. */
@@ -1112,7 +1117,7 @@ final class ReportingQuery
             $figures[] = new OverviewFigures(
                 orders: (int) ($row->order_count ?? 0),
                 sales: (int) ($row->sales ?? 0),
-                kilograms: (int) ($row->kilograms ?? 0),
+                kilograms: Kilograms::fromGrams((int) ($row->grams ?? 0)),
                 cancelled: (int) ($row->cancelled ?? 0),
                 unpaid: (int) ($unpaid->get($index)?->unpaid ?? 0),
                 new: (int) ($row->new_orders ?? 0),
@@ -1154,6 +1159,7 @@ final class ReportingQuery
     {
         $firsts = Order::query()
             ->where('status', '!=', OrderStatus::Cancelled->value)
+            ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value))
             ->selectRaw('customer_id, min(created_at) as created_at')
             ->groupBy('customer_id');
 
@@ -1255,7 +1261,8 @@ final class ReportingQuery
     {
         return Shipment::query()
             ->where('booked_at', '>=', $window->start->toDateTimeString())
-            ->where('booked_at', '<', $window->end->toDateTimeString());
+            ->where('booked_at', '<', $window->end->toDateTimeString())
+            ->when($window->kind, fn (Builder $parcels, OrderKind $kind): Builder => $parcels->whereHas('order', fn (Builder $orders): Builder => $orders->where('kind', $kind->value)));
     }
 
     /**
@@ -1358,7 +1365,18 @@ final class ReportingQuery
     {
         return Order::query()
             ->where('created_at', '>=', $window->start->toDateTimeString())
-            ->where('created_at', '<', $window->end->toDateTimeString());
+            ->where('created_at', '<', $window->end->toDateTimeString())
+            ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value));
+    }
+
+    /**
+     * A line's weight in grams, as SQL over `order_lines`: what the ledger
+     * reads (`OrderLine::grams()`), so Kilograms Sold counts a Pack by its
+     * weight × its count and a bulk line by its Kilograms (ADR-0035).
+     */
+    private static function lineGrams(): string
+    {
+        return (string) OrderLine::grams()->getValue(DB::connection()->getQueryGrammar());
     }
 
     /**
@@ -1378,7 +1396,7 @@ final class ReportingQuery
     private function weighed(Builder $orders): Builder
     {
         return $orders->leftJoinSub(
-            OrderLine::query()->toBase()->selectRaw('order_id, sum(quantity) as order_kilograms')->groupBy('order_id'),
+            OrderLine::query()->toBase()->selectRaw('order_id, sum('.self::lineGrams().') as order_grams')->groupBy('order_id'),
             'weights',
             'weights.order_id',
             '=',

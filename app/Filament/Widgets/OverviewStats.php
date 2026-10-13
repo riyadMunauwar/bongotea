@@ -68,7 +68,7 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
             $this->tile('Sales', Money::format($current->sales), $overview, fn (OverviewFigures $figures): int => $figures->sales)
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->sales, $previous->sales, upIsGood: true)),
 
-            $this->tile('Kilograms Sold', Kilograms::format($current->kilograms), $overview, fn (OverviewFigures $figures): int => $figures->kilograms)
+            $this->tile('Kilograms Sold', Kilograms::format($current->kilograms), $overview, fn (OverviewFigures $figures): int|float => $figures->kilograms)
                 ->tap(fn (Stat $stat) => $this->describeChange($stat, $overview, $current->kilograms, $previous->kilograms, upIsGood: true)),
 
             $this->tile('Average Order Value', Money::format($current->averageOrderValue()), $overview, fn (OverviewFigures $figures): int => $figures->averageOrderValue())
@@ -184,17 +184,17 @@ class OverviewStats extends StatsOverviewWidget implements GatedOnDashboard
      * comparison had nothing reads "up from none", since there is no
      * percentage of nothing; two empty windows read as no change.
      */
-    private function describeChange(Stat $stat, Overview $overview, int $current, int $previous, bool $upIsGood): void
+    private function describeChange(Stat $stat, Overview $overview, int|float $current, int|float $previous, bool $upIsGood): void
     {
         $against = $this->comparisonName($overview);
 
-        if ($current === $previous) {
+        if ($current == $previous) {
             $this->describe($stat, "No change on {$against}", 0, $upIsGood);
 
             return;
         }
 
-        if ($previous === 0) {
+        if ($previous == 0) {
             $this->describe($stat, 'Up from none', 1, $upIsGood);
 
             return;

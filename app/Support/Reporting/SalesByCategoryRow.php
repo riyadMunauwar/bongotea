@@ -21,9 +21,9 @@ final readonly class SalesByCategoryRow
         public int $orders,
         /** Its lines' totals: goods alone, since the Delivery Charge belongs to no Category. */
         public int $sales,
-        public int $kilograms,
+        public int|float $kilograms,
         public int $previousSales,
-        public int $previousKilograms,
+        public int|float $previousKilograms,
     ) {}
 
     public function name(): string
@@ -35,8 +35,8 @@ final readonly class SalesByCategoryRow
      * Its Kilograms as a share of every Category's, from 0 to 1; null where
      * nothing was weighed at all.
      */
-    public function kilogramsShareOf(int $kilograms): ?float
+    public function kilogramsShareOf(int|float $kilograms): ?float
     {
-        return $kilograms === 0 ? null : $this->kilograms / $kilograms;
+        return $kilograms == 0 ? null : $this->kilograms / $kilograms;
     }
 }

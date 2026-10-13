@@ -54,7 +54,7 @@ class CustomerReport extends Page
 
     public function filtersForm(Schema $schema): Schema
     {
-        return $schema->components($this->reportingWindowComponents());
+        return $schema->components([...$this->reportingWindowComponents(), $this->orderKindComponent()]);
     }
 
     /**

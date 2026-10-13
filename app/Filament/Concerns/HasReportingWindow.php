@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Enums\OrderKind;
 use App\Support\Reporting\ReportingPreset;
 use App\Support\Reporting\ReportingWindow;
 use Filament\Forms\Components\DatePicker;
@@ -67,5 +68,21 @@ trait HasReportingWindow
                 ->live()
                 ->minDate(fn (Get $get): ?string => $get(ReportingWindow::FROM_FILTER)),
         ];
+    }
+
+    /**
+     * Bulk, Retail or All (ADR-0034), beside the window on every screen whose
+     * figures are counted from Orders; All by default, because Sales is the
+     * whole takings. Left off the screens that count no Order — what was
+     * bought, who visited — since a control that changes nothing is worse
+     * than none.
+     */
+    protected function orderKindComponent(): Select
+    {
+        return Select::make(ReportingWindow::KIND_FILTER)
+            ->label('Orders')
+            ->options(OrderKind::class)
+            ->placeholder('Bulk and retail')
+            ->live();
     }
 }

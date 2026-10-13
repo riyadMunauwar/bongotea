@@ -17,6 +17,6 @@ final readonly class SalesOverTimePoint
         /** The totals, Delivery Charge included, of the ones not Cancelled, in minor units. */
         public int $sales,
         /** Kilograms Sold: the Kilograms on those same Orders. */
-        public int $kilograms,
+        public int|float $kilograms,
     ) {}
 }
