@@ -44,6 +44,7 @@ it('opens a demo install on its System Pages and demo Pages, each drawn from its
     $expectedBlocks = [
         '/bulk-order' => ['bulk_order_form'],
         '/my-orders' => ['my_orders'],
+        '/packet-basket' => ['packet_basket'],
         '/pricing' => ['hero_carousel', 'price_calculator', 'price_matrix', 'delivery_chart'],
         '/contact' => ['hero_carousel', 'contact_cards', 'contact_form', 'map'],
     ];
@@ -54,7 +55,7 @@ it('opens a demo install on its System Pages and demo Pages, each drawn from its
         );
     }
 
-    expect(Page::query()->count())->toBe(19);
+    expect(Page::query()->count())->toBe(20);
 });
 
 it('stocks the demo catalogue: three themed Categories, its Tags, and fifteen Products on three Tiers', function () {
@@ -165,7 +166,7 @@ it('opens a blank store on its System Pages alone, linked from the header and on
         ->expectsOutputToContain('The store is open, blank.')
         ->assertSuccessful();
 
-    expect(Page::query()->orderBy('id')->pluck('slug')->all())->toBe(['home', 'bulk-order', 'my-orders'])
+    expect(Page::query()->orderBy('id')->pluck('slug')->all())->toBe(['home', 'bulk-order', 'packet-basket', 'my-orders'])
         ->and(Product::withTrashed()->exists())->toBeFalse()
         ->and(Category::query()->exists())->toBeFalse()
         ->and(Menu::query()->count())->toBe(2);
@@ -262,7 +263,7 @@ it('lays no demo over a store that already has content of its own', function () 
 
     expect(Product::query()->exists())->toBeFalse()
         ->and(Menu::query()->exists())->toBeFalse()
-        ->and(Page::query()->pluck('slug')->sort()->values()->all())->toBe(['bulk-order', 'eid-offer', 'home', 'my-orders']);
+        ->and(Page::query()->pluck('slug')->sort()->values()->all())->toBe(['bulk-order', 'eid-offer', 'home', 'my-orders', 'packet-basket']);
 });
 
 it('adds nothing twice and puts back nothing a Merchant edited, renamed or deleted when run again', function () {
@@ -288,7 +289,7 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
         ->and($home->fresh()->blocks[0]['type'])->toBe('faq')
         ->and(Page::query()->where('slug', 'about-us')->exists())->toBeTrue()
         ->and(Page::query()->whereIn('slug', ['about', 'contact'])->exists())->toBeFalse()
-        ->and(Page::query()->count())->toBe(18)
+        ->and(Page::query()->count())->toBe(19)
         ->and($leaf->fresh()->name)->toBe('প্রিমিয়াম ২০২৭')
         ->and($leaf->fresh()->price)->toBe(70000)
         ->and($leaf->tags()->count())->toBe(0)

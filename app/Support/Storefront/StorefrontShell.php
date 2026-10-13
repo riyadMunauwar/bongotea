@@ -3,11 +3,13 @@
 namespace App\Support\Storefront;
 
 use App\Enums\SystemPage;
+use App\Models\Pack;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\PhoneNumber;
 use App\Support\Pricing\DeliveryBand;
 use App\Support\Pricing\PriceBook;
+use App\Support\Pricing\RetailPriceBook;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\StoreSettings;
@@ -31,6 +33,8 @@ class StorefrontShell
     public const BULK_ORDER_PATH = '/bulk-order';
 
     public const MY_ORDERS_PATH = '/my-orders';
+
+    public const PACKET_BASKET_PATH = '/packet-basket';
 
     /** Where the Bulk Order form's continue button leads. */
     public const CHECKOUT_PATH = '/checkout';
@@ -126,22 +130,47 @@ class StorefrontShell
     }
 
     /**
-     * Bulk Order and My Orders are found by their role, so the buttons
+     * What the retail Cart, held in the browser beside the bulk one
+     * (ADR-0034), is priced from on every page, since the header counts its
+     * Packs wherever the buyer is: every Pack of every published Product, with
+     * whether it can be ordered now, and the retail Delivery Charge and
+     * threshold. A Product with no Pack sends nothing here. Money in minor
+     * units.
+     *
+     * @return array{deliveryCharge: int, freeDeliveryFrom: ?int, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool}>}
+     */
+    public function retailPricing(): array
+    {
+        $book = RetailPriceBook::current();
+
+        return [
+            'deliveryCharge' => $book->deliveryCharge,
+            'freeDeliveryFrom' => $book->freeDeliveryFrom,
+            'packs' => $this->catalogue->products()
+                ->flatMap(fn (Product $product) => $product->packs->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Bulk Order, the Packet Basket and My Orders are found by their role, so the buttons
      * follow a renamed slug; one not published leaves its button at the
      * installed slug.
      *
-     * @return array{bulkOrder: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string, enquiry: string}
+     * @return array{bulkOrder: string, packetBasket: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string, enquiry: string}
      */
     public function links(): array
     {
         $paths = Page::query()
             ->published()
-            ->whereIn('system_role', [SystemPage::BulkOrder, SystemPage::MyOrders])
+            ->whereIn('system_role', [SystemPage::BulkOrder, SystemPage::PacketBasket, SystemPage::MyOrders])
             ->get(['slug', 'system_role'])
             ->mapWithKeys(fn (Page $page): array => [$page->system_role->value => $page->path()]);
 
         return [
             'bulkOrder' => $paths->get(SystemPage::BulkOrder->value, self::BULK_ORDER_PATH),
+            'packetBasket' => $paths->get(SystemPage::PacketBasket->value, self::PACKET_BASKET_PATH),
             'myOrders' => $paths->get(SystemPage::MyOrders->value, self::MY_ORDERS_PATH),
             'checkout' => self::CHECKOUT_PATH,
             'search' => self::SEARCH_PATH,

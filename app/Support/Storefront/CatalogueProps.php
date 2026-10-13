@@ -3,6 +3,7 @@
 namespace App\Support\Storefront;
 
 use App\Models\Category;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Support\Pricing\Tier;
 use Filament\Forms\Components\RichEditor\RichContentRenderer;
@@ -67,6 +68,29 @@ class CatalogueProps
             'isAvailable' => $product->is_available,
             'mrp' => $product->mrp,
             'tiers' => array_map(fn (Tier $tier): array => $tier->toArray(), $product->priceTiers()),
+        ];
+    }
+
+    /**
+     * What the retail Cart prices a Pack from and draws it with: its Pack
+     * Price and MRP, its weight, its Product's name, address and picture, and
+     * whether a buyer can order it now — its own switch on and its Product
+     * Available (ADR-0034). Only ever asked of a Product in the catalogue.
+     *
+     * @return array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool}
+     */
+    public static function cartPack(Product $product, Pack $pack): array
+    {
+        return [
+            'id' => $pack->id,
+            'productId' => $product->id,
+            'productName' => $product->name,
+            'href' => self::productPath($product),
+            'imageUrl' => $product->coverUrl(),
+            'grams' => $pack->grams,
+            'mrp' => $pack->mrp,
+            'price' => $pack->price,
+            'isOrderable' => $pack->is_available && $product->is_available,
         ];
     }
 

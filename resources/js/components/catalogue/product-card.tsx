@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
+import { PackChooserButton } from '@/components/cart/pack-chooser';
 import { Stepper } from '@/components/cart/stepper';
 import { CartIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
@@ -16,7 +17,8 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
 /**
  * A Product as every list draws it: picture and badge, its Category's pill,
  * its name and Brand, strength, its first Tier's price beside the MRP struck
- * through, the most a Tier takes off the MRP, and its own Tier ladder. An
+ * through, the most a Tier takes off the MRP, and its own Tier ladder, and
+ * — for a Product open to retail — the packet button beside the kilograms. An
  * unavailable Product is drawn greyed and says so, because a regular buyer
  * looks for the tea they always buy.
  *
@@ -129,6 +131,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
                         />
                     )}
+                    {product.isAvailable && <PackChooserButton productId={product.id} productName={product.name} className="mt-2" />}
                 </div>
             </div>
         </article>

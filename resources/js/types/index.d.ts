@@ -5,6 +5,7 @@
 
 import type { CartProduct } from '@/lib/cart';
 import type { DeliveryBand } from '@/lib/pricing';
+import type { CartPack } from '@/lib/retail-cart';
 
 export type MenuLink = {
     label: string;
@@ -75,6 +76,7 @@ export type SharedProps = {
     };
     links: {
         bulkOrder: string;
+        packetBasket: string;
         myOrders: string;
         checkout: string;
         search: string;
@@ -89,6 +91,14 @@ export type SharedProps = {
         deliveryBands: DeliveryBand[];
         /** Every published Product, in catalogue order, the unavailable ones among them. */
         products: CartProduct[];
+    };
+    /** What the browser's retail Cart is priced from (ADR-0034); money in minor units. */
+    retailPricing: {
+        deliveryCharge: number;
+        /** The subtotal at which delivery is free; null for never. */
+        freeDeliveryFrom: number | null;
+        /** Every Pack of every published Product, in catalogue order; a Product with none sends none. */
+        packs: CartPack[];
     };
     seo: Seo;
     /** How many minor units make one taka; every price is sent in minor units. */

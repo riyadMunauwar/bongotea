@@ -13,7 +13,7 @@ use Inertia\Middleware;
 /**
  * The storefront's Inertia middleware: the root template, and the props
  * every storefront page shares — the header, drawer and footer, what the
- * browser's Cart is priced from, a default
+ * browser's two Carts are priced from, a default
  * `seo` a page may replace with its own, and how many minor units make a
  * taka, since every price is sent in minor units, and where the Pixel and
  * the beacon are reached.
@@ -47,6 +47,7 @@ class HandleInertiaRequests extends Middleware
             'menus' => fn (): array => $shell()->menus($request->getHost()),
             'links' => fn (): array => $shell()->links(),
             'pricing' => fn (): array => $shell()->pricing(),
+            'retailPricing' => fn (): array => $shell()->retailPricing(),
             'seo' => fn (): array => Seo::forStore(app(StoreSettings::class), $request)->toArray(),
             'minorUnitsPerTaka' => fn (): int => Money::factor(),
             'tracking' => fn (): array => [

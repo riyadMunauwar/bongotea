@@ -14,6 +14,7 @@ enum SystemPage: string implements HasLabel
     case Home = 'home';
     case BulkOrder = 'bulk_order';
     case MyOrders = 'my_orders';
+    case PacketBasket = 'packet_basket';
 
     public function getLabel(): string
     {
@@ -21,6 +22,7 @@ enum SystemPage: string implements HasLabel
             self::Home => 'Home',
             self::BulkOrder => 'Bulk Order',
             self::MyOrders => 'My Orders',
+            self::PacketBasket => 'Packet Basket',
         };
     }
 }

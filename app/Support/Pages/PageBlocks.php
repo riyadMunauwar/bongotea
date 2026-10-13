@@ -18,6 +18,7 @@ use App\Support\Pages\Blocks\InfoCards;
 use App\Support\Pages\Blocks\Journey;
 use App\Support\Pages\Blocks\MapAndAddress;
 use App\Support\Pages\Blocks\MyOrders;
+use App\Support\Pages\Blocks\PacketBasket;
 use App\Support\Pages\Blocks\PriceCalculator;
 use App\Support\Pages\Blocks\PriceMatrix;
 use App\Support\Pages\Blocks\ProductRail;
@@ -64,6 +65,7 @@ class PageBlocks
         CategoryPanels::class,
         ProductRail::class,
         BulkOrderForm::class,
+        PacketBasket::class,
         PriceCalculator::class,
         PriceMatrix::class,
         DeliveryChart::class,

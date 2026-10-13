@@ -52,3 +52,13 @@ export function ChevronDownIcon({ size = 12, strokeWidth = 2.4, className }: Ico
         </svg>
     );
 }
+
+/** The packet basket's bag, beside the bulk Cart's trolley. */
+export function BagIcon({ size = 24, className }: IconProps) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+            <path d="M5 8h14l-1 12a1.5 1.5 0 0 1-1.5 1.4h-9A1.5 1.5 0 0 1 6 20L5 8z" />
+            <path d="M9 10V6.5a3 3 0 0 1 6 0V10" />
+        </svg>
+    );
+}

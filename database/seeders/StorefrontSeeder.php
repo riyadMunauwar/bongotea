@@ -11,6 +11,7 @@ use App\Support\Pages\Blocks\CategoryTiles;
 use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
 use App\Support\Pages\Blocks\MyOrders;
+use App\Support\Pages\Blocks\PacketBasket;
 use App\Support\Pages\Blocks\PromiseStrip;
 use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\VideoReviews;
@@ -18,8 +19,8 @@ use App\Support\Pages\PageBlock;
 use Illuminate\Database\Seeder;
 
 /**
- * The three System Pages every store opens with, blank or demo (ADR-0030):
- * home, bulk order and the customer's orders, in the mockup's Blocks and
+ * The System Pages every store opens with, blank or demo (ADR-0030):
+ * home, bulk order, the packet basket and the customer's orders, in the mockup's Blocks and
  * copy.
  *
  * A System Page is found by its role, which can never change or be deleted,
@@ -45,6 +46,13 @@ class StorefrontSeeder extends Seeder
                 'text' => 'যে যে চা লাগবে, শুধু কত কেজি লাগবে সেটি দিন। সব চা মিলিয়ে মোট কেজি অনুযায়ী দাম নিজে থেকেই হিসাব হবে।',
                 'quick_chips' => true,
                 'show_tier_list' => true,
+            ]),
+        ]);
+
+        $this->systemPage(SystemPage::PacketBasket, 'প্যাকেট ঝুড়ি', 'packet-basket', [
+            self::block(PacketBasket::class, [
+                'heading' => 'আপনার প্যাকেট ঝুড়ি',
+                'text' => 'নিজের কাপের জন্য প্যাকেটে চা। প্যাকেটের দাম আলাদা, বাল্ক কার্টের সাথে মেলানো হয় না।',
             ]),
         ]);
 

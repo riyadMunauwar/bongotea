@@ -16,6 +16,7 @@ import { InfoCards } from './info-cards';
 import { Journey } from './journey';
 import { MapAndAddress } from './map-and-address';
 import { MyOrders } from './my-orders';
+import { PacketBasket } from './packet-basket';
 import { PriceCalculator } from './price-calculator';
 import { PriceMatrix } from './price-matrix';
 import { ProductRail } from './product-rail';
@@ -51,6 +52,7 @@ const COMPONENTS: {
     category_panels: CategoryPanels,
     product_rail: ProductRail,
     bulk_order_form: BulkOrderForm,
+    packet_basket: PacketBasket,
     price_calculator: PriceCalculator,
     price_matrix: PriceMatrix,
     delivery_chart: DeliveryChart,

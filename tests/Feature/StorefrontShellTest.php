@@ -4,6 +4,7 @@ use App\Enums\SystemPage;
 use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuItem;
+use App\Models\Pack;
 use App\Models\Page;
 use App\Models\Product;
 use App\Support\Settings\DeliveryChargeSettings;
@@ -48,7 +49,7 @@ it('renders the home page inside the storefront shell, with the store, announcem
             ->where('store.address', 'শ্রীমঙ্গল, মৌলভীবাজার')
             ->where('store.hours', 'সকাল ৯টা – রাত ৯টা')
             ->where('announcement', ['pill' => 'অফার', 'message' => '২০+ কেজিতে প্রতিটি চায়ে ডিস্ট্রিবিউটর দাম'])
-            ->where('links', ['bulkOrder' => '/bulk-order', 'myOrders' => '/my-orders', 'checkout' => '/checkout', 'search' => '/search', 'searchSuggestions' => '/search/suggestions', 'signInCode' => '/sign-in/code', 'signIn' => '/sign-in', 'signOut' => '/sign-out', 'enquiry' => '/enquiries'])
+            ->where('links', ['bulkOrder' => '/bulk-order', 'packetBasket' => '/packet-basket', 'myOrders' => '/my-orders', 'checkout' => '/checkout', 'search' => '/search', 'searchSuggestions' => '/search/suggestions', 'signInCode' => '/sign-in/code', 'signIn' => '/sign-in', 'signOut' => '/sign-out', 'enquiry' => '/enquiries'])
         );
 });
 
@@ -353,4 +354,28 @@ it('tells Home it is Home, so it draws the Cart\'s summary bar, and no other Pag
 
     $this->get('/')->assertInertia(fn (Assert $page) => $page->where('page.isHome', true));
     $this->get('/about')->assertInertia(fn (Assert $page) => $page->where('page.isHome', false));
+});
+
+it('shares every Pack of every published Product, with whether it can be ordered, and the retail delivery, for the browser\'s packet basket', function () {
+    app(DeliveryChargeSettings::class)->with(['retailDeliveryCharge' => 7000, 'retailFreeDeliveryFrom' => null])->save();
+
+    $assam = Product::factory()->create(['name' => 'Assam', 'slug' => 'assam']);
+    $small = Pack::factory()->for($assam)->create(['grams' => 100, 'mrp' => 12000, 'price' => 11000]);
+    $switchedOff = Pack::factory()->for($assam)->unavailable()->create(['grams' => 250, 'mrp' => 30000, 'price' => 27000]);
+    $unavailable = Product::factory()->unavailable()->create();
+    $ofUnavailable = Pack::factory()->for($unavailable)->create();
+    Product::factory()->create();
+    Pack::factory()->for(Product::factory()->draft())->create();
+    Pack::factory()->for(tap(Product::factory()->create())->delete())->create();
+
+    $this->get('/')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('retailPricing.deliveryCharge', 7000)
+            ->where('retailPricing.freeDeliveryFrom', null)
+            ->where('retailPricing.packs', [
+                ['id' => $small->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 100, 'mrp' => 12000, 'price' => 11000, 'isOrderable' => true],
+                ['id' => $switchedOff->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 250, 'mrp' => 30000, 'price' => 27000, 'isOrderable' => false],
+                ['id' => $ofUnavailable->id, 'productId' => $unavailable->id, 'productName' => $unavailable->name, 'href' => '/tea/'.$unavailable->slug, 'imageUrl' => null, 'grams' => 250, 'mrp' => $ofUnavailable->mrp, 'price' => $ofUnavailable->price, 'isOrderable' => false],
+            ])
+        );
 });

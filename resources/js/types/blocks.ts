@@ -232,6 +232,11 @@ export type DeliveryChartProps = {
 /** Where an Order stands as its Customer sees it, worked out by the server. */
 export type OrderProgress = 'received' | 'confirmed' | 'sent' | 'delivered' | 'cancelled';
 
+export type PacketBasketProps = {
+    heading: string | null;
+    text: string | null;
+};
+
 export type MyOrdersProps = {
     heading: string | null;
     text: string | null;
@@ -281,6 +286,7 @@ export type BlockPropsByType = {
     price_matrix: PriceMatrixProps;
     delivery_chart: DeliveryChartProps;
     my_orders: MyOrdersProps;
+    packet_basket: PacketBasketProps;
     contact_form: ContactFormProps;
 };
 

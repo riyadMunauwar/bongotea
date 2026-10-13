@@ -276,6 +276,10 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
         ['heading' => 'ডেলিভারি চার্জ', 'text' => null, 'offersCashOnDelivery' => true],
     ],
+    'packet basket, its wording alone, since it draws the shared retail pricing' => [
+        pageBlock('packet_basket', ['heading' => 'আপনার প্যাকেট ঝুড়ি', 'text' => '']),
+        ['heading' => 'আপনার প্যাকেট ঝুড়ি', 'text' => null],
+    ],
 ]);
 
 it('tells the delivery chart cash on delivery is not taken once the Merchant switches it off', function () {
@@ -285,14 +289,16 @@ it('tells the delivery chart cash on delivery is not taken once the Merchant swi
     $this->get('/delivery')->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.offersCashOnDelivery', false));
 });
 
-it('points the header at the Bulk Order and My Orders System Pages by role', function () {
+it('points the header at the Bulk Order, Packet Basket and My Orders System Pages by role', function () {
     Page::factory()->system(SystemPage::Home)->create();
     Page::factory()->system(SystemPage::BulkOrder)->create(['slug' => 'paikari']);
+    Page::factory()->system(SystemPage::PacketBasket)->create(['slug' => 'jhuri']);
     Page::factory()->system(SystemPage::MyOrders)->create(['slug' => 'amar-order']);
 
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
             ->where('links.bulkOrder', '/paikari')
+            ->where('links.packetBasket', '/jhuri')
             ->where('links.myOrders', '/amar-order')
         );
 });
@@ -302,7 +308,7 @@ it('leaves a header button at its installed slug while its System Page is a draf
     Page::factory()->system(SystemPage::BulkOrder)->create(['slug' => 'paikari', 'status' => 'draft']);
 
     $this->get('/')
-        ->assertInertia(fn (Assert $page) => $page->where('links.bulkOrder', '/bulk-order'));
+        ->assertInertia(fn (Assert $page) => $page->where('links.bulkOrder', '/bulk-order')->where('links.packetBasket', '/packet-basket'));
 });
 
 it('links a Menu entry naming Home to the bare domain', function () {

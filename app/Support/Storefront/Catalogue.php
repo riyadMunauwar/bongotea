@@ -37,7 +37,7 @@ class Catalogue
     {
         return $this->products ??= Product::query()
             ->published()
-            ->with(self::CARD_RELATIONS)
+            ->with([...self::CARD_RELATIONS, 'packs'])
             ->orderBy('id')
             ->get();
     }

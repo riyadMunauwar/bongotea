@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
+import { PackChooserButton } from '@/components/cart/pack-chooser';
 import { OtherTeas } from '@/components/catalogue/other-teas';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -159,16 +160,19 @@ export default function ProductPage() {
                             )}
                         </span>
                         {product.isAvailable ? (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
-                                    router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
-                                }}
-                                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
-                            >
-                                {bn.product.addToOrder}
-                            </button>
+                            <span className="flex flex-wrap items-center gap-3">
+                                <PackChooserButton productId={product.id} productName={product.name} className="w-auto px-6 py-[13px] md:px-6 md:py-[13px] md:text-[16px]" />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
+                                        router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
+                                    }}
+                                    className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
+                                >
+                                    {bn.product.addToOrder}
+                                </button>
+                            </span>
                         ) : (
                             store.hotline && (
                                 <span className="text-[14px] leading-[1.6] text-muted">

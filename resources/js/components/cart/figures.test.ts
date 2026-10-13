@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatTaka } from '@/lib/bangla';
-import { discountLabel, discountPercent } from './figures';
+import { discountLabel, discountPercent, packName, retailDeliveryNote } from './figures';
 
 const taka = (minorUnits: number) => formatTaka(minorUnits / 100);
 
@@ -26,5 +26,29 @@ describe('discountPercent', () => {
     it('is the share alone, rounded down, and nothing at the MRP', () => {
         expect(discountPercent(48000, 40500)).toBe('১৫');
         expect(discountPercent(50000, 50000)).toBeNull();
+    });
+});
+
+describe('packName', () => {
+    it('names a Pack by its weight, in grams below a kilogram and kilograms from one', () => {
+        expect(packName(250)).toBe('২৫০ গ্রাম');
+        expect(packName(1000)).toBe('১ কেজি');
+        expect(packName(1500)).toBe('১.৫ কেজি');
+    });
+});
+
+describe('retailDeliveryNote', () => {
+    const priced = { lines: [], packCount: 2, subtotal: 54000, savings: 0, deliveryCharge: 6000, total: 60000, amountToFreeDelivery: 46000 };
+
+    it('says how much more would make delivery free', () => {
+        expect(retailDeliveryNote(priced, taka)).toBe('আর ৳৪৬০-এর প্যাকেট নিলে ফ্রি ডেলিভারি');
+    });
+
+    it('says delivery is free once it is', () => {
+        expect(retailDeliveryNote({ ...priced, deliveryCharge: 0, amountToFreeDelivery: null }, taka)).toBe('আপনি ফ্রি ডেলিভারি পাচ্ছেন');
+    });
+
+    it('says nothing where delivery is never free', () => {
+        expect(retailDeliveryNote({ ...priced, amountToFreeDelivery: null }, taka)).toBeNull();
     });
 });

@@ -3,6 +3,7 @@ import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import type { PriceStep } from '@/lib/cart';
 import type { PricedCart } from '@/lib/pricing';
+import type { PricedRetailCart } from '@/lib/retail-pricing';
 
 /**
  * The Cart's figures as sentences, shared by every view of it so the header,
@@ -69,4 +70,18 @@ export function currentStepRange(steps: PriceStep[]): string | null {
     const current = steps.find((step) => step.current);
 
     return current === undefined ? null : tierRange(current);
+}
+
+/** A Pack's name, which is its weight: "২৫০ গ্রাম", "১ কেজি", "১.৫ কেজি". */
+export function packName(grams: number): string {
+    return grams < 1000 ? bn.packs.grams(toBanglaDigits(grams)) : bn.packs.kilograms(toBanglaDigits(grams / 1000));
+}
+
+/** Under the retail Delivery Charge: whether it is free, or how much more would make it so. */
+export function retailDeliveryNote(priced: PricedRetailCart, taka: Taka): string | null {
+    if (priced.packCount > 0 && priced.deliveryCharge === 0) {
+        return bn.packs.freeDelivery;
+    }
+
+    return priced.amountToFreeDelivery === null ? null : bn.packs.toFreeDelivery(taka(priced.amountToFreeDelivery));
 }
