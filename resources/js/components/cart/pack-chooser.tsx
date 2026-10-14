@@ -55,7 +55,8 @@ export function PackChooserButton({ productId, productName, className }: { produ
 /**
  * Each of a Product's Packs with its Pack Price, its MRP struck through and
  * the saving, a count, and the add button. A Pack that cannot be ordered now
- * is greyed and cannot be picked. A native `<dialog>`, so Escape closes it.
+ * is greyed and cannot be picked, and so is one স্টক শেষ — heavier than what
+ * is free of its tea. A native `<dialog>`, so Escape closes it.
  */
 function PackChooser({ productName, packs, onClose }: { productName: string; packs: CartPack[] | null; onClose: () => void }) {
     const dialog = useRef<HTMLDialogElement>(null);
@@ -65,8 +66,10 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);
-    /** What may still be added of the chosen Pack before its tea passes its খুচরা maximum, with what the basket already holds of it. */
-    const most = chosen === null ? MAX_PACKS : Math.max(1, retail.mostOf(chosen) - retail.countOf(chosen));
+    /** What may still be added of the chosen Pack before its tea passes its খুচরা maximum or what is free, with what the basket already holds of it. */
+    const room = chosen === null ? MAX_PACKS : retail.mostOf(chosen) - retail.countOf(chosen);
+    const most = Math.max(1, room);
+    const isPickable = (pack: CartPack) => pack.isOrderable && !retail.isSoldOut(pack.id);
 
     useEffect(() => {
         const element = dialog.current;
@@ -76,7 +79,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
         }
 
         if (packs && !element.open) {
-            setChosen(packs.find((pack) => pack.isOrderable)?.id ?? null);
+            setChosen(packs.find(isPickable)?.id ?? null);
             setCount(1);
             element.showModal();
         }
@@ -88,7 +91,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
     /** Adds the chosen Pack and goes straight on to the খুচরা কার্ট, remembering this page for "আরও চা যোগ করুন". */
     const buyNow = () => {
-        if (chosen === null) {
+        if (chosen === null || room < 1) {
             return;
         }
 
@@ -124,7 +127,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
                                 type="button"
                                 role="radio"
                                 aria-checked={chosen === pack.id}
-                                disabled={!pack.isOrderable}
+                                disabled={!isPickable(pack)}
                                 onClick={() => setChosen(pack.id)}
                                 className={cn(
                                     'flex cursor-pointer items-center justify-between gap-3 rounded-[10px] border bg-white px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50',
@@ -132,7 +135,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
                                 )}
                             >
                                 <b className="text-[16px] font-bold">{packName(pack.grams)}</b>
-                                {pack.isOrderable ? (
+                                {isPickable(pack) ? (
                                     <span className="flex flex-wrap items-baseline justify-end gap-x-2">
                                         <b className="text-[16px] font-bold text-primary-dark">{taka(pack.price)}</b>
                                         {pack.price < pack.mrp && (
@@ -143,7 +146,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
                                         )}
                                     </span>
                                 ) : (
-                                    <span className="text-[13px] font-semibold text-muted">{bn.packs.unavailable}</span>
+                                    <span className="text-[13px] font-semibold text-muted">{pack.isOrderable ? bn.packs.soldOut : bn.packs.unavailable}</span>
                                 )}
                             </button>
                         ))}
@@ -156,7 +159,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
                     <button
                         type="button"
-                        disabled={chosen === null}
+                        disabled={chosen === null || room < 1}
                         onClick={buyNow}
                         className="cursor-pointer rounded-[10px] border-0 bg-primary px-4 py-[13px] text-[15px] font-bold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
                     >

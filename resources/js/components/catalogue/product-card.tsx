@@ -10,6 +10,7 @@ import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
 import { useRetailCart } from '@/lib/use-retail-cart';
+import { useIsSoldOut } from '@/lib/use-is-sold-out';
 import type { BulkProductCard, ProductCard as ProductCardProps } from '@/types/catalogue';
 import { StrengthBar } from './strength-bar';
 import { themeStyle } from './theme';
@@ -23,7 +24,8 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
  * খুচরা — the packet button, alone with its cheapest Pack Price where it is
  * not sold পাইকারি (ADR-0036). An
  * unavailable Product is drawn greyed and says so, because a regular buyer
- * looks for the tea they always buy.
+ * looks for the tea they always buy; so is one স্টক শেষ every way it is sold,
+ * and one স্টক শেষ only পাইকারি says so in place of its kilogram button.
  *
  * Sized by whoever places it: a grid cell, or a slot in a sideways row.
  */
@@ -31,6 +33,8 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     const taka = useTaka();
     const cart = useCart();
     const kilograms = cart.kilogramsOf(product.id);
+    const isSoldOut = useIsSoldOut(product);
+    const isGreyed = !product.isAvailable || isSoldOut;
 
     return (
         <article
@@ -47,7 +51,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     alt=""
                     stripes="stripes-light"
                     label={bn.catalogue.imageOf(product.name)}
-                    className={cn('flex aspect-[16/10] items-end p-2 md:aspect-[5/4] md:p-3', !product.isAvailable && 'grayscale')}
+                    className={cn('flex aspect-[16/10] items-end p-2 md:aspect-[5/4] md:p-3', isGreyed && 'grayscale')}
                 >
                     {product.badge && (
                         <span className="absolute top-2 left-2 rounded-full bg-eyebrow px-[7px] py-[2px] text-[10px] font-semibold text-white md:top-3 md:left-3 md:px-[10px] md:py-1 md:text-[12px]">
@@ -62,7 +66,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                 </Picture>
             </Link>
 
-            <div className={cn('flex flex-1 flex-col gap-[6px] p-[14px] md:gap-2 md:px-5 md:pt-[18px] md:pb-5', !product.isAvailable && 'opacity-70')}>
+            <div className={cn('flex flex-1 flex-col gap-[6px] p-[14px] md:gap-2 md:px-5 md:pt-[18px] md:pb-5', isGreyed && 'opacity-70')}>
                 <span className="flex flex-wrap items-center gap-[6px]">
                     <span className="rounded-full bg-(--cat-tint) px-[7px] py-[2px] text-[10px] font-semibold text-(--cat-text) md:px-[9px] md:py-[3px] md:text-[12px]">
                         {product.category.name}
@@ -87,11 +91,11 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                 {product.isSoldBulk ? <BulkPrices product={product} cartKilograms={cart.priced.totalKilograms} /> : <RetailFrom productId={product.id} />}
 
                 <div className="mt-auto pt-[6px] md:pt-[10px]">
-                    {!product.isAvailable ? (
-                        <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-[6px] py-[10px] text-[13px] font-semibold text-muted md:rounded-[10px] md:p-3 md:text-[15px]">
-                            {bn.catalogue.unavailable}
-                        </span>
-                    ) : !product.isSoldBulk ? null : kilograms === 0 ? (
+                    {isGreyed ? (
+                        <CardNotice>{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</CardNotice>
+                    ) : !product.isSoldBulk ? null : kilograms === 0 && cart.isSoldOut(product.id) ? (
+                        <CardNotice>{bn.catalogue.bulkSoldOut}</CardNotice>
+                    ) : kilograms === 0 ? (
                         <button
                             type="button"
                             onClick={() => cart.set(product.id, 1)}
@@ -109,10 +113,19 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
                         />
                     )}
-                    {product.isAvailable && <PackChooserButton productId={product.id} productName={product.name} className={cn(product.isSoldBulk && 'mt-2')} />}
+                    {!isGreyed && <PackChooserButton productId={product.id} productName={product.name} className={cn(product.isSoldBulk && 'mt-2')} />}
                 </div>
             </div>
         </article>
+    );
+}
+
+/** In place of a card's buttons: why it cannot be ordered now. */
+function CardNotice({ children }: { children: string }) {
+    return (
+        <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-[6px] py-[10px] text-[13px] font-semibold text-muted md:rounded-[10px] md:p-3 md:text-[15px]">
+            {children}
+        </span>
     );
 }
 

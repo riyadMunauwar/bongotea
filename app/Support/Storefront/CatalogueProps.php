@@ -6,6 +6,7 @@ use App\Enums\OrderKind;
 use App\Models\Category;
 use App\Models\Pack;
 use App\Models\Product;
+use App\Support\Inventory\CommittedStock;
 use App\Support\Pricing\Tier;
 use Filament\Forms\Components\RichEditor\RichContentRenderer;
 use Illuminate\Support\Collection;
@@ -71,7 +72,11 @@ class CatalogueProps
      * And its পাইকারি Order Limit in whole kilograms, so the Cart can flag a
      * line below it and stop its stepper at the most; null is no limit.
      *
-     * @return array{id: int, isAvailable: bool, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>, packs: list<array{id: int, grams: int}>, defaultPackId: ?int, minKilograms: ?int, maxKilograms: ?int}
+     * And its Free to Sell in grams as the catalogue read it, null where
+     * nobody has counted it, from which the page works out স্টক শেষ and where
+     * a stepper stops — never stored, and never touching Available.
+     *
+     * @return array{id: int, isAvailable: bool, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>, packs: list<array{id: int, grams: int}>, defaultPackId: ?int, minKilograms: ?int, maxKilograms: ?int, freeGrams: ?int}
      */
     public static function cartProduct(Product $product): array
     {
@@ -86,6 +91,7 @@ class CatalogueProps
             'defaultPackId' => $packs->contains('id', $product->default_bulk_pack_id) ? $product->default_bulk_pack_id : null,
             'minKilograms' => $product->bulk_min_kilograms,
             'maxKilograms' => $product->bulk_max_kilograms,
+            'freeGrams' => CommittedStock::loadedOn($product),
         ];
     }
 
@@ -104,9 +110,10 @@ class CatalogueProps
      * Available (ADR-0034). Only ever asked of a Product in the catalogue.
      *
      * And its Product's খুচরা Order Limit in grams, which every Pack of it is
-     * measured against together; null is no limit.
+     * measured against together; null is no limit. And its Product's Free to
+     * Sell in grams, shared by every Pack of it, null where uncounted.
      *
-     * @return array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int}
+     * @return array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int, freeGrams: ?int}
      */
     public static function cartPack(Product $product, Pack $pack): array
     {
@@ -122,6 +129,7 @@ class CatalogueProps
             'isOrderable' => $pack->is_available && $product->is_available,
             'minGrams' => $product->retail_min_grams,
             'maxGrams' => $product->retail_max_grams,
+            'freeGrams' => CommittedStock::loadedOn($product),
         ];
     }
 

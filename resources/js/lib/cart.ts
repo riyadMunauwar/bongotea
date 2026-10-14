@@ -12,7 +12,7 @@
  * memory.
  */
 
-import { gramsFromKilograms, packetsIn } from './grams';
+import { GRAMS_PER_KILOGRAM, gramsFromKilograms, packetsIn, wholeKilogramsIn } from './grams';
 import type { ProductPrices } from './pricing';
 
 export const MAX_KILOGRAMS = 999;
@@ -30,8 +30,9 @@ export type BulkPack = { id: number; grams: number };
 
 /**
  * What the Cart needs to know of a Product: its Tiers, whether a buyer can
- * have it now, its পাইকারি Packs with the default, and its পাইকারি Order Limit
- * in whole Kilograms, null at an end with no limit.
+ * have it now, its পাইকারি Packs with the default, its পাইকারি Order Limit
+ * in whole Kilograms, null at an end with no limit, and its Free to Sell in
+ * grams, null where nobody has counted it (ADR-0037).
  */
 export type CartProduct = ProductPrices & {
     isAvailable: boolean;
@@ -39,6 +40,7 @@ export type CartProduct = ProductPrices & {
     defaultPackId: number | null;
     minKilograms: number | null;
     maxKilograms: number | null;
+    freeGrams: number | null;
 };
 
 /** Where a tea's whole weight in the Cart falls against its Order Limit: short of it, past it, or within it. */
@@ -47,9 +49,10 @@ export type LimitBreach = 'below' | 'above' | null;
 /**
  * A line the Cart is priced from, with the Pack it is supplied in and the
  * packets that makes — null where the Pack cannot make the Kilograms exactly —
- * and whether it is outside the tea's Order Limit, which Checkout would refuse.
+ * whether it is outside the tea's Order Limit, and whether it holds more than
+ * is free to sell, each of which Checkout would refuse.
  */
-export type BulkCartLine = { product: CartProduct; kilograms: number; pack: BulkPack | null; packets: number | null; limit: LimitBreach };
+export type BulkCartLine = { product: CartProduct; kilograms: number; pack: BulkPack | null; packets: number | null; limit: LimitBreach; isShort: boolean };
 
 export const EMPTY_CART: Cart = Object.freeze({});
 
@@ -104,12 +107,29 @@ function isWholeAboveNought(value: unknown): value is number {
 }
 
 /**
- * The Kilograms a stepper may go to: stopped at the tea's পাইকারি maximum,
- * but never stopped coming down. A Product holds one line, so the line is its
- * whole weight in the Cart.
+ * Whether a tea is স্টক শেষ পাইকারি: counted, with less free to sell than one
+ * Kilogram, the least anybody could order of it. Worked out here and never
+ * stored, and never the same as not Available. A tea nobody has counted
+ * never is.
  */
-export function cappedKilograms(product: CartProduct, kilograms: number): number {
-    return product.maxKilograms === null ? kilograms : Math.min(kilograms, product.maxKilograms);
+export function isBulkSoldOut(product: CartProduct): boolean {
+    return product.freeGrams !== null && product.freeGrams < GRAMS_PER_KILOGRAM;
+}
+
+/** The most Kilograms of a tea the Cart may hold: its পাইকারি maximum or the whole Kilograms free to sell, whichever is lower, and never past 999. */
+export function mostKilograms(product: CartProduct): number {
+    const free = product.freeGrams === null ? MAX_KILOGRAMS : wholeKilogramsIn(product.freeGrams);
+
+    return Math.min(MAX_KILOGRAMS, free, product.maxKilograms ?? MAX_KILOGRAMS);
+}
+
+/**
+ * The Kilograms a stepper may go to from what the Cart holds now: stopped at
+ * `mostKilograms()`, but never stopped coming down, even from above it. A
+ * Product holds one line, so the line is its whole weight in the Cart.
+ */
+export function cappedKilograms(product: CartProduct, kilograms: number, held = 0): number {
+    return kilograms <= held ? kilograms : Math.min(kilograms, Math.max(held, mostKilograms(product)));
 }
 
 /** Where a tea's Kilograms fall against its পাইকারি Order Limit. */
@@ -165,6 +185,7 @@ export function cartLines(cart: Cart, products: CartProduct[]): BulkCartLine[] {
                 pack,
                 packets: pack === null ? null : packetsIn(gramsFromKilograms(kilograms), pack.grams),
                 limit: limitBreachOf(product, kilograms),
+                isShort: product.freeGrams !== null && gramsFromKilograms(kilograms) > product.freeGrams,
             };
         });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cappedKilograms, cartLines, clampKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
+import { cappedKilograms, cartLines, clampKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
 /** A tea in 1 kg bags, its default, unless given other পাইকারি Packs. */
@@ -12,6 +12,7 @@ const product = (id: number, isAvailable = true, tiers: Tier[] = [{ min: 1, max:
     defaultPackId: packs[0]?.id ?? null,
     minKilograms: null,
     maxKilograms: null,
+    freeGrams: null,
 });
 
 /** A line holding Kilograms in the Product's default Pack. */
@@ -96,8 +97,8 @@ describe('cartLines', () => {
         const lines = cartLines({ 7: kg(4), 3: kg(8), 9: kg(2), 11: kg(5) }, [premium, strong, unavailable]);
 
         expect(lines).toStrictEqual([
-            { product: premium, kilograms: 8, pack: { id: 30, grams: 1000 }, packets: 8, limit: null },
-            { product: strong, kilograms: 4, pack: { id: 70, grams: 1000 }, packets: 4, limit: null },
+            { product: premium, kilograms: 8, pack: { id: 30, grams: 1000 }, packets: 8, limit: null, isShort: false },
+            { product: strong, kilograms: 4, pack: { id: 70, grams: 1000 }, packets: 4, limit: null, isShort: false },
         ]);
     });
 
@@ -132,6 +133,40 @@ describe('Order Limits', () => {
         expect(cappedKilograms(limited, 9)).toBe(5);
         expect(cappedKilograms(product(3), 9)).toBe(9);
         expect(cappedKilograms(limited, 1)).toBe(1);
+    });
+});
+
+describe('স্টক শেষ', () => {
+    /** A tea with 2.5 kg free to sell. */
+    const counted = { ...product(3), freeGrams: 2500 };
+
+    it('is a counted tea with less than a Kilogram free, and never one nobody counted', () => {
+        expect(isBulkSoldOut({ ...product(3), freeGrams: 999 })).toBe(true);
+        expect(isBulkSoldOut({ ...product(3), freeGrams: 0 })).toBe(true);
+        expect(isBulkSoldOut({ ...product(3), freeGrams: -400 })).toBe(true);
+        expect(isBulkSoldOut({ ...product(3), freeGrams: 1000 })).toBe(false);
+        expect(isBulkSoldOut(product(3))).toBe(false);
+    });
+
+    it('stops a stepper at the whole Kilograms free or the maximum, whichever is lower', () => {
+        expect(mostKilograms(counted)).toBe(2);
+        expect(mostKilograms({ ...counted, maxKilograms: 1 })).toBe(1);
+        expect(mostKilograms({ ...counted, maxKilograms: 5 })).toBe(2);
+        expect(mostKilograms({ ...product(3), freeGrams: -400 })).toBe(0);
+        expect(mostKilograms(product(3))).toBe(999);
+        expect(cappedKilograms(counted, 9)).toBe(2);
+    });
+
+    it('never stops a stepper coming down from above what is free', () => {
+        expect(cappedKilograms(counted, 4, 5)).toBe(4);
+        expect(cappedKilograms(counted, 6, 5)).toBe(5);
+        expect(cappedKilograms({ ...product(3), freeGrams: 0 }, 1, 3)).toBe(1);
+    });
+
+    it('flags a line holding more than is free', () => {
+        expect(cartLines({ 3: kg(3) }, [counted])[0].isShort).toBe(true);
+        expect(cartLines({ 3: kg(2) }, [counted])[0].isShort).toBe(false);
+        expect(cartLines({ 3: kg(999) }, [product(3)])[0].isShort).toBe(false);
     });
 });
 

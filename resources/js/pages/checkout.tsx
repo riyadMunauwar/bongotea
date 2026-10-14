@@ -72,6 +72,9 @@ export default function CheckoutPage() {
     const cart = useCart();
     const retail = useRetailCart();
     const isRetail = kind === 'retail';
+    /** What holds up placing the Order in whichever Cart is being checked out: a tea outside its Order Limit, or more than is free to sell. */
+    const isOutsideLimit = isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit;
+    const isShort = isRetail ? retail.hasShort : cart.hasShort;
     const taka = useTaka();
     const [districtTyped, setDistrictTyped] = useState('');
     const [refusal, setRefusal] = useState<{ text: string } | null>(null);
@@ -329,10 +332,11 @@ export default function CheckoutPage() {
                     <span className="text-[19px] font-semibold text-ink">{bn.checkout.summary}</span>
                     {isRetail ? <RetailSummary retail={retail} /> : <BulkSummary cart={cart} nameOf={nameOf} />}
                     {!isRetail && cart.hasUnpackable && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.unpackableCheckout}</span>}
-                    {(isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit) && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.outsideLimitCheckout}</span>}
+                    {isOutsideLimit && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.outsideLimitCheckout}</span>}
+                    {isShort && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.shortCheckout}</span>}
                     <button
                         type="submit"
-                        disabled={form.processing || repricing || (!isRetail && cart.hasUnpackable) || (isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit)}
+                        disabled={form.processing || repricing || (!isRetail && cart.hasUnpackable) || isOutsideLimit || isShort}
                         className="mt-1 w-full cursor-pointer rounded-[10px] border-0 bg-primary p-[15px] text-center text-[17px] font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:bg-disabled"
                     >
                         {form.processing ? bn.checkout.placing : bn.checkout.confirm}
@@ -458,6 +462,11 @@ function RetailSummary({ retail }: { retail: UseRetailCart }) {
                             {pack.productName} {packName(pack.grams)}{' '}
                             <span className="text-muted">{bn.packs.lineAt(toBanglaDigits(count), taka(pack.price))}</span>
                             {pack.price < pack.mrp && <s className="ml-1 text-muted opacity-75">{taka(pack.mrp)}</s>}
+                            {retail.isShort(pack.productId) && (
+                                <span role="alert" className="block text-[13px] font-semibold text-eyebrow">
+                                    {bn.packs.short}
+                                </span>
+                            )}
                         </span>
                         <span className="font-semibold">{taka(pack.price * count)}</span>
                     </div>

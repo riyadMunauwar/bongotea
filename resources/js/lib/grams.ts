@@ -20,6 +20,11 @@ export function kilogramsFromGrams(grams: number): number {
     return grams / GRAMS_PER_KILOGRAM;
 }
 
+/** The whole kilograms in these grams, rounded down and never below nought: 2500 -> 2, -400 -> 0. */
+export function wholeKilogramsIn(grams: number): number {
+    return Math.max(0, Math.floor(grams / GRAMS_PER_KILOGRAM));
+}
+
 /** How many packets of a Pack these grams make, or null where they leave a remainder. Never rounded. */
 export function packetsIn(grams: number, packGrams: number): number | null {
     ensurePackWeighsSomething(packGrams);

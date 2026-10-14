@@ -3,8 +3,10 @@ import { useMemo, useSyncExternalStore } from 'react';
 import {
     cappedKilograms,
     cartLines,
-    MAX_KILOGRAMS,
     EMPTY_CART,
+    isBulkSoldOut,
+    MAX_KILOGRAMS,
+    mostKilograms,
     onlyOrderable,
     priceSteps,
     readCart,
@@ -24,9 +26,11 @@ export type UseCart = {
     kilogramsOf: (productId: number) => number;
     /** A Product's line with its Pack and packet count, or null while it holds no Kilograms. */
     lineOf: (productId: number) => BulkCartLine | null;
-    /** The most Kilograms of a Product a stepper may reach: its পাইকারি maximum, else 999. */
+    /** The most Kilograms of a Product a stepper may reach: its পাইকারি maximum or what is free to sell, whichever is lower, else 999. */
     mostKilogramsOf: (productId: number) => number;
-    /** Sets a Product's Kilograms, clamped to 0–999 and stopped at its পাইকারি maximum; refused for a Product a buyer cannot have now. From none to some is an Added to Cart. */
+    /** Whether a counted Product has less than a Kilogram free to sell: স্টক শেষ পাইকারি, though still Available. */
+    isSoldOut: (productId: number) => boolean;
+    /** Sets a Product's Kilograms, clamped to 0–999 and stopped at its পাইকারি maximum and what is free to sell, but never stopped coming down; refused for a Product a buyer cannot have now. From none to some is an Added to Cart. */
     set: (productId: number, kilograms: number) => void;
     /** Chooses which of a Product's পাইকারি Packs its Kilograms are supplied in. */
     setPack: (productId: number, packId: number) => void;
@@ -40,6 +44,8 @@ export type UseCart = {
     hasUnpackable: boolean;
     /** Whether a line is outside its tea's পাইকারি Order Limit, which Checkout would refuse. */
     hasOutsideLimit: boolean;
+    /** Whether a line holds more than is free to sell, which Checkout would refuse. */
+    hasShort: boolean;
     /** The ladder of weights for the teas in the Cart, or for every tea a buyer can have while it is empty. */
     steps: PriceStep[];
     /** Every published Product the page was sent, in catalogue order. */
@@ -70,7 +76,12 @@ export function useCart(): UseCart {
             mostKilogramsOf: (productId: number) => {
                 const product = orderable.find((candidate) => candidate.id === productId);
 
-                return product === undefined ? MAX_KILOGRAMS : cappedKilograms(product, MAX_KILOGRAMS);
+                return product === undefined ? MAX_KILOGRAMS : mostKilograms(product);
+            },
+            isSoldOut: (productId: number) => {
+                const product = orderable.find((candidate) => candidate.id === productId);
+
+                return product !== undefined && isBulkSoldOut(product);
             },
             set: (productId: number, kilograms: number) => {
                 const chosen = orderable.find((candidate) => candidate.id === productId);
@@ -80,7 +91,7 @@ export function useCart(): UseCart {
                 }
 
                 const before = onlyOrderable(readCart(), pricing.products);
-                const after = withKilograms(before, productId, cappedKilograms(chosen, kilograms));
+                const after = withKilograms(before, productId, cappedKilograms(chosen, kilograms, before[productId]?.kilograms ?? 0));
 
                 writeCart(after);
 
@@ -103,6 +114,7 @@ export function useCart(): UseCart {
             isEmpty: lines.length === 0,
             hasUnpackable: lines.some((line) => line.packets === null),
             hasOutsideLimit: lines.some((line) => line.limit !== null),
+            hasShort: lines.some((line) => line.isShort),
             steps: priceSteps(
                 lines.length === 0 ? orderable : lines.map((line) => line.product),
                 lines.reduce((sum, line) => sum + line.kilograms, 0),

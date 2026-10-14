@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     cappedCount,
+    beyondFree,
     clampCount,
+    isPackSoldOut,
     EMPTY_RETAIL_CART,
     onlyOrderablePacks,
     outsideLimits,
@@ -26,6 +28,7 @@ const pack = (id: number, isOrderable = true): CartPack => ({
     isOrderable,
     minGrams: null,
     maxGrams: null,
+    freeGrams: null,
 });
 
 describe('Order Limits', () => {
@@ -50,6 +53,43 @@ describe('Order Limits', () => {
     it('never stops a count coming down, even above the maximum', () => {
         expect(cappedCount({ 2: 6 }, packs, 2, 5)).toBe(5);
         expect(cappedCount({ 2: 6 }, packs, 2, 7)).toBe(6);
+    });
+});
+
+describe('স্টক শেষ', () => {
+    /** Assam in 100 g and 250 g Packs, 600 g of it free to sell. */
+    const hundred = { ...pack(1), productId: 7, grams: 100, freeGrams: 600 };
+    const quarter = { ...pack(2), productId: 7, grams: 250, freeGrams: 600 };
+    const other = pack(3);
+    const packs = [hundred, quarter, other];
+
+    it("is a counted tea's Pack heavier than what is free, and never one nobody counted", () => {
+        expect(isPackSoldOut({ ...quarter, freeGrams: 249 })).toBe(true);
+        expect(isPackSoldOut({ ...quarter, freeGrams: 250 })).toBe(false);
+        expect(isPackSoldOut({ ...hundred, freeGrams: 249 })).toBe(false);
+        expect(isPackSoldOut(other)).toBe(false);
+    });
+
+    it("stops a Pack's count at what is free, counting the tea's other Packs", () => {
+        expect(cappedCount({}, packs, 2, 5)).toBe(2);
+        expect(cappedCount({ 2: 2 }, packs, 1, 5)).toBe(1);
+        expect(cappedCount({}, packs, 3, 50)).toBe(50);
+    });
+
+    it('takes the lower of what is free and the খুচরা maximum', () => {
+        const limited = packs.map((each) => ({ ...each, maxGrams: each.productId === 7 ? 300 : null }));
+
+        expect(cappedCount({}, limited, 1, 9)).toBe(3);
+    });
+
+    it('never stops a count coming down from above what is free', () => {
+        expect(cappedCount({ 2: 4 }, packs, 2, 3)).toBe(3);
+        expect(cappedCount({ 2: 4 }, packs, 2, 5)).toBe(4);
+    });
+
+    it('flags a tea whose Packs together hold more than is free', () => {
+        expect(beyondFree(retailLines({ 1: 2, 2: 2, 3: 9 }, packs))).toStrictEqual(new Set([7]));
+        expect(beyondFree(retailLines({ 1: 1, 2: 2 }, packs))).toStrictEqual(new Set());
     });
 });
 

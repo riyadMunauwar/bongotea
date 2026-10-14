@@ -5,6 +5,7 @@ namespace App\Support\Storefront;
 use App\Enums\OrderKind;
 use App\Models\Category;
 use App\Models\Product;
+use App\Support\Inventory\CommittedStock;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -30,14 +31,15 @@ class Catalogue
 
     /**
      * Drafts are nobody's to see and a Product taken out of the catalogue is
-     * gone from every list, so neither is here.
+     * gone from every list, so neither is here. Each carries its Free to Sell
+     * (ADR-0037), summed into this one query rather than read per card.
      *
      * @return Collection<int, Product>
      */
     public function products(): Collection
     {
-        return $this->products ??= Product::query()
-            ->published()
+        return $this->products ??= app(CommittedStock::class)
+            ->withFreeToSell(Product::query()->published())
             ->with([...self::CARD_RELATIONS, 'packs'])
             ->orderBy('id')
             ->get();

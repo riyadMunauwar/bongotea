@@ -14,6 +14,7 @@ import { formatPhone, toBanglaDigits } from '@/lib/bangla';
 import { rowAnchor } from '@/lib/cart';
 import { useCart } from '@/lib/use-cart';
 import { useMoments } from '@/lib/use-moments';
+import { useIsSoldOut } from '@/lib/use-is-sold-out';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
 import type { BulkProductCard, ProductCard, ProductDetail } from '@/types/catalogue';
@@ -30,7 +31,9 @@ type ProductPageProps = {
  * leads with its cheapest Pack Price and offers its Packs alone (ADR-0036).
  * Its Characteristics are drawn in groups — the basics, the quality, the
  * Merchant's own under অন্যান্য — and then its Storage tips. Every
- * characteristic the Merchant left blank is simply not drawn.
+ * characteristic the Merchant left blank is simply not drawn. A Product স্টক শেষ
+ * every way it is sold is drawn greyed like an unavailable one, with the
+ * hotline; one স্টক শেষ only পাইকারি says so in place of its kilogram button.
  */
 export default function ProductPage() {
     const { product, others } = usePage<ProductPageProps>().props;
@@ -38,6 +41,8 @@ export default function ProductPage() {
     const taka = useTaka();
     const cart = useCart();
     const { productViewed } = useMoments();
+    const isSoldOut = useIsSoldOut(product);
+    const isGreyed = !product.isAvailable || isSoldOut;
 
     /**
      * Product Viewed, once each time a Product's page is opened — not again as
@@ -80,7 +85,7 @@ export default function ProductPage() {
             </Link>
 
             <div className="grid items-start gap-6 md:grid-cols-2 md:gap-12">
-                <Gallery product={product} />
+                <Gallery product={product} isGreyed={isGreyed} />
 
                 <div className="flex flex-col gap-[18px]">
                     <span className="flex flex-wrap items-center gap-2">
@@ -97,8 +102,10 @@ export default function ProductPage() {
 
                     {product.shortDescription && <p className="m-0 text-[clamp(16px,1.4vw,19px)] leading-[1.7] text-muted">{product.shortDescription}</p>}
 
-                    {!product.isAvailable && (
-                        <span className="self-start rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">{bn.catalogue.unavailable}</span>
+                    {isGreyed && (
+                        <span className="self-start rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">
+                            {product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}
+                        </span>
                     )}
 
                     <CharacteristicGroup heading={bn.product.basicsHeading} characteristics={basics} />
@@ -153,10 +160,13 @@ export default function ProductPage() {
 
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-[6px]">
                         {product.isSoldBulk ? <BulkPriceLine product={product} /> : <RetailFrom productId={product.id} />}
-                        {product.isAvailable ? (
+                        {!isGreyed ? (
                             <span className="flex flex-wrap items-center gap-3">
                                 <PackChooserButton productId={product.id} productName={product.name} className="w-auto px-6 py-[13px] md:px-6 md:py-[13px] md:text-[16px]" />
-                                {product.isSoldBulk && (
+                                {product.isSoldBulk && cart.isSoldOut(product.id) && (
+                                    <span className="rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">{bn.catalogue.bulkSoldOut}</span>
+                                )}
+                                {product.isSoldBulk && !cart.isSoldOut(product.id) && (
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -172,7 +182,7 @@ export default function ProductPage() {
                         ) : (
                             store.hotline && (
                                 <span className="text-[14px] leading-[1.6] text-muted">
-                                    {bn.product.unavailableNote}{' '}
+                                    {product.isAvailable ? bn.product.soldOutNote : bn.product.unavailableNote}{' '}
                                     <a href={store.hotline.href} className="font-semibold">
                                         {formatPhone(store.hotline.number)}
                                     </a>
@@ -251,7 +261,7 @@ function HeadedCard({ heading, children }: { heading: string; children: ReactNod
 }
 
 /** The cover large, and the rest of the gallery as thumbnails that swap into it. */
-function Gallery({ product }: { product: ProductDetail }) {
+function Gallery({ product, isGreyed }: { product: ProductDetail; isGreyed: boolean }) {
     const [shown, setShown] = useState(0);
     const images = product.gallery;
 
@@ -262,7 +272,7 @@ function Gallery({ product }: { product: ProductDetail }) {
                 alt={product.name}
                 stripes="stripes-light"
                 label={bn.product.picture(product.name)}
-                className={cn('flex aspect-square items-end rounded-[16px] p-[14px]', !product.isAvailable && 'grayscale')}
+                className={cn('flex aspect-square items-end rounded-[16px] p-[14px]', isGreyed && 'grayscale')}
             />
             {images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto">

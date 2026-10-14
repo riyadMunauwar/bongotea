@@ -59,7 +59,7 @@ describe('beaconItems', () => {
 });
 
 describe('a Pack', () => {
-    const quarter: CartPack = { id: 7, productId: 12, productName: 'Gold', href: '/tea/gold', imageUrl: null, grams: 250, mrp: 30000, price: 27000, isOrderable: true, minGrams: null, maxGrams: null };
+    const quarter: CartPack = { id: 7, productId: 12, productName: 'Gold', href: '/tea/gold', imageUrl: null, grams: 250, mrp: 30000, price: 27000, isOrderable: true, minGrams: null, maxGrams: null, freeGrams: null };
     const retail = { deliveryCharge: 6000, freeDeliveryFrom: null };
 
     it('is reported as its Product, its count the quantity, its Pack Price the price and its weight the variant, from the retail Cart', () => {

@@ -340,11 +340,11 @@ it('shares every published Product\'s MRP, Tiers and availability, and the Deliv
                     ['min' => 11, 'max' => null, 'fee' => 0],
                 ],
                 'products' => [
-                    ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'packs' => [['id' => $premium->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $premium->default_bulk_pack_id, 'minKilograms' => null, 'maxKilograms' => null, 'tiers' => [
+                    ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'packs' => [['id' => $premium->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $premium->default_bulk_pack_id, 'minKilograms' => null, 'maxKilograms' => null, 'freeGrams' => null, 'tiers' => [
                         ['min' => 1, 'max' => 5, 'price' => 62000],
                         ['min' => 6, 'max' => null, 'price' => 58900],
                     ]],
-                    ['id' => $unavailable->id, 'isAvailable' => false, 'mrp' => 46000, 'packs' => [['id' => $unavailable->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $unavailable->default_bulk_pack_id, 'minKilograms' => null, 'maxKilograms' => null, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
+                    ['id' => $unavailable->id, 'isAvailable' => false, 'mrp' => 46000, 'packs' => [['id' => $unavailable->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $unavailable->default_bulk_pack_id, 'minKilograms' => null, 'maxKilograms' => null, 'freeGrams' => null, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
                 ],
             ])
         );
@@ -374,9 +374,9 @@ it('shares every Pack of every published Product, with whether it can be ordered
             ->where('retailPricing.deliveryCharge', 7000)
             ->where('retailPricing.freeDeliveryFrom', null)
             ->where('retailPricing.packs', [
-                ['id' => $small->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 100, 'mrp' => 12000, 'price' => 11000, 'isOrderable' => true, 'minGrams' => null, 'maxGrams' => null],
-                ['id' => $switchedOff->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 250, 'mrp' => 30000, 'price' => 27000, 'isOrderable' => false, 'minGrams' => null, 'maxGrams' => null],
-                ['id' => $ofUnavailable->id, 'productId' => $unavailable->id, 'productName' => $unavailable->name, 'href' => '/tea/'.$unavailable->slug, 'imageUrl' => null, 'grams' => 250, 'mrp' => $ofUnavailable->mrp, 'price' => $ofUnavailable->price, 'isOrderable' => false, 'minGrams' => null, 'maxGrams' => null],
+                ['id' => $small->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 100, 'mrp' => 12000, 'price' => 11000, 'isOrderable' => true, 'minGrams' => null, 'maxGrams' => null, 'freeGrams' => null],
+                ['id' => $switchedOff->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 250, 'mrp' => 30000, 'price' => 27000, 'isOrderable' => false, 'minGrams' => null, 'maxGrams' => null, 'freeGrams' => null],
+                ['id' => $ofUnavailable->id, 'productId' => $unavailable->id, 'productName' => $unavailable->name, 'href' => '/tea/'.$unavailable->slug, 'imageUrl' => null, 'grams' => 250, 'mrp' => $ofUnavailable->mrp, 'price' => $ofUnavailable->price, 'isOrderable' => false, 'minGrams' => null, 'maxGrams' => null, 'freeGrams' => null],
             ])
         );
 });

@@ -59,13 +59,15 @@ function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
     const price = tierFor(product, cart.priced.totalKilograms).price;
+    /** স্টক শেষ greys a row with nothing in the Cart; one holding Kilograms keeps its stepper, so the buyer can bring it down. */
+    const isGreyed = !product.isAvailable || (kilograms === 0 && cart.isSoldOut(product.id));
 
     return (
         <div
             className={cn(
                 'mx-2 mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[12px] border p-3 transition-colors md:mx-3',
                 kilograms > 0 ? 'border-green-200 bg-white' : 'border-divider bg-green-25',
-                !product.isAvailable && 'opacity-70',
+                isGreyed && 'opacity-70',
             )}
         >
             <div className="flex min-w-0 flex-col gap-[3px]">
@@ -83,7 +85,7 @@ function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
                     )}
                 </span>
             </div>
-            {product.isAvailable ? (
+            {!isGreyed ? (
                 <Stepper
                     kilograms={kilograms}
                     onChange={(next) => cart.set(product.id, next)}
@@ -92,7 +94,7 @@ function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
                     buttonClassName="size-10 text-primary"
                 />
             ) : (
-                <span className="text-[13px] font-semibold text-muted">{bn.catalogue.unavailable}</span>
+                <span className="text-[13px] font-semibold text-muted">{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</span>
             )}
             {kilograms > 0 && (
                 <div className="col-span-full flex items-baseline justify-between gap-2 border-t border-dashed border-border pt-2 text-[13px] text-muted">

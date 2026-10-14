@@ -1,7 +1,7 @@
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import type { BulkCartLine } from '@/lib/cart';
-import { workableKilograms } from '@/lib/grams';
+import { wholeKilogramsIn, workableKilograms } from '@/lib/grams';
 import type { UseCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { packName } from './figures';
@@ -12,7 +12,9 @@ import { packName } from './figures';
  * Kilograms or the Pack change — "২ কেজি = ৮ প্যাকেট × ২৫০ গ্রাম" — or, where
  * the Pack cannot make the Kilograms exactly, the weights that it can. A tea
  * with no পাইকারি Pack on offer says so, since it holds up the Checkout, and
- * so does a line below the tea's পাইকারি minimum or above its maximum.
+ * so does a line below the tea's পাইকারি minimum or above its maximum, and one
+ * holding more than is free to sell — with the whole Kilograms that are, or
+ * স্টক শেষ where not one is.
  */
 export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; cart: UseCart; className?: string }) {
     const { product, kilograms, pack, packets } = line;
@@ -61,6 +63,17 @@ export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; ca
                         : bn.cart.aboveMaximum(toBanglaDigits(product.maxKilograms ?? 0))}
                 </span>
             )}
+            {line.isShort && <ShortNotice freeGrams={product.freeGrams ?? 0} />}
         </div>
+    );
+}
+
+function ShortNotice({ freeGrams }: { freeGrams: number }) {
+    const free = wholeKilogramsIn(freeGrams);
+
+    return (
+        <span role="alert" className="basis-full font-semibold text-eyebrow">
+            {free > 0 ? bn.cart.short(toBanglaDigits(free)) : bn.cart.soldOutLine}
+        </span>
     );
 }

@@ -113,6 +113,8 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
     const tier = tierFor(product, total);
     const next = product.tiers.length > 1 ? nextDropAbove(product, total) : null;
     const set = (value: number) => cart.set(product.id, value);
+    /** স্টক শেষ greys a row with nothing in the Cart; one holding Kilograms keeps its stepper, so the buyer can bring it down. */
+    const isGreyed = !product.isAvailable || (kilograms === 0 && cart.isSoldOut(product.id));
 
     return (
         <div
@@ -120,7 +122,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
             className={cn(
                 'flex scroll-mt-[130px] flex-col gap-[10px] rounded-[12px] border p-3 transition-colors duration-300 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:gap-4 min-[1100px]:px-4 min-[1100px]:py-[14px] lg:scroll-mt-[170px]',
                 flashed ? 'border-primary bg-green-50' : kilograms > 0 ? 'border-green-200 bg-green-25' : 'border-border bg-white',
-                !product.isAvailable && 'opacity-70',
+                isGreyed && 'opacity-70',
             )}
         >
             <div className="flex min-w-0 flex-1 items-center gap-[10px] min-[1100px]:gap-4">
@@ -128,7 +130,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                     src={product.imageUrl}
                     alt=""
                     stripes="stripes-light"
-                    className={cn('size-10 flex-none rounded-[8px] min-[1100px]:size-14', !product.isAvailable && 'grayscale')}
+                    className={cn('size-10 flex-none rounded-[8px] min-[1100px]:size-14', isGreyed && 'grayscale')}
                 />
                 <div className="flex min-w-0 flex-1 flex-col min-[1100px]:gap-[2px]">
                     <b className="text-[15px] leading-[1.4] font-semibold text-ink min-[1100px]:text-[17px]">{product.name}</b>
@@ -149,12 +151,12 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                             </>
                         )}
                     </span>
-                    {product.isAvailable && next !== null && (
+                    {!isGreyed && next !== null && (
                         <span className="text-[12px] leading-[1.45] text-(--cat-text)">
                             {bn.bulkOrder.rowNext(toBanglaDigits(next.min - total), discountLabel(product.mrp, next.price, taka) ?? '', taka(next.price))}
                         </span>
                     )}
-                    {product.isAvailable && next === null && product.tiers.length > 1 && total > 0 && (
+                    {!isGreyed && next === null && product.tiers.length > 1 && total > 0 && (
                         <span className="text-[12px] font-semibold text-primary">{bn.bulkOrder.bestNow}</span>
                     )}
                     {line !== null && <BulkPackLine line={line} cart={cart} className="mt-1" />}
@@ -164,7 +166,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                 )}
             </div>
 
-            {product.isAvailable ? (
+            {!isGreyed ? (
                 <div className="flex items-center gap-2 min-[1100px]:gap-[6px]">
                     {quickChips && (
                         <div className="grid max-w-[260px] min-w-0 flex-1 grid-cols-4 gap-1 max-md:max-w-none min-[1100px]:flex min-[1100px]:max-w-none min-[1100px]:gap-[6px]">
@@ -194,7 +196,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                     />
                 </div>
             ) : (
-                <span className="text-[13px] font-semibold text-muted">{bn.catalogue.unavailable}</span>
+                <span className="text-[13px] font-semibold text-muted">{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</span>
             )}
         </div>
     );
@@ -244,7 +246,7 @@ function Summary({ cart, steps }: { cart: UseCart; steps: PriceStep[] | null }) 
                     <StepCells steps={steps} className="px-1 py-[7px] text-[12px] leading-[1.45]" />
                 </div>
             )}
-            <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit} className="w-full p-[15px] text-[16px]">
+            <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="w-full p-[15px] text-[16px]">
                 {bn.bulkOrder.continue}
             </ContinueButton>
         </aside>
@@ -273,7 +275,7 @@ function BottomBar({ cart }: { cart: UseCart }) {
                     <span className="text-[12px] text-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
                     <b className="text-[21px] leading-[1.3] font-bold text-ink">{taka(priced.total)}</b>
                 </div>
-                <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
+                <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
                     {bn.bulkOrder.continueShort}
                 </ContinueButton>
             </div>

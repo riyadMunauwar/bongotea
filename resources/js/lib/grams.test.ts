@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import file from '../../../tests/Fixtures/Inventory/packing-examples.json';
-import { gramsFromKilograms, gramsOfPackets, kilogramsFromGrams, packetsIn, workableKilograms } from './grams';
+import { gramsFromKilograms, gramsOfPackets, kilogramsFromGrams, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
 
 /**
  * The shared packing worked examples, converted by the TypeScript mirror. Pest
@@ -42,5 +42,13 @@ describe('a Pack that weighs nothing', () => {
 describe('the weights a Pack can make', () => {
     it('are asked for in whole kilograms only, as the server types them', () => {
         expect(() => workableKilograms(2.5, 400)).toThrow();
+    });
+});
+
+describe('the whole kilograms in some grams', () => {
+    it('rounds down, and reads a figure below nothing as none', () => {
+        expect(wholeKilogramsIn(2500)).toBe(2);
+        expect(wholeKilogramsIn(999)).toBe(0);
+        expect(wholeKilogramsIn(-400)).toBe(0);
     });
 });

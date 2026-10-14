@@ -140,7 +140,7 @@ class StorefrontShell
      * nothing here, and that is how the storefront knows it is not sold
      * খুচরা. Money in minor units.
      *
-     * @return array{deliveryCharge: int, freeDeliveryFrom: ?int, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int}>}
+     * @return array{deliveryCharge: int, freeDeliveryFrom: ?int, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int, freeGrams: ?int}>}
      */
     public function retailPricing(): array
     {

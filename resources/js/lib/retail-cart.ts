@@ -24,7 +24,8 @@ export type RetailCart = Readonly<Record<number, number>>;
  * A Pack as the shared `retailPricing` prop sends it: its prices, what it is
  * of, whether a buyer can order it now, and its tea's খুচরা Order Limit in
  * grams — measured on every Pack of the tea together, null at an end with no
- * limit.
+ * limit — and its tea's Free to Sell in grams, shared by every Pack of it,
+ * null where nobody has counted it (ADR-0037).
  */
 export type CartPack = PackPrices & {
     productId: number;
@@ -35,6 +36,7 @@ export type CartPack = PackPrices & {
     isOrderable: boolean;
     minGrams: number | null;
     maxGrams: number | null;
+    freeGrams: number | null;
 };
 
 export const EMPTY_RETAIL_CART: RetailCart = Object.freeze({});
@@ -118,15 +120,39 @@ export function outsideLimits(lines: HeldPack[]): Map<number, Exclude<LimitBreac
 }
 
 /**
+ * The teas whose Packs together hold more than is free to sell, by Product
+ * id, which Checkout would refuse. A tea nobody has counted never is.
+ */
+export function beyondFree(lines: HeldPack[]): Set<number> {
+    const weighed = new Map<number, number>();
+
+    for (const { pack, count } of lines) {
+        weighed.set(pack.productId, (weighed.get(pack.productId) ?? 0) + gramsOfPackets(count, pack.grams));
+    }
+
+    return new Set(lines.filter(({ pack }) => pack.freeGrams !== null && (weighed.get(pack.productId) ?? 0) > pack.freeGrams).map(({ pack }) => pack.productId));
+}
+
+/**
+ * Whether a Pack is স্টক শেষ: its tea counted, with less free to sell than
+ * the Pack weighs. Worked out here and never stored, and never the same as
+ * not orderable. A Pack of a tea nobody has counted never is.
+ */
+export function isPackSoldOut(pack: CartPack): boolean {
+    return pack.freeGrams !== null && pack.freeGrams < pack.grams;
+}
+
+/**
  * The count a Pack's stepper may go to: stopped where its tea, with the other
- * Packs of it the Cart holds, would pass its খুচরা maximum — but never stopped
- * coming down, even from above it.
+ * Packs of it the Cart holds, would pass its খুচরা maximum or what is free to
+ * sell, whichever is lower — but never stopped coming down, even from above it.
  */
 export function cappedCount(cart: RetailCart, packs: CartPack[], packId: number, count: number): number {
     const pack = packs.find((candidate) => candidate.id === packId);
     const held = cart[packId] ?? 0;
+    const ceilings = pack === undefined ? [] : [pack.maxGrams, pack.freeGrams].filter((grams) => grams !== null);
 
-    if (pack === undefined || pack.maxGrams === null || count <= held) {
+    if (pack === undefined || ceilings.length === 0 || count <= held) {
         return count;
     }
 
@@ -134,7 +160,7 @@ export function cappedCount(cart: RetailCart, packs: CartPack[], packId: number,
         .filter((line) => line.pack.productId === pack.productId && line.pack.id !== packId)
         .reduce((grams, line) => grams + gramsOfPackets(line.count, line.pack.grams), 0);
 
-    return Math.min(count, Math.max(held, Math.floor((pack.maxGrams - others) / pack.grams)));
+    return Math.min(count, Math.max(held, Math.floor((Math.min(...ceilings) - others) / pack.grams)));
 }
 
 /**

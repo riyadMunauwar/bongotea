@@ -16,8 +16,8 @@ import { Picture, SectionHeading } from './shared';
  * The packet basket (খুচরা কার্ট) as a page (ADR-0034): each Pack with its
  * tea, size, Pack Price, a stepper, a remove button and its line total; what
  * can no longer be ordered flagged and left out of every figure; a tea whose
- * Packs together fall outside its খুচরা Order Limit flagged at its lines,
- * holding up the Checkout; and beside
+ * Packs together fall outside its খুচরা Order Limit, or hold more than is free
+ * to sell, flagged at its lines, holding up the Checkout; and beside
  * it the subtotal, the retail Delivery Charge, the total and how far free
  * delivery is. "আরও চা যোগ করুন" goes back to the page the last Pack was
  * bought from. An empty basket points back to the shop. Every figure comes
@@ -103,6 +103,11 @@ function BasketLine({ line, retail }: { line: HeldPack; retail: UseRetailCart })
                         {limit === 'below' ? bn.packs.belowMinimum(packName(pack.minGrams ?? 0)) : bn.packs.aboveMaximum(packName(pack.maxGrams ?? 0))}
                     </span>
                 )}
+                {retail.isShort(pack.productId) && (
+                    <span role="alert" className="text-[13px] font-semibold text-eyebrow">
+                        {bn.packs.short}
+                    </span>
+                )}
                 <div className="flex items-center gap-3">
                     <PackStepper count={count} max={retail.mostOf(pack.id)} onChange={(next) => retail.set(pack.id, next)} />
                     <button type="button" onClick={() => retail.remove(pack.id)} className="cursor-pointer border-0 bg-transparent p-0 text-[13px] font-semibold text-muted underline">
@@ -133,7 +138,8 @@ function UnorderableLine({ name, onRemove }: { name: string | null; onRemove: ()
 function Summary({ retail }: { retail: UseRetailCart }) {
     const taka = useTaka();
     const { links } = usePage().props;
-    const { priced, isEmpty, hasOutsideLimit } = retail;
+    const { priced, isEmpty, hasOutsideLimit, hasShort } = retail;
+    const isHeldUp = isEmpty || hasOutsideLimit || hasShort;
     const note = retailDeliveryNote(priced, taka);
 
     return (
@@ -152,11 +158,11 @@ function Summary({ retail }: { retail: UseRetailCart }) {
             </div>
             <button
                 type="button"
-                disabled={isEmpty || hasOutsideLimit}
+                disabled={isHeldUp}
                 onClick={() => router.visit(`${links.checkout}?cart=retail`)}
                 className={cn(
                     'w-full cursor-pointer rounded-[10px] border-0 p-[15px] text-center text-[16px] font-semibold text-white disabled:cursor-not-allowed',
-                    isEmpty || hasOutsideLimit ? 'bg-disabled' : 'bg-primary hover:bg-primary-dark',
+                    isHeldUp ? 'bg-disabled' : 'bg-primary hover:bg-primary-dark',
                 )}
             >
                 {bn.packs.checkout}

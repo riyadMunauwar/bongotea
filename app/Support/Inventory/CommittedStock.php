@@ -105,9 +105,7 @@ class CommittedStock
     {
         return $this->withFreeToSell(Product::withTrashed()->whereKey($productIds))
             ->get()
-            ->mapWithKeys(fn (Product $product): array => [
-                $product->getKey() => self::figure($product->getAttribute(self::FREE_TO_SELL)),
-            ])
+            ->mapWithKeys(fn (Product $product): array => [$product->getKey() => self::loadedOn($product)])
             ->all();
     }
 
@@ -198,6 +196,15 @@ class CommittedStock
             "({$held->toSql()}) - ({$promised->toSql()}) as ".self::FREE_TO_SELL,
             [...$held->getBindings(), ...$promised->getBindings()],
         );
+    }
+
+    /**
+     * Free to Sell as a Product read through `withFreeToSell()` carries it, in
+     * grams: null where nobody has counted it, and on a Product read without it.
+     */
+    public static function loadedOn(Product $product): ?int
+    {
+        return self::figure($product->getAttribute(self::FREE_TO_SELL));
     }
 
     /** A summed figure as it comes back from the database: a string on some drivers, null where nothing was counted. */
