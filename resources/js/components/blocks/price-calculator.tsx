@@ -87,6 +87,7 @@ function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
                 <Stepper
                     kilograms={kilograms}
                     onChange={(next) => cart.set(product.id, next)}
+                    max={cart.mostKilogramsOf(product.id)}
                     className="rounded-[10px] border border-input bg-white text-[15px] text-ink"
                     buttonClassName="size-10 text-primary"
                 />

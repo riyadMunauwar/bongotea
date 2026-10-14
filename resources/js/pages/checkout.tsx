@@ -46,6 +46,8 @@ type Refusal = {
     current: { total: number };
     unavailable: number[];
     short: number[];
+    /** What is outside its Order Limit: Products for the bulk Cart, Packs for the packet basket. */
+    outsideLimit: number[];
 };
 
 /**
@@ -166,17 +168,19 @@ export default function CheckoutPage() {
                 const lineName = isRetail ? packNameOf : nameOf;
                 const gone = answer.unavailable.map(lineName).filter((name) => name !== '');
                 const short = answer.short.map(lineName).filter((name) => name !== '');
+                const outside = answer.outsideLimit.map(lineName).filter((name) => name !== '');
                 const moved = answer.current.total !== quotedTotal;
 
-                /** A refusal for stock alone changed no price, so it says only what is short (ADR-0037). */
-                const onlyShort = short.length > 0 && gone.length === 0 && !moved;
+                /** A refusal for stock or an Order Limit alone changed no price, so it says only what is wrong (ADR-0037). */
+                const onlyQuantity = short.length + outside.length > 0 && gone.length === 0 && !moved;
 
                 setRefusal({
                     text: [
-                        onlyShort ? null : bn.checkout.changedHeading,
+                        onlyQuantity ? null : bn.checkout.changedHeading,
                         moved ? bn.checkout.changed(taka(quotedTotal), taka(answer.current.total)) : null,
                         gone.length > 0 ? bn.checkout.unavailable(gone.join(', ')) : null,
                         short.length > 0 ? bn.checkout.short(short.join(', ')) : null,
+                        outside.length > 0 ? bn.checkout.outsideLimit(outside.join(', ')) : null,
                     ]
                         .filter(Boolean)
                         .join(' '),
@@ -325,9 +329,10 @@ export default function CheckoutPage() {
                     <span className="text-[19px] font-semibold text-ink">{bn.checkout.summary}</span>
                     {isRetail ? <RetailSummary retail={retail} /> : <BulkSummary cart={cart} nameOf={nameOf} />}
                     {!isRetail && cart.hasUnpackable && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.unpackableCheckout}</span>}
+                    {(isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit) && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.outsideLimitCheckout}</span>}
                     <button
                         type="submit"
-                        disabled={form.processing || repricing || (!isRetail && cart.hasUnpackable)}
+                        disabled={form.processing || repricing || (!isRetail && cart.hasUnpackable) || (isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit)}
                         className="mt-1 w-full cursor-pointer rounded-[10px] border-0 bg-primary p-[15px] text-center text-[17px] font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:bg-disabled"
                     >
                         {form.processing ? bn.checkout.placing : bn.checkout.confirm}

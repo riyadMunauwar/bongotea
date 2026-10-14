@@ -9,6 +9,7 @@ use App\Models\OrderLine;
 use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Money;
 use App\Support\Pricing\CartLine;
@@ -203,6 +204,41 @@ class Repricing
     }
 
     /**
+     * Why a form row's tea would be outside its পাইকারি Order Limit, its
+     * Kilograms on every row of it added up, or null where it is within or the
+     * row is not yet a line — so the form can refuse it on the Kilograms. The
+     * same check `apply()` makes.
+     *
+     * @param  array<array-key, mixed>  $state
+     * @param  array<string, mixed>  $row
+     */
+    public static function limitProblem(array $state, array $row): ?string
+    {
+        $line = RequestedLine::fromState($row);
+        $product = $line === null ? null : Product::withTrashed()->find($line->productId);
+
+        if ($product === null || ! $product->isSoldAs(OrderKind::Bulk)) {
+            return null;
+        }
+
+        $ofProduct = array_filter(self::requested($state), fn (RequestedLine $requested): bool => $requested->productId === $product->getKey());
+
+        return OrderLimit::refusals(OrderKind::Bulk, self::weighed($ofProduct, new Collection([$product->getKey() => $product])))[$product->getKey()] ?? null;
+    }
+
+    /**
+     * Each line's Product and the grams it holds, for its Order Limit.
+     *
+     * @param  array<array-key, RequestedLine>  $lines  each naming a Product among `$products`
+     * @param  Collection<int, Product>  $products
+     * @return list<array{0: Product, 1: int}>
+     */
+    private static function weighed(array $lines, Collection $products): array
+    {
+        return array_values(array_map(fn (RequestedLine $line): array => [$products[$line->productId], Grams::fromKilograms($line->kilograms)], $lines));
+    }
+
+    /**
      * A form row read as the line it would be: its Product, the Pack it would
      * be supplied in and the stored line it was filled from. Null while it is
      * not yet a line, or names no Product.
@@ -239,7 +275,7 @@ class Repricing
      * @param  array<array-key, mixed>  $state
      *
      * @throws LogicException where the Order already has a Shipment
-     * @throws InvalidArgumentException where the rows are not lines an Order can hold
+     * @throws InvalidArgumentException where the rows are not lines an Order can hold, or a Product is outside its Order Limit
      * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      */
     public function apply(Order $order, array $state, User $by): void
@@ -274,6 +310,14 @@ class Repricing
         }
 
         $packs = self::packs($lines, $products, $stored);
+
+        /** No way past an Order Limit, for anyone: a deal is struck on price instead. */
+        $outside = OrderLimit::refusals(OrderKind::Bulk, self::weighed($lines, $products));
+
+        if ($outside !== []) {
+            throw new InvalidArgumentException(reset($outside));
+        }
+
         $cart = $this->price($lines, $products);
         $costs = $this->ledger->averageCostFor(array_values(array_unique(array_map(fn (RequestedLine $line): int => $line->productId, $lines))));
         $wasTotal = $order->total;

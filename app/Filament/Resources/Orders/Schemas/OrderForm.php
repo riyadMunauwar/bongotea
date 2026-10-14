@@ -270,6 +270,7 @@ class OrderForm
                                     ->suffix('kg')
                                     ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::bulkRowRule($get, $record, 'kilograms', Repricing::packingProblem(...)))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::withinOrderLimit($get, $record, retail: false))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 /**
@@ -305,6 +306,7 @@ class OrderForm
                                     ->minValue(1)
                                     ->maxValue(CheckoutRequest::MAX_PACKS)
                                     ->visible(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::withinOrderLimit($get, $record, retail: true))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 TextEntry::make('price_per_kilogram')
@@ -493,6 +495,32 @@ class OrderForm
                 'pack_id' => $get('pack_id'),
                 $field => $value,
             ]);
+
+            if ($problem !== null) {
+                $fail($problem);
+            }
+        };
+    }
+
+    /**
+     * Refuses a row whose tea, every row of it added up, would be outside its
+     * Order Limit, on the Kilograms of a bulk row and the count of a retail
+     * one. There is no Permission past it. Only asked of a save that
+     * reprices, so an Order captured before a limit was set keeps its lines.
+     */
+    private static function withinOrderLimit(Get $get, ?Order $record, bool $retail): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record, $retail): void {
+            $lines = $get('../../lines');
+            $lines = is_array($lines) ? $lines : [];
+
+            if ($record !== null && ! ($retail ? RetailRepricing::changes($record, $lines) : Repricing::changes($record, $lines))) {
+                return;
+            }
+
+            $problem = $retail
+                ? RetailRepricing::limitProblem($record, $lines, ['id' => $get('id'), 'pack_id' => $get('pack_id'), 'count' => $value])
+                : Repricing::limitProblem($lines, ['id' => $get('id'), 'product_id' => $get('product_id'), 'kilograms' => $value]);
 
             if ($problem !== null) {
                 $fail($problem);

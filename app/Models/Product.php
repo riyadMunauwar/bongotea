@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\OrderKind;
 use App\Enums\ProductStatus;
 use App\Enums\Strength;
+use App\Support\Orders\OrderLimit;
 use App\Support\Pricing\ProductTiers;
 use App\Support\Pricing\Tier;
 use Database\Factories\ProductFactory;
@@ -62,7 +63,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'tiers', 'strength', 'tea_type', 'grade', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
     'cups_per_kilogram', 'package_weight', 'custom_characteristics', 'best_for', 'not_best_for',
     'brewing_steps', 'business_tips', 'storage_tips', 'badge', 'search_keywords', 'status', 'is_available',
-    'sold_bulk', 'sold_retail', 'default_bulk_pack_id', 'seo_title', 'seo_description', 'seo_image',
+    'sold_bulk', 'sold_retail', 'default_bulk_pack_id', 'bulk_min_kilograms', 'bulk_max_kilograms',
+    'retail_min_grams', 'retail_max_grams', 'seo_title', 'seo_description', 'seo_image',
 ])]
 class Product extends Model implements HasMedia
 {
@@ -103,6 +105,10 @@ class Product extends Model implements HasMedia
             'sold_bulk' => 'boolean',
             'sold_retail' => 'boolean',
             'default_bulk_pack_id' => 'integer',
+            'bulk_min_kilograms' => 'integer',
+            'bulk_max_kilograms' => 'integer',
+            'retail_min_grams' => 'integer',
+            'retail_max_grams' => 'integer',
         ];
     }
 
@@ -127,6 +133,8 @@ class Product extends Model implements HasMedia
                 throw new LogicException("Product {$product->getKey()} cannot be saved: it must be sold পাইকারি, খুচরা or both.");
             }
 
+            $product->guardOrderLimits();
+
             if (! $product->sold_bulk) {
                 $product->forgetTiers();
 
@@ -146,6 +154,31 @@ class Product extends Model implements HasMedia
         $this->price = null;
         $this->mrp = null;
         $this->default_bulk_pack_id = null;
+    }
+
+    /**
+     * Forgets the Order Limit of a way the Product is no longer sold, then
+     * refuses one whose maximum is below its minimum. That a পাইকারি minimum is a weight some পাইকারি Pack
+     * makes is the form's rule, as every rule across a Product and its Packs is.
+     */
+    private function guardOrderLimits(): void
+    {
+        if (! $this->sold_bulk) {
+            $this->bulk_min_kilograms = null;
+            $this->bulk_max_kilograms = null;
+        }
+
+        if (! $this->sold_retail) {
+            $this->retail_min_grams = null;
+            $this->retail_max_grams = null;
+        }
+
+        $problem = OrderLimit::problem($this->bulk_min_kilograms, $this->bulk_max_kilograms)
+            ?? OrderLimit::problem($this->retail_min_grams, $this->retail_max_grams);
+
+        if ($problem !== null) {
+            throw new LogicException("Product {$this->getKey()} cannot be saved: {$problem}");
+        }
     }
 
     /** Refuses a default পাইকারি Pack that is not one of this Product's Packs ticked পাইকারি. */

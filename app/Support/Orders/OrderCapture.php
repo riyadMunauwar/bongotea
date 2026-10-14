@@ -44,6 +44,10 @@ use Illuminate\Support\Facades\DB;
  * stock ledger at this instant rather than from anything the caller sent or
  * anything read back later (ADR-0022).
  *
+ * So do Order Limits: a Product's whole weight in the Order outside its
+ * limit that way is refused through the same Quote refusals, before stock is
+ * read.
+ *
  * And the stock gate lives here (ADR-0037): an Order wanting more of a
  * counted Product than its Free to Sell is refused through the same Quote
  * refusals, the check made inside the transaction with the Products locked.
@@ -70,7 +74,7 @@ class OrderCapture
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
      *
-     * @throws QuoteRefused where a Product or its Pack cannot be had now, the Cart wants more than is Free to Sell, or the Quote disagrees with the store
+     * @throws QuoteRefused where a Product or its Pack cannot be had now, a Product is outside its Order Limit, the Cart wants more than is Free to Sell, or the Quote disagrees with the store
      * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      * @throws CheckoutUnavailable where the Cart or the details cannot become an Order
      */
@@ -142,7 +146,7 @@ class OrderCapture
      * @param  list<array{packId: int, productId: int, pack: Pack|null, count: int}>  $lines  the packet basket, one line per Pack; a Pack since deleted is null
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      *
-     * @throws RetailQuoteRefused where a Pack cannot be ordered now, or the Quote disagrees with the store
+     * @throws RetailQuoteRefused where a Pack cannot be ordered now, a Product is outside its Order Limit, or the Quote disagrees with the store
      * @throws CheckoutUnavailable where the basket or the details cannot become an Order
      */
     public function captureRetail(array $lines, array $details, ?RetailQuote $quote = null): Order
@@ -220,6 +224,42 @@ class OrderCapture
         ));
     }
 
+    /**
+     * Refuses a basket holding less or more of a Product than its খুচরা Order
+     * Limit, every Pack of it added up — 100 g and 250 g of one tea are 350 g
+     * of it, however split — naming every Pack of each Product refused.
+     *
+     * @param  list<array{packId: int, productId: int, pack: Pack, count: int}>  $lines
+     *
+     * @throws RetailQuoteRefused
+     */
+    private static function refuseOutsideRetailLimits(array $lines, PricedRetailCart $priced): void
+    {
+        $outside = OrderLimit::refusals(OrderKind::Retail, array_map(
+            fn (array $line): array => [$line['pack']->product, Grams::ofPackets($line['count'], $line['pack']->grams)],
+            $lines,
+        ));
+
+        if ($outside !== []) {
+            $packIds = array_values(array_map(
+                fn (array $line): int => $line['packId'],
+                array_filter($lines, fn (array $line): bool => array_key_exists($line['pack']->product_id, $outside)),
+            ));
+
+            throw new RetailQuoteRefused(self::outsideLimitMessage($outside), $priced, outsideLimitPackIds: $packIds);
+        }
+    }
+
+    /**
+     * What an Order Limit refusal says in the log; the Customer is told in their own words by the page.
+     *
+     * @param  array<int, string>  $refusals
+     */
+    private static function outsideLimitMessage(array $refusals): string
+    {
+        return 'Outside an Order Limit: '.implode(' ', $refusals);
+    }
+
     /** What a stock refusal says in the log; the Customer is told in their own words by the page. */
     private static function shortMessage(int $productId): string
     {
@@ -289,6 +329,9 @@ class OrderCapture
         }
 
         $priced = self::priceRetailOf($lines);
+
+        /** Before the Quote is compared, as for bulk. */
+        self::refuseOutsideRetailLimits($lines, $priced);
 
         if ($quote !== null && ! $quote->agreesWith($priced)) {
             throw new RetailQuoteRefused('The Quote no longer agrees with what the store charges.', $priced);
@@ -400,6 +443,16 @@ class OrderCapture
         }
 
         $priced = self::priceOf($lines);
+
+        /** Before the Quote is compared: a buyer told only that a price moved would send the same Cart again. */
+        $outside = OrderLimit::refusals(OrderKind::Bulk, array_map(
+            fn (array $line): array => [$line['product'], Grams::fromKilograms($line['kilograms'])],
+            $lines,
+        ));
+
+        if ($outside !== []) {
+            throw new QuoteRefused(self::outsideLimitMessage($outside), $priced, outsideLimitProductIds: array_keys($outside));
+        }
 
         if ($quote !== null && ! $quote->agreesWith($priced)) {
             throw new QuoteRefused('The Quote no longer agrees with what the store charges.', $priced);

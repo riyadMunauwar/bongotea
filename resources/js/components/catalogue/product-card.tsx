@@ -104,6 +104,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                         <Stepper
                             kilograms={kilograms}
                             onChange={(next) => cart.set(product.id, next)}
+                            max={cart.mostKilogramsOf(product.id)}
                             className="rounded-[8px] border border-primary bg-green-50 text-[14px] text-primary-dark md:rounded-[10px] md:text-[16px]"
                             buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
                         />

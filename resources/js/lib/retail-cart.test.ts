@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    cappedCount,
     clampCount,
     EMPTY_RETAIL_CART,
     onlyOrderablePacks,
+    outsideLimits,
     parseRetailCart,
     readRetailCart,
     retailLines,
@@ -22,6 +24,33 @@ const pack = (id: number, isOrderable = true): CartPack => ({
     mrp: 30000,
     price: 27000,
     isOrderable,
+    minGrams: null,
+    maxGrams: null,
+});
+
+describe('Order Limits', () => {
+    /** Assam in 100 g and 250 g Packs, its খুচরা limit 500 g to 1 kg. */
+    const hundred = { ...pack(1), productId: 7, grams: 100, minGrams: 500, maxGrams: 1000 };
+    const quarter = { ...pack(2), productId: 7, grams: 250, minGrams: 500, maxGrams: 1000 };
+    const other = pack(3);
+    const packs = [hundred, quarter, other];
+
+    it('measures a tea on all its Packs together, however split', () => {
+        expect(outsideLimits(retailLines({ 1: 1, 2: 1, 3: 1 }, packs))).toStrictEqual(new Map([[7, 'below']]));
+        expect(outsideLimits(retailLines({ 1: 1, 2: 2 }, packs))).toStrictEqual(new Map());
+        expect(outsideLimits(retailLines({ 1: 1, 2: 4 }, packs))).toStrictEqual(new Map([[7, 'above']]));
+    });
+
+    it('stops a Pack\'s count where the tea would pass its maximum, counting its other Packs', () => {
+        expect(cappedCount({ 1: 5 }, packs, 2, 3)).toBe(2);
+        expect(cappedCount({ 1: 5 }, packs, 2, 1)).toBe(1);
+        expect(cappedCount({}, packs, 3, 50)).toBe(50);
+    });
+
+    it('never stops a count coming down, even above the maximum', () => {
+        expect(cappedCount({ 2: 6 }, packs, 2, 5)).toBe(5);
+        expect(cappedCount({ 2: 6 }, packs, 2, 7)).toBe(6);
+    });
 });
 
 describe('clampCount', () => {

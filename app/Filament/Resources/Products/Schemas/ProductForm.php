@@ -9,7 +9,9 @@ use App\Filament\Concerns\HasSeoFields;
 use App\Filament\Concerns\HasSlugField;
 use App\Models\Pack;
 use App\Models\Product;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
+use App\Support\Orders\OrderLimit;
 use App\Support\Pricing\ProductTiers;
 use App\Support\Settings\GeneralSettings;
 use Closure;
@@ -51,6 +53,7 @@ class ProductForm
                     self::imagesSection(),
                     self::pricesSection(),
                     self::packsSection(),
+                    self::orderLimitsSection(),
                     self::teaProfileSection(),
                 ])->columnSpan(['lg' => 2]),
 
@@ -431,6 +434,73 @@ class ProductForm
 
                 self::defaultBulkPackSelect(),
             ]);
+    }
+
+    /**
+     * The Product's Order Limits: the least and the most of it one Order may
+     * hold, for পাইকারি in whole kilograms and for খুচরা in grams, each end
+     * optional and each way shown only while the Product is sold that way. The
+     * most is never below the least, and a পাইকারি minimum must be a weight
+     * one of its পাইকারি Packs makes exactly, so a limit is never impossible
+     * to meet. Measured on the tea's whole weight in an Order, however many
+     * lines or Packs it is split across.
+     */
+    private static function orderLimitsSection(): Section
+    {
+        return Section::make('Order Limits')
+            ->description('The least and the most of this tea one order may hold, all its packs added up. Blank is no limit at that end. Staff are held to them too.')
+            ->columnSpanFull()
+            ->columns(['default' => 1, 'sm' => 2])
+            ->schema([
+                self::limitInput('bulk_min_kilograms', 'পাইকারি minimum', 'kg', 'sold_bulk')
+                    ->rules([self::bulkMinimumCanBeMade()]),
+                self::limitInput('bulk_max_kilograms', 'পাইকারি maximum', 'kg', 'sold_bulk')
+                    ->rules([self::limitMaximumCanBeSaved('bulk_min_kilograms')]),
+                self::limitInput('retail_min_grams', 'খুচরা minimum', 'g', 'sold_retail'),
+                self::limitInput('retail_max_grams', 'খুচরা maximum', 'g', 'sold_retail')
+                    ->rules([self::limitMaximumCanBeSaved('retail_min_grams')]),
+            ]);
+    }
+
+    private static function limitInput(string $name, string $label, string $unit, string $productSwitch): TextInput
+    {
+        return TextInput::make($name)
+            ->label($label)
+            ->integer()
+            ->minValue(1)
+            ->suffix($unit)
+            ->visible(fn (Get $get): bool => (bool) $get($productSwitch))
+            ->dehydrateStateUsing(fn (mixed $state): ?int => is_numeric($state) ? (int) $state : null);
+    }
+
+    /** The most is never below the least; both as typed, in the same unit. */
+    private static function limitMaximumCanBeSaved(string $minimum): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get, $minimum): void {
+            $problem = is_numeric($value) && is_numeric($get($minimum)) ? OrderLimit::problem((int) $get($minimum), (int) $value) : null;
+
+            if ($problem !== null) {
+                $fail(ucfirst($problem));
+            }
+        };
+    }
+
+    /** A পাইকারি minimum some Pack row ticked পাইকারি makes exactly, so a bulk buyer can meet it. */
+    private static function bulkMinimumCanBeMade(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            if (! is_numeric($value) || (int) $value < 1) {
+                return;
+            }
+
+            $makeable = collect(is_array($get('packs')) ? $get('packs') : [])
+                ->filter(fn (mixed $pack): bool => is_array($pack) && (bool) ($pack['serves_bulk'] ?? false) && is_numeric($pack['grams'] ?? null) && (int) $pack['grams'] > 0)
+                ->contains(fn (array $pack): bool => Grams::packetsIn(Grams::fromKilograms((int) $value), (int) $pack['grams']) !== null);
+
+            if (! $makeable) {
+                $fail("No পাইকারি Pack makes {$value} kg exactly; choose a minimum one of them does.");
+            }
+        };
     }
 
     /**

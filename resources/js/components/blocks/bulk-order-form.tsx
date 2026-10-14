@@ -188,6 +188,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                         kilograms={kilograms}
                         onChange={set}
                         editable
+                        max={cart.mostKilogramsOf(product.id)}
                         className="ml-auto h-10 flex-none rounded-[10px] border border-input bg-white min-[1100px]:h-11"
                         buttonClassName="size-10 text-primary min-[1100px]:size-11 min-[1100px]:text-[22px]"
                     />
@@ -243,7 +244,7 @@ function Summary({ cart, steps }: { cart: UseCart; steps: PriceStep[] | null }) 
                     <StepCells steps={steps} className="px-1 py-[7px] text-[12px] leading-[1.45]" />
                 </div>
             )}
-            <ContinueButton disabled={isEmpty || cart.hasUnpackable} className="w-full p-[15px] text-[16px]">
+            <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit} className="w-full p-[15px] text-[16px]">
                 {bn.bulkOrder.continue}
             </ContinueButton>
         </aside>
@@ -272,7 +273,7 @@ function BottomBar({ cart }: { cart: UseCart }) {
                     <span className="text-[12px] text-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
                     <b className="text-[21px] leading-[1.3] font-bold text-ink">{taka(priced.total)}</b>
                 </div>
-                <ContinueButton disabled={isEmpty || cart.hasUnpackable} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
+                <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
                     {bn.bulkOrder.continueShort}
                 </ContinueButton>
             </div>

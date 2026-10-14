@@ -141,13 +141,59 @@ class RetailRepricing
     }
 
     /**
+     * Why a form row's tea would be outside its খুচরা Order Limit, the weight
+     * of every row of it added up — each line weighed as it would record, its
+     * own Pack weight while it keeps its Pack — or null where it is within or
+     * the row is not yet a line. So the form can refuse it on the count; the
+     * same check `apply()` makes.
+     *
+     * @param  array<array-key, mixed>  $state
+     * @param  array<string, mixed>  $row
+     */
+    public static function limitProblem(?Order $order, array $state, array $row): ?string
+    {
+        $line = RequestedPackLine::fromState($row);
+        $lines = self::requested($state);
+        $packs = self::packs($lines);
+        $pack = $line === null ? null : $packs->get($line->packId);
+
+        if ($pack === null) {
+            return null;
+        }
+
+        $stored = $order === null ? new Collection : $order->lines()->get()->keyBy(fn (OrderLine $line): int => (int) $line->getKey());
+
+        return self::limitRefusals(array_filter($lines, fn (RequestedPackLine $line): bool => $packs->has($line->packId)), $packs, $stored)[$pack->product_id] ?? null;
+    }
+
+    /**
+     * Why each Product is outside its খুচরা Order Limit, its lines' weights
+     * added up, by Product id.
+     *
+     * @param  array<array-key, RequestedPackLine>  $lines  each naming a Pack among `$packs`
+     * @param  Collection<int, Pack>  $packs
+     * @param  Collection<int, OrderLine>  $stored
+     * @return array<int, string>
+     */
+    private static function limitRefusals(array $lines, Collection $packs, Collection $stored): array
+    {
+        return OrderLimit::refusals(OrderKind::Retail, array_map(function (RequestedPackLine $line) use ($packs, $stored): array {
+            $pack = $packs[$line->packId];
+            $kept = self::keptLine($line, $stored);
+            $packGrams = $kept !== null && (int) $kept->pack_id === $line->packId ? $kept->pack_grams : $pack->grams;
+
+            return [$pack->product, Grams::ofPackets($line->count, $packGrams)];
+        }, $lines));
+    }
+
+    /**
      * Write the rows onto the retail Order, priced afresh, with the retail
      * Delivery Charge read from the new subtotal.
      *
      * @param  array<array-key, mixed>  $state
      *
      * @throws LogicException where the Order already has a Shipment, or is not retail
-     * @throws InvalidArgumentException where the rows are not lines the Order can hold
+     * @throws InvalidArgumentException where the rows are not lines the Order can hold, or a Product is outside its Order Limit
      */
     public function apply(Order $order, array $state, User $by): void
     {
@@ -189,6 +235,13 @@ class RetailRepricing
             if (($kept === null || (int) $kept->pack_id !== $line->packId) && ! $packs[$line->packId]->isOrderableAs(OrderKind::Retail)) {
                 throw new InvalidArgumentException("Pack [{$line->packId}] cannot be ordered now.");
             }
+        }
+
+        /** No way past an Order Limit, for anyone: a deal is struck on price instead. */
+        $outside = self::limitRefusals($lines, $packs, $stored);
+
+        if ($outside !== []) {
+            throw new InvalidArgumentException(reset($outside));
         }
 
         $cart = self::price($lines, $packs);

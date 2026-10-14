@@ -28,11 +28,28 @@ export type Cart = Readonly<Record<number, CartEntry>>;
 /** A পাইকারি Pack a Product's Kilograms may be supplied in, known by its weight. */
 export type BulkPack = { id: number; grams: number };
 
-/** What the Cart needs to know of a Product: its Tiers, whether a buyer can have it now, and its পাইকারি Packs with the default. */
-export type CartProduct = ProductPrices & { isAvailable: boolean; packs: BulkPack[]; defaultPackId: number | null };
+/**
+ * What the Cart needs to know of a Product: its Tiers, whether a buyer can
+ * have it now, its পাইকারি Packs with the default, and its পাইকারি Order Limit
+ * in whole Kilograms, null at an end with no limit.
+ */
+export type CartProduct = ProductPrices & {
+    isAvailable: boolean;
+    packs: BulkPack[];
+    defaultPackId: number | null;
+    minKilograms: number | null;
+    maxKilograms: number | null;
+};
 
-/** A line the Cart is priced from, with the Pack it is supplied in and the packets that makes — null where the Pack cannot make the Kilograms exactly. */
-export type BulkCartLine = { product: CartProduct; kilograms: number; pack: BulkPack | null; packets: number | null };
+/** Where a tea's whole weight in the Cart falls against its Order Limit: short of it, past it, or within it. */
+export type LimitBreach = 'below' | 'above' | null;
+
+/**
+ * A line the Cart is priced from, with the Pack it is supplied in and the
+ * packets that makes — null where the Pack cannot make the Kilograms exactly —
+ * and whether it is outside the tea's Order Limit, which Checkout would refuse.
+ */
+export type BulkCartLine = { product: CartProduct; kilograms: number; pack: BulkPack | null; packets: number | null; limit: LimitBreach };
 
 export const EMPTY_CART: Cart = Object.freeze({});
 
@@ -86,6 +103,24 @@ function isWholeAboveNought(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
+/**
+ * The Kilograms a stepper may go to: stopped at the tea's পাইকারি maximum,
+ * but never stopped coming down. A Product holds one line, so the line is its
+ * whole weight in the Cart.
+ */
+export function cappedKilograms(product: CartProduct, kilograms: number): number {
+    return product.maxKilograms === null ? kilograms : Math.min(kilograms, product.maxKilograms);
+}
+
+/** Where a tea's Kilograms fall against its পাইকারি Order Limit. */
+function limitBreachOf(product: CartProduct, kilograms: number): LimitBreach {
+    if (product.minKilograms !== null && kilograms < product.minKilograms) {
+        return 'below';
+    }
+
+    return product.maxKilograms !== null && kilograms > product.maxKilograms ? 'above' : null;
+}
+
 /** Sets a Product's Kilograms, keeping the Pack chosen for it; nought removes the line. */
 export function withKilograms(cart: Cart, productId: number, kilograms: number): Cart {
     const { [productId]: replaced, ...rest } = cart;
@@ -124,7 +159,13 @@ export function cartLines(cart: Cart, products: CartProduct[]): BulkCartLine[] {
             const { kilograms, packId } = cart[product.id];
             const pack = packFor(product, packId);
 
-            return { product, kilograms, pack, packets: pack === null ? null : packetsIn(gramsFromKilograms(kilograms), pack.grams) };
+            return {
+                product,
+                kilograms,
+                pack,
+                packets: pack === null ? null : packetsIn(gramsFromKilograms(kilograms), pack.grams),
+                limit: limitBreachOf(product, kilograms),
+            };
         });
 }
 

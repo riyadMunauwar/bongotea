@@ -9,7 +9,8 @@
  * written leaves the Cart working for this visit, held in memory.
  */
 
-import { storage } from './cart';
+import { storage, type LimitBreach } from './cart';
+import { gramsOfPackets } from './grams';
 import type { PackPrices, RetailLine } from './retail-pricing';
 
 export const MAX_PACKS = 99;
@@ -19,7 +20,12 @@ const STORAGE_KEY = 'bongotea.retail-cart';
 /** Pack id → how many, one to 99; a Pack held nought times is absent. */
 export type RetailCart = Readonly<Record<number, number>>;
 
-/** A Pack as the shared `retailPricing` prop sends it: its prices, what it is of, and whether a buyer can order it now. */
+/**
+ * A Pack as the shared `retailPricing` prop sends it: its prices, what it is
+ * of, whether a buyer can order it now, and its tea's খুচরা Order Limit in
+ * grams — measured on every Pack of the tea together, null at an end with no
+ * limit.
+ */
 export type CartPack = PackPrices & {
     productId: number;
     productName: string;
@@ -27,6 +33,8 @@ export type CartPack = PackPrices & {
     imageUrl: string | null;
     grams: number;
     isOrderable: boolean;
+    minGrams: number | null;
+    maxGrams: number | null;
 };
 
 export const EMPTY_RETAIL_CART: RetailCart = Object.freeze({});
@@ -82,6 +90,51 @@ export type HeldPack = { pack: CartPack; count: number };
  */
 export function retailLines(cart: RetailCart, packs: CartPack[]): (RetailLine & HeldPack)[] {
     return packs.filter((pack) => pack.isOrderable && (cart[pack.id] ?? 0) > 0).map((pack) => ({ pack, count: cart[pack.id] }));
+}
+
+/**
+ * The teas whose Packs together weigh less than their খুচরা minimum or more
+ * than their maximum, by Product id: 100 g and 250 g of one tea are 350 g of
+ * it, however split. A tea within its limit is absent.
+ */
+export function outsideLimits(lines: HeldPack[]): Map<number, Exclude<LimitBreach, null>> {
+    const weighed = new Map<number, { grams: number; pack: CartPack }>();
+
+    for (const { pack, count } of lines) {
+        weighed.set(pack.productId, { grams: (weighed.get(pack.productId)?.grams ?? 0) + gramsOfPackets(count, pack.grams), pack });
+    }
+
+    const outside = new Map<number, Exclude<LimitBreach, null>>();
+
+    for (const [productId, { grams, pack }] of weighed) {
+        if (pack.minGrams !== null && grams < pack.minGrams) {
+            outside.set(productId, 'below');
+        } else if (pack.maxGrams !== null && grams > pack.maxGrams) {
+            outside.set(productId, 'above');
+        }
+    }
+
+    return outside;
+}
+
+/**
+ * The count a Pack's stepper may go to: stopped where its tea, with the other
+ * Packs of it the Cart holds, would pass its খুচরা maximum — but never stopped
+ * coming down, even from above it.
+ */
+export function cappedCount(cart: RetailCart, packs: CartPack[], packId: number, count: number): number {
+    const pack = packs.find((candidate) => candidate.id === packId);
+    const held = cart[packId] ?? 0;
+
+    if (pack === undefined || pack.maxGrams === null || count <= held) {
+        return count;
+    }
+
+    const others = retailLines(cart, packs)
+        .filter((line) => line.pack.productId === pack.productId && line.pack.id !== packId)
+        .reduce((grams, line) => grams + gramsOfPackets(line.count, line.pack.grams), 0);
+
+    return Math.min(count, Math.max(held, Math.floor((pack.maxGrams - others) / pack.grams)));
 }
 
 /**

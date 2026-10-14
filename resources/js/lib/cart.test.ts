@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cartLines, clampKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
+import { cappedKilograms, cartLines, clampKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
 /** A tea in 1 kg bags, its default, unless given other পাইকারি Packs. */
@@ -10,6 +10,8 @@ const product = (id: number, isAvailable = true, tiers: Tier[] = [{ min: 1, max:
     tiers,
     packs,
     defaultPackId: packs[0]?.id ?? null,
+    minKilograms: null,
+    maxKilograms: null,
 });
 
 /** A line holding Kilograms in the Product's default Pack. */
@@ -94,8 +96,8 @@ describe('cartLines', () => {
         const lines = cartLines({ 7: kg(4), 3: kg(8), 9: kg(2), 11: kg(5) }, [premium, strong, unavailable]);
 
         expect(lines).toStrictEqual([
-            { product: premium, kilograms: 8, pack: { id: 30, grams: 1000 }, packets: 8 },
-            { product: strong, kilograms: 4, pack: { id: 70, grams: 1000 }, packets: 4 },
+            { product: premium, kilograms: 8, pack: { id: 30, grams: 1000 }, packets: 8, limit: null },
+            { product: strong, kilograms: 4, pack: { id: 70, grams: 1000 }, packets: 4, limit: null },
         ]);
     });
 
@@ -108,6 +110,28 @@ describe('cartLines', () => {
         expect(cartLines({ 3: kg(2) }, [assam])[0].packets).toBe(8);
         expect(cartLines({ 3: { kilograms: 2, packId: 32 } }, [assam])[0].packets).toBe(5);
         expect(cartLines({ 3: { kilograms: 1, packId: 32 } }, [assam])[0].packets).toBeNull();
+    });
+});
+
+describe('Order Limits', () => {
+    const limited = { ...product(3), minKilograms: 2, maxKilograms: 5 };
+
+    it('flags a line below its পাইকারি minimum or above its maximum', () => {
+        expect(cartLines({ 3: kg(1) }, [limited])[0].limit).toBe('below');
+        expect(cartLines({ 3: kg(2) }, [limited])[0].limit).toBeNull();
+        expect(cartLines({ 3: kg(6) }, [limited])[0].limit).toBe('above');
+    });
+
+    it('takes a missing end as no limit there', () => {
+        expect(cartLines({ 3: kg(999) }, [{ ...product(3), minKilograms: 2 }])[0].limit).toBeNull();
+        expect(cartLines({ 3: kg(1) }, [{ ...product(3), maxKilograms: 5 }])[0].limit).toBeNull();
+    });
+
+    it('stops a stepper at the maximum, but never stops it coming down', () => {
+        expect(cappedKilograms(limited, 4)).toBe(4);
+        expect(cappedKilograms(limited, 9)).toBe(5);
+        expect(cappedKilograms(product(3), 9)).toBe(9);
+        expect(cappedKilograms(limited, 1)).toBe(1);
     });
 });
 

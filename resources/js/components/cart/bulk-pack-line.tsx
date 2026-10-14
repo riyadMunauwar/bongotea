@@ -11,7 +11,8 @@ import { packName } from './figures';
  * পাইকারি Packs when it has more than one, and the packet count as the
  * Kilograms or the Pack change — "২ কেজি = ৮ প্যাকেট × ২৫০ গ্রাম" — or, where
  * the Pack cannot make the Kilograms exactly, the weights that it can. A tea
- * with no পাইকারি Pack on offer says so, since it holds up the Checkout.
+ * with no পাইকারি Pack on offer says so, since it holds up the Checkout, and
+ * so does a line below the tea's পাইকারি minimum or above its maximum.
  */
 export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; cart: UseCart; className?: string }) {
     const { product, kilograms, pack, packets } = line;
@@ -52,6 +53,13 @@ export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; ca
                 </span>
             ) : (
                 <span className="text-muted">{bn.cart.packetCount(toBanglaDigits(kilograms), toBanglaDigits(packets), packName(pack.grams))}</span>
+            )}
+            {line.limit !== null && (
+                <span role="alert" className="basis-full font-semibold text-eyebrow">
+                    {line.limit === 'below'
+                        ? bn.cart.belowMinimum(toBanglaDigits(product.minKilograms ?? 0))
+                        : bn.cart.aboveMaximum(toBanglaDigits(product.maxKilograms ?? 0))}
+                </span>
             )}
         </div>
     );

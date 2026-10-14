@@ -7,6 +7,8 @@ type StepperProps = {
     onChange: (kilograms: number) => void;
     /** A typed quantity between −/+, in Bangla or English digits; otherwise the Kilograms are only shown. */
     editable?: boolean;
+    /** The most the Kilograms may reach — the tea's পাইকারি maximum — where + stops. */
+    max?: number;
     className?: string;
     buttonClassName?: string;
 };
@@ -16,7 +18,7 @@ type StepperProps = {
  * asked for to 0–999, so this only says what was pressed or typed; a typed
  * box cleared to nothing means nought.
  */
-export function Stepper({ kilograms, onChange, editable = false, className, buttonClassName }: StepperProps) {
+export function Stepper({ kilograms, onChange, editable = false, max, className, buttonClassName }: StepperProps) {
     const button = cn('flex flex-none cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-[20px]', buttonClassName);
 
     return (
@@ -40,7 +42,13 @@ export function Stepper({ kilograms, onChange, editable = false, className, butt
             ) : (
                 <span className="flex-1 text-center font-bold">{bn.cart.kilogramsOf(toBanglaDigits(kilograms))}</span>
             )}
-            <button type="button" aria-label={bn.cart.increase} onClick={() => onChange(kilograms + 1)} className={button}>
+            <button
+                type="button"
+                aria-label={bn.cart.increase}
+                disabled={max !== undefined && kilograms >= max}
+                onClick={() => onChange(kilograms + 1)}
+                className={cn(button, 'disabled:cursor-not-allowed disabled:opacity-40')}
+            >
                 +
             </button>
         </div>

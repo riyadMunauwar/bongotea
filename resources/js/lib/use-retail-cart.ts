@@ -1,8 +1,12 @@
 import { usePage } from '@inertiajs/react';
 import { useMemo, useSyncExternalStore } from 'react';
+import type { LimitBreach } from './cart';
 import {
+    cappedCount,
     EMPTY_RETAIL_CART,
+    MAX_PACKS,
     onlyOrderablePacks,
+    outsideLimits,
     readRetailCart,
     retailLines,
     subscribeToRetailCart,
@@ -18,7 +22,9 @@ import { useMoments } from './use-moments';
 export type UseRetailCart = {
     /** How many of a Pack the Cart holds; nought for one a buyer cannot order now. */
     countOf: (packId: number) => number;
-    /** Sets a Pack's count, clamped to 0–99; refused for a Pack a buyer cannot order now. From none to some is an Added to Cart. */
+    /** The most of a Pack a stepper may reach: where its tea, with its other Packs held, would pass its খুচরা maximum, else 99. */
+    mostOf: (packId: number) => number;
+    /** Sets a Pack's count, clamped to 0–99 and stopped at its tea's খুচরা maximum; refused for a Pack a buyer cannot order now. From none to some is an Added to Cart. */
     set: (packId: number, count: number) => void;
     /** Takes a Pack out, the unorderable ones included. */
     remove: (packId: number) => void;
@@ -30,6 +36,10 @@ export type UseRetailCart = {
     /** Every figure the packet basket shows, worked out afresh as it changes. */
     priced: PricedRetailCart;
     isEmpty: boolean;
+    /** Where a tea's Packs together fall outside its খুচরা Order Limit, or null within it. */
+    limitOf: (productId: number) => LimitBreach;
+    /** Whether any tea is outside its খুচরা Order Limit, which Checkout would refuse. */
+    hasOutsideLimit: boolean;
     /** A Product's Packs, smallest first unless the Merchant ordered them; empty for a Product not open to retail. */
     packsOf: (productId: number) => CartPack[];
 };
@@ -49,16 +59,18 @@ export function useRetailCart(): UseRetailCart {
         const lines = retailLines(cart, retailPricing.packs);
         const held = new Map(lines.map((line) => [line.pack.id, line.count]));
         const orderable = new Set(retailPricing.packs.filter((pack) => pack.isOrderable).map((pack) => pack.id));
+        const outside = outsideLimits(lines);
 
         return {
             countOf: (packId: number) => held.get(packId) ?? 0,
+            mostOf: (packId: number) => Math.min(MAX_PACKS, cappedCount(cart, retailPricing.packs, packId, MAX_PACKS)),
             set: (packId: number, count: number) => {
                 if (!orderable.has(packId)) {
                     return;
                 }
 
                 const before = onlyOrderablePacks(readRetailCart(), retailPricing.packs);
-                const after = withCount(before, packId, count);
+                const after = withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count));
 
                 writeRetailCart(after);
 
@@ -76,6 +88,8 @@ export function useRetailCart(): UseRetailCart {
             unorderable: unorderableLines(cart, retailPricing.packs),
             priced: priceRetailCart({ deliveryCharge: retailPricing.deliveryCharge, freeDeliveryFrom: retailPricing.freeDeliveryFrom }, lines),
             isEmpty: lines.length === 0,
+            limitOf: (productId: number) => outside.get(productId) ?? null,
+            hasOutsideLimit: outside.size > 0,
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
     }, [cart, retailPricing, moments]);

@@ -65,6 +65,8 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);
+    /** What may still be added of the chosen Pack before its tea passes its খুচরা maximum, with what the basket already holds of it. */
+    const most = chosen === null ? MAX_PACKS : Math.max(1, retail.mostOf(chosen) - retail.countOf(chosen));
 
     useEffect(() => {
         const element = dialog.current;
@@ -90,7 +92,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
             return;
         }
 
-        retail.set(chosen, retail.countOf(chosen) + count);
+        retail.set(chosen, retail.countOf(chosen) + Math.min(count, most));
         onClose();
         router.visit(withReturnPath(links.packetBasket, url));
     };
@@ -149,7 +151,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
                     <div className="flex items-center justify-between gap-3">
                         <span className="text-[14px] text-muted">{bn.packs.count}</span>
-                        <PackStepper count={count} onChange={(next) => setCount(Math.min(MAX_PACKS, Math.max(1, next)))} />
+                        <PackStepper count={Math.min(count, most)} max={most} onChange={(next) => setCount(Math.min(most, Math.max(1, next)))} />
                     </div>
 
                     <button
@@ -166,8 +168,8 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
     );
 }
 
-/** −/+ around a count of Packs; what is asked for is clamped by whoever holds it. */
-export function PackStepper({ count, onChange, className }: { count: number; onChange: (count: number) => void; className?: string }) {
+/** −/+ around a count of Packs, + stopping at `max` where given; what is asked for is clamped by whoever holds it. */
+export function PackStepper({ count, onChange, max, className }: { count: number; onChange: (count: number) => void; max?: number; className?: string }) {
     const button = 'flex size-9 flex-none cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-[20px] text-primary-dark';
 
     return (
@@ -176,7 +178,13 @@ export function PackStepper({ count, onChange, className }: { count: number; onC
                 −
             </button>
             <span className="min-w-[44px] text-center text-[15px] font-bold text-primary-dark">{bn.packs.countOf(toBanglaDigits(count))}</span>
-            <button type="button" aria-label={bn.cart.increase} onClick={() => onChange(count + 1)} className={button}>
+            <button
+                type="button"
+                aria-label={bn.cart.increase}
+                disabled={max !== undefined && count >= max}
+                onClick={() => onChange(count + 1)}
+                className={cn(button, 'disabled:cursor-not-allowed disabled:opacity-40')}
+            >
                 +
             </button>
         </div>
