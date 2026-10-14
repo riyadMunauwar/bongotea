@@ -174,7 +174,7 @@ it('shows each Pack line\'s weight and count on the order', function () {
     $order = retailOrderAgreedAt(quarterKiloOfAssam(), 2, 27000);
 
     Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-        ->assertSeeText('2 × 250 g');
+        ->assertSeeHtmlInOrder(['250 g', '2 PCS']);
 });
 
 it('refuses to put a Pack that cannot be ordered now on a retail order, however the line is sent', function () {

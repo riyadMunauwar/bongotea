@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Pack;
+use App\Support\Inventory\Grams;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -107,9 +108,14 @@ class OrderInfolist
                             ->hiddenLabel()
                             ->table([
                                 TableColumn::make('Product'),
-                                TableColumn::make('Unit price')
+                                TableColumn::make('Pack')
                                     ->alignment(Alignment::End),
-                                TableColumn::make('Qty')
+                                TableColumn::make('Packets')
+                                    ->alignment(Alignment::End),
+                                TableColumn::make('Weight')
+                                    ->alignment(Alignment::End),
+                                TableColumn::make('Pricing'),
+                                TableColumn::make('Unit price')
                                     ->alignment(Alignment::End),
                                 TableColumn::make('Line total')
                                     ->alignment(Alignment::End),
@@ -128,20 +134,49 @@ class OrderInfolist
                                         tooltip: 'As sold. The product may have been renamed or removed since.',
                                     ),
 
-                                /** A Price Override says so, with its reason and who gave it. */
+                                /**
+                                 * Every figure from here to the line total is
+                                 * read off what the line recorded at Capture,
+                                 * never off the Product or Pack as they are now,
+                                 * so editing either leaves a past Order alone.
+                                 * A bulk line taken before Packs reached bulk
+                                 * names no Pack and so counts no packets.
+                                 */
+                                TextEntry::make('pack_grams')
+                                    ->label('Pack')
+                                    ->alignment(Alignment::End)
+                                    ->placeholder('Loose')
+                                    ->formatStateUsing(fn (int $state): string => Pack::nameFor($state)),
+
+                                TextEntry::make('packets')
+                                    ->label('Packets')
+                                    ->alignment(Alignment::End)
+                                    ->state(fn (OrderLine $record): ?int => $record->packets())
+                                    ->placeholder('—')
+                                    ->formatStateUsing(fn (int $state): string => "{$state} PCS"),
+
+                                TextEntry::make('weight')
+                                    ->label('Weight')
+                                    ->alignment(Alignment::End)
+                                    ->state(fn (OrderLine $record): int => $record->totalGrams())
+                                    ->formatStateUsing(fn (int $state): string => number_format($state).' g / '.Grams::format($state)),
+
+                                /** Bulk is priced per kilogram by its Tiers, retail per packet at its Pack Price. */
+                                TextEntry::make('kind')
+                                    ->label('Pricing')
+                                    ->badge(),
+
+                                /** A Price Override says so, with its reason and who gave it; otherwise where the price came from. */
                                 TextEntry::make('unit_price')
                                     ->label('Unit price')
                                     ->alignment(Alignment::End)
-                                    ->formatStateUsing(fn (int $state): string => Money::format($state))
-                                    ->helperText(fn (OrderLine $record): ?string => $record->isPriceOverridden()
-                                        ? 'Set by hand'.($record->priceOverriddenBy ? " by {$record->priceOverriddenBy->name}" : '').": {$record->price_override_reason}"
-                                        : null),
-
-                                /** A Pack line is counted in Packs of its weight (ADR-0034), so the size is what gets weighed out. */
-                                TextEntry::make('quantity')
-                                    ->label('Qty')
-                                    ->alignment(Alignment::End)
-                                    ->formatStateUsing(fn (int $state, OrderLine $record): string => $record->isPack() ? "{$state} × ".Pack::nameFor($record->pack_grams) : "{$state} kg"),
+                                    ->formatStateUsing(fn (int $state, OrderLine $record): string => Money::format($state).($record->isPack() ? ' / pack' : ' / kg'))
+                                    ->helperText(fn (OrderLine $record): ?string => match (true) {
+                                        $record->isPriceOverridden() => 'Set by hand'.($record->priceOverriddenBy ? " by {$record->priceOverriddenBy->name}" : '').": {$record->price_override_reason}",
+                                        $record->isPack() => 'Pack Price',
+                                        $record->tier() === null => null,
+                                        default => 'Tier Price, '.$record->tier()->label(),
+                                    }),
 
                                 TextEntry::make('line_total')
                                     ->label('Line total')

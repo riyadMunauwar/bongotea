@@ -621,7 +621,7 @@ class OrderForm
                     $byKey[$key] = [
                         'price' => $line->unit_price,
                         'total' => $line->line_total,
-                        'note' => self::lineNote($line->isPriceOverridden(), $line->tier_min === null ? null : new Tier($line->tier_min, $line->tier_max, $line->unit_price)),
+                        'note' => self::lineNote($line->isPriceOverridden(), $line->tier()),
                     ];
                 }
             }

@@ -6,6 +6,7 @@ use App\Enums\OrderKind;
 use App\Observers\OrderLineObserver;
 use App\Support\Bangla;
 use App\Support\Inventory\Grams;
+use App\Support\Pricing\Tier;
 use Database\Factories\OrderLineFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -147,6 +148,16 @@ class OrderLine extends Model
     }
 
     /**
+     * How many grams the line weighs, the way `grams()` reads it in a query: a
+     * bulk line's Kilograms × 1000, a retail line its recorded Pack weight × its
+     * count.
+     */
+    public function totalGrams(): int
+    {
+        return $this->isPack() ? Grams::ofPackets($this->quantity, $this->pack_grams) : Grams::fromKilograms($this->quantity);
+    }
+
+    /**
      * The line as the admin names it: "Assam, 250 g × 2" for a Pack, the
      * Product's name alone for Kilograms.
      */
@@ -166,6 +177,12 @@ class OrderLine extends Model
         }
 
         return "{$this->product_name}, ".Pack::banglaNameFor($this->pack_grams).' × '.Bangla::number($this->quantity);
+    }
+
+    /** The Tier the line was priced in, as it stood then; null for a retail line or one under a Price Override. */
+    public function tier(): ?Tier
+    {
+        return $this->tier_min === null ? null : new Tier($this->tier_min, $this->tier_max, $this->unit_price);
     }
 
     /** Whether a User set this line's price by hand, which only an override's reason says. */
