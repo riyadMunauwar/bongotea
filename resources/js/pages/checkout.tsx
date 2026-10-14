@@ -428,7 +428,7 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
                             )}
                         </span>
                         <span className="font-semibold">{taka(line.lineTotal)}</span>
-                        <BulkPackLine line={cart.lines[index]} cart={cart} className="w-full" />
+                        <BulkPackLine line={cart.lines[index]} onPackChange={(packId) => cart.setPack(cart.lines[index].product.id, packId)} className="w-full" />
                     </div>
                 ))}
             </div>

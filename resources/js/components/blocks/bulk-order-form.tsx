@@ -159,7 +159,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                     {!isGreyed && next === null && product.tiers.length > 1 && total > 0 && (
                         <span className="text-[12px] font-semibold text-primary">{bn.bulkOrder.bestNow}</span>
                     )}
-                    {line !== null && <BulkPackLine line={line} cart={cart} className="mt-1" />}
+                    {line !== null && <BulkPackLine line={line} onPackChange={(packId) => cart.setPack(line.product.id, packId)} className="mt-1" />}
                 </div>
                 {kilograms > 0 && (
                     <span className="text-[13px] font-bold whitespace-nowrap text-primary-dark min-[1100px]:text-[15px]">{taka(tier.price * kilograms)}</span>

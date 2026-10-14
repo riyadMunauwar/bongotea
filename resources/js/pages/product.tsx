@@ -1,18 +1,15 @@
-import { Link, router, usePage } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
-import { PackChooserButton } from '@/components/cart/pack-chooser';
 import { OtherTeas } from '@/components/catalogue/other-teas';
-import { RetailFrom } from '@/components/catalogue/product-card';
+import { PurchasePanel } from '@/components/catalogue/purchase-panel';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
 import { themeStyle } from '@/components/catalogue/theme';
-import { firstTierPrice, lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
+import { lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
 import { bn } from '@/lang/bn';
-import { formatPhone, toBanglaDigits } from '@/lib/bangla';
-import { rowAnchor } from '@/lib/cart';
-import { useCart } from '@/lib/use-cart';
+import { toBanglaDigits } from '@/lib/bangla';
 import { useMoments } from '@/lib/use-moments';
 import { useIsSoldOut } from '@/lib/use-is-sold-out';
 import { cn } from '@/lib/utils';
@@ -25,21 +22,18 @@ type ProductPageProps = {
 };
 
 /**
- * A Product at its own address: its gallery, what it is like, where it does
- * best, how to brew, keep and sell it, its own Tier ladder where it is sold
- * পাইকারি, and other teas. A Product sold only খুচরা has no Tiers, so it
- * leads with its cheapest Pack Price and offers its Packs alone (ADR-0036).
- * Its Characteristics are drawn in groups — the basics, the quality, the
- * Merchant's own under অন্যান্য — and then its Storage tips. Every
- * characteristic the Merchant left blank is simply not drawn. A Product স্টক শেষ
- * every way it is sold is drawn greyed like an unavailable one, with the
- * hotline; one স্টক শেষ only পাইকারি says so in place of its kilogram button.
+ * A Product at its own address. On a wide screen its gallery sits on the left
+ * with what it is like under it — its Characteristics in groups (the basics,
+ * the quality, the Merchant's own under অন্যান্য), its Storage tips, where it
+ * does best and how to brew it — and the purchase panel stays in view on the
+ * right. On a phone the gallery comes first, then the panel, then the rest.
+ * Below both: its own Tier ladder where it is sold পাইকারি, its description,
+ * business tips and other teas. Every characteristic the Merchant left blank
+ * is simply not drawn. A Product স্টক শেষ every way it is sold is drawn greyed
+ * like an unavailable one.
  */
 export default function ProductPage() {
     const { product, others } = usePage<ProductPageProps>().props;
-    const { links, store } = usePage().props;
-    const taka = useTaka();
-    const cart = useCart();
     const { productViewed } = useMoments();
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
@@ -84,30 +78,12 @@ export default function ProductPage() {
                 {bn.product.allTeas}
             </Link>
 
-            <div className="grid items-start gap-6 md:grid-cols-2 md:gap-12">
+            <div className="grid items-start gap-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-12 md:gap-y-8">
                 <Gallery product={product} isGreyed={isGreyed} />
 
-                <div className="flex flex-col gap-[18px]">
-                    <span className="flex flex-wrap items-center gap-2">
-                        <Link href={product.category.href} className="rounded-full bg-(--cat-tint) px-[11px] py-[3px] text-[13px] font-semibold text-(--cat-text) no-underline">
-                            {product.category.name}
-                        </Link>
-                        <span className="text-[13px] text-muted">
-                            {bn.catalogue.brand}: <b className="font-semibold text-ink">{product.brand.name}</b>
-                        </span>
-                        {product.badge && <span className="rounded-full bg-eyebrow px-[10px] py-[3px] text-[12px] font-semibold text-white">{product.badge}</span>}
-                    </span>
+                <PurchasePanel product={product} isGreyed={isGreyed} className="md:sticky md:top-[150px] md:col-start-2 md:row-span-2 md:row-start-1 md:max-h-[calc(100vh-170px)] md:overflow-y-auto" />
 
-                    <h1 className="m-0 text-[clamp(28px,3.6vw,44px)] leading-[1.25] font-semibold text-ink">{product.name}</h1>
-
-                    {product.shortDescription && <p className="m-0 text-[clamp(16px,1.4vw,19px)] leading-[1.7] text-muted">{product.shortDescription}</p>}
-
-                    {isGreyed && (
-                        <span className="self-start rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">
-                            {product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}
-                        </span>
-                    )}
-
+                <div className="flex flex-col gap-[18px] md:col-start-1">
                     <CharacteristicGroup heading={bn.product.basicsHeading} characteristics={basics} />
                     <CharacteristicGroup heading={bn.product.qualityHeading} characteristics={quality} />
                     <CharacteristicGroup heading={bn.product.otherCharacteristicsHeading} characteristics={product.customCharacteristics} />
@@ -157,39 +133,6 @@ export default function ProductPage() {
                             </ol>
                         </div>
                     )}
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-[6px]">
-                        {product.isSoldBulk ? <BulkPriceLine product={product} /> : <RetailFrom productId={product.id} />}
-                        {!isGreyed ? (
-                            <span className="flex flex-wrap items-center gap-3">
-                                <PackChooserButton productId={product.id} productName={product.name} className="w-auto px-6 py-[13px] md:px-6 md:py-[13px] md:text-[16px]" />
-                                {product.isSoldBulk && cart.isSoldOut(product.id) && (
-                                    <span className="rounded-full bg-surface px-3 py-[6px] text-[14px] font-semibold text-muted">{bn.catalogue.bulkSoldOut}</span>
-                                )}
-                                {product.isSoldBulk && !cart.isSoldOut(product.id) && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
-                                            router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
-                                        }}
-                                        className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
-                                    >
-                                        {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
-                                    </button>
-                                )}
-                            </span>
-                        ) : (
-                            store.hotline && (
-                                <span className="text-[14px] leading-[1.6] text-muted">
-                                    {product.isAvailable ? bn.product.soldOutNote : bn.product.unavailableNote}{' '}
-                                    <a href={store.hotline.href} className="font-semibold">
-                                        {formatPhone(store.hotline.number)}
-                                    </a>
-                                </span>
-                            )
-                        )}
-                    </div>
                 </div>
             </div>
 
@@ -294,26 +237,6 @@ function Gallery({ product, isGreyed }: { product: ProductDetail; isGreyed: bool
                 </div>
             )}
         </div>
-    );
-}
-
-/** The price range a Kilogram of a পাইকারি Product runs over its Tiers, beside its MRP struck through. */
-function BulkPriceLine({ product }: { product: BulkProductCard }) {
-    const taka = useTaka();
-    const first = firstTierPrice(product.tiers);
-    const lowest = lowestPrice(product.tiers);
-
-    return (
-        <span className="text-[15px] text-muted">
-            <b className="text-[24px] font-bold text-primary-dark">{lowest < first ? `${taka(lowest)}–${taka(first)}` : taka(first)}</b>
-            {bn.blocks.perKilogram}
-            {first < product.mrp && (
-                <>
-                    {' '}
-                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s> <span className="font-semibold text-primary">{discountLabel(product.mrp, first, taka)}</span>
-                </>
-            )}
-        </span>
     );
 }
 

@@ -12,8 +12,8 @@
  * memory.
  */
 
-import { GRAMS_PER_KILOGRAM, gramsFromKilograms, packetsIn, wholeKilogramsIn } from './grams';
-import type { ProductPrices } from './pricing';
+import { GRAMS_PER_KILOGRAM, gramsFromKilograms, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
+import { priceCart, type PriceBook, type PricedLine, type ProductPrices } from './pricing';
 
 export const MAX_KILOGRAMS = 999;
 
@@ -197,6 +197,41 @@ export function cartLines(cart: Cart, products: CartProduct[]): BulkCartLine[] {
  */
 export function onlyOrderable(cart: Cart, products: CartProduct[]): Cart {
     return Object.fromEntries(cartLines(cart, products).map((line) => [line.product.id, cart[line.product.id]]));
+}
+
+/** A tea's line as the Cart would hold it, priced with the rest of the Cart, and the Cart's whole weight then. */
+export type LineQuote = { line: BulkCartLine; priced: PricedLine; totalKilograms: number };
+
+/**
+ * What a tea's line would be were the Cart to hold these Kilograms of it in
+ * this Pack in place of what it holds now: its packets, its Tier Price for
+ * the whole Cart's weight with it, and its line total. Null for a tea a buyer
+ * cannot have now, and for no Kilograms.
+ */
+export function quoteLine(cart: Cart, products: CartProduct[], book: PriceBook, productId: number, kilograms: number, packId: number | null): LineQuote | null {
+    const quoted = withKilograms(cart, productId, kilograms);
+    const lines = cartLines(packId === null ? quoted : withPack(quoted, productId, packId), products);
+    const index = lines.findIndex((line) => line.product.id === productId);
+
+    if (index === -1) {
+        return null;
+    }
+
+    const priced = priceCart(book, lines);
+
+    return { line: lines[index], priced: priced.lines[index], totalKilograms: priced.totalKilograms };
+}
+
+/** The Kilograms a buyer starts from in a Pack: the least the tea may be ordered in, at least one, that the Pack makes exactly. */
+export function firstKilograms(product: CartProduct, packId: number | null): number {
+    const least = Math.max(1, product.minKilograms ?? 1);
+    const pack = packFor(product, packId);
+
+    if (pack === null) {
+        return least;
+    }
+
+    return workableKilograms(least, pack.grams).find((kilograms) => kilograms >= least) ?? least;
 }
 
 /** The address fragment naming a Bulk Order row, which highlights it: `tea-12`. */

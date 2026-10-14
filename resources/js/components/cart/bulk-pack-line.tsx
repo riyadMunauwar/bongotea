@@ -2,7 +2,6 @@ import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import type { BulkCartLine } from '@/lib/cart';
 import { wholeKilogramsIn, workableKilograms } from '@/lib/grams';
-import type { UseCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { packName } from './figures';
 
@@ -16,7 +15,7 @@ import { packName } from './figures';
  * holding more than is free to sell — with the whole Kilograms that are, or
  * স্টক শেষ where not one is.
  */
-export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; cart: UseCart; className?: string }) {
+export function BulkPackLine({ line, onPackChange, className }: { line: BulkCartLine; onPackChange: (packId: number) => void; className?: string }) {
     const { product, kilograms, pack, packets } = line;
 
     if (pack === null) {
@@ -34,7 +33,7 @@ export function BulkPackLine({ line, cart, className }: { line: BulkCartLine; ca
                     {bn.cart.packLabel}
                     <select
                         value={pack.id}
-                        onChange={(event) => cart.setPack(product.id, Number(event.target.value))}
+                        onChange={(event) => onPackChange(Number(event.target.value))}
                         className="cursor-pointer rounded-[6px] border border-input bg-white px-[6px] py-[2px] text-[13px] font-semibold text-ink"
                     >
                         {product.packs.map((option) => (

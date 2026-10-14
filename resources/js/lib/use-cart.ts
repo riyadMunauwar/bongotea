@@ -9,6 +9,7 @@ import {
     mostKilograms,
     onlyOrderable,
     priceSteps,
+    quoteLine,
     readCart,
     subscribeToCart,
     withKilograms,
@@ -16,6 +17,7 @@ import {
     writeCart,
     type BulkCartLine,
     type CartProduct,
+    type LineQuote,
     type PriceStep,
 } from './cart';
 import { priceCart, type PricedCart } from './pricing';
@@ -30,8 +32,10 @@ export type UseCart = {
     mostKilogramsOf: (productId: number) => number;
     /** Whether a counted Product has less than a Kilogram free to sell: স্টক শেষ পাইকারি, though still Available. */
     isSoldOut: (productId: number) => boolean;
-    /** Sets a Product's Kilograms, clamped to 0–999 and stopped at its পাইকারি maximum and what is free to sell, but never stopped coming down; refused for a Product a buyer cannot have now. From none to some is an Added to Cart. */
-    set: (productId: number, kilograms: number) => void;
+    /** Sets a Product's Kilograms, clamped to 0–999 and stopped at its পাইকারি maximum and what is free to sell, but never stopped coming down; refused for a Product a buyer cannot have now. With a Pack of the Product's, its Kilograms are supplied in that. From none to some is an Added to Cart. */
+    set: (productId: number, kilograms: number, packId?: number) => void;
+    /** A Product's line were the Cart to hold these Kilograms of it in this Pack, priced with the rest of the Cart; null for one a buyer cannot have now. */
+    quote: (productId: number, kilograms: number, packId: number | null) => LineQuote | null;
     /** Chooses which of a Product's পাইকারি Packs its Kilograms are supplied in. */
     setPack: (productId: number, packId: number) => void;
     clear: () => void;
@@ -69,6 +73,7 @@ export function useCart(): UseCart {
         const held = new Map(lines.map((line) => [line.product.id, line]));
         const orderable = pricing.products.filter((product) => product.isAvailable);
         const available = new Set(orderable.map((product) => product.id));
+        const book = { deliveryBands: pricing.deliveryBands };
 
         return {
             kilogramsOf: (productId: number) => held.get(productId)?.kilograms ?? 0,
@@ -83,7 +88,7 @@ export function useCart(): UseCart {
 
                 return product !== undefined && isBulkSoldOut(product);
             },
-            set: (productId: number, kilograms: number) => {
+            set: (productId: number, kilograms: number, packId?: number) => {
                 const chosen = orderable.find((candidate) => candidate.id === productId);
 
                 if (chosen === undefined) {
@@ -91,7 +96,8 @@ export function useCart(): UseCart {
                 }
 
                 const before = onlyOrderable(readCart(), pricing.products);
-                const after = withKilograms(before, productId, cappedKilograms(chosen, kilograms, before[productId]?.kilograms ?? 0));
+                const counted = withKilograms(before, productId, cappedKilograms(chosen, kilograms, before[productId]?.kilograms ?? 0));
+                const after = chosen.packs.some((pack) => pack.id === packId) ? withPack(counted, productId, packId as number) : counted;
 
                 writeCart(after);
 
@@ -103,6 +109,7 @@ export function useCart(): UseCart {
                     }
                 }
             },
+            quote: (productId: number, kilograms: number, packId: number | null) => quoteLine(cart, pricing.products, book, productId, kilograms, packId),
             setPack: (productId: number, packId: number) => {
                 if (held.get(productId)?.product.packs.some((pack) => pack.id === packId)) {
                     writeCart(withPack(onlyOrderable(readCart(), pricing.products), productId, packId));
@@ -110,7 +117,7 @@ export function useCart(): UseCart {
             },
             clear: () => writeCart(EMPTY_CART),
             lines,
-            priced: priceCart({ deliveryBands: pricing.deliveryBands }, lines),
+            priced: priceCart(book, lines),
             isEmpty: lines.length === 0,
             hasUnpackable: lines.some((line) => line.packets === null),
             hasOutsideLimit: lines.some((line) => line.limit !== null),

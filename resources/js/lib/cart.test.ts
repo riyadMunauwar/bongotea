@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cappedKilograms, cartLines, clampKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
+import { cappedKilograms, cartLines, clampKilograms, firstKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, quoteLine, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
 /** A tea in 1 kg bags, its default, unless given other পাইকারি Packs. */
@@ -210,5 +210,54 @@ describe('rowAnchor', () => {
         expect(rowFromAnchor(`#${rowAnchor(12)}`)).toBe(12);
         expect(rowFromAnchor('#products')).toBeNull();
         expect(rowFromAnchor('')).toBeNull();
+    });
+});
+
+describe('quoteLine', () => {
+    const bands = [{ min: 1, max: null, fee: 0 }];
+    const premium = product(3, true, [
+        { min: 1, max: 5, price: 62000 },
+        { min: 6, max: null, price: 58900 },
+    ], [{ id: 30, grams: 1000 }, { id: 31, grams: 250 }, { id: 32, grams: 1500 }]);
+    const strong = product(7);
+
+    it('prices the line as the Cart would hold it, from the Tier for the whole Cart with it', () => {
+        const quote = quoteLine({ 7: kg(4) }, [premium, strong], { deliveryBands: bands }, 3, 2, 31);
+
+        expect(quote?.line.pack).toStrictEqual({ id: 31, grams: 250 });
+        expect(quote?.line.packets).toBe(8);
+        expect(quote?.priced.tierPrice).toBe(58900);
+        expect(quote?.priced.lineTotal).toBe(117800);
+        expect(quote?.totalKilograms).toBe(6);
+    });
+
+    it('stands in for what the Cart already holds of the tea, Pack and all', () => {
+        const quote = quoteLine({ 3: { kilograms: 9, packId: 30 } }, [premium], { deliveryBands: bands }, 3, 2, 31);
+
+        expect(quote?.totalKilograms).toBe(2);
+        expect(quote?.line.pack?.id).toBe(31);
+        expect(quote?.priced.tierPrice).toBe(62000);
+    });
+
+    it('gives no packets where the Pack cannot make the Kilograms exactly', () => {
+        expect(quoteLine(EMPTY_CART, [premium], { deliveryBands: bands }, 3, 2, 32)?.line.packets).toBeNull();
+    });
+
+    it('quotes nothing for a tea a buyer cannot have now, or for no Kilograms', () => {
+        expect(quoteLine(EMPTY_CART, [product(3, false)], { deliveryBands: bands }, 3, 2, 30)).toBeNull();
+        expect(quoteLine(EMPTY_CART, [premium], { deliveryBands: bands }, 3, 0, 30)).toBeNull();
+    });
+});
+
+describe('firstKilograms', () => {
+    it('starts at the least the tea may be ordered in that the Pack makes exactly', () => {
+        expect(firstKilograms(product(3), 30)).toBe(1);
+        expect(firstKilograms(product(3, true, undefined, [{ id: 32, grams: 1500 }]), 32)).toBe(3);
+        expect(firstKilograms({ ...product(3, true, undefined, [{ id: 32, grams: 1500 }]), minKilograms: 4 }, 32)).toBe(6);
+        expect(firstKilograms({ ...product(3), minKilograms: 5 }, 30)).toBe(5);
+    });
+
+    it('starts at one Kilogram where the tea has no Pack to make', () => {
+        expect(firstKilograms(product(3, true, undefined, []), null)).toBe(1);
     });
 });
