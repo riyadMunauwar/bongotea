@@ -2,6 +2,8 @@
 
 namespace App\Support\Inventory;
 
+use InvalidArgumentException;
+
 /**
  * The stock ledger's unit, and the one place it is converted.
  *
@@ -25,6 +27,12 @@ namespace App\Support\Inventory;
  * `LINE_COST` for the same figure in a query. A weighted average needs
  * no conversion at all — Σ(grams × cost per kg) ÷ Σ(grams) is a cost per
  * kilogram already.
+ *
+ * Packing is the third conversion: grams into a Pack's packets and back, and the
+ * whole kilograms a Pack can make, for a refusal to name. It is mirrored for
+ * the storefront by `resources/js/lib/grams.ts`, and the two are held to the
+ * same arithmetic by `tests/Fixtures/Inventory/packing-examples.json`. No
+ * other place converts a weight to packets.
  */
 class Grams
 {
@@ -76,6 +84,50 @@ class Grams
     }
 
     /**
+     * How many packets of a Pack these grams make, or null where they leave a
+     * remainder: 2000 in 250 g -> 8, 1000 in 400 g -> null. Never rounded — a
+     * weight a Pack cannot make exactly is refused, not quietly changed.
+     */
+    public static function packetsIn(int $grams, int $packGrams): ?int
+    {
+        self::ensurePackWeighsSomething($packGrams);
+
+        return $grams % $packGrams === 0 ? intdiv($grams, $packGrams) : null;
+    }
+
+    /**
+     * What so many packets of a Pack weigh: 10 × 250 g -> 2500.
+     */
+    public static function ofPackets(int $packets, int $packGrams): int
+    {
+        self::ensurePackWeighsSomething($packGrams);
+
+        return $packets * $packGrams;
+    }
+
+    /**
+     * The whole kilograms nearest to these that a Pack makes exactly, for a
+     * refusal to name: the one below and the one above, or the first two where
+     * none lies below — 1 kg in 400 g -> [2, 4], 5 kg in 400 g -> [4, 6]. Just
+     * these kilograms where the Pack already makes them.
+     *
+     * @return list<int>
+     */
+    public static function workableKilograms(int $kilograms, int $packGrams): array
+    {
+        self::ensurePackWeighsSomething($packGrams);
+
+        $step = intdiv($packGrams, self::greatestCommonDivisor(self::PER_KILOGRAM, $packGrams));
+        $below = intdiv($kilograms, $step) * $step;
+
+        return match (true) {
+            $below === $kilograms => [$kilograms],
+            $below <= 0 => [$step, 2 * $step],
+            default => [$below, $below + $step],
+        };
+    }
+
+    /**
      * What these grams are worth at a cost per kilogram, in minor units.
      */
     public static function cost(int $grams, int $costPerKilogram): int
@@ -90,5 +142,17 @@ class Grams
     public static function costOfSum(mixed $summed): ?int
     {
         return $summed === null ? null : (int) round(((float) $summed) / self::PER_KILOGRAM);
+    }
+
+    private static function ensurePackWeighsSomething(int $packGrams): void
+    {
+        if ($packGrams < 1) {
+            throw new InvalidArgumentException("A Pack must weigh at least a gram, not {$packGrams}.");
+        }
+    }
+
+    private static function greatestCommonDivisor(int $a, int $b): int
+    {
+        return $b === 0 ? $a : self::greatestCommonDivisor($b, $a % $b);
     }
 }

@@ -11,6 +11,7 @@ paths:
   - app/Support/Orders/OrderCapture.php
   - app/Models/OrderLine.php
   - 'app/Filament/Clusters/Inventory/**'
+  - app/Support/Inventory/Grams.php
 ---
 
 # Inventory
@@ -96,3 +97,6 @@ OrderCapture::capture() takes cart lines, details and an optional Quote; every f
 
 ## The ledger counts grams; cost stays per kilogram, and a line's weight is read through OrderLine::grams()
 Every ledger quantity (`stock_movements`, `supply_lines`, `stock_counts`, and every `StockLedger` argument and answer — On Hand, Committed, units shipped, Buying units) is integer **grams** (ADR-0035). `unit_cost` is still minor units per **kilogram** on movements, Supply lines and Order Lines: a price per gram would truncate in an integer column. So a weighted average needs no conversion (Σ g×c ÷ Σ g is per kg), and money is `App\Support\Inventory\Grams`: Value at Cost rounds once over the sum (`costOfSum()`, `SUMMED_COST`), a Supply rounds per line and adds the lines like an invoice (`cost()`, `LINE_COST`), half away from zero. Never turn `quantity * unit_cost` into money without going through `Grams` (an average, Σ(quantity × unit_cost) ÷ Σ(quantity), needs no conversion and stays raw). Forms take kilograms and convert with `Grams::fromKilograms()` at the edge; screens draw with `Grams::toKilograms()`/`format()`. Booking, returns, Partial Returns, write-offs and Committed read how much an Order Line weighs only through `OrderLine::grams()` — a new kind of line changes that one expression. `StockLedgerInGramsTest` pins the migration and the rounding.
+
+## Packing conversions live only in Grams and lib/grams.ts
+Grams into a Pack's packets (`packetsIn`, null on a remainder, never rounded), packets back to grams (`ofPackets`), and the whole kilograms a Pack makes for a refusal message (`workableKilograms`) live only in `App\Support\Inventory\Grams` and its TypeScript mirror `resources/js/lib/grams.ts`. Both are held to `tests/Fixtures/Inventory/packing-examples.json` (Pest: `PackingExamplesTest`, Vitest: `grams.test.ts`). A new case goes in the fixture. Never write a packet or weight conversion anywhere else.
