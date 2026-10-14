@@ -36,10 +36,12 @@ class ProductsTable
                 $ledger = app(StockLedger::class);
                 $query->with(['category', 'brand']);
 
+                $stock = app(CommittedStock::class);
+
                 return $cover->withUnitsShipped(
-                    app(CommittedStock::class)->withCommitted(
+                    $stock->withFreeToSell($stock->withCommitted(
                         $ledger->withValueAtCost($ledger->withOnHand($query)),
-                    ),
+                    )),
                 );
             })
             ->columns([
@@ -154,6 +156,23 @@ class ProductsTable
                     ->formatStateUsing(fn (?int $state): string => Grams::toKilograms((int) $state))
                     ->sortable()
                     ->default(0),
+
+                /**
+                 * What a Customer can still order: On Hand less every New and
+                 * Confirmed Order nobody has sent (ADR-0037), the figure
+                 * Capture refuses against. Beside Committed so a stale New
+                 * Order holding stock shows as the gap between the two.
+                 *
+                 * Nothing where nobody has counted the Product, like On Hand,
+                 * and loud below nothing — more is promised than is held.
+                 */
+                TextColumn::make(CommittedStock::FREE_TO_SELL)
+                    ->label('Free to sell')
+                    ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Grams::toKilograms($state))
+                    ->sortable()
+                    ->placeholder('—')
+                    ->color(fn (?int $state): ?string => $state !== null && $state < 0 ? 'danger' : null)
+                    ->weight(fn (?int $state): ?FontWeight => $state !== null && $state < 0 ? FontWeight::Bold : null),
 
                 /**
                  * What the units held are worth at what they cost, beside

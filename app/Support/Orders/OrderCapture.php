@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pack;
 use App\Models\Product;
+use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
 use App\Support\Pricing\CartLine;
@@ -42,20 +43,28 @@ use Illuminate\Support\Facades\DB;
  * units cost as well as what they sold for, and the figure comes from the
  * stock ledger at this instant rather than from anything the caller sent or
  * anything read back later (ADR-0022).
+ *
+ * And the stock gate lives here (ADR-0037): an Order wanting more of a
+ * counted Product than its Free to Sell is refused through the same Quote
+ * refusals, the check made inside the transaction with the Products locked.
+ * Nothing is written to the ledger — stock still moves only when a box does.
  */
 class OrderCapture
 {
     /** What a retail Order's Delivery Charge is called, in place of a Delivery Band's range. */
     public const RETAIL_DELIVERY_LABEL = 'Retail delivery';
 
-    public function __construct(private readonly StockLedger $ledger) {}
+    public function __construct(
+        private readonly StockLedger $ledger,
+        private readonly CommittedStock $stock,
+    ) {}
 
     /**
      * @param  list<array{product: Product, kilograms: int}>  $lines  the Cart, one line per Product
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
      *
-     * @throws QuoteRefused where a Product in the Cart cannot be had now, or the Quote disagrees with the store
+     * @throws QuoteRefused where a Product in the Cart cannot be had now, wants more than is Free to Sell, or the Quote disagrees with the store
      * @throws CheckoutUnavailable where the Cart or the details cannot become an Order
      */
     public function capture(array $lines, array $details, ?Quote $quote = null): Order
@@ -85,6 +94,18 @@ class OrderCapture
         $customer = Customer::forPhone($details['phone']);
 
         return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
+            $wanted = [];
+
+            foreach ($lines as $line) {
+                $wanted[$line['product']->getKey()] = Grams::fromKilograms($line['kilograms']);
+            }
+
+            $short = $this->beyondFreeToSell($wanted);
+
+            if ($short !== []) {
+                throw new QuoteRefused(self::shortMessage($short[0]), $priced, shortProductIds: $short);
+            }
+
             $order = $this->createOrder($customer, $details, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryBand?->label());
 
             foreach ($lines as $index => $line) {
@@ -103,7 +124,8 @@ class OrderCapture
      * Delivery Bands. The same refusals as bulk, read for Packs: a Pack
      * removed, switched off, not ticked খুচরা, named under another Product, or
      * whose Product is not sold খুচরা or can no longer be had refuses with the basket priced as it is now, and so
-     * does a Quote that disagrees. Stock is not touched (ADR-0021).
+     * does a Quote that disagrees, or a basket wanting more of a Product than
+     * is Free to Sell (ADR-0037). Stock is read, never moved (ADR-0021).
      *
      * @param  list<array{packId: int, productId: int, pack: Pack|null, count: int}>  $lines  the packet basket, one line per Pack; a Pack since deleted is null
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
@@ -127,6 +149,25 @@ class OrderCapture
         $customer = Customer::forPhone($details['phone']);
 
         return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
+            /** Several Packs of one Product draw on its one pool, so their weights are added before anything is compared (ADR-0035). */
+            $wanted = [];
+
+            foreach ($lines as $line) {
+                $productId = $line['pack']->product_id;
+                $wanted[$productId] = ($wanted[$productId] ?? 0) + Grams::ofPackets($line['count'], $line['pack']->grams);
+            }
+
+            $short = $this->beyondFreeToSell($wanted);
+
+            if ($short !== []) {
+                $shortPacks = array_values(array_map(
+                    fn (array $line): int => $line['packId'],
+                    array_filter($lines, fn (array $line): bool => in_array($line['pack']->product_id, $short, true)),
+                ));
+
+                throw new RetailQuoteRefused(self::shortMessage($short[0]), $priced, shortPackIds: $shortPacks);
+            }
+
             $order = $this->createOrder($customer, $details, OrderKind::Retail, $priced->deliveryCharge, self::RETAIL_DELIVERY_LABEL);
 
             foreach ($lines as $index => $line) {
@@ -135,6 +176,42 @@ class OrderCapture
 
             return $order->refresh();
         });
+    }
+
+    /**
+     * The Products an Order wants more of than is Free to Sell (ADR-0037), in
+     * id order. A Product nobody has counted is never among them: unknown is
+     * not empty, and its first Stock Count is what brings it under the check.
+     *
+     * Called inside Capture's transaction, and the Products' rows are locked
+     * before the figure is read, so a second Capture for the same Product
+     * waits here until the first has committed its lines and then reads them —
+     * two Checkouts racing for the last grams cannot both win. Locked in id
+     * order, so two baskets naming the same Products in a different order
+     * cannot each hold one the other is waiting on.
+     *
+     * @param  array<int, int>  $wanted  grams wanted, by Product id
+     * @return list<int>
+     */
+    private function beyondFreeToSell(array $wanted): array
+    {
+        $productIds = array_keys($wanted);
+        sort($productIds);
+
+        Product::withTrashed()->whereKey($productIds)->orderBy('id')->lockForUpdate()->pluck('id');
+
+        $free = $this->stock->freeToSellFor($productIds);
+
+        return array_values(array_filter(
+            $productIds,
+            fn (int $productId): bool => ($free[$productId] ?? null) !== null && $wanted[$productId] > $free[$productId],
+        ));
+    }
+
+    /** What a stock refusal says in the log; the Customer is told in their own words by the page. */
+    private static function shortMessage(int $productId): string
+    {
+        return "Product [{$productId}] wants more than is free to sell.";
     }
 
     /**

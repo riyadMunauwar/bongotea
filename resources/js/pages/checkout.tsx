@@ -40,10 +40,11 @@ type CheckoutForm = {
     payment_method: string;
 };
 
-/** What the store answered when the Quote no longer agreed with it (ADR-0029). */
+/** What the store answered when the Quote no longer agreed with it (ADR-0029), or the Cart wanted more than is free to sell (ADR-0037). */
 type Refusal = {
     current: { total: number };
     unavailable: number[];
+    short: number[];
 };
 
 /**
@@ -161,13 +162,20 @@ export default function CheckoutPage() {
                 }
 
                 const answer = JSON.parse(response.data) as Refusal;
-                const gone = answer.unavailable.map(isRetail ? packNameOf : nameOf).filter((name) => name !== '');
+                const lineName = isRetail ? packNameOf : nameOf;
+                const gone = answer.unavailable.map(lineName).filter((name) => name !== '');
+                const short = answer.short.map(lineName).filter((name) => name !== '');
+                const moved = answer.current.total !== quotedTotal;
+
+                /** A refusal for stock alone changed no price, so it says only what is short (ADR-0037). */
+                const onlyShort = short.length > 0 && gone.length === 0 && !moved;
 
                 setRefusal({
                     text: [
-                        bn.checkout.changedHeading,
-                        bn.checkout.changed(taka(quotedTotal), taka(answer.current.total)),
+                        onlyShort ? null : bn.checkout.changedHeading,
+                        moved ? bn.checkout.changed(taka(quotedTotal), taka(answer.current.total)) : null,
                         gone.length > 0 ? bn.checkout.unavailable(gone.join(', ')) : null,
+                        short.length > 0 ? bn.checkout.short(short.join(', ')) : null,
                     ]
                         .filter(Boolean)
                         .join(' '),

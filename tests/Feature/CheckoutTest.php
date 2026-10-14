@@ -106,7 +106,7 @@ it('captures the cart priced by the store, and hands the placing browser the ord
     app(StockLedger::class)->recordSupply(
         supplier: Supplier::factory()->create(),
         suppliedOn: now()->toDateString(),
-        lines: [['product_id' => $premium->getKey(), 'quantity' => 10, 'unit_cost' => 40000]],
+        lines: [['product_id' => $premium->getKey(), 'quantity' => 10000, 'unit_cost' => 40000]],
     );
 
     $response = $this->postJson(route('checkout.store'), sevenKilograms($premium, $strong, ['phone' => '+৮৮০১৭১২-৩৪৫৬৭৮']));

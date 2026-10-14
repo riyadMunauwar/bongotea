@@ -84,9 +84,9 @@ class CheckoutController extends Controller
                 ? $capture->captureRetail($request->retailLines(), $request->details(), $request->retailQuote())
                 : $capture->capture($request->cartLines(), $request->details(), $request->quote());
         } catch (QuoteRefused $refusal) {
-            return self::refused($refusal->current->toArray(), $refusal->unavailableProductIds);
+            return self::refused($refusal->current->toArray(), $refusal->unavailableProductIds, $refusal->shortProductIds);
         } catch (RetailQuoteRefused $refusal) {
-            return self::refused($refusal->current->toArray(), $refusal->unavailablePackIds);
+            return self::refused($refusal->current->toArray(), $refusal->unavailablePackIds, $refusal->shortPackIds);
         }
 
         /**
@@ -118,18 +118,21 @@ class CheckoutController extends Controller
 
     /**
      * A Capture refused because the Quote no longer agrees: 409, the figures
-     * as they are now, and what the buyer can no longer have — Products for
-     * the bulk Cart, Packs for the packet basket.
+     * as they are now, what the buyer can no longer have, and what they want
+     * more of than is Free to Sell (ADR-0037) — Products for the bulk Cart,
+     * Packs for the packet basket.
      *
      * @param  array<string, mixed>  $current
      * @param  list<int>  $unavailable
+     * @param  list<int>  $short
      */
-    private static function refused(array $current, array $unavailable): JsonResponse
+    private static function refused(array $current, array $unavailable, array $short): JsonResponse
     {
         return response()->json([
             'message' => 'দাম বা প্রাপ্যতা বদলেছে। নতুন হিসাব দেখে আবার নিশ্চিত করুন।',
             'current' => $current,
             'unavailable' => $unavailable,
+            'short' => $short,
         ], ResponseCode::HTTP_CONFLICT);
     }
 

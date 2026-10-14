@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Products\Pages;
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\DaysOfCover;
 use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
@@ -67,8 +68,10 @@ class ProductStockHistory extends ManageRelatedRecords
         $cover = app(DaysOfCover::class)->forProduct($product);
 
         $onHand = $ledger->onHand($product);
+        $free = app(CommittedStock::class)->freeToSell($product);
 
         return 'On hand: '.($onHand === null ? '—' : Grams::toKilograms($onHand))
+            .' · Free to sell: '.($free === null ? '—' : Grams::toKilograms($free))
             .' · Value at cost: '.($value === null ? '—' : Money::format($value))
             .' · Days of cover: '.($cover === null ? '—' : number_format($cover, 1));
     }

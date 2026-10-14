@@ -85,7 +85,7 @@ it('stamps each line with what its units cost at capture', function () {
     app(StockLedger::class)->recordSupply(
         supplier: Supplier::factory()->create(),
         suppliedOn: now()->toDateString(),
-        lines: [['product_id' => $tea->getKey(), 'quantity' => 10, 'unit_cost' => 40000]],
+        lines: [['product_id' => $tea->getKey(), 'quantity' => 10000, 'unit_cost' => 40000]],
     );
 
     $order = orderAsCaptured(lines: [['product' => $tea, 'kilograms' => 2]]);
