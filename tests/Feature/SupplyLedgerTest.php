@@ -2,6 +2,7 @@
 
 use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -122,6 +123,81 @@ it('refuses a delivery of nothing at all', function () {
         ->toThrow(InvalidArgumentException::class);
 
     expect(Supply::count())->toBe(0);
+});
+
+/*
+|--------------------------------------------------------------------------
+| A delivery that came packed
+|--------------------------------------------------------------------------
+*/
+
+it('records the Pack a line came in and how many packets it was, into the one pool of grams', function () {
+    $product = Product::factory()->create();
+    $pack = Pack::factory()->for($product)->create(['grams' => 250]);
+
+    $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 2500, 'unit_cost' => 40000, 'pack_id' => $pack->getKey()],
+    ], null, $this->buyer);
+
+    $line = SupplyLine::sole();
+
+    expect($line->pack->is($pack))->toBeTrue()
+        ->and($line->pack_grams)->toBe(250)
+        ->and($line->packets)->toBe(10)
+        ->and($this->ledger->onHand($product))->toBe(2500);
+});
+
+it('keeps the packing a line was recorded in after its Pack is gone', function () {
+    $product = Product::factory()->create();
+    $pack = Pack::factory()->for($product)->create(['grams' => 100]);
+
+    $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 2000, 'unit_cost' => 40000, 'pack_id' => $pack->getKey()],
+    ], null, $this->buyer);
+
+    $pack->delete();
+
+    $line = SupplyLine::sole();
+
+    expect($line->pack_id)->toBeNull()
+        ->and($line->pack_grams)->toBe(100)
+        ->and($line->packets)->toBe(20);
+});
+
+it('records loose weight with no Pack and invents no packet count', function () {
+    $product = Product::factory()->create();
+
+    $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 2500, 40000), null, $this->buyer);
+
+    $line = SupplyLine::sole();
+
+    expect($line->pack_id)->toBeNull()
+        ->and($line->pack_grams)->toBeNull()
+        ->and($line->packets)->toBeNull();
+});
+
+it('refuses a weight its Pack cannot make exactly, and writes nothing', function () {
+    $product = Product::factory()->create();
+    $pack = Pack::factory()->for($product)->create(['grams' => 400]);
+
+    expect(fn () => $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 1000, 'unit_cost' => 40000, 'pack_id' => $pack->getKey()],
+    ], null, $this->buyer))->toThrow(InvalidArgumentException::class);
+
+    expect(Supply::count())->toBe(0)
+        ->and(StockMovement::count())->toBe(0);
+});
+
+it('refuses a Pack belonging to another Product, and writes nothing', function () {
+    $product = Product::factory()->create();
+    $elsewhere = Pack::factory()->create(['grams' => 250]);
+
+    expect(fn () => $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $product->getKey(), 'quantity' => 2500, 'unit_cost' => 40000, 'pack_id' => $elsewhere->getKey()],
+    ], null, $this->buyer))->toThrow(InvalidArgumentException::class);
+
+    expect(Supply::count())->toBe(0)
+        ->and(StockMovement::count())->toBe(0);
 });
 
 /*

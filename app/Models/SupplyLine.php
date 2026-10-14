@@ -13,7 +13,9 @@ use LogicException;
 
 /**
  * One Product's worth of a Supply: how many grams arrived and what a
- * kilogram of them cost (ADR-0035).
+ * kilogram of them cost (ADR-0035), and, where they came packed, the Pack and
+ * how many packets — recorded, never derived later, so the line reads like the
+ * challan whatever happens to the Pack.
  *
  * An `Order Line` read from the buying side. It is what a Stock Movement
  * points at when it says a Supply caused it — one line, one movement — rather
@@ -26,6 +28,9 @@ use LogicException;
 #[Fillable([
     'supply_id',
     'product_id',
+    'pack_id',
+    'pack_grams',
+    'packets',
     'quantity',
     'unit_cost',
 ])]
@@ -37,6 +42,8 @@ class SupplyLine extends Model
     protected function casts(): array
     {
         return [
+            'pack_grams' => 'integer',
+            'packets' => 'integer',
             'quantity' => 'integer',
             'unit_cost' => 'integer',
         ];
@@ -70,6 +77,26 @@ class SupplyLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    /**
+     * The Pack this line came in, null on a loose delivery or once the Pack
+     * is gone — `pack_grams` and `packets` still say how it was entered.
+     *
+     * @return BelongsTo<Pack, $this>
+     */
+    public function pack(): BelongsTo
+    {
+        return $this->belongsTo(Pack::class);
+    }
+
+    /**
+     * How the line was packed, as the challan said it: "10 × 250 g", or
+     * null where it came loose.
+     */
+    public function packing(): ?string
+    {
+        return $this->pack_grams === null ? null : "{$this->packets} × ".Pack::nameFor($this->pack_grams);
     }
 
     /**

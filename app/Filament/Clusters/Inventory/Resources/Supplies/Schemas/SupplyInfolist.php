@@ -88,6 +88,7 @@ class SupplyInfolist
                             ->hiddenLabel()
                             ->table([
                                 TableColumn::make('Product'),
+                                TableColumn::make('Packed'),
                                 TableColumn::make('Quantity')
                                     ->alignment(Alignment::End),
                                 TableColumn::make('Unit cost')
@@ -98,6 +99,11 @@ class SupplyInfolist
                             ->schema([
                                 TextEntry::make('product.name')
                                     ->label('Product'),
+
+                                /** As the challan said it, read off what the line recorded rather than its Pack today. */
+                                TextEntry::make('packing')
+                                    ->label('Packed')
+                                    ->state(fn (SupplyLine $record): string => $record->packing() ?? 'Loose'),
 
                                 TextEntry::make('quantity')
                                     ->label('Quantity')

@@ -13,6 +13,7 @@ use App\Filament\Clusters\Inventory\Resources\Supplies\Pages\ViewSupply;
 use App\Filament\Clusters\Inventory\Resources\Supplies\SupplyResource;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\Pages\ProductStockHistory;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -158,6 +159,152 @@ it('asks for a supplier, a day, a product, a quantity and a cost, and refuses a 
         ->and(StockMovement::count())->toBe(0);
 });
 
+it('records packets of a Pack as their grams, and their cost per packet as a cost per kilogram', function () {
+    $tea = Product::factory()->create(['name' => 'Assam CTC']);
+    $quarter = Pack::factory()->for($tea)->create(['grams' => 250]);
+    $hundred = Pack::factory()->for($tea)->create(['grams' => 100]);
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'supplier_id' => $this->supplier->getKey(),
+            'supplied_on' => '2026-09-10',
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'pcs', 'pack_id' => $quarter->getKey(), 'quantity' => 10, 'unit_cost' => '100.00'],
+                ['product_id' => $tea->getKey(), 'unit' => 'pcs', 'pack_id' => $hundred->getKey(), 'quantity' => 20, 'unit_cost' => '50.00'],
+            ],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $lines = Supply::sole()->lines;
+    $quarters = $lines->firstWhere('pack_grams', 250);
+    $hundreds = $lines->firstWhere('pack_grams', 100);
+
+    /** 10 × 250 g is 2,500 g at ৳100 a packet, ৳400 a kilogram; 20 × 100 g is 2,000 g at ৳50 a packet, ৳500 a kilogram. */
+    expect($quarters->quantity)->toBe(2500)
+        ->and($quarters->packets)->toBe(10)
+        ->and($quarters->pack->is($quarter))->toBeTrue()
+        ->and($quarters->unit_cost)->toBe(40000)
+        ->and($quarters->lineCost())->toBe(100000)
+        ->and($hundreds->quantity)->toBe(2000)
+        ->and($hundreds->packets)->toBe(20)
+        ->and($hundreds->unit_cost)->toBe(50000)
+        ->and($this->ledger->onHand($tea))->toBe(4500)
+        /** (2,500 g × ৳400 + 2,000 g × ৳500) ÷ 4,500 g = ৳444.44 a kilogram, what ৳2,000 bought. */
+        ->and($this->ledger->averageCost($tea))->toBe(44444)
+        ->and($this->ledger->valueAtCost($tea))->toBe(200000);
+});
+
+it('records kilograms that came packed with the Pack and its packet count', function () {
+    $tea = Product::factory()->create();
+    $half = Pack::factory()->for($tea)->create(['grams' => 500]);
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'supplier_id' => $this->supplier->getKey(),
+            'supplied_on' => '2026-09-10',
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'kg', 'pack_id' => $half->getKey(), 'quantity' => 2, 'unit_cost' => '400.00'],
+            ],
+        ])
+        ->assertSeeText('4 PCS')
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $line = SupplyLine::sole();
+
+    expect($line->quantity)->toBe(2000)
+        ->and($line->pack->is($half))->toBeTrue()
+        ->and($line->packets)->toBe(4)
+        ->and($line->unit_cost)->toBe(40000);
+});
+
+it('shows the grams and kilograms so many packets make before they are saved', function () {
+    $tea = Product::factory()->create();
+    $quarter = Pack::factory()->for($tea)->create(['grams' => 250]);
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'pcs', 'pack_id' => $quarter->getKey(), 'quantity' => 10, 'unit_cost' => '100.00'],
+            ],
+        ])
+        ->assertSeeText('2,500 g · 2.5 kg');
+});
+
+it('refuses kilograms a chosen Pack cannot make exactly', function () {
+    $tea = Product::factory()->create();
+    $odd = Pack::factory()->for($tea)->create(['grams' => 400]);
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'supplier_id' => $this->supplier->getKey(),
+            'supplied_on' => '2026-09-10',
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'kg', 'pack_id' => $odd->getKey(), 'quantity' => 1, 'unit_cost' => '400.00'],
+            ],
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['lines.0.quantity']);
+
+    expect(Supply::count())->toBe(0)
+        ->and(StockMovement::count())->toBe(0);
+});
+
+it('takes loose kilograms with no Pack and records no packet count', function () {
+    $tea = Product::factory()->create();
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'supplier_id' => $this->supplier->getKey(),
+            'supplied_on' => '2026-09-10',
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'kg', 'pack_id' => null, 'quantity' => 1.25, 'unit_cost' => '400.00'],
+            ],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $line = SupplyLine::sole();
+
+    expect($line->quantity)->toBe(1250)
+        ->and($line->pack_id)->toBeNull()
+        ->and($line->packets)->toBeNull();
+});
+
+it('asks for a Pack and a whole number of packets on a line typed in PCS', function () {
+    $tea = Product::factory()->create();
+
+    Livewire::test(CreateSupply::class)
+        ->fillForm([
+            'supplier_id' => $this->supplier->getKey(),
+            'supplied_on' => '2026-09-10',
+            'lines' => [
+                ['product_id' => $tea->getKey(), 'unit' => 'pcs', 'pack_id' => null, 'quantity' => 2.5, 'unit_cost' => '100.00'],
+            ],
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['lines.0.pack_id' => 'required', 'lines.0.quantity']);
+
+    expect(Supply::count())->toBe(0);
+});
+
+it('offers only the line\'s own Product\'s Packs', function () {
+    $tea = Product::factory()->withoutPacks()->create();
+    $quarter = Pack::factory()->for($tea)->create(['grams' => 250]);
+    $elsewhere = Pack::factory()->create(['grams' => 100]);
+
+    $options = Livewire::test(CreateSupply::class)
+        ->fillForm(['lines' => [['product_id' => $tea->getKey(), 'unit' => 'pcs']]])
+        ->instance()
+        ->getSchema('form')
+        ->getComponent(fn ($component): bool => $component instanceof Select && $component->getName() === 'pack_id')
+        ->getOptions();
+
+    expect($options)->toBe([$quarter->getKey() => '250 g'])
+        ->and($options)->not->toHaveKey($elsewhere->getKey());
+});
+
 it('refuses a delivery of nothing, which is not a delivery', function () {
     Livewire::test(CreateSupply::class)
         ->fillForm([
@@ -246,6 +393,21 @@ it('reads one delivery as the document it came on', function () {
         ->assertSeeText('Nasrin Akter')
         ->assertSeeText(Money::format(90000))
         ->assertSeeText(Money::format(40 * 90000));
+});
+
+it('reads a packed line in the Pack and packet count it was entered in', function () {
+    $tea = Product::factory()->create(['name' => 'Assam CTC']);
+    $quarter = Pack::factory()->for($tea)->create(['grams' => 250]);
+
+    $supply = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
+        ['product_id' => $tea->getKey(), 'quantity' => 2500, 'unit_cost' => 40000, 'pack_id' => $quarter->getKey()],
+        ['product_id' => $tea->getKey(), 'quantity' => 1250, 'unit_cost' => 40000],
+    ], null, $this->buyer);
+
+    Livewire::test(ViewSupply::class, ['record' => $supply->getKey()])
+        ->assertSeeText('10 × 250 g')
+        ->assertSeeText('2.5')
+        ->assertSeeText('Loose');
 });
 
 it('offers no way to edit or delete a delivery', function () {

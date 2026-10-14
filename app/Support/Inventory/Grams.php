@@ -136,6 +136,18 @@ class Grams
     }
 
     /**
+     * A cost per packet of a Pack as the cost per kilogram the ledger stamps,
+     * in minor units: ৳100 a 250 g packet -> ৳400 a kilogram. Rounded half
+     * away from zero where the Pack does not divide a kilogram.
+     */
+    public static function costPerKilogram(int $costPerPacket, int $packGrams): int
+    {
+        self::ensurePackWeighsSomething($packGrams);
+
+        return (int) round($costPerPacket * self::PER_KILOGRAM / $packGrams);
+    }
+
+    /**
      * A Σ(grams × cost per kg) read back from the database as the money it
      * comes to, in minor units, or null where nothing was summed.
      */

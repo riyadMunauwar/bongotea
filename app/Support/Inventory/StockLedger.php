@@ -6,6 +6,7 @@ use App\Enums\AdjustmentCause;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Models\OrderLine;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\StockCount;
@@ -314,9 +315,13 @@ class StockLedger
      * than as a figure anybody writes down.
      *
      * A line's quantity is in grams and its cost is per kilogram (ADR-0035);
-     * the Supply form converts the kilograms a Merchant types.
+     * the Supply form converts the kilograms, packets and cost per packet a
+     * Merchant types. A line naming a `pack_id` came packed: the Pack must be
+     * that Product's and make the grams exactly, and the line records its
+     * weight and the packet count. Either way the grams go into the Product's
+     * one pool.
      *
-     * @param  list<array{product_id: int|string, quantity: int, unit_cost: int}>  $lines
+     * @param  list<array{product_id: int|string, quantity: int, unit_cost: int, pack_id?: int|string|null}>  $lines
      */
     public function recordSupply(
         Supplier $supplier,
@@ -345,6 +350,7 @@ class StockLedger
                     'product_id' => $product->getKey(),
                     'quantity' => (int) $line['quantity'],
                     'unit_cost' => (int) $line['unit_cost'],
+                    ...$this->packing($product, $line['pack_id'] ?? null, (int) $line['quantity']),
                 ]);
 
                 $this->write(
@@ -361,6 +367,29 @@ class StockLedger
 
             return $supply;
         });
+    }
+
+    /**
+     * What a Supply line records about the Pack it came in: nothing for a
+     * loose delivery, else the Pack, its weight and how many packets the
+     * grams make — refused where the Pack is another Product's or cannot
+     * make the grams exactly, never rounded.
+     *
+     * @return array{pack_id?: int, pack_grams?: int, packets?: int}
+     */
+    private function packing(Product $product, int|string|null $packId, int $grams): array
+    {
+        if ($packId === null || $packId === '') {
+            return [];
+        }
+
+        $pack = Pack::query()->whereBelongsTo($product)->find($packId)
+            ?? throw new InvalidArgumentException("Pack {$packId} is not one of Product {$product->getKey()}'s Packs.");
+
+        $packets = Grams::packetsIn($grams, $pack->grams)
+            ?? throw new InvalidArgumentException("{$grams} g is not a whole number of {$pack->name()} packets.");
+
+        return ['pack_id' => $pack->getKey(), 'pack_grams' => $pack->grams, 'packets' => $packets];
     }
 
     /**
