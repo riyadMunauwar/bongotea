@@ -1,5 +1,8 @@
 # Stock moves when a Shipment is Booked, and never at Capture
 
+> Amended by ADR-0037: Capture now refuses an Order wanting more than a Product's **Free to Sell**.
+> Movements still happen only at Booked, Returned and Abandoned.
+
 A Stock Movement is written when a parcel physically changes hands and at no other moment. Stock
 leaves when a Shipment reaches **Booked** — a Courier has taken the box — comes back when one is
 **Returned**, and is written off when one is **Abandoned**. A Shipment **Awaiting Dispatch** moves
