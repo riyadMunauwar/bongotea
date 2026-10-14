@@ -2,6 +2,7 @@
 
 namespace App\Support\Orders;
 
+use App\Enums\OrderKind;
 use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -102,7 +103,7 @@ class Repricing
     {
         $requested = self::requested($state);
         $products = self::products($requested);
-        $requested = array_filter($requested, fn (RequestedLine $line): bool => $products->has($line->productId));
+        $requested = array_filter($requested, fn (RequestedLine $line): bool => $products->get($line->productId)?->isSoldAs(OrderKind::Bulk) ?? false);
 
         if ($requested === []) {
             return null;
@@ -151,7 +152,7 @@ class Repricing
 
         $product = $settled->isOverridden() ? Product::withTrashed()->find($settled->productId) : null;
 
-        if ($product === null || $settled->overridePrice <= $product->mrp) {
+        if ($product === null || ! $product->isSoldAs(OrderKind::Bulk) || $settled->overridePrice <= $product->mrp) {
             return null;
         }
 
@@ -195,6 +196,11 @@ class Repricing
         foreach ($lines as $line) {
             if (! $products->has($line->productId)) {
                 throw new InvalidArgumentException("Product [{$line->productId}] does not exist.");
+            }
+
+            /** Even a line the Order already holds: a Product no longer sold পাইকারি has no Tiers to price it by (ADR-0036). */
+            if (! $products[$line->productId]->isSoldAs(OrderKind::Bulk)) {
+                throw new InvalidArgumentException("Product [{$line->productId}] is not sold পাইকারি.");
             }
         }
 

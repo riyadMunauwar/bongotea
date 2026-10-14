@@ -5,6 +5,7 @@ import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
 import { PackChooserButton } from '@/components/cart/pack-chooser';
 import { OtherTeas } from '@/components/catalogue/other-teas';
+import { RetailFrom } from '@/components/catalogue/product-card';
 import { StrengthBar } from '@/components/catalogue/strength-bar';
 import { themeStyle } from '@/components/catalogue/theme';
 import { firstTierPrice, lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
@@ -15,7 +16,7 @@ import { useCart } from '@/lib/use-cart';
 import { useMoments } from '@/lib/use-moments';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
-import type { ProductCard, ProductDetail } from '@/types/catalogue';
+import type { BulkProductCard, ProductCard, ProductDetail } from '@/types/catalogue';
 
 type ProductPageProps = {
     product: ProductDetail;
@@ -24,7 +25,9 @@ type ProductPageProps = {
 
 /**
  * A Product at its own address: its gallery, what it is like, where it does
- * best, how to brew, keep and sell it, its own Tier ladder, and other teas.
+ * best, how to brew, keep and sell it, its own Tier ladder where it is sold
+ * পাইকারি, and other teas. A Product sold only খুচরা has no Tiers, so it
+ * leads with its cheapest Pack Price and offers its Packs alone (ADR-0036).
  * Its Characteristics are drawn in groups — the basics, the quality, the
  * Merchant's own under অন্যান্য — and then its Storage tips. Every
  * characteristic the Merchant left blank is simply not drawn.
@@ -36,13 +39,16 @@ export default function ProductPage() {
     const cart = useCart();
     const { productViewed } = useMoments();
 
-    /** Product Viewed, once each time a Product's page is opened — not again as the page redraws. */
+    /**
+     * Product Viewed, once each time a Product's page is opened — not again as
+     * the page redraws. Reported as a Kilogram, so only of a Product sold
+     * পাইকারি.
+     */
     useEffect(() => {
-        productViewed({ id: product.id, mrp: product.mrp, tiers: product.tiers });
+        if (product.isSoldBulk) {
+            productViewed({ id: product.id, mrp: product.mrp, tiers: product.tiers });
+        }
     }, [product.id]);
-
-    const first = firstTierPrice(product.tiers);
-    const lowest = lowestPrice(product.tiers);
 
     const basics = filled([
         { label: bn.product.packageWeight, value: product.packageWeight },
@@ -146,32 +152,22 @@ export default function ProductPage() {
                     )}
 
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-[6px]">
-                        <span className="text-[15px] text-muted">
-                            <b className="text-[24px] font-bold text-primary-dark">
-                                {lowest < first ? `${taka(lowest)}–${taka(first)}` : taka(first)}
-                            </b>
-                            {bn.blocks.perKilogram}
-                            {first < product.mrp && (
-                                <>
-                                    {' '}
-                                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s>{' '}
-                                    <span className="font-semibold text-primary">{discountLabel(product.mrp, first, taka)}</span>
-                                </>
-                            )}
-                        </span>
+                        {product.isSoldBulk ? <BulkPriceLine product={product} /> : <RetailFrom productId={product.id} />}
                         {product.isAvailable ? (
                             <span className="flex flex-wrap items-center gap-3">
                                 <PackChooserButton productId={product.id} productName={product.name} className="w-auto px-6 py-[13px] md:px-6 md:py-[13px] md:text-[16px]" />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
-                                        router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
-                                    }}
-                                    className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
-                                >
-                                    {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
-                                </button>
+                                {product.isSoldBulk && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            cart.set(product.id, Math.max(cart.kilogramsOf(product.id), 1));
+                                            router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
+                                        }}
+                                        className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark"
+                                    >
+                                        {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
+                                    </button>
+                                )}
                             </span>
                         ) : (
                             store.hotline && (
@@ -187,7 +183,7 @@ export default function ProductPage() {
                 </div>
             </div>
 
-            <PriceLadder product={product} />
+            {product.isSoldBulk && <PriceLadder product={product} />}
 
             {product.descriptionHtml && <div className="prose-story max-w-[760px]" dangerouslySetInnerHTML={{ __html: product.descriptionHtml }} />}
 
@@ -291,12 +287,32 @@ function Gallery({ product }: { product: ProductDetail }) {
     );
 }
 
+/** The price range a Kilogram of a পাইকারি Product runs over its Tiers, beside its MRP struck through. */
+function BulkPriceLine({ product }: { product: BulkProductCard }) {
+    const taka = useTaka();
+    const first = firstTierPrice(product.tiers);
+    const lowest = lowestPrice(product.tiers);
+
+    return (
+        <span className="text-[15px] text-muted">
+            <b className="text-[24px] font-bold text-primary-dark">{lowest < first ? `${taka(lowest)}–${taka(first)}` : taka(first)}</b>
+            {bn.blocks.perKilogram}
+            {first < product.mrp && (
+                <>
+                    {' '}
+                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s> <span className="font-semibold text-primary">{discountLabel(product.mrp, first, taka)}</span>
+                </>
+            )}
+        </span>
+    );
+}
+
 /**
  * The Product's own Tiers as a table: each range, its price, and what it
  * takes off the MRP, with a bar that grows as the saving does. Not drawn for
  * a flat price at the MRP, which has nothing to compare.
  */
-function PriceLadder({ product }: { product: ProductDetail }) {
+function PriceLadder({ product }: { product: BulkProductCard }) {
     const taka = useTaka();
     const maxSaving = product.mrp - lowestPrice(product.tiers);
 

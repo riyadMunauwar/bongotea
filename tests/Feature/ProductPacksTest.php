@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OrderKind;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
@@ -11,10 +12,10 @@ use App\Models\User;
 use Livewire\Livewire;
 
 /**
- * A Product opened to retail by giving it Packs (ADR-0034): each a weight in
- * grams, an MRP and a Pack Price of its own and an Available switch, edited on
- * the Product's own form and refused, by the form and by the model alike,
- * when two weigh the same or a Pack Price exceeds its MRP.
+ * A Product's Packs (ADR-0034, ADR-0036), here the খুচরা kind: each a weight
+ * in grams, an MRP and a Pack Price of its own and an Available switch,
+ * edited on the Product's own form and refused, by the form and by the model
+ * alike, when two weigh the same or a Pack Price exceeds its MRP.
  */
 beforeEach(function (): void {
     $this->actingAs(User::factory()->managingCatalogue()->create());
@@ -35,9 +36,11 @@ function createProductWithPacks(array $packs): mixed
             'category_id' => test()->category->getKey(),
             'brand_id' => test()->brand->getKey(),
             'mrp' => '700',
+            'sold_bulk' => false,
+            'sold_retail' => true,
         ])
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '620']])
-        ->set('data.packs', $packs)
+        ->set('data.packs', array_map(fn (array $pack): array => ['serves_retail' => true, ...$pack], $packs))
         ->call('create');
 }
 
@@ -136,7 +139,7 @@ it('orders a Pack only while its own switch is on and its Product is published, 
     $pack = Pack::factory()->create();
     $arrange($pack);
 
-    expect($pack->fresh()->isOrderable())->toBe($orderable);
+    expect($pack->fresh()->isOrderableAs(OrderKind::Retail))->toBe($orderable);
 })->with([
     'all on' => [fn (Pack $pack) => null, true],
     'switched off' => [fn (Pack $pack) => $pack->update(['is_available' => false]), false],
@@ -145,18 +148,18 @@ it('orders a Pack only while its own switch is on and its Product is published, 
     'Product out of the catalogue' => [fn (Pack $pack) => $pack->product->delete(), false],
 ]);
 
-it('shows which Products are open to retail, and filters by it', function () {
-    $retail = Product::factory()->create();
-    Pack::factory()->for($retail)->create();
-    $bulkOnly = Product::factory()->create();
+it('shows which ways each Product is sold, and filters by them', function () {
+    $retailOnly = Product::factory()->retailOnly()->create();
+    $bulkOnly = Product::factory()->bulkOnly()->create();
 
     Livewire::test(ListProducts::class)
-        ->assertTableColumnStateSet('packs_exists', true, $retail)
-        ->assertTableColumnStateSet('packs_exists', false, $bulkOnly)
-        ->filterTable('packs', true)
-        ->assertCanSeeTableRecords([$retail])
+        ->assertTableColumnStateSet('sold_retail', true, $retailOnly)
+        ->assertTableColumnStateSet('sold_bulk', false, $retailOnly)
+        ->assertTableColumnStateSet('sold_bulk', true, $bulkOnly)
+        ->filterTable('sold_retail', true)
+        ->assertCanSeeTableRecords([$retailOnly])
         ->assertCanNotSeeTableRecords([$bulkOnly])
-        ->filterTable('packs', false)
+        ->filterTable('sold_retail', false)
         ->assertCanSeeTableRecords([$bulkOnly])
-        ->assertCanNotSeeTableRecords([$retail]);
+        ->assertCanNotSeeTableRecords([$retailOnly]);
 });

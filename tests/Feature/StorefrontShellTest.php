@@ -11,6 +11,7 @@ use App\Support\Settings\DeliveryChargeSettings;
 use App\Support\Settings\FooterSettings;
 use App\Support\Settings\HeaderSettings;
 use App\Support\Settings\StoreSettings;
+use App\Support\Storefront\CatalogueProps;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -378,4 +379,22 @@ it('shares every Pack of every published Product, with whether it can be ordered
                 ['id' => $ofUnavailable->id, 'productId' => $unavailable->id, 'productName' => $unavailable->name, 'href' => '/tea/'.$unavailable->slug, 'imageUrl' => null, 'grams' => 250, 'mrp' => $ofUnavailable->mrp, 'price' => $ofUnavailable->price, 'isOrderable' => false],
             ])
         );
+});
+
+it('prices the browser\'s পাইকারি Cart from Products sold পাইকারি alone', function () {
+    $bulk = Product::factory()->create();
+    Product::factory()->retailOnly()->create();
+
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('pricing.products', [CatalogueProps::cartProduct($bulk)]));
+});
+
+it('offers the browser\'s খুচরা Cart only Packs ticked খুচরা of Products sold খুচরা', function () {
+    $both = Product::factory()->create();
+    $retail = Pack::factory()->for($both)->retailOnly()->create(['grams' => 250]);
+    Pack::factory()->for($both)->bulkOnly()->create(['grams' => 1000]);
+    $noLongerRetail = Product::factory()->create();
+    Pack::factory()->for($noLongerRetail)->create();
+    $noLongerRetail->update(['sold_retail' => false]);
+
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('retailPricing.packs', [CatalogueProps::cartPack($both, $retail)]));
 });

@@ -123,7 +123,7 @@ class DemoStoreSeeder extends Seeder
             self::pageLink('দাম হিসাব', $pages['pricing']),
             self::heading('অর্ডার', [
                 self::anchorLink('অর্ডারের ধাপ', $pages['home'], 'how', '৩ ধাপে সহজ অর্ডার'),
-                self::pageLink('বাল্ক অর্ডার করুন', $pages['bulk_order'], 'মোট কেজি যত বেশি, দাম তত কম'),
+                self::pageLink('পাইকারি অর্ডার করুন', $pages['bulk_order'], 'মোট কেজি যত বেশি, দাম তত কম'),
                 self::pageLink('আমার অর্ডার ও ডেলিভারি', $pages['my_orders']),
             ]),
             self::heading('আমাদের সম্পর্কে', [
@@ -150,7 +150,7 @@ class DemoStoreSeeder extends Seeder
                     self::pageLink('হোম', $pages['home']),
                     self::anchorLink('আমাদের চা', $pages['home'], 'products'),
                     self::pageLink('দাম হিসাব', $pages['pricing']),
-                    self::pageLink('বাল্ক অর্ডার', $pages['bulk_order']),
+                    self::pageLink('পাইকারি অর্ডার', $pages['bulk_order']),
                     self::pageLink('আমার অর্ডার', $pages['my_orders']),
                 ],
                 'চা জ্ঞানকোষ' => [

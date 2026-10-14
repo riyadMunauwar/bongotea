@@ -235,3 +235,45 @@ it('fills the price calculator and the price matrix with every published Product
             ])
         );
 })->with(['price_calculator', 'price_matrix']);
+
+it('lists no Product sold only খুচরা on a bulk surface', function (string $type) {
+    $gold = Category::factory()->create();
+    $bulk = Product::factory()->for($gold)->create();
+    Product::factory()->for($gold)->retailOnly()->create();
+
+    pageWithBlock($type);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.categories', [
+                [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($bulk->fresh())]],
+            ])
+        );
+})->with(['bulk_order_form', 'price_calculator', 'price_matrix']);
+
+it('draws a Product sold only খুচরা on the other lists, saying it has no Tiers', function () {
+    $retailOnly = Product::factory()->retailOnly()->create();
+
+    pageWithBlock('product_rail', ['source' => 'picked', 'product_ids' => [$retailOnly->id]]);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.products.0.id', $retailOnly->id)
+            ->where('page.blocks.0.props.products.0.isSoldBulk', false)
+            ->where('page.blocks.0.props.products.0.mrp', null)
+            ->where('page.blocks.0.props.products.0.tiers', [])
+        );
+});
+
+it('tiles a Category of Products sold only খুচরা with no lowest Tier price', function () {
+    $family = Category::factory()->create();
+    Product::factory()->for($family)->retailOnly()->create();
+
+    pageWithBlock('category_tiles');
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.tiles.0.productCount', 1)
+            ->where('page.blocks.0.props.tiles.0.lowestPrice', null)
+        );
+});

@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Orders\Repricing;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
@@ -438,4 +439,24 @@ it('finds an order by part of its number', function () {
         ->searchTable('7k3q')
         ->assertCanSeeTableRecords([$wanted])
         ->assertCanNotSeeTableRecords([$other]);
+});
+
+it('refuses a bulk line whose Product is no longer sold পাইকারি, even one the Order holds', function () {
+    $premium = teaBreakingAtSix();
+    $order = orderAgreedAt([['product' => $premium, 'kilograms' => 3, 'price' => 50000]]);
+    $premium->update(['sold_bulk' => false, 'sold_retail' => true]);
+
+    app(Repricing::class)->apply($order, [['id' => $order->lines()->sole()->getKey(), 'product_id' => $premium->getKey(), 'kilograms' => 4]], auth()->user());
+})->throws(InvalidArgumentException::class);
+
+it('offers a bulk line only Products sold পাইকারি', function () {
+    $retailOnly = Product::factory()->retailOnly()->create();
+
+    Livewire::test(CreateOrder::class)
+        ->fillForm(['customer_phone' => '01712345678', 'customer_district' => 'Dhaka'])
+        ->set('data.lines', ['a' => ['product_id' => $retailOnly->getKey(), 'kilograms' => 1]])
+        ->call('create')
+        ->assertHasFormErrors(['lines.a.product_id']);
+
+    expect(Order::query()->exists())->toBeFalse();
 });

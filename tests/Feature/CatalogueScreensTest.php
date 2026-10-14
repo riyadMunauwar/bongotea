@@ -15,6 +15,7 @@ use App\Filament\Resources\Tags\Pages\ManageTags;
 use App\Filament\Resources\Tags\TagResource;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\Tag;
 use App\Models\User;
@@ -279,7 +280,7 @@ it('creates a Product with every characteristic, its Tags and SEO fields', funct
         ->and($product->seo_title)->toBe('Premium tea');
 });
 
-it('publishes a Product with nothing but its name, slug, Category, Brand, MRP and one Tier', function () {
+it('publishes a Product with nothing but its name, slug, Category, Brand, MRP, one Tier and one Pack', function () {
     Livewire::test(CreateProduct::class)
         ->fillForm([
             'name' => 'Bare',
@@ -290,6 +291,7 @@ it('publishes a Product with nothing but its name, slug, Category, Brand, MRP an
             'mrp' => '500',
         ])
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '500']])
+        ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -321,6 +323,7 @@ it('stores the MRP and each Tier with its price in minor units', function () {
             ['min' => '4', 'max' => '20', 'price' => '589'],
             ['min' => '21', 'max' => '', 'price' => '589'],
         ])
+        ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -368,6 +371,7 @@ it('refuses an MRP below a Tier Price, and takes one equal to the first Tier\'s'
             ['min' => '1', 'max' => '5', 'price' => '500'],
             ['min' => '6', 'max' => '', 'price' => '480'],
         ])
+        ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
         ->call('create');
 
     $refused ? $component->assertHasFormErrors(['mrp']) : $component->assertHasNoFormErrors();
@@ -533,6 +537,7 @@ it('stores the gallery in order, the first image being the cover', function () {
 
 it('lets the slug of a never-published draft be corrected', function () {
     $draft = Product::factory()->draft()->create(['slug' => 'typo']);
+    Pack::factory()->for($draft)->create();
 
     Livewire::test(EditProduct::class, ['record' => $draft->getKey()])
         ->assertFormFieldEnabled('slug')
@@ -545,6 +550,7 @@ it('lets the slug of a never-published draft be corrected', function () {
 
 it('locks the slug once the Product is published, while it can still be renamed', function () {
     $draft = Product::factory()->draft()->create(['slug' => 'premium', 'name' => 'Premium']);
+    Pack::factory()->for($draft)->create();
 
     Livewire::test(EditProduct::class, ['record' => $draft->getKey()])
         ->fillForm(['status' => ProductStatus::Published->value])

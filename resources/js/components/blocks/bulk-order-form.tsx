@@ -13,7 +13,7 @@ import { useCart, type UseCart } from '@/lib/use-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { BulkOrderFormProps } from '@/types/blocks';
-import type { ProductCard } from '@/types/catalogue';
+import type { BulkProductCard } from '@/types/catalogue';
 import { Picture, SectionHeading } from './shared';
 
 /** The quick-set chips' Kilograms. */
@@ -104,7 +104,7 @@ function useFlashedRow(): number | null {
     return flashed;
 }
 
-function Row({ product, cart, quickChips, flashed }: { product: ProductCard; cart: UseCart; quickChips: boolean; flashed: boolean }) {
+function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard; cart: UseCart; quickChips: boolean; flashed: boolean }) {
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
     const total = cart.priced.totalKilograms;

@@ -211,6 +211,11 @@ it('refuses a quote the store no longer agrees with, and answers with the figure
         ['totalKilograms' => 4, 'total' => 252000],
         ['strong'],
     ],
+    'a product no longer sold পাইকারি' => [
+        fn (Product $premium, Product $strong) => $strong->update(['sold_bulk' => false, 'sold_retail' => true]),
+        ['totalKilograms' => 4, 'total' => 252000],
+        ['strong'],
+    ],
     'a product taken back to draft' => [
         fn (Product $premium, Product $strong) => $strong->update(['status' => 'draft']),
         ['totalKilograms' => 4, 'total' => 252000],

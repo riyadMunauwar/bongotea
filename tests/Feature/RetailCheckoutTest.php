@@ -169,6 +169,16 @@ it('refuses a Pack that can no longer be ordered, naming it and pricing the rest
 
         return [$pack, 2, 27000];
     }],
+    'ticked পাইকারি only' => [function (Pack $pack): array {
+        $pack->update(['serves_retail' => false]);
+
+        return [$pack, 2, 27000];
+    }],
+    'its Product no longer sold খুচরা' => [function (Pack $pack): array {
+        $pack->product->update(['sold_retail' => false]);
+
+        return [$pack, 2, 27000];
+    }],
     'named under another Product' => [function (Pack $pack): array {
         $pack->product_id = Product::factory()->create()->id;
 

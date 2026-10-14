@@ -51,7 +51,7 @@ class CategoryTiles extends PageBlock
                 ...CatalogueProps::categoryReference($category),
                 'note' => CatalogueProps::text($category->note),
                 'productCount' => $products->count(),
-                'lowestPrice' => CatalogueProps::priceRange($products)['low'] ?? 0,
+                'lowestPrice' => CatalogueProps::priceRange($products)['low'] ?? null,
             ];
         }
 

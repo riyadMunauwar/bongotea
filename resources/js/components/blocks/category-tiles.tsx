@@ -41,10 +41,14 @@ export function CategoryTiles({ heading, allLink, tiles }: CategoryTilesProps) {
                             {tile.note && <span className="text-[13px] text-body">{tile.note}</span>}
                         </span>
                         <span className="relative flex items-center justify-between">
-                            <span className="text-[13px] text-ink">
-                                {bn.blocks.startsAt} <b className="text-[16px]">{taka(tile.lowestPrice)}</b>
-                                {bn.blocks.perKilogram}
-                            </span>
+                            {tile.lowestPrice === null ? (
+                                <span />
+                            ) : (
+                                <span className="text-[13px] text-ink">
+                                    {bn.blocks.startsAt} <b className="text-[16px]">{taka(tile.lowestPrice)}</b>
+                                    {bn.blocks.perKilogram}
+                                </span>
+                            )}
                             <span className="flex size-[34px] items-center justify-center rounded-full bg-white font-bold text-(--cat-text)" aria-hidden="true">
                                 →
                             </span>

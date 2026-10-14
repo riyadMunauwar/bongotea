@@ -238,7 +238,25 @@ class ProductForm
                 Toggle::make('is_available')
                     ->label('Available')
                     ->default(true)
-                    ->helperText('Off keeps it on show, greyed, saying it cannot be had right now.'),
+                    ->rules([self::availableCanBeSaved()])
+                    ->helperText('Off keeps it on show, greyed, saying it cannot be had right now. Needs a Pack first.'),
+
+                /**
+                 * How it is ever sold, as against Available, which is for
+                 * now (ADR-0036). Turning পাইকারি off clears its Tiers.
+                 */
+                Toggle::make('sold_bulk')
+                    ->label('Sold পাইকারি')
+                    ->default(true)
+                    ->live()
+                    ->rules([self::switchesCanBeSaved()])
+                    ->helperText('By the kilogram, at its Tiers, on the bulk order form, calculator and price list.'),
+
+                Toggle::make('sold_retail')
+                    ->label('Sold খুচরা')
+                    ->default(false)
+                    ->live()
+                    ->helperText('In Packs, at their Pack Prices, from the খুচরা কার্ট.'),
 
                 TextInput::make('badge')
                     ->helperText('A short ribbon on the card, e.g. "সবচেয়ে জনপ্রিয়". Blank shows none.')
@@ -285,12 +303,14 @@ class ProductForm
      * and never rise in price, raised on the list because a gap is between two
      * rows and belongs to neither; a Tier above the MRP is raised on the MRP.
      * Money is typed in whole taka and stored in minor units, converted here
-     * at the boundary.
+     * at the boundary. Only a Product sold পাইকারি has Tiers, so the section is
+     * gone, and nothing in it saved or checked, while that switch is off.
      */
     private static function pricesSection(): Section
     {
         return Section::make('Prices')
             ->description('What a kilogram of this tea costs at each weight of the whole cart, across every tea in it. One row alone is a flat price. Every discount a buyer sees is measured from the MRP.')
+            ->visible(fn (Get $get): bool => (bool) $get('sold_bulk'))
             ->columnSpanFull()
             ->schema([
                 TextInput::make('mrp')
@@ -339,16 +359,20 @@ class ProductForm
     }
 
     /**
-     * The Product's Packs (ADR-0034): giving it any opens it to retail, and
-     * leaving none keeps it bulk-only. A Pack is named by its weight, so the
-     * weight is all that tells two apart and no two may share one; its Pack
-     * Price never exceeds its MRP. Money is typed in whole taka and stored in
-     * minor units, as on the Tiers.
+     * The Product's Packs (ADR-0036): the sealed sizes it reaches a Customer
+     * in, each ticked for the ways it serves. A tick shows only for a way the
+     * Product is sold, and is saved off whenever its switch is, so a Pack
+     * never serves a way its Product is not sold. Only a Pack ticked খুচরা
+     * shows and needs an MRP and a Pack Price, the Pack Price never above the
+     * MRP; a price typed on a Pack opens it to nobody. A Pack is named by its
+     * weight, so the weight is all that tells two apart and no two may share
+     * one. Money is typed in whole taka and stored in minor units, as on the
+     * Tiers.
      */
     private static function packsSection(): Section
     {
         return Section::make('Packs')
-            ->description('Sealed retail sizes of this tea. Give it any and it is sold in Packs as well; leave none and it stays bulk-only.')
+            ->description('The sealed sizes this tea is sent in. Tick each for পাইকারি, খুচরা or both; every way it is sold needs at least one Pack.')
             ->columnSpanFull()
             ->schema([
                 Repeater::make('packs')
@@ -357,8 +381,9 @@ class ProductForm
                     ->orderColumn('sort')
                     ->reorderable()
                     ->defaultItems(0)
-                    ->columns(['default' => 1, 'sm' => 4])
+                    ->columns(['default' => 1, 'sm' => 3])
                     ->addActionLabel('Add a Pack')
+                    ->rules([self::packsCanBeSaved()])
                     ->schema([
                         TextInput::make('grams')
                             ->label('Weight')
@@ -368,8 +393,16 @@ class ProductForm
                             ->distinct()
                             ->suffix('g'),
 
+                        self::packTick('serves_bulk', 'পাইকারি', 'sold_bulk')
+                            ->rules([self::packTicksCanBeSaved()]),
+
+                        /** Raised here only where the পাইকারি tick, which carries it otherwise, is hidden. */
+                        self::packTick('serves_retail', 'খুচরা', 'sold_retail')
+                            ->rules([fn (Get $get): ?Closure => $get('../../sold_bulk') ? null : self::packTicksCanBeSaved()($get)]),
+
                         TextInput::make('mrp')
                             ->label('MRP')
+                            ->visible(fn (Get $get): bool => self::servesRetail($get))
                             ->required()
                             ->integer()
                             ->minValue(1)
@@ -379,6 +412,7 @@ class ProductForm
 
                         TextInput::make('price')
                             ->label('Pack Price')
+                            ->visible(fn (Get $get): bool => self::servesRetail($get))
                             ->required()
                             ->integer()
                             ->minValue(1)
@@ -393,6 +427,87 @@ class ProductForm
                             ->inline(false),
                     ]),
             ]);
+    }
+
+    /**
+     * A Pack's tick for one way of selling: shown only while its Product's
+     * switch for that way is on, and saved off whenever that switch is.
+     */
+    private static function packTick(string $name, string $label, string $productSwitch): Toggle
+    {
+        return Toggle::make($name)
+            ->label($label)
+            ->default(fn (Get $get): bool => (bool) $get("../../{$productSwitch}"))
+            ->inline(false)
+            ->live()
+            ->visible(fn (Get $get): bool => (bool) $get("../../{$productSwitch}"))
+            ->dehydratedWhenHidden()
+            ->dehydrateStateUsing(fn (mixed $state, Get $get): bool => (bool) $state && (bool) $get("../../{$productSwitch}"));
+    }
+
+    /** Whether a Pack row, as it stands, is ticked পাইকারি for a Product sold পাইকারি. */
+    private static function servesBulk(Get $get): bool
+    {
+        return (bool) $get('serves_bulk') && (bool) $get('../../sold_bulk');
+    }
+
+    /** Whether a Pack row, as it stands, is ticked খুচরা for a Product sold খুচরা. */
+    private static function servesRetail(Get $get): bool
+    {
+        return (bool) $get('serves_retail') && (bool) $get('../../sold_retail');
+    }
+
+    /** A Pack serves at least one of the ways its Product is sold; a tick hidden for a way not sold counts as off. */
+    private static function packTicksCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            if (! self::servesBulk($get) && ! self::servesRetail($get)) {
+                $fail('Tick পাইকারি, খুচরা or both.');
+            }
+        };
+    }
+
+    /**
+     * Every way the Product is sold has a Pack serving it, once it has any
+     * Pack at all; a Product with none is refused only at Available.
+     */
+    private static function packsCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            $packs = is_array($value) ? $value : [];
+
+            if ($packs === []) {
+                return;
+            }
+
+            foreach (['sold_bulk' => ['serves_bulk', 'পাইকারি'], 'sold_retail' => ['serves_retail', 'খুচরা']] as $switch => [$tick, $way]) {
+                if ($get($switch) && ! collect($packs)->contains(fn (mixed $pack): bool => is_array($pack) && (bool) ($pack[$tick] ?? false))) {
+                    $fail("Sold {$way}, so at least one Pack must be ticked {$way}.");
+                }
+            }
+        };
+    }
+
+    /** A Product is sold one way at least; the error sits on the first switch. */
+    private static function switchesCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            if (! $get('sold_bulk') && ! $get('sold_retail')) {
+                $fail('Sell it পাইকারি, খুচরা or both.');
+            }
+        };
+    }
+
+    /** Nothing goes on sale that cannot be packed, so an Available Product has a Pack. */
+    private static function availableCanBeSaved(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            $packs = $get('packs');
+
+            if ($value && (! is_array($packs) || $packs === [])) {
+                $fail('Give it a Pack before it can be Available.');
+            }
+        };
     }
 
     /** Both are still in whole taka here, as typed, so they compare directly. */

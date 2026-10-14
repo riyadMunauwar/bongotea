@@ -9,7 +9,8 @@ import { toBanglaDigits } from '@/lib/bangla';
 import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
-import type { ProductCard as ProductCardProps } from '@/types/catalogue';
+import { useRetailCart } from '@/lib/use-retail-cart';
+import type { BulkProductCard, ProductCard as ProductCardProps } from '@/types/catalogue';
 import { StrengthBar } from './strength-bar';
 import { themeStyle } from './theme';
 import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
@@ -17,8 +18,10 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
 /**
  * A Product as every list draws it: picture and badge, its Category's pill,
  * its name and Brand, strength, its first Tier's price beside the MRP struck
- * through, the most a Tier takes off the MRP, and its own Tier ladder, and
- * — for a Product open to retail — the packet button beside the kilograms. An
+ * through, the most a Tier takes off the MRP, and its own Tier ladder, with
+ * the kilogram button, all for a Product sold পাইকারি; and — for one sold
+ * খুচরা — the packet button, alone with its cheapest Pack Price where it is
+ * not sold পাইকারি (ADR-0036). An
  * unavailable Product is drawn greyed and says so, because a regular buyer
  * looks for the tea they always buy.
  *
@@ -28,9 +31,6 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     const taka = useTaka();
     const cart = useCart();
     const kilograms = cart.kilogramsOf(product.id);
-    const first = firstTierPrice(product.tiers);
-    const lowest = lowestPrice(product.tiers);
-    const maxSaving = lowest < first ? product.mrp - lowest : 0;
 
     return (
         <article
@@ -84,37 +84,14 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     </span>
                 )}
 
-                <span className="mt-[2px] flex flex-wrap items-baseline gap-[6px] md:mt-1">
-                    <b className="text-[17px] font-extrabold text-ink md:text-[24px]">
-                        {taka(first)}
-                        {bn.blocks.perKilogram}
-                    </b>
-                    {first < product.mrp && (
-                        <>
-                            <s className="text-[12px] text-muted md:text-[14px]">{taka(product.mrp)}</s>
-                            <span className="text-[11px] font-semibold text-primary md:text-[13px]">{discountLabel(product.mrp, first, taka)}</span>
-                        </>
-                    )}
-                    {maxSaving > 0 && (
-                        <span className="rounded-[5px] bg-offer-tint px-[6px] py-px text-[10px] font-bold text-cart-badge md:rounded-[6px] md:px-2 md:py-[2px] md:text-[12px]">
-                            <span className="md:hidden">{bn.catalogue.upToOffShort(taka(maxSaving))}</span>
-                            <span className="max-md:hidden">{bn.catalogue.upToOff(taka(maxSaving))}</span>
-                        </span>
-                    )}
-                </span>
-
-                {product.tiers.length > 1 && (
-                    <div className="mt-1 md:mt-[6px]">
-                        <TierLadder mrp={product.mrp} tiers={product.tiers} cartKilograms={cart.priced.totalKilograms} />
-                    </div>
-                )}
+                {product.isSoldBulk ? <BulkPrices product={product} cartKilograms={cart.priced.totalKilograms} /> : <RetailFrom productId={product.id} />}
 
                 <div className="mt-auto pt-[6px] md:pt-[10px]">
                     {!product.isAvailable ? (
                         <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-[6px] py-[10px] text-[13px] font-semibold text-muted md:rounded-[10px] md:p-3 md:text-[15px]">
                             {bn.catalogue.unavailable}
                         </span>
-                    ) : kilograms === 0 ? (
+                    ) : !product.isSoldBulk ? null : kilograms === 0 ? (
                         <button
                             type="button"
                             onClick={() => cart.set(product.id, 1)}
@@ -131,9 +108,60 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
                         />
                     )}
-                    {product.isAvailable && <PackChooserButton productId={product.id} productName={product.name} className="mt-2" />}
+                    {product.isAvailable && <PackChooserButton productId={product.id} productName={product.name} className={cn(product.isSoldBulk && 'mt-2')} />}
                 </div>
             </div>
         </article>
     );
+}
+
+/** A পাইকারি Product's first Tier Price beside the MRP struck through, the most a Tier takes off, and its ladder. */
+function BulkPrices({ product, cartKilograms }: { product: BulkProductCard; cartKilograms: number }) {
+    const taka = useTaka();
+    const first = firstTierPrice(product.tiers);
+    const lowest = lowestPrice(product.tiers);
+    const maxSaving = lowest < first ? product.mrp - lowest : 0;
+
+    return (
+        <>
+            <span className="mt-[2px] flex flex-wrap items-baseline gap-[6px] md:mt-1">
+                <b className="text-[17px] font-extrabold text-ink md:text-[24px]">
+                    {taka(first)}
+                    {bn.blocks.perKilogram}
+                </b>
+                {first < product.mrp && (
+                    <>
+                        <s className="text-[12px] text-muted md:text-[14px]">{taka(product.mrp)}</s>
+                        <span className="text-[11px] font-semibold text-primary md:text-[13px]">{discountLabel(product.mrp, first, taka)}</span>
+                    </>
+                )}
+                {maxSaving > 0 && (
+                    <span className="rounded-[5px] bg-offer-tint px-[6px] py-px text-[10px] font-bold text-cart-badge md:rounded-[6px] md:px-2 md:py-[2px] md:text-[12px]">
+                        <span className="md:hidden">{bn.catalogue.upToOffShort(taka(maxSaving))}</span>
+                        <span className="max-md:hidden">{bn.catalogue.upToOff(taka(maxSaving))}</span>
+                    </span>
+                )}
+            </span>
+
+            {product.tiers.length > 1 && (
+                <div className="mt-1 md:mt-[6px]">
+                    <TierLadder mrp={product.mrp} tiers={product.tiers} cartKilograms={cartKilograms} />
+                </div>
+            )}
+        </>
+    );
+}
+
+/** A Product sold only খুচরা has no Tiers, so its card leads with its cheapest খুচরা Pack Price. */
+export function RetailFrom({ productId }: { productId: number }) {
+    const taka = useTaka();
+    const prices = useRetailCart()
+        .packsOf(productId)
+        .map((pack) => pack.price);
+
+    if (prices.length === 0) {
+        return null;
+    }
+
+    return <b className="mt-[2px] text-[17px] font-extrabold text-ink md:mt-1 md:text-[24px]">{bn.catalogue.retailFrom(taka(Math.min(...prices)))}</b>;
 }

@@ -40,7 +40,7 @@ class StorefrontSeeder extends Seeder
     {
         $this->systemPage(SystemPage::Home, 'হোম', 'home', self::homeBlocks());
 
-        $this->systemPage(SystemPage::BulkOrder, 'বাল্ক অর্ডার', 'bulk-order', [
+        $this->systemPage(SystemPage::BulkOrder, 'পাইকারি অর্ডার', 'bulk-order', [
             self::block(BulkOrderForm::class, [
                 'heading' => 'একসাথে চা অর্ডার করুন',
                 'text' => 'যে যে চা লাগবে, শুধু কত কেজি লাগবে সেটি দিন। সব চা মিলিয়ে মোট কেজি অনুযায়ী দাম নিজে থেকেই হিসাব হবে।',
@@ -49,10 +49,10 @@ class StorefrontSeeder extends Seeder
             ]),
         ]);
 
-        $this->systemPage(SystemPage::PacketBasket, 'প্যাকেট ঝুড়ি', 'packet-basket', [
+        $this->systemPage(SystemPage::PacketBasket, 'খুচরা কার্ট', 'packet-basket', [
             self::block(PacketBasket::class, [
-                'heading' => 'আপনার প্যাকেট ঝুড়ি',
-                'text' => 'নিজের কাপের জন্য প্যাকেটে চা। প্যাকেটের দাম আলাদা, বাল্ক কার্টের সাথে মেলানো হয় না।',
+                'heading' => 'আপনার খুচরা কার্ট',
+                'text' => 'নিজের কাপের জন্য প্যাকেটে চা। প্যাকেটের দাম আলাদা, পাইকারি কার্টের সাথে মেলানো হয় না।',
             ]),
         ]);
 
@@ -109,7 +109,7 @@ class StorefrontSeeder extends Seeder
                 'layout' => 'carousel',
                 'slides' => [
                     $slide('চায়ের দোকান ও ব্যবসার জন্য', 'আপনার ব্যবসার জন্য ভালো চা, সহজে অর্ডার করুন', 'চায়ের দোকান, রেস্টুরেন্ট কিংবা ব্যবসার জন্য প্রয়োজন অনুযায়ী চা নিন। একসাথে বেশি নিলে প্রতি কেজির দাম আরও কম।'),
-                    $slide('বাল্ক দাম', 'বেশি নিলে দাম কম', 'সব চা মিলিয়ে ১০ কেজি নিলে হোলসেল দাম, ২০ কেজি বা তার বেশি নিলে ডিস্ট্রিবিউটর দাম।'),
+                    $slide('পাইকারি দাম', 'বেশি নিলে দাম কম', 'সব চা মিলিয়ে ১০ কেজি নিলে হোলসেল দাম, ২০ কেজি বা তার বেশি নিলে ডিস্ট্রিবিউটর দাম।'),
                     $slide('সহজ অর্ডার', 'কম বুঝলেও সহজে চায়ের অর্ডার', 'কোন চা কত কেজি লাগবে দিন, বাকি হিসাব আমাদের।'),
                 ],
             ]),

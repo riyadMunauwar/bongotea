@@ -3,7 +3,7 @@
  * props are what its PHP definition's `props()` returns, key for key.
  */
 
-import type { CategoryDetail, CategoryReference, CategoryTheme, ProductCard } from '@/types/catalogue';
+import type { BulkProductCard, CategoryDetail, CategoryReference, CategoryTheme, ProductCard } from '@/types/catalogue';
 
 export type BlockButton = { label: string; href: string };
 
@@ -174,8 +174,8 @@ export type CategoryTilesProps = {
         href: string;
         theme: CategoryTheme;
         productCount: number;
-        /** The lowest price any of its Products reaches at its last Tier, in minor units. */
-        lowestPrice: number;
+        /** The lowest price any of its Products sold পাইকারি reaches at its last Tier, in minor units; null with none. */
+        lowestPrice: number | null;
     }[];
 };
 
@@ -195,10 +195,10 @@ export type ProductRailProps = {
     products: ProductCard[];
 };
 
-/** A Category with a published Product, and its cards, as the Cart's Blocks list every tea. */
+/** A Category with a published Product sold পাইকারি, and its cards, as the পাইকারি Cart's Blocks list every tea. */
 export type CartCategory = CategoryReference & {
     note: string | null;
-    products: ProductCard[];
+    products: BulkProductCard[];
 };
 
 export type BulkOrderFormProps = {

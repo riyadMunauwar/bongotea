@@ -66,6 +66,17 @@ it('reports nothing for a Pack of a Product the store does not sell', function (
     expect(TrackingEvent::query()->sole()->selection->lines)->toBe([]);
 })->with('tracking providers');
 
+it('reports nothing for a Product not sold the way its Cart names', function (ProviderScript $script) {
+    $script->switchOn();
+    $retailOnly = Product::factory()->retailOnly()->create();
+    $bulkPack = Pack::factory()->bulkOnly()->for($this->gold)->create(['grams' => 1000]);
+
+    reportToBeacon(TrackingMoment::AddedToCart, 'cart-3', ['items' => $retailOnly->id.':1'])->assertNoContent();
+    reportToBeacon(TrackingMoment::AddedToCart, 'basket-3', ['cart' => 'retail', 'items' => $bulkPack->id.':1'])->assertNoContent();
+
+    expect(TrackingEvent::query()->get()->map(fn (TrackingEvent $event): array => $event->selection->lines)->all())->toBe([[], []]);
+})->with('tracking providers');
+
 it('reports a retail Purchase with its Packs, from the retail Cart, and a bulk one from the bulk Cart', function (ProviderScript $script) {
     $script->switchOn();
 

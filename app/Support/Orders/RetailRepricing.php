@@ -2,6 +2,7 @@
 
 namespace App\Support\Orders;
 
+use App\Enums\OrderKind;
 use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -91,7 +92,7 @@ class RetailRepricing
     {
         $requested = self::requested($state);
         $packs = self::packs($requested);
-        $requested = array_filter($requested, fn (RequestedPackLine $line): bool => $packs->has($line->packId));
+        $requested = array_filter($requested, fn (RequestedPackLine $line): bool => $packs->has($line->packId) && $packs[$line->packId]->isSoldAs(OrderKind::Retail));
 
         if ($requested === []) {
             return null;
@@ -132,7 +133,7 @@ class RetailRepricing
 
         $pack = $settled->isOverridden() ? Pack::query()->find($settled->packId) : null;
 
-        if ($pack === null || $settled->overridePrice <= $pack->mrp) {
+        if ($pack === null || ! $pack->isSoldAs(OrderKind::Retail) || $settled->overridePrice <= $pack->mrp) {
             return null;
         }
 
@@ -177,10 +178,15 @@ class RetailRepricing
                 throw new InvalidArgumentException("Pack [{$line->packId}] does not exist.");
             }
 
+            /** Even a line the Order already holds: a Pack not sold খুচরা may have no Pack Price to price it by (ADR-0036). */
+            if (! $packs[$line->packId]->isSoldAs(OrderKind::Retail)) {
+                throw new InvalidArgumentException("Pack [{$line->packId}] is not sold খুচরা.");
+            }
+
             /** A line may keep a Pack it already holds; a Pack newly put on the Order must be one a Customer could order now. */
             $kept = self::keptLine($line, $stored);
 
-            if (($kept === null || (int) $kept->pack_id !== $line->packId) && ! $packs[$line->packId]->isOrderable()) {
+            if (($kept === null || (int) $kept->pack_id !== $line->packId) && ! $packs[$line->packId]->isOrderableAs(OrderKind::Retail)) {
                 throw new InvalidArgumentException("Pack [{$line->packId}] cannot be ordered now.");
             }
         }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\OrderKind;
 use App\Enums\TrackingMoment;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Pack;
@@ -151,10 +152,11 @@ class TrackingController extends Controller
         if ($retail) {
             $counts = $this->quantities($items, CheckoutRequest::MAX_PACKS);
 
-            /** Only Packs of Products the store sells, as `forProducts()` reads only published Products. */
+            /** Only Packs the store sells খুচরা, as `forProducts()` reads only published Products sold পাইকারি. */
             $packs = Pack::query()
                 ->whereKey(array_keys($counts))
-                ->whereHas('product', fn (Builder $products): Builder => $products->published())
+                ->where('serves_retail', true)
+                ->whereHas('product', fn (Builder $products): Builder => $products->published()->soldAs(OrderKind::Retail))
                 ->orderBy('id')
                 ->get();
 
@@ -163,7 +165,7 @@ class TrackingController extends Controller
 
         $kilograms = $this->quantities($items, CheckoutRequest::MAX_KILOGRAMS);
 
-        return Selection::forProducts(Product::query()->published()->findMany(array_keys($kilograms)), $kilograms);
+        return Selection::forProducts(Product::query()->published()->soldAs(OrderKind::Bulk)->findMany(array_keys($kilograms)), $kilograms);
     }
 
     /**

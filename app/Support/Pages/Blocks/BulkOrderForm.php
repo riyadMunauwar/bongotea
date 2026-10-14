@@ -54,7 +54,7 @@ class BulkOrderForm extends PageBlock
             'text' => self::text($data, 'text'),
             'quickChips' => (bool) ($data['quick_chips'] ?? true),
             'showTierList' => (bool) ($data['show_tier_list'] ?? true),
-            'categories' => CatalogueProps::stockedCategories(app(Catalogue::class)),
+            'categories' => CatalogueProps::stockedBulkCategories(app(Catalogue::class)),
         ];
     }
 }

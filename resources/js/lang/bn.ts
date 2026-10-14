@@ -99,6 +99,7 @@ export const bn = {
         upToOff: (amount: string) => `সর্বোচ্চ ${amount} ছাড়`,
         upToOffShort: (amount: string) => `−${amount} পর্যন্ত`,
         ladderNote: 'কার্টের মোট কেজি অনুযায়ী দাম',
+        retailFrom: (price: string) => `খুচরা ${price} থেকে`,
         unavailable: 'এখন পাওয়া যাচ্ছে না',
         imageOf: (name: string) => `${name} প্যাকেট`,
         brand: 'ব্র্যান্ড',

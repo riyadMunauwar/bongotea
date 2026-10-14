@@ -2,6 +2,7 @@
 
 namespace App\Support\Storefront;
 
+use App\Enums\OrderKind;
 use App\Enums\SystemPage;
 use App\Models\Pack;
 use App\Models\Page;
@@ -111,8 +112,8 @@ class StorefrontShell
     /**
      * What the Cart, held in the browser (ADR-0029), is priced from on every
      * page, since the header shows its total wherever the buyer is: every
-     * published Product's own Tiers and whether it can be had now, and the
-     * Delivery Bands. Prices and fees in minor units.
+     * published Product sold পাইকারি, with its own Tiers and whether it can
+     * be had now, and the Delivery Bands. Prices and fees in minor units.
      *
      * @return array{deliveryBands: list<array{min: int, max: ?int, fee: int}>, products: list<array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}>}
      */
@@ -123,7 +124,7 @@ class StorefrontShell
                 fn (DeliveryBand $band): array => ['min' => $band->min, 'max' => $band->max, 'fee' => $band->fee],
                 PriceBook::current()->deliveryBands,
             ),
-            'products' => $this->catalogue->products()
+            'products' => $this->catalogue->soldAs(OrderKind::Bulk)
                 ->map(fn (Product $product): array => CatalogueProps::cartProduct($product))
                 ->values()
                 ->all(),
@@ -133,10 +134,11 @@ class StorefrontShell
     /**
      * What the retail Cart, held in the browser beside the bulk one
      * (ADR-0034), is priced from on every page, since the header counts its
-     * Packs wherever the buyer is: every Pack of every published Product, with
-     * whether it can be ordered now, and the retail Delivery Charge and
-     * threshold. A Product with no Pack sends nothing here. Money in minor
-     * units.
+     * Packs wherever the buyer is: every Pack ticked খুচরা of every published
+     * Product sold খুচরা (ADR-0036), with whether it can be ordered now, and
+     * the retail Delivery Charge and threshold. A Product with none sends
+     * nothing here, and that is how the storefront knows it is not sold
+     * খুচরা. Money in minor units.
      *
      * @return array{deliveryCharge: int, freeDeliveryFrom: ?int, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool}>}
      */
@@ -147,8 +149,10 @@ class StorefrontShell
         return [
             'deliveryCharge' => $book->deliveryCharge,
             'freeDeliveryFrom' => $book->freeDeliveryFrom,
-            'packs' => $this->catalogue->products()
-                ->flatMap(fn (Product $product): Collection => $product->packs->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
+            'packs' => $this->catalogue->soldAs(OrderKind::Retail)
+                ->flatMap(fn (Product $product): Collection => $product->packs
+                    ->filter(fn (Pack $pack): bool => $pack->servesAs(OrderKind::Retail))
+                    ->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
                 ->values()
                 ->all(),
         ];

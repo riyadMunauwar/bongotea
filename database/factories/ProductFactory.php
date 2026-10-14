@@ -9,8 +9,9 @@ use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * A published, Available Product: what the store sells unless a test says
- * otherwise.
+ * A published, Available Product sold পাইকারি and খুচরা both: what the store
+ * sells unless a test says otherwise. It comes with no Packs; a test that
+ * needs one gives it one.
  *
  * @extends Factory<Product>
  */
@@ -34,9 +35,11 @@ class ProductFactory extends Factory
             'price' => fake()->numberBetween(10, 500) * 10000,
 
             /** At the first Tier's price, so it saves nothing unless a test says otherwise. */
-            'mrp' => fn (array $attributes): int => $attributes['tiers'][0]['price'] ?? $attributes['price'],
+            'mrp' => fn (array $attributes): ?int => $attributes['tiers'][0]['price'] ?? $attributes['price'],
             'status' => ProductStatus::Published,
             'is_available' => true,
+            'sold_bulk' => true,
+            'sold_retail' => true,
         ];
     }
 
@@ -50,5 +53,23 @@ class ProductFactory extends Factory
     public function unavailable(): static
     {
         return $this->state(['is_available' => false]);
+    }
+
+    /** Sold পাইকারি alone: by the Kilogram, at its Tiers, and never in the খুচরা Cart. */
+    public function bulkOnly(): static
+    {
+        return $this->state(['sold_bulk' => true, 'sold_retail' => false]);
+    }
+
+    /** Sold খুচরা alone: in Packs only, with no Tiers, and on no bulk surface. */
+    public function retailOnly(): static
+    {
+        return $this->state(['sold_bulk' => false, 'sold_retail' => true, 'price' => null, 'mrp' => null, 'tiers' => null]);
+    }
+
+    /** Sold পাইকারি and খুচরা both, said outright where a test turns on it. */
+    public function bothWays(): static
+    {
+        return $this->state(['sold_bulk' => true, 'sold_retail' => true]);
     }
 }

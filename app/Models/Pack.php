@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderKind;
 use App\Support\Inventory\Grams;
 use Database\Factories\PackFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -12,15 +13,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 /**
- * A sealed retail size of one Product (ADR-0034), sold whole and counted.
+ * A sealed size of one Product (ADR-0036), sold whole and counted, whichever
+ * way the Customer buys.
  *
  * Known by its weight alone: `grams` is its name, and no two Packs of one
- * Product weigh the same. `mrp` and `price` (the Pack Price) are minor units,
- * both above nothing, and the Pack Price never exceeds the MRP — refused on
- * save otherwise, whoever saves it. It holds no stock of its own; a Pack sold
- * is weighed out of its Product's (ADR-0035).
+ * Product weigh the same. It is ticked for the ways it serves — `serves_bulk`
+ * (পাইকারি) and `serves_retail` (খুচরা) — at least one, and only ways its
+ * Product is sold. Only a Pack ticked খুচরা needs `mrp` and `price` (the Pack
+ * Price), minor units above nothing with the Pack Price never above the MRP;
+ * a price typed on a Pack serving only পাইকারি opens it to nobody. All refused
+ * on save otherwise, whoever saves it. It holds no stock of its own; a Pack
+ * sold is weighed out of its Product's (ADR-0035).
  */
-#[Fillable(['product_id', 'grams', 'mrp', 'price', 'is_available', 'sort'])]
+#[Fillable(['product_id', 'grams', 'serves_bulk', 'serves_retail', 'mrp', 'price', 'is_available', 'sort'])]
 class Pack extends Model
 {
     /** @use HasFactory<PackFactory> */
@@ -30,6 +35,8 @@ class Pack extends Model
     {
         return [
             'grams' => 'integer',
+            'serves_bulk' => 'boolean',
+            'serves_retail' => 'boolean',
             'mrp' => 'integer',
             'price' => 'integer',
             'is_available' => 'boolean',
@@ -54,11 +61,21 @@ class Pack extends Model
             return 'its weight must be above nothing.';
         }
 
-        if ($this->mrp === null || $this->mrp < 1 || $this->price === null || $this->price < 1) {
-            return 'its MRP and Pack Price must be above nothing.';
+        if (! $this->serves_bulk && ! $this->serves_retail) {
+            return 'it must serve পাইকারি, খুচরা or both.';
         }
 
-        if ($this->price > $this->mrp) {
+        $product = $this->product()->first();
+
+        if ($product !== null && (($this->serves_bulk && ! $product->sold_bulk) || ($this->serves_retail && ! $product->sold_retail))) {
+            return 'it serves a way its Product is not sold.';
+        }
+
+        if ($this->serves_retail && ($this->mrp === null || $this->mrp < 1 || $this->price === null || $this->price < 1)) {
+            return 'a Pack sold খুচরা needs an MRP and a Pack Price above nothing.';
+        }
+
+        if ($this->serves_retail && $this->price > $this->mrp) {
             return 'its Pack Price is above its MRP; nothing is sold above it.';
         }
 
@@ -83,18 +100,38 @@ class Pack extends Model
         return $grams < Grams::PER_KILOGRAM ? "{$grams} g" : Grams::format($grams);
     }
 
+    /** Whether the Pack is ticked for that way of buying; a price typed on it says nothing. */
+    public function servesAs(OrderKind $kind): bool
+    {
+        return match ($kind) {
+            OrderKind::Bulk => $this->serves_bulk,
+            OrderKind::Retail => $this->serves_retail,
+        };
+    }
+
     /**
-     * Whether a Customer can order this Pack now: its own switch is on, and
-     * its Product is published, Available and still in the catalogue. A
-     * Product made unavailable takes every Pack with it; a Pack switched off
-     * leaves its Product untouched.
+     * Whether the Pack is sold that way at all: ticked for it, and its
+     * Product switched to it — whatever either's Available says. Both are
+     * asked, since a Product's switch turned off outside its form leaves its
+     * Packs' ticks as they were.
      */
-    public function isOrderable(): bool
+    public function isSoldAs(OrderKind $kind): bool
+    {
+        return $this->servesAs($kind) && ($this->product?->isSoldAs($kind) ?? false);
+    }
+
+    /**
+     * Whether a Customer can order this Pack that way now: it is sold that
+     * way, its own switch is on, and its Product is published, Available and
+     * still in the catalogue. A Product made unavailable takes every Pack
+     * with it; a Pack switched off leaves its Product untouched.
+     */
+    public function isOrderableAs(OrderKind $kind): bool
     {
         $product = $this->product;
 
         return $this->is_available
-            && $product !== null
+            && $this->isSoldAs($kind)
             && ! $product->trashed()
             && $product->isPublished()
             && $product->is_available;

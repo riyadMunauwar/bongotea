@@ -101,8 +101,8 @@ class OrderCapture
      * line one Pack's worth at its Pack Price, paying the flat retail Delivery
      * Charge — waived at the threshold — and nothing from the Tiers or the
      * Delivery Bands. The same refusals as bulk, read for Packs: a Pack
-     * removed, switched off, named under another Product, or whose Product can
-     * no longer be had refuses with the basket priced as it is now, and so
+     * removed, switched off, not ticked খুচরা, named under another Product, or
+     * whose Product is not sold খুচরা or can no longer be had refuses with the basket priced as it is now, and so
      * does a Quote that disagrees. Stock is not touched (ADR-0021).
      *
      * @param  list<array{packId: int, productId: int, pack: Pack|null, count: int}>  $lines  the packet basket, one line per Pack; a Pack since deleted is null
@@ -188,7 +188,7 @@ class OrderCapture
         foreach ($lines as $line) {
             $pack = $line['pack'];
 
-            if ($pack !== null && $pack->product_id === $line['productId'] && $pack->isOrderable()) {
+            if ($pack !== null && $pack->product_id === $line['productId'] && $pack->isOrderableAs(OrderKind::Retail)) {
                 $orderable[] = $line;
             } else {
                 $refused[] = $line['packId'];
@@ -323,14 +323,16 @@ class OrderCapture
     }
 
     /**
-     * Why a buyer cannot have the Product now, or null where they can. Three
-     * separate answers, as the catalogue keeps them: taken out for good, never
-     * or no longer published, and unavailable for now.
+     * Why a buyer cannot have the Product by the Kilogram now, or null where
+     * they can. Four separate answers, as the catalogue keeps them: taken out
+     * for good, not sold পাইকারি at all (ADR-0036), never or no longer
+     * published, and unavailable for now.
      */
     private static function whyUnorderable(Product $product): ?string
     {
         return match (true) {
             $product->trashed() => 'is no longer sold',
+            ! $product->isSoldAs(OrderKind::Bulk) => 'is not sold পাইকারি',
             ! $product->isPublished() => 'is not published',
             ! $product->is_available => 'is not available now',
             default => null,

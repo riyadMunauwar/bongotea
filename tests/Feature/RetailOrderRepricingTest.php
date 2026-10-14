@@ -183,3 +183,27 @@ it('refuses to put a Pack that cannot be ordered now on a retail order, however 
 
     app(RetailRepricing::class)->apply($order, [['pack_id' => $switchedOff->getKey(), 'count' => 1]], auth()->user());
 })->throws(InvalidArgumentException::class);
+
+it('refuses a retail line whose Pack no longer serves খুচরা or whose Product is no longer sold খুচরা, even one the Order holds', function (Closure $spoil) {
+    $assam = quarterKiloOfAssam();
+    $order = retailOrderAgreedAt($assam, 2, 27000);
+    $spoil($assam);
+
+    app(RetailRepricing::class)->apply($order, [['id' => $order->lines()->sole()->getKey(), 'pack_id' => $assam->getKey(), 'count' => 3]], auth()->user());
+})->with([
+    'ticked পাইকারি only' => [fn (Pack $pack) => $pack->update(['serves_retail' => false])],
+    'Product no longer sold খুচরা' => [fn (Pack $pack) => $pack->product->update(['sold_retail' => false])],
+])->throws(InvalidArgumentException::class);
+
+it('offers a retail line only Packs that serve খুচরা', function () {
+    $assam = quarterKiloOfAssam();
+    $bulkPack = Pack::factory()->bulkOnly()->for($assam->product)->create(['grams' => 1000]);
+
+    Livewire::test(CreateOrder::class)
+        ->fillForm(['kind' => OrderKind::Retail->value, 'customer_phone' => '01712345678', 'customer_district' => 'Dhaka'])
+        ->set('data.lines', ['a' => ['pack_id' => $bulkPack->getKey(), 'count' => 1]])
+        ->call('create')
+        ->assertHasFormErrors(['lines.a.pack_id']);
+
+    expect(Order::query()->exists())->toBeFalse();
+});

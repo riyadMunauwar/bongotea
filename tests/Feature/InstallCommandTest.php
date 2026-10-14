@@ -108,6 +108,28 @@ it('stocks the demo catalogue: three themed Categories, its Tags, and fifteen Pr
     });
 });
 
+it('gives every demo Product its switches and Packs: the tea-stall teas পাইকারি, the family teas both ways', function () {
+    $this->artisan('bongotea:install', installOptions())->assertSuccessful();
+
+    $leaf = Product::query()->where('slug', 'tea-stall-premium-leaf')->sole();
+    $family = Product::query()->where('slug', 'family-bongo-tea-leaf')->sole();
+
+    expect($leaf->only(['sold_bulk', 'sold_retail']))->toBe(['sold_bulk' => true, 'sold_retail' => false])
+        ->and($leaf->packs->map->only(['grams', 'serves_bulk', 'serves_retail'])->all())->toBe([
+            ['grams' => 500, 'serves_bulk' => true, 'serves_retail' => false],
+            ['grams' => 1000, 'serves_bulk' => true, 'serves_retail' => false],
+        ])
+        ->and($family->only(['sold_bulk', 'sold_retail']))->toBe(['sold_bulk' => true, 'sold_retail' => true])
+        ->and($family->packs->map->only(['grams', 'serves_bulk', 'serves_retail', 'mrp', 'price'])->all())->toBe([
+            ['grams' => 100, 'serves_bulk' => false, 'serves_retail' => true, 'mrp' => 7000, 'price' => 6600],
+            ['grams' => 250, 'serves_bulk' => false, 'serves_retail' => true, 'mrp' => 17500, 'price' => 16500],
+            ['grams' => 500, 'serves_bulk' => true, 'serves_retail' => false, 'mrp' => null, 'price' => null],
+            ['grams' => 1000, 'serves_bulk' => true, 'serves_retail' => false, 'mrp' => null, 'price' => null],
+        ]);
+
+    Product::query()->each(fn (Product $product) => expect($product->packs)->not->toBeEmpty());
+});
+
 /**
  * Store, the announcement, the blurb and the Delivery Bands already default
  * to the mockup, so only the header's and footer's Menus are written: they

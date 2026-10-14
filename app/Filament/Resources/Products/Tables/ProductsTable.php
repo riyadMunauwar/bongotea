@@ -34,7 +34,7 @@ class ProductsTable
             /** Every stock figure is summed into the query the list already runs, so a catalogue of any size costs one of them. */
             ->modifyQueryUsing(function (Builder $query) use ($cover): Builder {
                 $ledger = app(StockLedger::class);
-                $query->with(['category', 'brand'])->withExists('packs');
+                $query->with(['category', 'brand']);
 
                 return $cover->withUnitsShipped(
                     app(CommittedStock::class)->withCommitted(
@@ -61,13 +61,19 @@ class ProductsTable
                     ->label('Available')
                     ->boolean(),
 
-                /** Open to retail is having any Pack (ADR-0034); a Product with none is bulk-only. */
-                IconColumn::make('packs_exists')
-                    ->label('Retail')
+                /** How each is ever sold (ADR-0036), as against Available, which is for now. */
+                IconColumn::make('sold_bulk')
+                    ->label('পাইকারি')
                     ->boolean(),
 
+                IconColumn::make('sold_retail')
+                    ->label('খুচরা')
+                    ->boolean(),
+
+                /** The first Tier's price; a Product sold only খুচরা has none. */
                 TextColumn::make('price')
                     ->formatStateUsing(fn (int $state): string => Money::format($state))
+                    ->placeholder('—')
                     ->sortable(),
 
                 /**
@@ -188,12 +194,10 @@ class ProductsTable
                     ->options(ProductStatus::class),
                 TernaryFilter::make('is_available')
                     ->label('Available'),
-                TernaryFilter::make('packs')
-                    ->label('Open to retail')
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->has('packs'),
-                        false: fn (Builder $query): Builder => $query->doesntHave('packs'),
-                    ),
+                TernaryFilter::make('sold_bulk')
+                    ->label('Sold পাইকারি'),
+                TernaryFilter::make('sold_retail')
+                    ->label('Sold খুচরা'),
                 /** Taken out of the catalogue is the soft delete; this is how to find those again. */
                 TrashedFilter::make()
                     ->label('Taken out of the catalogue'),

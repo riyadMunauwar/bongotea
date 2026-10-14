@@ -11,7 +11,7 @@ import { useCart, type UseCart } from '@/lib/use-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { PriceCalculatorProps } from '@/types/blocks';
-import type { ProductCard } from '@/types/catalogue';
+import type { BulkProductCard } from '@/types/catalogue';
 
 /**
  * "হিসাব করে দেখুন": every published Product by Category with −/+, beside the
@@ -55,7 +55,7 @@ export function PriceCalculator({ heading, text, categories }: PriceCalculatorPr
     );
 }
 
-function Row({ product, cart }: { product: ProductCard; cart: UseCart }) {
+function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
     const price = tierFor(product, cart.priced.totalKilograms).price;
@@ -106,7 +106,7 @@ function Row({ product, cart }: { product: ProductCard; cart: UseCart }) {
     );
 }
 
-function Panel({ cart, products }: { cart: UseCart; products: ProductCard[] }) {
+function Panel({ cart, products }: { cart: UseCart; products: BulkProductCard[] }) {
     const taka = useTaka();
     const { links } = usePage().props;
     const { priced, steps } = cart;

@@ -2,6 +2,7 @@
 
 namespace App\Support\Storefront;
 
+use App\Enums\OrderKind;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Collection;
@@ -43,6 +44,19 @@ class Catalogue
     }
 
     /**
+     * The Products sold that way (ADR-0036): every bulk surface — the bulk
+     * order form, the price calculator, the price matrix and the browser's
+     * পাইকারি Cart — lists only `soldAs(OrderKind::Bulk)`, read here and
+     * nowhere else.
+     *
+     * @return Collection<int, Product>
+     */
+    public function soldAs(OrderKind $kind): Collection
+    {
+        return $this->products()->filter(fn (Product $product): bool => $product->isSoldAs($kind))->values();
+    }
+
+    /**
      * @return Collection<int, Category>
      */
     public function categories(): Collection
@@ -56,23 +70,25 @@ class Catalogue
     /**
      * @return Collection<int, Product>
      */
-    public function productsIn(Category $category): Collection
+    public function productsIn(Category $category, ?OrderKind $soldAs = null): Collection
     {
-        return $this->products()->where('category_id', $category->getKey())->values();
+        $products = $soldAs === null ? $this->products() : $this->soldAs($soldAs);
+
+        return $products->where('category_id', $category->getKey())->values();
     }
 
     /**
-     * Each Category that has a published Product, in the Merchant's order,
-     * with its Products beside it.
+     * Each Category that has a published Product — sold that way, where a way
+     * is named — in the Merchant's order, with its Products beside it.
      *
      * @return list<array{category: Category, products: Collection<int, Product>}>
      */
-    public function stocked(): array
+    public function stocked(?OrderKind $soldAs = null): array
     {
         $stocked = [];
 
         foreach ($this->categories() as $category) {
-            $products = $this->productsIn($category);
+            $products = $this->productsIn($category, $soldAs);
 
             if ($products->isNotEmpty()) {
                 $stocked[] = ['category' => $category, 'products' => $products];

@@ -32,7 +32,7 @@ class BlankStoreSeeder extends Seeder
 
         $links = [
             self::pageLink('হোম', $home),
-            self::pageLink('বাল্ক অর্ডার', $bulkOrder),
+            self::pageLink('পাইকারি অর্ডার', $bulkOrder),
             self::pageLink('আমার অর্ডার', $myOrders),
         ];
 

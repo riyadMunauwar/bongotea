@@ -44,7 +44,7 @@ class PriceMatrix extends PageBlock
         return [
             'heading' => self::text($data, 'heading'),
             'text' => self::text($data, 'text'),
-            'categories' => CatalogueProps::stockedCategories(app(Catalogue::class)),
+            'categories' => CatalogueProps::stockedBulkCategories(app(Catalogue::class)),
         ];
     }
 }

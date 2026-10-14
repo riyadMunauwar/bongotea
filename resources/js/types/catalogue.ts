@@ -28,7 +28,28 @@ export type CategoryReference = {
     theme: CategoryTheme;
 };
 
-export type ProductCard = {
+/**
+ * A Product sold পাইকারি, with its MRP and Tiers, or one sold only খুচরা,
+ * with neither (ADR-0036): it is priced by its Packs, from `retailPricing`.
+ * The bulk side only ever lists the first kind.
+ */
+export type ProductCard = BulkProductCard | RetailOnlyProductCard;
+
+export type BulkProductCard = ProductCardBase & {
+    isSoldBulk: true;
+    /** What every discount shown is measured from; no Tier Price exceeds it. */
+    mrp: number;
+    /** The Product's own Tiers, in order; the first's price is the most it charges. */
+    tiers: Tier[];
+};
+
+export type RetailOnlyProductCard = ProductCardBase & {
+    isSoldBulk: false;
+    mrp: null;
+    tiers: [];
+};
+
+type ProductCardBase = {
     id: number;
     name: string;
     href: string;
@@ -41,10 +62,6 @@ export type ProductCard = {
     brand: { id: number; name: string };
     category: CategoryReference;
     tagIds: number[];
-    /** What every discount shown is measured from; no Tier Price exceeds it. */
-    mrp: number;
-    /** The Product's own Tiers, in order; the first's price is the most it charges. */
-    tiers: Tier[];
 };
 
 export type Strength = { grade: string; bars: number };
@@ -79,7 +96,7 @@ export type CategoryDetail = CategoryReference & {
     about: string | null;
     whyPoints: string[];
     productCount: number;
-    /** From the cheapest last Tier to the dearest first Tier; null with no Products. */
+    /** From the cheapest last Tier to the dearest first Tier of its Products sold পাইকারি; null with none. */
     priceRange: { low: number; high: number } | null;
 };
 
@@ -89,5 +106,6 @@ export type SearchSuggestion = {
     href: string;
     imageUrl: string | null;
     categoryName: string;
-    firstTierPrice: number;
+    /** Null for a Product sold only খুচরা, which has no Tiers. */
+    firstTierPrice: number | null;
 };

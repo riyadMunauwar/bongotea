@@ -462,6 +462,7 @@ class OrderForm
     {
         $onSale = Product::query()
             ->published()
+            ->soldAs(OrderKind::Bulk)
             ->where('is_available', true)
             ->orderBy('name')
             ->pluck('name', 'id')
@@ -489,7 +490,7 @@ class OrderForm
             ->with('product')
             ->where(fn (Builder $query): Builder => $query->whereKey($held)->orWhere('is_available', true))
             ->get()
-            ->filter(fn (Pack $pack): bool => $held->contains($pack->getKey()) || $pack->isOrderable())
+            ->filter(fn (Pack $pack): bool => $held->contains($pack->getKey()) || $pack->isOrderableAs(OrderKind::Retail))
             ->sortBy(fn (Pack $pack): string => $pack->product->name.sprintf('%08d', $pack->grams))
             ->mapWithKeys(fn (Pack $pack): array => [$pack->getKey() => "{$pack->product->name} — {$pack->name()}"])
             ->all();

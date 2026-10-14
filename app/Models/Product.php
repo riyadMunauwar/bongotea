@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderKind;
 use App\Enums\ProductStatus;
 use App\Enums\Strength;
 use App\Support\Pricing\ProductTiers;
@@ -43,15 +44,19 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * is measured from, required, and no Tier Price may exceed it.
  * What a Kilogram costs in a Cart is only ever worked out by `PriceBook`.
  *
- * A Product with any `packs` is open to retail as well (ADR-0034); one with
- * none is bulk-only.
+ * Two switches say how a Product is ever sold (ADR-0036): `sold_bulk`
+ * (পাইকারি, by the Kilogram at its Tiers) and `sold_retail` (খুচরা, in its
+ * Packs at their Pack Prices), at least one always on. Only a Product sold
+ * পাইকারি has Tiers, a `price` and an `mrp`; the model clears all three from
+ * one sold only খুচরা. Which ways it is sold is not whether it is Available:
+ * that is for now, this is for good.
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
     'tiers', 'strength', 'tea_type', 'grade', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
     'cups_per_kilogram', 'package_weight', 'custom_characteristics', 'best_for', 'not_best_for',
     'brewing_steps', 'business_tips', 'storage_tips', 'badge', 'search_keywords', 'status', 'is_available',
-    'seo_title', 'seo_description', 'seo_image',
+    'sold_bulk', 'sold_retail', 'seo_title', 'seo_description', 'seo_image',
 ])]
 class Product extends Model implements HasMedia
 {
@@ -89,6 +94,8 @@ class Product extends Model implements HasMedia
             'status' => ProductStatus::class,
             'first_published_at' => 'datetime',
             'is_available' => 'boolean',
+            'sold_bulk' => 'boolean',
+            'sold_retail' => 'boolean',
         ];
     }
 
@@ -109,9 +116,27 @@ class Product extends Model implements HasMedia
                 $product->first_published_at = now();
             }
 
+            if (! $product->sold_bulk && ! $product->sold_retail) {
+                throw new LogicException("Product {$product->getKey()} cannot be saved: it must be sold পাইকারি, খুচরা or both.");
+            }
+
+            if (! $product->sold_bulk) {
+                $product->forgetTiers();
+
+                return;
+            }
+
             $product->settlePrice();
             $product->guardMrp();
         });
+    }
+
+    /** A Product sold only খুচরা has no Tiers, so nothing priced by the Kilogram. */
+    private function forgetTiers(): void
+    {
+        $this->tiers = null;
+        $this->price = null;
+        $this->mrp = null;
     }
 
     /**
@@ -160,12 +185,18 @@ class Product extends Model implements HasMedia
     }
 
     /**
-     * The Product's Tiers as the pricing module reads them.
+     * The Product's Tiers as the pricing module reads them. A Product sold
+     * only খুচরা has none, so asking is a mistake upstream: the bulk side
+     * should never have listed it.
      *
      * @return non-empty-list<Tier>
      */
     public function priceTiers(): array
     {
+        if (! $this->sold_bulk) {
+            throw new LogicException("Product {$this->getKey()} is not sold পাইকারি; it has no Tiers.");
+        }
+
         return ProductTiers::from($this->tiers ?? ProductTiers::flat((int) $this->price));
     }
 
@@ -193,6 +224,27 @@ class Product extends Model implements HasMedia
     public function isPublished(): bool
     {
         return $this->status === ProductStatus::Published;
+    }
+
+    /** Whether the Merchant sells this Product that way at all: its পাইকারি or খুচরা switch. */
+    public function isSoldAs(OrderKind $kind): bool
+    {
+        return match ($kind) {
+            OrderKind::Bulk => $this->sold_bulk,
+            OrderKind::Retail => $this->sold_retail,
+        };
+    }
+
+    /**
+     * The Products sold that way: the one rule the bulk side lists by, and
+     * the retail side too.
+     *
+     * @param  Builder<Product>  $query
+     */
+    #[Scope]
+    protected function soldAs(Builder $query, OrderKind $kind): void
+    {
+        $query->where($kind === OrderKind::Bulk ? 'sold_bulk' : 'sold_retail', true);
     }
 
     /**
@@ -229,9 +281,8 @@ class Product extends Model implements HasMedia
     }
 
     /**
-     * The Product's Packs (ADR-0034), in the Merchant's order and smallest
-     * first where none was set. A Product with any is open to retail; one
-     * with none is bulk-only.
+     * The Product's Packs (ADR-0036), in the Merchant's order and smallest
+     * first where none was set, each ticked for the ways it serves.
      *
      * @return HasMany<Pack, $this>
      */

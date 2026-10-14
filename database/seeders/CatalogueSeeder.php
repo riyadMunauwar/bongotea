@@ -32,11 +32,17 @@ use Illuminate\Support\Facades\DB;
  * typed whole-taka Tier Prices (ADR-0031) a few percent apart, each below
  * the Product's MRP. Brewing figures follow the store's own চা তৈরির নিয়ম:
  * ২.৫০–২.৭৫ গ্রাম for লিফ and BOP, ২.০০–২.৫০ গ্রাম for PD, ডাস্ট and CD.
+ *
+ * Every Product is sold পাইকারি in 500 g and 1 kg bags; the family teas are
+ * sold খুচরা as well, in 100 g and 250 g packets (ADR-0036).
  */
 class CatalogueSeeder extends Seeder
 {
     /** The three weights every Product is priced at, by the whole cart's Kilograms. */
     private const RANGES = [[1, 9], [10, 19], [20, null]];
+
+    /** The Category whose teas are sold খুচরা too, in packets for the family table; the tea-stall ones are পাইকারি alone. */
+    private const RETAIL_CATEGORY = 'family-blend';
 
     private const CATEGORIES = [
         [
@@ -139,17 +145,54 @@ class CatalogueSeeder extends Seeder
         }
 
         foreach (self::products() as $product) {
+            $soldRetail = $product['category'] === self::RETAIL_CATEGORY;
+
             $created = Product::query()->create([
                 ...array_diff_key($product, array_flip(['category', 'tags'])),
                 'category_id' => $categories[$product['category']]->id,
                 'brand_id' => $brand->id,
                 'status' => ProductStatus::Published,
                 'is_available' => true,
+                'sold_bulk' => true,
+                'sold_retail' => $soldRetail,
                 'storage_tips' => Product::commonStorageTips(),
             ]);
 
             $created->tags()->attach(array_map(fn (string $slug): int => $tags[$slug]->id, $product['tags']));
+
+            foreach (self::packs($product, $soldRetail) as $sort => $pack) {
+                $created->packs()->create([...$pack, 'sort' => $sort, 'is_available' => true]);
+            }
         }
+    }
+
+    /**
+     * A Product's Packs (ADR-0036): the 500 g and 1 kg bags a পাইকারি order
+     * is sent in, and — for a family tea, sold খুচরা as well — 100 g and
+     * 250 g packets priced at their share of the MRP and the first Tier
+     * Price, to the whole taka.
+     *
+     * @param  array{mrp: int, tiers: list<array{price: int}>}  $product
+     * @return list<array{grams: int, serves_bulk: bool, serves_retail: bool, mrp?: int, price?: int}>
+     */
+    private static function packs(array $product, bool $soldRetail): array
+    {
+        $taka = Money::toMinorUnits(1);
+        $share = fn (int $perKilogram, int $grams): int => (int) round($perKilogram * $grams / 1000 / $taka) * $taka;
+
+        $retail = $soldRetail ? array_map(fn (int $grams): array => [
+            'grams' => $grams,
+            'serves_bulk' => false,
+            'serves_retail' => true,
+            'mrp' => $share($product['mrp'], $grams),
+            'price' => $share($product['tiers'][0]['price'], $grams),
+        ], [100, 250]) : [];
+
+        return [
+            ...$retail,
+            ['grams' => 500, 'serves_bulk' => true, 'serves_retail' => false],
+            ['grams' => 1000, 'serves_bulk' => true, 'serves_retail' => false],
+        ];
     }
 
     /**
