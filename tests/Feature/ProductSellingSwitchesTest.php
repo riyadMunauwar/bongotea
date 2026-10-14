@@ -108,7 +108,8 @@ function productFormWith(array $fields, array $packs): Testable
             ...$fields,
         ])
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '620']])
-        ->set('data.packs', $packs);
+        ->set('data.packs', $packs)
+        ->set('data.default_bulk_pack', $fields['default_bulk_pack'] ?? collect($packs)->firstWhere('serves_bulk', true)['grams'] ?? null);
 }
 
 /** @return array<string, mixed> */

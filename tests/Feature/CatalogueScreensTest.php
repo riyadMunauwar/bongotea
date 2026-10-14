@@ -292,6 +292,7 @@ it('publishes a Product with nothing but its name, slug, Category, Brand, MRP, o
         ])
         ->set('data.tiers', [['min' => '1', 'max' => '', 'price' => '500']])
         ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
+        ->set('data.default_bulk_pack', '1000')
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -324,6 +325,7 @@ it('stores the MRP and each Tier with its price in minor units', function () {
             ['min' => '21', 'max' => '', 'price' => '589'],
         ])
         ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
+        ->set('data.default_bulk_pack', '1000')
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -372,6 +374,7 @@ it('refuses an MRP below a Tier Price, and takes one equal to the first Tier\'s'
             ['min' => '6', 'max' => '', 'price' => '480'],
         ])
         ->set('data.packs', [['grams' => '1000', 'serves_bulk' => true, 'is_available' => true]])
+        ->set('data.default_bulk_pack', '1000')
         ->call('create');
 
     $refused ? $component->assertHasFormErrors(['mrp']) : $component->assertHasNoFormErrors();

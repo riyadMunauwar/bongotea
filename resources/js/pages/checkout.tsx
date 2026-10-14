@@ -1,5 +1,6 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { BulkPackLine } from '@/components/cart/bulk-pack-line';
 import { deliveryNote, discountLabel, feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
@@ -323,9 +324,10 @@ export default function CheckoutPage() {
                 <aside className="flex flex-col gap-3 rounded-[14px] border border-border p-[clamp(18px,2vw,24px)] md:sticky md:top-[150px]">
                     <span className="text-[19px] font-semibold text-ink">{bn.checkout.summary}</span>
                     {isRetail ? <RetailSummary retail={retail} /> : <BulkSummary cart={cart} nameOf={nameOf} />}
+                    {!isRetail && cart.hasUnpackable && <span className="text-[13px] font-semibold text-eyebrow">{bn.cart.unpackableCheckout}</span>}
                     <button
                         type="submit"
-                        disabled={form.processing || repricing}
+                        disabled={form.processing || repricing || (!isRetail && cart.hasUnpackable)}
                         className="mt-1 w-full cursor-pointer rounded-[10px] border-0 bg-primary p-[15px] text-center text-[17px] font-semibold text-white hover:bg-primary-dark disabled:cursor-wait disabled:bg-disabled"
                     >
                         {form.processing ? bn.checkout.placing : bn.checkout.confirm}
@@ -393,7 +395,8 @@ function SummaryLine({ label, value, accent = false }: { label: string; value: s
 }
 
 /**
- * What a bulk Order's lines, kilograms and figures add up to.
+ * What a bulk Order's lines, kilograms and figures add up to, each line with
+ * the Pack it is supplied in, changeable here, and its packet count.
  */
 function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: number) => string }) {
     const taka = useTaka();
@@ -403,8 +406,8 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
     return (
         <>
             <div className="flex flex-col gap-2 border-b border-divider pb-3">
-                {priced.lines.map((line) => (
-                    <div key={line.productId} className="flex justify-between gap-3 text-[14px]">
+                {priced.lines.map((line, index) => (
+                    <div key={line.productId} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[14px]">
                         <span>
                             {nameOf(line.productId)}{' '}
                             <span className="text-muted">{bn.checkout.lineAt(toBanglaDigits(line.kilograms), taka(line.tierPrice))}</span>
@@ -416,6 +419,7 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
                             )}
                         </span>
                         <span className="font-semibold">{taka(line.lineTotal)}</span>
+                        <BulkPackLine line={cart.lines[index]} cart={cart} className="w-full" />
                     </div>
                 ))}
             </div>
@@ -468,10 +472,10 @@ function RetailSummary({ retail }: { retail: UseRetailCart }) {
     );
 }
 
-/** What the request carries for the bulk Cart: its lines and the Quote shown. */
-function bulkPayload({ priced }: UseCart) {
+/** What the request carries for the bulk Cart: its lines with their Packs, and the Quote shown. The store works out the packets itself. */
+function bulkPayload({ lines, priced }: UseCart) {
     return {
-        lines: priced.lines.map((line) => ({ productId: line.productId, kilograms: line.kilograms })),
+        lines: lines.map((line) => ({ productId: line.product.id, kilograms: line.kilograms, packId: line.pack?.id ?? null })),
         quote: {
             lines: priced.lines.map((line) => ({ productId: line.productId, tierPrice: line.tierPrice })),
             deliveryCharge: priced.deliveryCharge,

@@ -5,18 +5,46 @@ namespace Database\Factories;
 use App\Enums\ProductStatus;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Pack;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * A published, Available Product sold পাইকারি and খুচরা both: what the store
- * sells unless a test says otherwise. It comes with no Packs; a test that
- * needs one gives it one.
+ * sells unless a test says otherwise. A Product sold পাইকারি comes with one
+ * Pack, a 1 kg bag serving পাইকারি alone and marked its default, so any whole
+ * number of Kilograms can be ordered; a test that needs a Pack sold খুচরা, or
+ * another bulk size, gives it one.
  *
  * @extends Factory<Product>
  */
 class ProductFactory extends Factory
 {
+    /** The weight of the default পাইকারি Pack every factory Product sold পাইকারি is given. */
+    public const DEFAULT_BULK_PACK_GRAMS = 1000;
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Product $product): void {
+            if (! $product->sold_bulk || $product->default_bulk_pack_id !== null) {
+                return;
+            }
+
+            $pack = Pack::factory()->bulkOnly()->for($product)->create(['grams' => self::DEFAULT_BULK_PACK_GRAMS]);
+
+            $product->update(['default_bulk_pack_id' => $pack->getKey()]);
+        });
+    }
+
+    /** No Pack at all, as a Product made outside its form may be. */
+    public function withoutPacks(): static
+    {
+        return $this->afterCreating(function (Product $product): void {
+            $product->update(['default_bulk_pack_id' => null]);
+            $product->packs()->delete();
+        });
+    }
+
     /**
      * @return array<string, mixed>
      */

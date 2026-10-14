@@ -197,7 +197,7 @@ it('refuses a retail line whose Pack no longer serves খুচরা or whose P
 
 it('offers a retail line only Packs that serve খুচরা', function () {
     $assam = quarterKiloOfAssam();
-    $bulkPack = Pack::factory()->bulkOnly()->for($assam->product)->create(['grams' => 1000]);
+    $bulkPack = $assam->product->defaultBulkPack;
 
     Livewire::test(CreateOrder::class)
         ->fillForm(['kind' => OrderKind::Retail->value, 'customer_phone' => '01712345678', 'customer_district' => 'Dhaka'])

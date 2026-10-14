@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\TrackingContext;
 use App\Support\Orders\OrderCapture;
 use App\Support\Orders\OrderOwnership;
+use App\Support\Orders\PackingRefused;
 use App\Support\Orders\QuoteRefused;
 use App\Support\Orders\RetailQuoteRefused;
 use App\Support\Payments\PaymentStarter;
@@ -25,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\Response as ResponseCode;
@@ -87,6 +89,9 @@ class CheckoutController extends Controller
             return self::refused($refusal->current->toArray(), $refusal->unavailableProductIds, $refusal->shortProductIds);
         } catch (RetailQuoteRefused $refusal) {
             return self::refused($refusal->current->toArray(), $refusal->unavailablePackIds, $refusal->shortPackIds);
+        } catch (PackingRefused $refusal) {
+            /** The buyer's own quantity, not a figure that moved: answered on the Cart's lines like any other, naming weights that work (ADR-0036). */
+            throw ValidationException::withMessages(['lines' => $refusal->banglaMessage()]);
         }
 
         /**

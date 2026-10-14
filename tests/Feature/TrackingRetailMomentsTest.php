@@ -69,7 +69,7 @@ it('reports nothing for a Pack of a Product the store does not sell', function (
 it('reports nothing for a Product not sold the way its Cart names', function (ProviderScript $script) {
     $script->switchOn();
     $retailOnly = Product::factory()->retailOnly()->create();
-    $bulkPack = Pack::factory()->bulkOnly()->for($this->gold)->create(['grams' => 1000]);
+    $bulkPack = $this->gold->defaultBulkPack;
 
     reportToBeacon(TrackingMoment::AddedToCart, 'cart-3', ['items' => $retailOnly->id.':1'])->assertNoContent();
     reportToBeacon(TrackingMoment::AddedToCart, 'basket-3', ['cart' => 'retail', 'items' => $bulkPack->id.':1'])->assertNoContent();

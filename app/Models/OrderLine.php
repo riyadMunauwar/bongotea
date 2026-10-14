@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderKind;
 use App\Observers\OrderLineObserver;
 use App\Support\Bangla;
 use App\Support\Inventory\Grams;
@@ -44,8 +45,17 @@ use Illuminate\Support\Facades\DB;
  * Pack, `pack_grams` keeps its weight as it stood at Capture, `quantity` is
  * how many, `unit_price` the Pack Price, `mrp` the Pack's MRP and `unit_cost`
  * what one Pack's weight cost; it records no Tier. A Pack deleted later leaves
- * the line whole: the reference goes null and the weight stays. Both are null
- * on a bulk line.
+ * the line whole: the reference goes null and the weight stays.
+ *
+ * A bulk line names the Pack its whole Kilograms are supplied in the same way
+ * (ADR-0036): `pack_id` and `pack_grams` as they stood at Capture, while
+ * `quantity` stays its Kilograms and the Tiers alone price it. Its packet
+ * count is never stored — it is read off the Kilograms and the recorded weight,
+ * which are both fixed at Capture and so cannot disagree. A bulk line written
+ * before Packs reached bulk names none.
+ *
+ * `kind` is its Order's, copied when the line is first written, so the line
+ * says on its own row whether its quantity is Kilograms or Packs.
  */
 #[ObservedBy(OrderLineObserver::class)]
 #[Fillable(['product_id', 'category_id', 'pack_id', 'pack_grams', 'product_name', 'unit_price', 'mrp', 'unit_cost', 'quantity', 'tier_min', 'tier_max', 'price_override_reason', 'price_overridden_by'])]
@@ -57,6 +67,7 @@ class OrderLine extends Model
     protected function casts(): array
     {
         return [
+            'kind' => OrderKind::class,
             'unit_price' => 'integer',
             'mrp' => 'integer',
             'unit_cost' => 'integer',
@@ -115,10 +126,24 @@ class OrderLine extends Model
         return $this->belongsTo(Pack::class);
     }
 
-    /** Whether this line is one Pack's worth rather than Kilograms. */
+    /** Whether this line is one Pack's worth rather than Kilograms: a retail line. */
     public function isPack(): bool
     {
-        return $this->pack_grams !== null;
+        return $this->kind === OrderKind::Retail;
+    }
+
+    /**
+     * How many packets the line is sent in: a retail line's count, or the
+     * packets a bulk line's Kilograms make of its recorded Pack weight. Null
+     * for a bulk line that names no Pack.
+     */
+    public function packets(): ?int
+    {
+        return match (true) {
+            $this->isPack() => $this->quantity,
+            $this->pack_grams === null => null,
+            default => Grams::packetsIn(Grams::fromKilograms($this->quantity), $this->pack_grams),
+        };
     }
 
     /**
@@ -140,11 +165,7 @@ class OrderLine extends Model
             return $this->product_name.' × '.Bangla::number($this->quantity).' কেজি';
         }
 
-        $size = $this->pack_grams < Grams::PER_KILOGRAM
-            ? Bangla::number($this->pack_grams).' গ্রাম'
-            : Bangla::digits(Grams::toKilograms($this->pack_grams)).' কেজি';
-
-        return "{$this->product_name}, {$size} × ".Bangla::number($this->quantity);
+        return "{$this->product_name}, ".Pack::banglaNameFor($this->pack_grams).' × '.Bangla::number($this->quantity);
     }
 
     /** Whether a User set this line's price by hand, which only an override's reason says. */
@@ -159,11 +180,12 @@ class OrderLine extends Model
      *
      * The one place the ledger reads a line's weight — booking, a Return, a
      * Partial Return, a write-off and Committed all sum this (ADR-0035). A bulk
-     * line is its Kilograms × 1000, and a Pack line its Pack's weight as
-     * stamped at Capture × its count, so both leave the same shelf.
+     * line is its Kilograms × 1000 whatever Pack they come in, and a retail
+     * line its Pack's weight as stamped at Capture × its count, so both leave
+     * the same shelf.
      */
     public static function grams(): Expression
     {
-        return DB::raw('coalesce(order_lines.pack_grams, '.Grams::PER_KILOGRAM.') * order_lines.quantity');
+        return DB::raw("case when order_lines.kind = '".OrderKind::Retail->value."' then order_lines.pack_grams else ".Grams::PER_KILOGRAM.' end * order_lines.quantity');
     }
 }

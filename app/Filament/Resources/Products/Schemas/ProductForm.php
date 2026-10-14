@@ -7,6 +7,7 @@ use App\Enums\ProductStatus;
 use App\Enums\Strength;
 use App\Filament\Concerns\HasSeoFields;
 use App\Filament\Concerns\HasSlugField;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Support\Money;
 use App\Support\Pricing\ProductTiers;
@@ -391,6 +392,7 @@ class ProductForm
                             ->integer()
                             ->minValue(1)
                             ->distinct()
+                            ->live(onBlur: true)
                             ->suffix('g'),
 
                         self::packTick('serves_bulk', 'পাইকারি', 'sold_bulk')
@@ -426,7 +428,34 @@ class ProductForm
                             ->default(true)
                             ->inline(false),
                     ]),
+
+                self::defaultBulkPackSelect(),
             ]);
+    }
+
+    /**
+     * The পাইকারি Pack a bulk buyer starts from (ADR-0036), chosen by weight
+     * among the Pack rows ticked পাইকারি, since a Pack not yet saved has no id
+     * to choose it by. Required while the Product is sold পাইকারি and has a
+     * Pack. Saved after the Packs, which are above it in the form, so the
+     * weight is turned into the Pack it names only once that Pack exists.
+     */
+    private static function defaultBulkPackSelect(): Select
+    {
+        return Select::make('default_bulk_pack')
+            ->label('Default পাইকারি Pack')
+            ->helperText('The size a bulk buyer starts from; they can choose another পাইকারি Pack.')
+            ->visible(fn (Get $get): bool => (bool) $get('sold_bulk'))
+            ->options(fn (Get $get): array => collect(is_array($get('packs')) ? $get('packs') : [])
+                ->filter(fn (mixed $pack): bool => is_array($pack) && (bool) ($pack['serves_bulk'] ?? false) && is_numeric($pack['grams'] ?? null) && (int) $pack['grams'] > 0)
+                ->mapWithKeys(fn (array $pack): array => [(int) $pack['grams'] => Pack::nameFor((int) $pack['grams'])])
+                ->all())
+            ->required(fn (Get $get): bool => is_array($get('packs')) && $get('packs') !== [])
+            ->afterStateHydrated(fn (Select $component, ?Product $record): mixed => $component->state($record?->defaultBulkPack?->grams))
+            ->dehydrated(false)
+            ->saveRelationshipsUsing(fn (Product $record, mixed $state): bool => $record->update([
+                'default_bulk_pack_id' => is_numeric($state) ? $record->packs()->where('grams', (int) $state)->where('serves_bulk', true)->value('id') : null,
+            ]));
     }
 
     /**

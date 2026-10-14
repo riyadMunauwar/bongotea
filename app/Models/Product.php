@@ -11,6 +11,7 @@ use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -50,13 +51,18 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * পাইকারি has Tiers, a `price` and an `mrp`; the model clears all three from
  * one sold only খুচরা. Which ways it is sold is not whether it is Available:
  * that is for now, this is for good.
+ *
+ * `default_bulk_pack_id` is the পাইকারি Pack a bulk buyer starts from, always
+ * one of this Product's Packs ticked পাইকারি, and cleared with the Tiers from
+ * a Product no longer sold পাইকারি. That a Product sold পাইকারি has one is the
+ * form's rule, as every rule across a Product and its Packs is.
  */
 #[Fillable([
     'name', 'slug', 'category_id', 'brand_id', 'short_description', 'description', 'price', 'mrp',
     'tiers', 'strength', 'tea_type', 'grade', 'particle_size', 'liquor_colour', 'liquor_body', 'aroma', 'infusion',
     'cups_per_kilogram', 'package_weight', 'custom_characteristics', 'best_for', 'not_best_for',
     'brewing_steps', 'business_tips', 'storage_tips', 'badge', 'search_keywords', 'status', 'is_available',
-    'sold_bulk', 'sold_retail', 'seo_title', 'seo_description', 'seo_image',
+    'sold_bulk', 'sold_retail', 'default_bulk_pack_id', 'seo_title', 'seo_description', 'seo_image',
 ])]
 class Product extends Model implements HasMedia
 {
@@ -96,6 +102,7 @@ class Product extends Model implements HasMedia
             'is_available' => 'boolean',
             'sold_bulk' => 'boolean',
             'sold_retail' => 'boolean',
+            'default_bulk_pack_id' => 'integer',
         ];
     }
 
@@ -128,15 +135,35 @@ class Product extends Model implements HasMedia
 
             $product->settlePrice();
             $product->guardMrp();
+            $product->guardDefaultBulkPack();
         });
     }
 
-    /** A Product sold only খুচরা has no Tiers, so nothing priced by the Kilogram. */
+    /** A Product sold only খুচরা has no Tiers, so nothing priced by the Kilogram, and no পাইকারি Pack to start from. */
     private function forgetTiers(): void
     {
         $this->tiers = null;
         $this->price = null;
         $this->mrp = null;
+        $this->default_bulk_pack_id = null;
+    }
+
+    /** Refuses a default পাইকারি Pack that is not one of this Product's Packs ticked পাইকারি. */
+    private function guardDefaultBulkPack(): void
+    {
+        if ($this->default_bulk_pack_id === null || ! $this->isDirty('default_bulk_pack_id')) {
+            return;
+        }
+
+        $isOwnBulkPack = $this->exists && Pack::query()
+            ->whereKey($this->default_bulk_pack_id)
+            ->where('product_id', $this->getKey())
+            ->where('serves_bulk', true)
+            ->exists();
+
+        if (! $isOwnBulkPack) {
+            throw new LogicException("Product {$this->getKey()} cannot be saved: its default পাইকারি Pack must be one of its own Packs ticked পাইকারি.");
+        }
     }
 
     /**
@@ -289,6 +316,27 @@ class Product extends Model implements HasMedia
     public function packs(): HasMany
     {
         return $this->hasMany(Pack::class)->orderBy('sort')->orderBy('grams');
+    }
+
+    /**
+     * The পাইকারি Pack a bulk buyer starts from until they choose another.
+     *
+     * @return BelongsTo<Pack, $this>
+     */
+    public function defaultBulkPack(): BelongsTo
+    {
+        return $this->belongsTo(Pack::class, 'default_bulk_pack_id');
+    }
+
+    /**
+     * The Packs a bulk line may be supplied in now: ticked পাইকারি and
+     * switched on, in the Merchant's order. Read off the loaded Packs.
+     *
+     * @return Collection<int, Pack>
+     */
+    public function bulkPacks(): Collection
+    {
+        return $this->packs->filter(fn (Pack $pack): bool => $pack->serves_bulk && $pack->is_available)->values();
     }
 
     /**

@@ -60,11 +60,18 @@ class OrderCapture
     ) {}
 
     /**
-     * @param  list<array{product: Product, kilograms: int}>  $lines  the Cart, one line per Product
+     * Each line names the Pack its Kilograms are supplied in (ADR-0036). A line
+     * that names none — an Order a seeder or a test captures, or a Cart kept
+     * from before bulk lines had Packs — is supplied in its Product's default
+     * পাইকারি Pack; a line naming a Pack since deleted names null, and is
+     * refused like a Pack that cannot be had. The Pack never prices the line.
+     *
+     * @param  list<array{product: Product, kilograms: int, pack?: Pack|null}>  $lines  the Cart, one line per Product
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
      *
-     * @throws QuoteRefused where a Product in the Cart cannot be had now, wants more than is Free to Sell, or the Quote disagrees with the store
+     * @throws QuoteRefused where a Product or its Pack cannot be had now, the Cart wants more than is Free to Sell, or the Quote disagrees with the store
+     * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      * @throws CheckoutUnavailable where the Cart or the details cannot become an Order
      */
     public function capture(array $lines, array $details, ?Quote $quote = null): Order
@@ -74,6 +81,11 @@ class OrderCapture
         }
 
         $this->refuseMalformed($lines);
+
+        $lines = array_map(fn (array $line): array => [
+            ...$line,
+            'pack' => array_key_exists('pack', $line) ? $line['pack'] : $line['product']->defaultBulkPack,
+        ], $lines);
 
         /**
          * Priced before the transaction opens, so a Cart that cannot be sold
@@ -109,7 +121,7 @@ class OrderCapture
             $order = $this->createOrder($customer, $details, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryBand?->label());
 
             foreach ($lines as $index => $line) {
-                $order->lines()->create($this->line($line['product'], $priced->lines[$index], $costs));
+                $order->lines()->create($this->line($line['product'], $line['pack'], $priced->lines[$index], $costs));
             }
 
             /** The lines' observer recomputed the totals; load them back. */
@@ -353,10 +365,11 @@ class OrderCapture
 
     /**
      * The Cart priced by the store, or a refusal: a Product a buyer cannot
-     * have now refuses before any price is compared, and the Quote, where
+     * have now, or cannot have in the Pack asked for, refuses before any price
+     * is compared; then Kilograms their Pack cannot make; and the Quote, where
      * there is one, must agree with every figure.
      *
-     * @param  list<array{product: Product, kilograms: int}>  $lines
+     * @param  list<array{product: Product, kilograms: int, pack: Pack|null}>  $lines
      */
     private function price(array $lines, ?Quote $quote): PricedCart
     {
@@ -364,7 +377,7 @@ class OrderCapture
         $refusals = [];
 
         foreach ($lines as $line) {
-            $why = self::whyUnorderable($line['product']);
+            $why = self::whyUnorderable($line['product']) ?? self::whyUnpackable($line['product'], $line['pack']);
 
             if ($why === null) {
                 $orderable[] = $line;
@@ -377,6 +390,13 @@ class OrderCapture
             $first = array_key_first($refusals);
 
             throw new QuoteRefused("Product [{$first}] {$refusals[$first]}.", self::priceOf($orderable), array_keys($refusals));
+        }
+
+        foreach ($lines as $line) {
+            /** @var Pack $pack */
+            $pack = $line['pack'];
+
+            PackingRefused::unlessPackable($line['product'], $line['kilograms'], $pack->grams);
         }
 
         $priced = self::priceOf($lines);
@@ -412,6 +432,21 @@ class OrderCapture
             ! $product->isSoldAs(OrderKind::Bulk) => 'is not sold পাইকারি',
             ! $product->isPublished() => 'is not published',
             ! $product->is_available => 'is not available now',
+            default => null,
+        };
+    }
+
+    /**
+     * Why the Product cannot be supplied in the Pack the line names, or null
+     * where it can: the Pack is gone or never was, belongs to another Product,
+     * or is not ticked পাইকারি and switched on (ADR-0036).
+     */
+    private static function whyUnpackable(Product $product, ?Pack $pack): ?string
+    {
+        return match (true) {
+            $pack === null => 'has no পাইকারি Pack to be supplied in',
+            (int) $pack->product_id !== $product->getKey() => 'was asked for in another Product\'s Pack',
+            ! $pack->isOrderableAs(OrderKind::Bulk) => "cannot be supplied in Pack [{$pack->getKey()}] now",
             default => null,
         };
     }
@@ -458,18 +493,23 @@ class OrderCapture
      *
      * `product_id` is kept as a reference for the admin, but the name and the
      * prices are copied because they are what gets quoted on the confirmation
-     * call and collected at the door.
+     * call and collected at the door. The Pack the Kilograms are supplied in
+     * is named and its weight copied too, so the packet count the packer reads
+     * never moves when the Pack is edited or deleted (ADR-0036).
      *
      * @param  array<int, int>  $costs  the whole Cart's average costs, read in one batch (#170)
-     * @return array{product_id: int, category_id: int, product_name: string, unit_price: int, mrp: int, unit_cost: int|null, quantity: int, tier_min: int|null, tier_max: int|null}
+     * @return array{product_id: int, category_id: int, pack_id: int, pack_grams: int, product_name: string, unit_price: int, mrp: int, unit_cost: int|null, quantity: int, tier_min: int|null, tier_max: int|null}
      */
-    private function line(Product $product, PricedLine $priced, array $costs): array
+    private function line(Product $product, Pack $pack, PricedLine $priced, array $costs): array
     {
         return [
             'product_id' => $product->getKey(),
 
             /** The Category it is sold under, fixed here so moving the Product later never moves this sale. */
             'category_id' => $product->category_id,
+
+            'pack_id' => $pack->getKey(),
+            'pack_grams' => $pack->grams,
 
             'product_name' => $product->name,
             'unit_price' => $priced->tierPrice,

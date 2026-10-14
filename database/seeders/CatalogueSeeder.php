@@ -163,6 +163,9 @@ class CatalogueSeeder extends Seeder
             foreach (self::packs($product, $soldRetail) as $sort => $pack) {
                 $created->packs()->create([...$pack, 'sort' => $sort, 'is_available' => true]);
             }
+
+            /** A bulk buyer starts from the 500 g business pack, as every পাইকারি tea's package weight says. */
+            $created->update(['default_bulk_pack_id' => $created->packs()->where('grams', 500)->value('id')]);
         }
     }
 

@@ -340,11 +340,11 @@ it('shares every published Product\'s MRP, Tiers and availability, and the Deliv
                     ['min' => 11, 'max' => null, 'fee' => 0],
                 ],
                 'products' => [
-                    ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'tiers' => [
+                    ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'packs' => [['id' => $premium->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $premium->default_bulk_pack_id, 'tiers' => [
                         ['min' => 1, 'max' => 5, 'price' => 62000],
                         ['min' => 6, 'max' => null, 'price' => 58900],
                     ]],
-                    ['id' => $unavailable->id, 'isAvailable' => false, 'mrp' => 46000, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
+                    ['id' => $unavailable->id, 'isAvailable' => false, 'mrp' => 46000, 'packs' => [['id' => $unavailable->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $unavailable->default_bulk_pack_id, 'tiers' => [['min' => 1, 'max' => null, 'price' => 46000]]],
                 ],
             ])
         );
@@ -391,7 +391,6 @@ it('prices the browser\'s পাইকারি Cart from Products sold পা�
 it('offers the browser\'s খুচরা Cart only Packs ticked খুচরা of Products sold খুচরা', function () {
     $both = Product::factory()->create();
     $retail = Pack::factory()->for($both)->retailOnly()->create(['grams' => 250]);
-    Pack::factory()->for($both)->bulkOnly()->create(['grams' => 1000]);
     $noLongerRetail = Product::factory()->create();
     Pack::factory()->for($noLongerRetail)->create();
     $noLongerRetail->update(['sold_retail' => false]);

@@ -67,7 +67,7 @@ it('names a Pack by its weight', function (int $grams, string $name) {
 ]);
 
 it('lists a Product\'s Packs smallest first until the Merchant orders them otherwise', function () {
-    $product = Product::factory()->create();
+    $product = Product::factory()->withoutPacks()->create();
     Pack::factory()->for($product)->create(['grams' => 500]);
     Pack::factory()->for($product)->create(['grams' => 100]);
     Pack::factory()->for($product)->create(['grams' => 250]);
@@ -129,6 +129,7 @@ it('removes a Pack from the form', function () {
     $packs = $component->get('data.packs');
     $component
         ->set('data.packs', array_filter($packs, fn (array $pack): bool => (int) $pack['grams'] === 500))
+        ->set('data.default_bulk_pack', '500')
         ->call('save')
         ->assertHasNoFormErrors();
 

@@ -64,15 +64,23 @@ class CatalogueProps
      * whether a buyer can have it now. Only ever asked of a Product sold
      * পাইকারি.
      *
-     * @return array{id: int, isAvailable: bool, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>}
+     * And the পাইকারি Packs its Kilograms may be supplied in now, with the
+     * default a buyer starts from (ADR-0036), so the Cart can show the packet
+     * count as it changes. Null where the default is not among them.
+     *
+     * @return array{id: int, isAvailable: bool, mrp: int, tiers: list<array{min: int, max: ?int, price: int}>, packs: list<array{id: int, grams: int}>, defaultPackId: ?int}
      */
     public static function cartProduct(Product $product): array
     {
+        $packs = $product->bulkPacks();
+
         return [
             'id' => $product->id,
             'isAvailable' => $product->is_available,
             'mrp' => $product->mrp,
             'tiers' => self::tiers($product),
+            'packs' => $packs->map(fn (Pack $pack): array => ['id' => $pack->id, 'grams' => $pack->grams])->all(),
+            'defaultPackId' => $packs->contains('id', $product->default_bulk_pack_id) ? $product->default_bulk_pack_id : null,
         ];
     }
 

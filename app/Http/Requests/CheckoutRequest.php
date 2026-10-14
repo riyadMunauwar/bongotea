@@ -88,6 +88,9 @@ class CheckoutRequest extends FormRequest
             'lines' => ['required', 'array', 'list'],
             'lines.*.productId' => ['required', 'integer', 'distinct', Rule::exists(Product::class, 'id')],
             'lines.*.kilograms' => ['required', 'integer', 'min:1', 'max:'.self::MAX_KILOGRAMS],
+
+            /** Not checked to exist here: a Pack removed since it was chosen is Capture's to refuse, with the Cart as it is now. */
+            'lines.*.packId' => ['nullable', 'integer', 'min:1'],
             'quote.lines.*.productId' => ['required', 'integer', 'distinct'],
             'quote.lines.*.tierPrice' => ['required', 'integer', 'min:0'],
         ];
@@ -145,9 +148,13 @@ class CheckoutRequest extends FormRequest
     /**
      * The Cart's lines, each Product found whether or not a buyer can still
      * have it: whether they can is Capture's to answer, with the figures as
-     * they are now.
+     * they are now. A line naming a Pack carries it, or null where it no
+     * longer exists; a line naming none is left to Capture, which supplies it
+     * in the Product's default পাইকারি Pack. Only the Product, the Pack and
+     * the Kilograms are read: a packet count the browser sends is ignored, and
+     * Capture works out its own.
      *
-     * @return list<array{product: Product, kilograms: int}>
+     * @return list<array{product: Product, kilograms: int, pack?: Pack|null}>
      */
     public function cartLines(): array
     {
@@ -158,9 +165,16 @@ class CheckoutRequest extends FormRequest
             ->get()
             ->keyBy('id');
 
+        $packs = Pack::query()
+            ->with('product')
+            ->whereKey(array_filter(array_column($lines, 'packId')))
+            ->get()
+            ->keyBy('id');
+
         return array_map(fn (array $line): array => [
             'product' => $products[(int) $line['productId']],
             'kilograms' => (int) $line['kilograms'],
+            ...(isset($line['packId']) ? ['pack' => $packs->get((int) $line['packId'])] : []),
         ], $lines);
     }
 

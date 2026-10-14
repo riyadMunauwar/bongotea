@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderKind;
+use App\Support\Bangla;
 use App\Support\Inventory\Grams;
 use Database\Factories\PackFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -53,6 +54,16 @@ class Pack extends Model
                 throw new LogicException("Pack {$pack->getKey()} cannot be saved: {$problem}");
             }
         });
+
+        /** A Pack no longer ticked পাইকারি stops being where a bulk buyer starts; the Product's form asks for another. */
+        static::saved(function (Pack $pack): void {
+            if (! $pack->serves_bulk) {
+                Product::withTrashed()
+                    ->whereKey($pack->product_id)
+                    ->where('default_bulk_pack_id', $pack->getKey())
+                    ->update(['default_bulk_pack_id' => null]);
+            }
+        });
     }
 
     private function problem(): ?string
@@ -98,6 +109,14 @@ class Pack extends Model
     public static function nameFor(int $grams): string
     {
         return $grams < Grams::PER_KILOGRAM ? "{$grams} g" : Grams::format($grams);
+    }
+
+    /** The name a Pack of this weight goes by in a Customer's words: "২৫০ গ্রাম", "১ কেজি". */
+    public static function banglaNameFor(int $grams): string
+    {
+        return $grams < Grams::PER_KILOGRAM
+            ? Bangla::number($grams).' গ্রাম'
+            : Bangla::digits(Grams::toKilograms($grams)).' কেজি';
     }
 
     /** Whether the Pack is ticked for that way of buying; a price typed on it says nothing. */

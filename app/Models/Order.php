@@ -526,14 +526,14 @@ class Order extends Model
     }
 
     /**
-     * The Kilograms on the Order's bulk lines. A Pack line holds a count of
+     * The Kilograms on the Order's bulk lines. A retail line holds a count of
      * Packs, not Kilograms, so it adds nothing here, and a retail Order's
      * `total_kilograms` is nought; its weight is read off its lines' grams
-     * (ADR-0035).
+     * (ADR-0035). A bulk line names its Pack too, so its kind says which it is.
      */
     public function bulkKilograms(): int
     {
-        return (int) $this->lines()->whereNull('pack_grams')->sum('quantity');
+        return (int) $this->lines()->where('kind', OrderKind::Bulk)->sum('quantity');
     }
 
     /**

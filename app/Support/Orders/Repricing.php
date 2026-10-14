@@ -6,6 +6,7 @@ use App\Enums\OrderKind;
 use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Inventory\StockLedger;
@@ -33,8 +34,15 @@ use LogicException;
  * handed to them.
  *
  * The lines arrive as the admin order form holds them: a list of rows of
- * `{id, product_id, kilograms, override_price, override_reason}`, the
- * override price in whole taka.
+ * `{id, product_id, kilograms, pack_id, override_price, override_reason}`,
+ * the override price in whole taka.
+ *
+ * Each line is supplied in a পাইকারি Pack of its Product (ADR-0036), the
+ * Product's default where the row names none. A line keeps the Pack and the
+ * weight it recorded until a User chooses another; either way its Kilograms
+ * must make a whole number of them, and a Pack its Product no longer offers
+ * পাইকারি is refused even on a line that already holds it. The Pack never
+ * prices the line.
  */
 class Repricing
 {
@@ -43,7 +51,7 @@ class Repricing
     /**
      * An Order's lines as the form holds them.
      *
-     * @return list<array{id: int, product_id: int|null, kilograms: int, override_price: string|null, override_reason: string|null}>
+     * @return list<array{id: int, product_id: int|null, kilograms: int, pack_id: int|null, override_price: string|null, override_reason: string|null}>
      */
     public static function stateOf(Order $order): array
     {
@@ -51,6 +59,7 @@ class Repricing
             'id' => $line->getKey(),
             'product_id' => $line->product_id,
             'kilograms' => $line->quantity,
+            'pack_id' => $line->pack_id,
             'override_price' => $line->isPriceOverridden() ? Money::toWholeMajorString($line->unit_price) : null,
             'override_reason' => $line->price_override_reason,
         ])->values()->all();
@@ -160,6 +169,65 @@ class Repricing
     }
 
     /**
+     * Why a form row cannot be supplied in the Pack it names, or null where
+     * it can or the row is not yet a line — so the form can refuse it on the
+     * Pack before `apply()` does. The same check `apply()` makes.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function packProblem(?Order $order, array $row): ?string
+    {
+        $row = self::formRow($order, $row);
+
+        return $row === null ? null : self::packRefusal($row['product'], $row['pack'], $row['kept']);
+    }
+
+    /**
+     * Why a form row's Kilograms cannot be made in its Pack, or null where
+     * they can, the Pack is itself refused or the row is not yet a line — so
+     * the form can refuse it on the Kilograms, naming weights that work. Read
+     * against the weight the line would record: its own where it keeps its
+     * Pack, the Pack's today otherwise.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function packingProblem(?Order $order, array $row): ?string
+    {
+        $row = self::formRow($order, $row);
+
+        if ($row === null || $row['pack'] === null) {
+            return null;
+        }
+
+        return PackingRefused::of($row['product'], $row['line']->kilograms, self::recordedGrams($row['pack'], $row['kept']))?->getMessage();
+    }
+
+    /**
+     * A form row read as the line it would be: its Product, the Pack it would
+     * be supplied in and the stored line it was filled from. Null while it is
+     * not yet a line, or names no Product.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{line: RequestedLine, product: Product, pack: Pack|null, kept: OrderLine|null}|null
+     */
+    private static function formRow(?Order $order, array $row): ?array
+    {
+        $line = RequestedLine::fromState($row);
+        $product = $line === null ? null : Product::withTrashed()->find($line->productId);
+
+        if ($line === null || $product === null) {
+            return null;
+        }
+
+        return [
+            'line' => $line,
+            'product' => $product,
+            'pack' => $line->packId === null ? $product->defaultBulkPack : Pack::query()->find($line->packId),
+            'kept' => $line->id === null || $order === null ? null : $order->lines()->find($line->id),
+        ];
+    }
+
+    /**
      * Write the rows onto the Order, priced afresh, with its Delivery Charge
      * and band read from the new total Kilograms.
      *
@@ -172,6 +240,7 @@ class Repricing
      *
      * @throws LogicException where the Order already has a Shipment
      * @throws InvalidArgumentException where the rows are not lines an Order can hold
+     * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      */
     public function apply(Order $order, array $state, User $by): void
     {
@@ -204,12 +273,13 @@ class Repricing
             }
         }
 
+        $packs = self::packs($lines, $products, $stored);
         $cart = $this->price($lines, $products);
         $costs = $this->ledger->averageCostFor(array_values(array_unique(array_map(fn (RequestedLine $line): int => $line->productId, $lines))));
         $wasTotal = $order->total;
         $wasPriced = $stored->isNotEmpty();
 
-        DB::transaction(function () use ($order, $by, $lines, $stored, $products, $cart, $costs, $wasTotal, $wasPriced): void {
+        DB::transaction(function () use ($order, $by, $lines, $stored, $products, $packs, $cart, $costs, $wasTotal, $wasPriced): void {
             /**
              * Asked again under the Order's row lock, which `CourierBooker`
              * books under too, so a parcel booked a moment ago is never
@@ -224,7 +294,7 @@ class Repricing
             $stored->except($keptIds)->each(fn (OrderLine $line): ?bool => $line->delete());
 
             foreach ($lines as $index => $line) {
-                $this->write($order, $line, self::keptLine($line, $stored), $products[$line->productId], $cart->lines[$index], $costs, $by);
+                $this->write($order, $line, self::keptLine($line, $stored), $products[$line->productId], $packs[$index], $cart->lines[$index], $costs, $by);
             }
 
             $order->fill([
@@ -246,7 +316,7 @@ class Repricing
     /**
      * @param  array<array-key, int>  $costs
      */
-    private function write(Order $order, RequestedLine $line, ?OrderLine $kept, Product $product, PricedLine $priced, array $costs, User $by): void
+    private function write(Order $order, RequestedLine $line, ?OrderLine $kept, Product $product, Pack $pack, PricedLine $priced, array $costs, User $by): void
     {
         $sameProduct = $kept !== null && (int) $kept->product_id === $line->productId;
         $overrideChanged = $line->isOverridden() && ! ($sameProduct
@@ -261,6 +331,8 @@ class Repricing
             'product_id' => $line->productId,
             'category_id' => $sameProduct ? $kept->category_id : $product->category_id,
             'product_name' => $sameProduct ? $kept->product_name : $product->name,
+            'pack_id' => $pack->getKey(),
+            'pack_grams' => self::recordedGrams($pack, $kept),
             'unit_price' => $priced->tierPrice,
             'mrp' => $priced->mrp,
 
@@ -349,6 +421,75 @@ class Repricing
     }
 
     /**
+     * The Pack each line is supplied in, under the line's key: the one its row
+     * names, else its Product's default পাইকারি Pack. Refused where there is
+     * none, where it is another Product's or no longer offered পাইকারি — even
+     * on a line already holding it — where a Pack newly put on the line is
+     * switched off, and where the line's Kilograms are not a whole number of
+     * the weight it would record.
+     *
+     * @param  list<RequestedLine>  $lines
+     * @param  Collection<int, Product>  $products
+     * @param  Collection<int, OrderLine>  $stored
+     * @return list<Pack>
+     *
+     * @throws InvalidArgumentException
+     * @throws PackingRefused
+     */
+    private static function packs(array $lines, Collection $products, Collection $stored): array
+    {
+        $named = Pack::query()
+            ->with('product')
+            ->whereKey(array_filter(array_map(fn (RequestedLine $line): ?int => $line->packId, $lines)))
+            ->get()
+            ->keyBy(fn (Pack $pack): int => (int) $pack->getKey());
+
+        return array_map(function (RequestedLine $line) use ($products, $stored, $named): Pack {
+            $product = $products[$line->productId];
+            $pack = $line->packId === null ? $product->defaultBulkPack : $named->get($line->packId);
+            $kept = self::keptLine($line, $stored);
+            $refusal = self::packRefusal($product, $pack, $kept);
+
+            if ($refusal !== null) {
+                throw new InvalidArgumentException($refusal);
+            }
+
+            /** @var Pack $pack */
+            PackingRefused::unlessPackable($product, $line->kilograms, self::recordedGrams($pack, $kept));
+
+            return $pack;
+        }, $lines);
+    }
+
+    /**
+     * Why a line of this Product cannot be supplied in this Pack, or null
+     * where it can: there is none, it is another Product's or no longer
+     * offered পাইকারি — even to a line already holding it — or it is newly
+     * put on the line while switched off.
+     */
+    private static function packRefusal(Product $product, ?Pack $pack, ?OrderLine $kept): ?string
+    {
+        return match (true) {
+            $pack === null => "{$product->name} has no পাইকারি Pack to be sent in.",
+            (int) $pack->product_id !== $product->getKey() || ! $pack->isSoldAs(OrderKind::Bulk) => "{$product->name} is no longer sent in {$pack->name()} Packs পাইকারি.",
+            ! self::keepsPack($pack, $kept) && ! $pack->is_available => "{$product->name}'s {$pack->name()} Packs are switched off.",
+            default => null,
+        };
+    }
+
+    /** Whether a line stays in the Pack it already recorded. */
+    private static function keepsPack(Pack $pack, ?OrderLine $kept): bool
+    {
+        return $kept !== null && (int) $kept->pack_id === $pack->getKey() && $kept->pack_grams !== null;
+    }
+
+    /** The Pack weight a line records: its own while it keeps its Pack, so an edited Pack moves no Order; the Pack's today otherwise. */
+    private static function recordedGrams(Pack $pack, ?OrderLine $kept): int
+    {
+        return self::keepsPack($pack, $kept) ? $kept->pack_grams : $pack->grams;
+    }
+
+    /**
      * The stored line a row was filled from. A row naming a line that is not
      * this Order's is a line being added.
      *
@@ -408,7 +549,7 @@ class Repricing
 
             return $line === null
                 ? ['incomplete']
-                : [$line->id, $line->productId, $line->kilograms, $line->overridePrice, $line->overridePrice === null ? null : $line->overrideReason];
+                : [$line->id, $line->productId, $line->kilograms, $line->packId, $line->overridePrice, $line->overridePrice === null ? null : $line->overrideReason];
         }, $state));
     }
 }

@@ -127,7 +127,8 @@ it('gives every demo Product its switches and Packs: the tea-stall teas পা�
             ['grams' => 1000, 'serves_bulk' => true, 'serves_retail' => false, 'mrp' => null, 'price' => null],
         ]);
 
-    Product::query()->each(fn (Product $product) => expect($product->packs)->not->toBeEmpty());
+    Product::query()->each(fn (Product $product) => expect($product->packs)->not->toBeEmpty()
+        ->and($product->defaultBulkPack->grams)->toBe(500));
 });
 
 /**

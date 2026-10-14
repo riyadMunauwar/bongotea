@@ -1,5 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import { BulkPackLine } from '@/components/cart/bulk-pack-line';
 import { deliveryNote, discountLabel, feeText, nextDropText, stepName } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
@@ -107,6 +108,7 @@ function useFlashedRow(): number | null {
 function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard; cart: UseCart; quickChips: boolean; flashed: boolean }) {
     const taka = useTaka();
     const kilograms = cart.kilogramsOf(product.id);
+    const line = cart.lineOf(product.id);
     const total = cart.priced.totalKilograms;
     const tier = tierFor(product, total);
     const next = product.tiers.length > 1 ? nextDropAbove(product, total) : null;
@@ -155,6 +157,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                     {product.isAvailable && next === null && product.tiers.length > 1 && total > 0 && (
                         <span className="text-[12px] font-semibold text-primary">{bn.bulkOrder.bestNow}</span>
                     )}
+                    {line !== null && <BulkPackLine line={line} cart={cart} className="mt-1" />}
                 </div>
                 {kilograms > 0 && (
                     <span className="text-[13px] font-bold whitespace-nowrap text-primary-dark min-[1100px]:text-[15px]">{taka(tier.price * kilograms)}</span>
@@ -240,7 +243,7 @@ function Summary({ cart, steps }: { cart: UseCart; steps: PriceStep[] | null }) 
                     <StepCells steps={steps} className="px-1 py-[7px] text-[12px] leading-[1.45]" />
                 </div>
             )}
-            <ContinueButton disabled={isEmpty} className="w-full p-[15px] text-[16px]">
+            <ContinueButton disabled={isEmpty || cart.hasUnpackable} className="w-full p-[15px] text-[16px]">
                 {bn.bulkOrder.continue}
             </ContinueButton>
         </aside>
@@ -269,7 +272,7 @@ function BottomBar({ cart }: { cart: UseCart }) {
                     <span className="text-[12px] text-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
                     <b className="text-[21px] leading-[1.3] font-bold text-ink">{taka(priced.total)}</b>
                 </div>
-                <ContinueButton disabled={isEmpty} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
+                <ContinueButton disabled={isEmpty || cart.hasUnpackable} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
                     {bn.bulkOrder.continueShort}
                 </ContinueButton>
             </div>

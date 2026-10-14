@@ -255,6 +255,8 @@ class OrderForm
                                     ->searchable()
                                     ->distinct()
                                     ->live()
+                                    /** Another tea starts again from its own default পাইকারি Pack. */
+                                    ->afterStateUpdated(fn (callable $set): mixed => $set('pack_id', null))
                                     ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
                                     ->columnSpan(2),
@@ -267,19 +269,34 @@ class OrderForm
                                     ->maxValue(CheckoutRequest::MAX_KILOGRAMS)
                                     ->suffix('kg')
                                     ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::bulkRowRule($get, $record, 'kilograms', Repricing::packingProblem(...)))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
-                                /** A retail line: one of the Packs a Customer could order now, or one the Order already holds. */
+                                /**
+                                 * A retail line: one of the Packs a Customer could order now,
+                                 * or one the Order already holds. A bulk line (ADR-0036): one
+                                 * of its tea's পাইকারি Packs on offer now, or the one the line
+                                 * already holds; left blank, the tea's default.
+                                 */
                                 Select::make('pack_id')
                                     ->label('Pack')
-                                    ->options(fn (?Order $record): array => self::packOptions($record))
-                                    ->required()
-                                    ->searchable()
+                                    ->options(fn (Get $get, ?Order $record): array => self::isRetail($get('../../kind'), $record)
+                                        ? self::packOptions($record)
+                                        : self::bulkPackOptions($get('product_id'), $record))
+                                    ->placeholder(fn (Get $get, ?Order $record): ?string => self::isRetail($get('../../kind'), $record) ? null : self::defaultPackPlaceholder($get('product_id')))
+                                    ->required(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
+                                    ->searchable(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
                                     ->distinct()
                                     ->live()
-                                    ->visible(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
-                                    ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
-                                    ->columnSpan(2),
+                                    ->rule(
+                                        fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record),
+                                        fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record),
+                                    )
+                                    ->rule(
+                                        fn (Get $get, ?Order $record): Closure => self::bulkRowRule($get, $record, 'pack_id', Repricing::packProblem(...)),
+                                        fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record),
+                                    )
+                                    ->columnSpan(fn (Get $get, ?Order $record): int => self::isRetail($get('../../kind'), $record) ? 2 : 1),
 
                                 TextInput::make('count')
                                     ->label('How many')
@@ -449,6 +466,69 @@ class OrderForm
                     : 'Its price set by hand, '.Money::format($above['override']).', is above the MRP of '.Money::format($above['mrp']).'. Someone who may set prices must change it first.');
             }
         };
+    }
+
+    /**
+     * Refuses a bulk row on one of its fields with what `Repricing` would
+     * refuse it for (ADR-0036): its Pack no longer offered পাইকারি on the
+     * Pack, Kilograms the Pack cannot make — naming the weights it can — on
+     * the Kilograms. Only asked of a save that reprices, as an untouched line
+     * keeps what it was captured with.
+     *
+     * @param  callable(?Order, array<string, mixed>): ?string  $problemOf
+     */
+    private static function bulkRowRule(Get $get, ?Order $record, string $field, callable $problemOf): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record, $field, $problemOf): void {
+            $lines = $get('../../lines');
+
+            if ($record !== null && ! Repricing::changes($record, is_array($lines) ? $lines : [])) {
+                return;
+            }
+
+            $problem = $problemOf($record, [
+                'id' => $get('id'),
+                'product_id' => $get('product_id'),
+                'kilograms' => $get('kilograms'),
+                'pack_id' => $get('pack_id'),
+                $field => $value,
+            ]);
+
+            if ($problem !== null) {
+                $fail($problem);
+            }
+        };
+    }
+
+    /**
+     * The Packs a bulk line of this tea may be supplied in: its পাইকারি Packs
+     * switched on, and whichever this Order's lines already hold, named by
+     * weight.
+     *
+     * @return array<int, string>
+     */
+    private static function bulkPackOptions(mixed $productId, ?Order $record): array
+    {
+        $product = is_numeric($productId) ? Product::withTrashed()->find((int) $productId) : null;
+
+        if ($product === null) {
+            return [];
+        }
+
+        $held = $record === null ? collect() : $record->lines()->where('product_id', $product->getKey())->pluck('pack_id')->filter();
+
+        return $product->packs
+            ->filter(fn (Pack $pack): bool => $held->contains($pack->getKey()) || ($pack->serves_bulk && $pack->is_available))
+            ->mapWithKeys(fn (Pack $pack): array => [$pack->getKey() => $pack->name().($pack->getKey() === $product->default_bulk_pack_id ? ' (default)' : '')])
+            ->all();
+    }
+
+    /** What a blank Pack means: the tea's default পাইকারি Pack, named. */
+    private static function defaultPackPlaceholder(mixed $productId): string
+    {
+        $pack = is_numeric($productId) ? Product::withTrashed()->find((int) $productId)?->defaultBulkPack : null;
+
+        return $pack === null ? 'Its default Pack' : "Its default, {$pack->name()}";
     }
 
     /**

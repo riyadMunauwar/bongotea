@@ -6,9 +6,10 @@ use App\Support\Money;
 
 /**
  * One line a User asks an Order to hold, read from the admin order form: which
- * Product, how many Kilograms, and the Price Override set on it, if any. Every
- * figure on the line is worked out from these by the pricing module; nothing
- * priced comes from the form but the override itself.
+ * Product, how many Kilograms, the Pack they are supplied in, and the Price
+ * Override set on it, if any. Every figure on the line is worked out from
+ * these by the pricing module; nothing priced comes from the form but the
+ * override itself, and the Pack prices nothing.
  */
 final readonly class RequestedLine
 {
@@ -17,6 +18,9 @@ final readonly class RequestedLine
         public ?int $id,
         public int $productId,
         public int $kilograms,
+
+        /** The পাইকারি Pack the Kilograms are supplied in, or null for the Product's default (ADR-0036). */
+        public ?int $packId,
 
         /** A Tier Price set by hand, in minor units. */
         public ?int $overridePrice,
@@ -47,12 +51,14 @@ final readonly class RequestedLine
         }
 
         $id = filter_var($row['id'] ?? null, FILTER_VALIDATE_INT);
+        $packId = filter_var($row['pack_id'] ?? null, FILTER_VALIDATE_INT);
         $overridePrice = $row['override_price'] ?? null;
 
         return new self(
             id: $id === false ? null : $id,
             productId: $productId,
             kilograms: $kilograms,
+            packId: $packId === false ? null : $packId,
             overridePrice: is_numeric($overridePrice) ? Money::toMinorUnits($overridePrice) : null,
             overrideReason: filled($row['override_reason'] ?? null) ? trim((string) $row['override_reason']) : null,
             saysOverride: array_key_exists('override_price', $row),
@@ -62,7 +68,7 @@ final readonly class RequestedLine
     /** The same line carrying the given override instead of its own. */
     public function withOverride(?int $price, ?string $reason): self
     {
-        return new self($this->id, $this->productId, $this->kilograms, $price, $price === null ? null : $reason, true);
+        return new self($this->id, $this->productId, $this->kilograms, $this->packId, $price, $price === null ? null : $reason, true);
     }
 
     public function isOverridden(): bool

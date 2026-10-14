@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderKind;
 use App\Models\OrderLine;
 
 class OrderLineObserver
@@ -17,6 +18,15 @@ class OrderLineObserver
     public function saving(OrderLine $line): void
     {
         $line->line_total = $line->unit_price * $line->quantity;
+    }
+
+    /**
+     * A line is of its Order's kind, which never changes (ADR-0034), so it is
+     * copied once here rather than by every writer.
+     */
+    public function creating(OrderLine $line): void
+    {
+        $line->kind = $line->order->kind ?? OrderKind::Bulk;
     }
 
     public function saved(OrderLine $line): void

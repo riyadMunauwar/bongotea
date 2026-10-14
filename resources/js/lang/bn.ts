@@ -149,6 +149,12 @@ export const bn = {
         step: (number: string) => `ধাপ ${number}`,
         viewOrder: 'অর্ডার দেখুন →',
         barLine: (kilograms: string) => `কার্টে মোট ${kilograms} কেজি`,
+        packLabel: 'প্যাকেট',
+        packetCount: (kilograms: string, packets: string, pack: string) => `${kilograms} কেজি = ${packets} প্যাকেট × ${pack}`,
+        unpackable: (pack: string, kilograms: string, workable: string) => `${pack} প্যাকেটে ${kilograms} কেজি হয় না — ${workable} কেজি নিন`,
+        noPack: 'এই চা এখন কোনো প্যাকেটে পাঠানো যাচ্ছে না — কার্ট থেকে সরান',
+        unpackableCheckout:'কিছু চায়ের কেজি তার প্যাকেটে মেলে না। কার্টে কেজি বা প্যাকেট বদলান।',
+        or: ' বা ',
     },
     packs: {
         buy: 'খুচরা কিনুন',
