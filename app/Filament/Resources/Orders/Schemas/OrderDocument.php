@@ -111,6 +111,23 @@ class OrderDocument
     }
 
     /**
+     * Why the Order was let past Free to Sell, and who said so (ADR-0037) —
+     * "Taken against tomorrow's Supply — Karim". One line in the Order block
+     * on both screens, drawn only on an Order that was, since every oversold
+     * Order is meant to be explained and every other one has nothing to say.
+     */
+    public static function soldBeyondStock(): TextEntry
+    {
+        return TextEntry::make('sold_beyond_stock_reason')
+            ->label('Sold beyond stock')
+            ->color('warning')
+            ->state(fn (?Order $record): ?string => $record?->sold_beyond_stock_reason === null
+                ? null
+                : $record->sold_beyond_stock_reason.($record->soldBeyondStockBy ? " — {$record->soldBeyondStockBy->name}" : ''))
+            ->visible(fn (?Order $record): bool => $record?->sold_beyond_stock_reason !== null);
+    }
+
+    /**
      * Every Payment on the Order, with what the gateway said about each.
      *
      * Drawn for an Order under an online method, and for one that holds a

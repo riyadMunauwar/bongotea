@@ -5,10 +5,13 @@ namespace App\Filament\Resources\Orders\Pages;
 use App\Enums\OrderKind;
 use App\Enums\PaymentMethod;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Support\Orders\BeyondFreeToSell;
 use App\Support\Orders\Repricing;
 use App\Support\Orders\RetailRepricing;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -38,11 +41,12 @@ class CreateOrder extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         $lines = $data['lines'] ?? [];
-        unset($data['lines']);
+        $beyondStockReason = $data[OrderForm::BEYOND_STOCK_REASON] ?? null;
+        unset($data['lines'], $data[OrderForm::BEYOND_STOCK_REASON]);
 
         $customer = Customer::forPhone((string) $data['customer_phone']);
 
-        return DB::transaction(function () use ($customer, $data, $lines): Order {
+        return DB::transaction(function () use ($customer, $data, $lines, $beyondStockReason): Order {
             $order = $customer->orders()->create([
                 ...$data,
                 'kind' => $data['kind'] ?? OrderKind::Bulk,
@@ -50,12 +54,32 @@ class CreateOrder extends CreateRecord
                 'payment_method' => PaymentMethod::CashOnDelivery,
             ]);
 
-            $order->isRetail()
-                ? app(RetailRepricing::class)->apply($order, $lines, auth()->user())
-                : app(Repricing::class)->apply($order, $lines, auth()->user());
+            try {
+                $order->isRetail()
+                    ? app(RetailRepricing::class)->apply($order, $lines, auth()->user(), $beyondStockReason)
+                    : app(Repricing::class)->apply($order, $lines, auth()->user(), $beyondStockReason);
+            } catch (BeyondFreeToSell $refusal) {
+                $this->refuseBeyondStock($refusal);
+            }
 
             return $order->refresh();
         });
+    }
+
+    /**
+     * A stock refusal the form's own check could not see coming — stock taken
+     * by another Order between the check and the save — shown as a refusal,
+     * with no Order written.
+     */
+    private function refuseBeyondStock(BeyondFreeToSell $refusal): void
+    {
+        Notification::make()
+            ->danger()
+            ->title('Not enough is free to sell')
+            ->body($refusal->getMessage())
+            ->send();
+
+        $this->halt(shouldRollbackDatabaseTransaction: true);
     }
 
     protected function getRedirectUrl(): string

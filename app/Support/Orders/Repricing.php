@@ -47,7 +47,10 @@ use LogicException;
  */
 class Repricing
 {
-    public function __construct(private readonly StockLedger $ledger) {}
+    public function __construct(
+        private readonly StockLedger $ledger,
+        private readonly StockCheck $stock,
+    ) {}
 
     /**
      * An Order's lines as the form holds them.
@@ -227,6 +230,30 @@ class Repricing
     }
 
     /**
+     * Why a form row's tea would take the Order past Free to Sell, its
+     * Kilograms on every row of it added up and the Order's own weight left
+     * out, or null where it would not or the row is not yet a line — so the
+     * form can refuse it on the Kilograms. The same check `apply()` makes,
+     * before any way past it is weighed.
+     *
+     * @param  array<array-key, mixed>  $state
+     * @param  array<string, mixed>  $row
+     */
+    public static function stockProblem(?Order $order, array $state, array $row): ?string
+    {
+        $line = RequestedLine::fromState($row);
+        $product = $line === null ? null : Product::withTrashed()->find($line->productId);
+
+        if ($product === null || ! $product->isSoldAs(OrderKind::Bulk)) {
+            return null;
+        }
+
+        $ofProduct = array_filter(self::requested($state), fn (RequestedLine $requested): bool => $requested->productId === $product->getKey());
+
+        return app(StockCheck::class)->refusals($order, StockCheck::wanted(self::weighed($ofProduct, new Collection([$product->getKey() => $product]))))[$product->getKey()] ?? null;
+    }
+
+    /**
      * Each line's Product and the grams it holds, for its Order Limit.
      *
      * @param  array<array-key, RequestedLine>  $lines  each naming a Product among `$products`
@@ -272,13 +299,17 @@ class Repricing
      * A changed override is stamped with who gave it and put on the Order's
      * trail with its reason.
      *
+     * The Order is held to Free to Sell less its own weight (`StockCheck`); a
+     * User who may sell beyond stock passes with `$beyondStockReason`, which
+     * is kept on the Order with their name.
+     *
      * @param  array<array-key, mixed>  $state
      *
      * @throws LogicException where the Order already has a Shipment
-     * @throws InvalidArgumentException where the rows are not lines an Order can hold, or a Product is outside its Order Limit
+     * @throws InvalidArgumentException where the rows are not lines an Order can hold, a Product is outside its Order Limit, or the Order would go past Free to Sell unexplained
      * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      */
-    public function apply(Order $order, array $state, User $by): void
+    public function apply(Order $order, array $state, User $by, ?string $beyondStockReason = null): void
     {
         if ($order->hasAnyShipment()) {
             throw new LogicException("Order {$order->order_number} has a Shipment; its lines are locked.");
@@ -312,7 +343,8 @@ class Repricing
         $packs = self::packs($lines, $products, $stored);
 
         /** No way past an Order Limit, for anyone: a deal is struck on price instead. */
-        $outside = OrderLimit::refusals(OrderKind::Bulk, self::weighed($lines, $products));
+        $weighed = self::weighed($lines, $products);
+        $outside = OrderLimit::refusals(OrderKind::Bulk, $weighed);
 
         if ($outside !== []) {
             throw new InvalidArgumentException(reset($outside));
@@ -323,7 +355,7 @@ class Repricing
         $wasTotal = $order->total;
         $wasPriced = $stored->isNotEmpty();
 
-        DB::transaction(function () use ($order, $by, $lines, $stored, $products, $packs, $cart, $costs, $wasTotal, $wasPriced): void {
+        DB::transaction(function () use ($order, $by, $lines, $stored, $products, $packs, $cart, $costs, $wasTotal, $wasPriced, $weighed, $beyondStockReason): void {
             /**
              * Asked again under the Order's row lock, which `CourierBooker`
              * books under too, so a parcel booked a moment ago is never
@@ -332,6 +364,9 @@ class Repricing
             if (Order::withTrashed()->lockForUpdate()->findOrFail($order->getKey())->hasAnyShipment()) {
                 throw new LogicException("Order {$order->order_number} has a Shipment; its lines are locked.");
             }
+
+            /** Before a line is written, so the Order's own weight is what it held. */
+            $this->stock->enforce($order, StockCheck::wanted($weighed), $by, $beyondStockReason);
 
             $keptIds = array_filter(array_map(fn (RequestedLine $line): ?int => self::keptLine($line, $stored)?->getKey(), $lines));
 

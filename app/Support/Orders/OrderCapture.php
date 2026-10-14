@@ -196,32 +196,17 @@ class OrderCapture
 
     /**
      * The Products an Order wants more of than is Free to Sell (ADR-0037), in
-     * id order. A Product nobody has counted is never among them: unknown is
-     * not empty, and its first Stock Count is what brings it under the check.
-     *
-     * Called inside Capture's transaction, and the Products' rows are locked
-     * before the figure is read, so a second Capture for the same Product
-     * waits here until the first has committed its lines and then reads them —
-     * two Checkouts racing for the last grams cannot both win. Locked in id
-     * order, so two baskets naming the same Products in a different order
-     * cannot each hold one the other is waiting on.
+     * id order, read under the Products' row locks inside Capture's
+     * transaction. A Product nobody has counted is never among them: unknown
+     * is not empty, and its first Stock Count is what brings it under the
+     * check.
      *
      * @param  array<int, int>  $wanted  grams wanted, by Product id
      * @return list<int>
      */
     private function beyondFreeToSell(array $wanted): array
     {
-        $productIds = array_keys($wanted);
-        sort($productIds);
-
-        Product::withTrashed()->whereKey($productIds)->orderBy('id')->lockForUpdate()->pluck('id');
-
-        $free = $this->stock->freeToSellFor($productIds);
-
-        return array_values(array_filter(
-            $productIds,
-            fn (int $productId): bool => ($free[$productId] ?? null) !== null && $wanted[$productId] > $free[$productId],
-        ));
+        return array_keys($this->stock->beyondFreeToSell($wanted));
     }
 
     /**

@@ -51,6 +51,7 @@ enum Permission: string implements HasLabel
     case DeleteOrders = 'delete orders';
     case DeletePages = 'delete pages';
     case OverridePrices = 'override prices';
+    case SellBeyondStock = 'sell beyond stock';
 
     /** The heading a working area sits under on the Roles screen. */
     public const WORKING_AREAS = 'Working areas';
@@ -75,6 +76,7 @@ enum Permission: string implements HasLabel
             self::DeleteOrders => 'Delete an Order',
             self::DeletePages => 'Delete a Page',
             self::OverridePrices => 'Override a price on an Order',
+            self::SellBeyondStock => 'Sell beyond stock, with a reason',
         };
     }
 
@@ -100,7 +102,8 @@ enum Permission: string implements HasLabel
             self::VoidSupplies,
             self::DeleteOrders,
             self::DeletePages,
-            self::OverridePrices => self::IRREVERSIBLE_ACTS,
+            self::OverridePrices,
+            self::SellBeyondStock => self::IRREVERSIBLE_ACTS,
         };
     }
 

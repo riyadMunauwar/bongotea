@@ -112,6 +112,50 @@ class CommittedStock
     }
 
     /**
+     * The Products an Order would hold more of than it may (ADR-0037), with the
+     * grams it may hold of each, by Product id in id order.
+     *
+     * What an Order may hold is Free to Sell plus what it already holds and
+     * that figure already counts against, so editing 4 kg to 6 kg asks only
+     * for the extra 2 kg. A Product the Order would hold no more of than it
+     * does now is never among them, even where Free to Sell has since gone
+     * below nothing: taking weight off is never refused. A Product nobody has
+     * counted is never among them either — unknown is not empty.
+     *
+     * Call it inside a transaction and the Products' rows are locked before the
+     * figure is read, so a second Order for the same Product waits here until
+     * the first has committed its lines and then reads them — two Orders
+     * racing for the last grams cannot both win. Locked in id order, so two
+     * Orders naming the same Products in a different order cannot each hold one
+     * the other is waiting on.
+     *
+     * @param  array<int, int>  $wanted  grams the Order would hold, by Product id
+     * @param  array<int, int>  $held  grams the Order already holds and Free to Sell already counts, by Product id
+     * @return array<int, int>
+     */
+    public function beyondFreeToSell(array $wanted, array $held = []): array
+    {
+        $productIds = array_keys($wanted);
+        sort($productIds);
+
+        Product::withTrashed()->whereKey($productIds)->orderBy('id')->lockForUpdate()->pluck('id');
+
+        $free = $this->freeToSellFor($productIds);
+        $beyond = [];
+
+        foreach ($productIds as $productId) {
+            $holds = $held[$productId] ?? 0;
+            $mayHold = ($free[$productId] ?? null) === null ? null : $free[$productId] + $holds;
+
+            if ($mayHold !== null && $wanted[$productId] > $holds && $wanted[$productId] > $mayHold) {
+                $beyond[$productId] = max(0, $mayHold);
+            }
+        }
+
+        return $beyond;
+    }
+
+    /**
      * Load Free to Sell onto every Product a query returns, under
      * `self::FREE_TO_SELL`: On Hand less the weight on every Order that is
      * neither Cancelled nor sent, New as well as Confirmed.

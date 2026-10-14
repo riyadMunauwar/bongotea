@@ -74,6 +74,13 @@ class OrderForm
     private const RECOMPUTE_DEBOUNCE = 500;
 
     /**
+     * The field a User who may sell beyond stock gives their reason in, read
+     * off the form data by CreateOrder and EditOrder. Never an Order column's
+     * name, so a details save cannot write it.
+     */
+    public const BEYOND_STOCK_REASON = 'beyond_stock_reason';
+
+    /**
      * The figures already worked out, per component and per set of rows.
      *
      * @var WeakMap<Component, array<string, array<string, mixed>>>|null
@@ -129,6 +136,8 @@ class OrderForm
 
                         OrderDocument::paymentMethod()
                             ->visibleOn('edit'),
+
+                        OrderDocument::soldBeyondStock(),
                     ]),
 
                 /**
@@ -271,6 +280,7 @@ class OrderForm
                                     ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::bulkRowRule($get, $record, 'kilograms', Repricing::packingProblem(...)))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::withinOrderLimit($get, $record, retail: false))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::withinFreeToSell($get, $record, retail: false))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 /**
@@ -307,6 +317,7 @@ class OrderForm
                                     ->maxValue(CheckoutRequest::MAX_PACKS)
                                     ->visible(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::withinOrderLimit($get, $record, retail: true))
+                                    ->rule(fn (Get $get, ?Order $record): Closure => self::withinFreeToSell($get, $record, retail: true))
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 TextEntry::make('price_per_kilogram')
@@ -349,6 +360,21 @@ class OrderForm
                                         self::figures($livewire, $get('../../lines'), $record, $get('../../kind'))['lines'][self::itemKey($component)]['total'] ?? null,
                                     )),
                             ]),
+
+                        /**
+                         * The one way past Free to Sell (ADR-0037), for a User
+                         * who may sell beyond stock. Not a column: the pages
+                         * hand it to Repricing, which keeps it on the Order
+                         * with the User's name only where it was needed.
+                         */
+                        Textarea::make(self::BEYOND_STOCK_REASON)
+                            ->label('Why sell beyond stock')
+                            ->rows(2)
+                            ->maxLength(1000)
+                            ->dehydrateStateUsing(self::nullWhenBlank())
+                            ->visible(fn (?Order $record): bool => self::canSellBeyondStock() && ! ($record?->hasAnyShipment() ?? false))
+                            ->live(onBlur: true)
+                            ->helperText('Only needed where an item is more than is free to sell, such as an order taken against tomorrow\'s delivery. Kept on the order with your name.'),
                     ]),
 
                 /**
@@ -526,6 +552,44 @@ class OrderForm
                 $fail($problem);
             }
         };
+    }
+
+    /**
+     * Refuses a row whose tea, every row of it added up, would take the Order
+     * past Free to Sell — its own weight left out, so only what an edit adds is
+     * asked for — on the Kilograms of a bulk row and the count of a retail one.
+     * A User who may sell beyond stock passes it by giving a reason, and is
+     * told so. Only asked of a save that reprices.
+     */
+    private static function withinFreeToSell(Get $get, ?Order $record, bool $retail): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record, $retail): void {
+            $lines = $get('../../lines');
+            $lines = is_array($lines) ? $lines : [];
+
+            if ($record !== null && ! ($retail ? RetailRepricing::changes($record, $lines) : Repricing::changes($record, $lines))) {
+                return;
+            }
+
+            /** As the save will see it: the status is written before the lines are repriced. */
+            $status = $get('../../status');
+            $order = $record === null || blank($status) ? $record : (clone $record)->setAttribute('status', $status);
+
+            $problem = $retail
+                ? RetailRepricing::stockProblem($order, $lines, ['id' => $get('id'), 'pack_id' => $get('pack_id'), 'count' => $value])
+                : Repricing::stockProblem($order, $lines, ['id' => $get('id'), 'product_id' => $get('product_id'), 'kilograms' => $value]);
+
+            if ($problem === null || (self::canSellBeyondStock() && filled($get('../../'.self::BEYOND_STOCK_REASON)))) {
+                return;
+            }
+
+            $fail(self::canSellBeyondStock() ? "{$problem} Give a reason below to sell beyond stock." : $problem);
+        };
+    }
+
+    private static function canSellBeyondStock(): bool
+    {
+        return auth()->user()?->can(Permission::SellBeyondStock) ?? false;
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Pack;
+use App\Models\Product;
 use App\Models\User;
 use App\Support\Inventory\Grams;
 use App\Support\Inventory\StockLedger;
@@ -37,7 +38,10 @@ use LogicException;
  */
 class RetailRepricing
 {
-    public function __construct(private readonly StockLedger $ledger) {}
+    public function __construct(
+        private readonly StockLedger $ledger,
+        private readonly StockCheck $stock,
+    ) {}
 
     /**
      * A retail Order's lines as the form holds them.
@@ -163,21 +167,48 @@ class RetailRepricing
 
         $stored = $order === null ? new Collection : $order->lines()->get()->keyBy(fn (OrderLine $line): int => (int) $line->getKey());
 
-        return self::limitRefusals(array_filter($lines, fn (RequestedPackLine $line): bool => $packs->has($line->packId)), $packs, $stored)[$pack->product_id] ?? null;
+        return OrderLimit::refusals(OrderKind::Retail, self::weighed(array_filter($lines, fn (RequestedPackLine $line): bool => $packs->has($line->packId)), $packs, $stored))[$pack->product_id] ?? null;
     }
 
     /**
-     * Why each Product is outside its খুচরা Order Limit, its lines' weights
-     * added up, by Product id.
+     * Why a form row's tea would take the Order past Free to Sell, the weight
+     * of every row of it added up as in `limitProblem()` and the Order's own
+     * weight left out, or null where it would not or the row is not yet a
+     * line — so the form can refuse it on the count. The same check `apply()`
+     * makes, before any way past it is weighed.
+     *
+     * @param  array<array-key, mixed>  $state
+     * @param  array<string, mixed>  $row
+     */
+    public static function stockProblem(?Order $order, array $state, array $row): ?string
+    {
+        $line = RequestedPackLine::fromState($row);
+        $lines = self::requested($state);
+        $packs = self::packs($lines);
+        $pack = $line === null ? null : $packs->get($line->packId);
+
+        if ($pack === null) {
+            return null;
+        }
+
+        $stored = $order === null ? new Collection : $order->lines()->get()->keyBy(fn (OrderLine $line): int => (int) $line->getKey());
+        $ofProduct = array_filter($lines, fn (RequestedPackLine $line): bool => $packs->has($line->packId) && $packs[$line->packId]->product_id === $pack->product_id);
+
+        return app(StockCheck::class)->refusals($order, StockCheck::wanted(self::weighed($ofProduct, $packs, $stored)))[$pack->product_id] ?? null;
+    }
+
+    /**
+     * Each line's Product and the grams it would record: its own Pack weight
+     * while it keeps its Pack, the Pack's today otherwise.
      *
      * @param  array<array-key, RequestedPackLine>  $lines  each naming a Pack among `$packs`
      * @param  Collection<int, Pack>  $packs
      * @param  Collection<int, OrderLine>  $stored
-     * @return array<int, string>
+     * @return list<array{0: Product, 1: int}>
      */
-    private static function limitRefusals(array $lines, Collection $packs, Collection $stored): array
+    private static function weighed(array $lines, Collection $packs, Collection $stored): array
     {
-        return OrderLimit::refusals(OrderKind::Retail, array_map(function (RequestedPackLine $line) use ($packs, $stored): array {
+        return array_values(array_map(function (RequestedPackLine $line) use ($packs, $stored): array {
             $pack = $packs[$line->packId];
             $kept = self::keptLine($line, $stored);
             $packGrams = $kept !== null && (int) $kept->pack_id === $line->packId ? $kept->pack_grams : $pack->grams;
@@ -190,12 +221,15 @@ class RetailRepricing
      * Write the rows onto the retail Order, priced afresh, with the retail
      * Delivery Charge read from the new subtotal.
      *
+     * Held to Free to Sell as bulk Repricing is, through `StockCheck`, every
+     * Pack of one Product weighed into its one pool.
+     *
      * @param  array<array-key, mixed>  $state
      *
      * @throws LogicException where the Order already has a Shipment, or is not retail
-     * @throws InvalidArgumentException where the rows are not lines the Order can hold, or a Product is outside its Order Limit
+     * @throws InvalidArgumentException where the rows are not lines the Order can hold, a Product is outside its Order Limit, or the Order would go past Free to Sell unexplained
      */
-    public function apply(Order $order, array $state, User $by): void
+    public function apply(Order $order, array $state, User $by, ?string $beyondStockReason = null): void
     {
         if (! $order->isRetail()) {
             throw new LogicException("Order {$order->order_number} is bulk; it is repriced by its Tiers.");
@@ -238,7 +272,8 @@ class RetailRepricing
         }
 
         /** No way past an Order Limit, for anyone: a deal is struck on price instead. */
-        $outside = self::limitRefusals($lines, $packs, $stored);
+        $weighed = self::weighed($lines, $packs, $stored);
+        $outside = OrderLimit::refusals(OrderKind::Retail, $weighed);
 
         if ($outside !== []) {
             throw new InvalidArgumentException(reset($outside));
@@ -249,11 +284,14 @@ class RetailRepricing
         $wasTotal = $order->total;
         $wasPriced = $stored->isNotEmpty();
 
-        DB::transaction(function () use ($order, $by, $lines, $stored, $packs, $cart, $costs, $wasTotal, $wasPriced): void {
+        DB::transaction(function () use ($order, $by, $lines, $stored, $packs, $cart, $costs, $wasTotal, $wasPriced, $weighed, $beyondStockReason): void {
             /** Asked again under the Order's row lock, which `CourierBooker` books under too. */
             if (Order::withTrashed()->lockForUpdate()->findOrFail($order->getKey())->hasAnyShipment()) {
                 throw new LogicException("Order {$order->order_number} has a Shipment; its lines are locked.");
             }
+
+            /** Before a line is written, so the Order's own weight is what it held. */
+            $this->stock->enforce($order, StockCheck::wanted($weighed), $by, $beyondStockReason);
 
             $keptIds = array_filter(array_map(fn (RequestedPackLine $line): ?int => self::keptLine($line, $stored)?->getKey(), $lines));
 

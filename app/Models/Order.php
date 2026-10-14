@@ -150,6 +150,29 @@ class Order extends Model
     }
 
     /**
+     * The User who let the Order past Free to Sell with a reason (ADR-0037),
+     * named even after they are filed away. Written only by Repricing, never
+     * from the form, which is why neither column is fillable.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function soldBeyondStockBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sold_beyond_stock_by')->withTrashed();
+    }
+
+    /**
+     * Whether the Order's weight is held out of Free to Sell: neither
+     * Cancelled nor deleted (ADR-0037). The status half of the set
+     * `CommittedStock::withFreeToSell()` counts; the other half, not yet sent,
+     * is the caller's to know.
+     */
+    public function holdsStock(): bool
+    {
+        return in_array($this->status, [OrderStatus::New, OrderStatus::Confirmed], true) && ! $this->trashed();
+    }
+
+    /**
      * @return HasMany<OrderLine, $this>
      */
     public function lines(): HasMany

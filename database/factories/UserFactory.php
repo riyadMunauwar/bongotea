@@ -138,6 +138,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * A User who may also take or reprice an Order past Free to Sell with a
+     * reason: they work Orders and hold `sell beyond stock` on top, so
+     * overselling is never casual.
+     */
+    public function sellingBeyondStock(): static
+    {
+        return $this->holdingRole('Stock Overseller', Permission::WorkOrders, Permission::SellBeyondStock);
+    }
+
+    /**
      * A User who may also delete, force-delete and restore an Order: they work
      * Orders and hold `delete orders` on top, so the queue cannot be tidied away
      * by whoever is merely working it.

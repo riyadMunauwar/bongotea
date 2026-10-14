@@ -9,14 +9,17 @@ use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
 use App\Filament\Resources\Orders\Actions\CheckWithGatewayAction;
 use App\Filament\Resources\Orders\Actions\SwitchToCashOnDeliveryAction;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Support\Orders\BeyondFreeToSell;
 use App\Support\Orders\Repricing;
 use App\Support\Orders\RetailRepricing;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -141,23 +144,44 @@ class EditOrder extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         $lines = $data['lines'] ?? null;
-        unset($data['lines'], $data['kind']);
+        $beyondStockReason = $data[OrderForm::BEYOND_STOCK_REASON] ?? null;
+        unset($data['lines'], $data['kind'], $data[OrderForm::BEYOND_STOCK_REASON]);
 
-        return DB::transaction(function () use ($record, $data, $lines): Order {
+        return DB::transaction(function () use ($record, $data, $lines, $beyondStockReason): Order {
             $record->update($data);
 
             if (! is_array($lines)) {
                 return $record;
             }
 
-            if ($record->isRetail() && RetailRepricing::changes($record, $lines)) {
-                app(RetailRepricing::class)->apply($record, $lines, auth()->user());
-            } elseif (! $record->isRetail() && Repricing::changes($record, $lines)) {
-                app(Repricing::class)->apply($record, $lines, auth()->user());
+            try {
+                if ($record->isRetail() && RetailRepricing::changes($record, $lines)) {
+                    app(RetailRepricing::class)->apply($record, $lines, auth()->user(), $beyondStockReason);
+                } elseif (! $record->isRetail() && Repricing::changes($record, $lines)) {
+                    app(Repricing::class)->apply($record, $lines, auth()->user(), $beyondStockReason);
+                }
+            } catch (BeyondFreeToSell $refusal) {
+                $this->refuseBeyondStock($refusal);
             }
 
             return $record;
         });
+    }
+
+    /**
+     * A stock refusal the form's own check could not see coming — stock taken
+     * by another Order between the check and the save, or a status changed in
+     * the same save — shown as a refusal, with nothing written.
+     */
+    private function refuseBeyondStock(BeyondFreeToSell $refusal): void
+    {
+        Notification::make()
+            ->danger()
+            ->title('Not enough is free to sell')
+            ->body($refusal->getMessage())
+            ->send();
+
+        $this->halt(shouldRollbackDatabaseTransaction: true);
     }
 
     protected function getRedirectUrl(): string

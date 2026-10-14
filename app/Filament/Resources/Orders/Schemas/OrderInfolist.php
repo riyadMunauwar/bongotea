@@ -56,6 +56,8 @@ class OrderInfolist
                             ->dateTime(),
 
                         OrderDocument::paymentMethod(),
+
+                        OrderDocument::soldBeyondStock(),
                     ]),
 
                 /**
