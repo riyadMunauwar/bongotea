@@ -84,8 +84,6 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     {product.name}
                 </Link>
 
-                {product.shortDescription && <p className="m-0 hidden text-[12px] leading-[1.5] text-muted md:block">{product.shortDescription}</p>}
-
                 {product.strength !== null && (
                     <span className="flex items-center gap-[6px] text-[10px] text-muted md:text-[11px]">
                         {bn.catalogue.strength}
