@@ -43,7 +43,9 @@ use LogicException;
  * weight it recorded until a User chooses another; either way its Kilograms
  * must make a whole number of them, and a Pack its Product no longer offers
  * পাইকারি is refused even on a line that already holds it. The Pack never
- * prices the line.
+ * prices the line. A Product may be on the Order in several of its Packs, a
+ * line each, never twice in one, and its Kilograms across them are one
+ * Product's to its Tier, its Order Limit and its stock.
  */
 class Repricing
 {
@@ -187,6 +189,21 @@ class Repricing
     }
 
     /**
+     * Why a form row's tea is already on the Order in the Pack the row would
+     * be supplied in — an earlier row holding it there, a row naming no Pack
+     * being in its tea's default — or null where it is not or the row is not
+     * yet a line, so the form can refuse it. The same check `apply()` makes.
+     *
+     * @param  array<array-key, mixed>  $state
+     */
+    public static function repeatProblem(array $state, int|string $key): ?string
+    {
+        $lines = self::requested($state);
+
+        return array_key_exists($key, $lines) ? (self::repeated($lines, self::products($lines))[$key] ?? null) : null;
+    }
+
+    /**
      * Why a form row's Kilograms cannot be made in its Pack, or null where
      * they can, the Pack is itself refused or the row is not yet a line — so
      * the form can refuse it on the Kilograms, naming weights that work. Read
@@ -306,7 +323,7 @@ class Repricing
      * @param  array<array-key, mixed>  $state
      *
      * @throws LogicException where the Order already has a Shipment
-     * @throws InvalidArgumentException where the rows are not lines an Order can hold, a Product is outside its Order Limit, or the Order would go past Free to Sell unexplained
+     * @throws InvalidArgumentException where the rows are not lines an Order can hold, a Product is in one Pack twice or outside its Order Limit, or the Order would go past Free to Sell unexplained
      * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
      */
     public function apply(Order $order, array $state, User $by, ?string $beyondStockReason = null): void
@@ -338,6 +355,12 @@ class Repricing
             if (! $products[$line->productId]->isSoldAs(OrderKind::Bulk)) {
                 throw new InvalidArgumentException("Product [{$line->productId}] is not sold পাইকারি.");
             }
+        }
+
+        $repeated = self::repeated($lines, $products);
+
+        if ($repeated !== []) {
+            throw new InvalidArgumentException(reset($repeated));
         }
 
         $packs = self::packs($lines, $products, $stored);
@@ -517,11 +540,7 @@ class Repricing
      */
     private static function packs(array $lines, Collection $products, Collection $stored): array
     {
-        $named = Pack::query()
-            ->with('product')
-            ->whereKey(array_filter(array_map(fn (RequestedLine $line): ?int => $line->packId, $lines)))
-            ->get()
-            ->keyBy(fn (Pack $pack): int => (int) $pack->getKey());
+        $named = self::namedPacks($lines);
 
         return array_map(function (RequestedLine $line) use ($products, $stored, $named): Pack {
             $product = $products[$line->productId];
@@ -538,6 +557,58 @@ class Repricing
 
             return $pack;
         }, $lines);
+    }
+
+    /**
+     * The rows naming a Product in a Pack an earlier row already holds it in,
+     * each with why, under its key. A row naming no Pack is in its Product's
+     * default; one whose Product or Pack cannot be found is left for the
+     * other checks to refuse.
+     *
+     * @param  array<array-key, RequestedLine>  $lines
+     * @param  Collection<int, Product>  $products
+     * @return array<array-key, string>
+     */
+    private static function repeated(array $lines, Collection $products): array
+    {
+        $named = self::namedPacks($lines);
+
+        $seen = [];
+        $repeated = [];
+
+        foreach ($lines as $key => $line) {
+            $product = $products->get($line->productId);
+            $pack = $line->packId === null ? $product?->defaultBulkPack : $named->get($line->packId);
+
+            if ($product === null || $pack === null) {
+                continue;
+            }
+
+            $pair = "{$product->getKey()}-{$pack->getKey()}";
+
+            if (isset($seen[$pair])) {
+                $repeated[$key] = "{$product->name} is already on this order in {$pack->name()} Packs.";
+            }
+
+            $seen[$pair] = true;
+        }
+
+        return $repeated;
+    }
+
+    /**
+     * Every Pack the rows name, keyed by id.
+     *
+     * @param  array<array-key, RequestedLine>  $lines
+     * @return Collection<int, Pack>
+     */
+    private static function namedPacks(array $lines): Collection
+    {
+        return Pack::query()
+            ->with('product')
+            ->whereKey(array_filter(array_map(fn (RequestedLine $line): ?int => $line->packId, $lines)))
+            ->get()
+            ->keyBy(fn (Pack $pack): int => (int) $pack->getKey());
     }
 
     /**

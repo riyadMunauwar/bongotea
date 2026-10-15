@@ -169,7 +169,7 @@ export const bn = {
         clearCart: 'মুছুন',
         barView: 'দেখুন →',
         barPacks: (count: string) => `${count}টি প্যাকেট`,
-        packLabel: 'প্যাকেট',
+        inPacks: (pack: string) => `${pack} প্যাকেটে`,
         packetCount: (kilograms: string, packets: string, pack: string) => `${kilograms} কেজি = ${packets} প্যাকেট × ${pack}`,
         unpackable: (pack: string, kilograms: string, workable: string) => `${pack} প্যাকেটে ${kilograms} কেজি হয় না — ${workable} কেজি নিন`,
         noPack: 'এই চা এখন কোনো প্যাকেটে পাঠানো যাচ্ছে না — কার্ট থেকে সরান',

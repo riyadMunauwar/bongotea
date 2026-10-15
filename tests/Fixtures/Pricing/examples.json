@@ -321,6 +321,28 @@
                 "nextPriceDrop": null,
                 "kilogramsToFreeDelivery": 46
             }
+        },
+        {
+            "name": "one tea in two Packs is two lines whose Kilograms are counted together: Premium 5 kg and 2 kg are a 7 kg cart, both at its 6–10 kg price",
+            "lines": [
+                { "productId": 1, "kilograms": 5 },
+                { "productId": 1, "kilograms": 2 }
+            ],
+            "expected": {
+                "lines": [
+                    { "productId": 1, "kilograms": 5, "mrp": 620, "tierPrice": 589, "tier": { "min": 6, "max": 10 }, "overridden": false, "lineTotal": 2945 },
+                    { "productId": 1, "kilograms": 2, "mrp": 620, "tierPrice": 589, "tier": { "min": 6, "max": 10 }, "overridden": false, "lineTotal": 1178 }
+                ],
+                "totalKilograms": 7,
+                "subtotal": 4123,
+                "savings": 217,
+                "deliveryCharge": 150,
+                "deliveryBand": { "min": 6, "max": 10, "fee": 150 },
+                "total": 4273,
+                "averagePerKilogram": 589,
+                "nextPriceDrop": { "atKilograms": 11, "kilogramsToGo": 4, "extraSaving": 217 },
+                "kilogramsToFreeDelivery": 44
+            }
         }
     ]
 }

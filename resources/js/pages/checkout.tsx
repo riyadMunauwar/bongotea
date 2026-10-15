@@ -405,7 +405,8 @@ function SummaryLine({ label, value, accent = false }: { label: string; value: s
 
 /**
  * What a bulk Order's lines, kilograms and figures add up to, each line with
- * the Pack it is supplied in, changeable here, and its packet count.
+ * the Pack it is supplied in and its packet count; a tea in several Packs is
+ * a line each, and what holds the tea up is said once, under its last.
  */
 function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: number) => string }) {
     const taka = useTaka();
@@ -416,7 +417,7 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
         <>
             <div className="flex flex-col gap-2 border-b border-divider pb-3">
                 {priced.lines.map((line, index) => (
-                    <div key={line.productId} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[14px]">
+                    <div key={`${line.productId}-${cart.lines[index].pack?.id ?? 'none'}`} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[14px]">
                         <span>
                             {nameOf(line.productId)}{' '}
                             <span className="text-muted">{bn.checkout.lineAt(toBanglaDigits(line.kilograms), taka(line.tierPrice))}</span>
@@ -428,7 +429,7 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
                             )}
                         </span>
                         <span className="font-semibold">{taka(line.lineTotal)}</span>
-                        <BulkPackLine line={cart.lines[index]} onPackChange={(packId) => cart.setPack(cart.lines[index].product.id, packId)} className="w-full" />
+                        <BulkPackLine line={cart.lines[index]} showTeaNotices={cart.lines[index + 1]?.product.id !== line.productId} className="w-full" />
                     </div>
                 ))}
             </div>

@@ -12,6 +12,7 @@ paths:
   - app/Models/OrderLine.php
   - 'app/Filament/Clusters/Inventory/**'
   - app/Support/Inventory/Grams.php
+  - 'app/Support/Orders/**'
 ---
 
 # Inventory
@@ -111,3 +112,6 @@ Bulk lines record `pack_id`/`pack_grams` too (ADR-0036), so `pack_grams !== null
 
 ## Order Limits are measured per Product across lines, in OrderLimit only
 Product's `bulk_min/max_kilograms` and `retail_min/max_grams` are read only through `App\Support\Orders\OrderLimit` (grams; null end = no limit). Always sum a Product's whole weight across every line/Pack before asking `OrderLimit::refusals()` — never per line. Capture checks it inside `price()`/`priceRetail()` before the Quote comparison (QuoteRefused `outsideLimitProductIds`, RetailQuoteRefused `outsideLimitPackIds`, sent as `outsideLimit` in the 409). Repricing/RetailRepricing `apply()` throw InvalidArgumentException; the Order form raises the same text via `limitProblem()` on kilograms/count, only on a save that reprices. No Permission bypasses a limit. The model refuses max < min and clears a way's limits when that switch goes off; "পাইকারি min must be made exactly by a পাইকারি Pack" is the Product form's rule only (Packs save after the Product).
+
+## A bulk Order holds a Product once per Pack, never once per Product
+A bulk line is one Product in one পাইকারি Pack (#52): a tea may sit on a bulk Order in several Packs, and its Kilograms across them count together for Tier, Order Limit (OrderLimit::refusals sums) and Free to Sell (Capture sums `$wanted`). Uniqueness is Product + *resolved* Pack — a line naming no Pack is the default, so it collides with one naming the default. Enforced in OrderCapture::refuseMalformed (after default resolution), CheckoutRequest::eachPackOnce, and Repricing::repeated(). In OrderForm the check sits on `product_id`, not `pack_id`: a blank pack_id means the default, and Laravel skips non-implicit closure rules on empty values.

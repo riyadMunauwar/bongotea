@@ -1,15 +1,17 @@
 /**
- * The Cart (ADR-0029): `{productId: {kilograms, packId}}` kept in this
- * browser's `localStorage` and nowhere else. Every view of it — product-card
- * steppers, the header, the Bulk Order form, the price calculator — reads and
- * writes this one store through `useCart()`, so no two quantities can disagree.
+ * The Cart (ADR-0029): a list of lines, `[{productId, packId, kilograms}]`,
+ * kept in this browser's `localStorage` and nowhere else. Every view of it —
+ * product-card steppers, the header, the Bulk Order form, the price
+ * calculator — reads and writes this one store through `useCart()`, so no two
+ * quantities can disagree.
  *
- * Each Product is held once, with its Kilograms and the one পাইকারি Pack they
- * are supplied in (ADR-0036): the buyer's choice, else the Product's default.
- * The Pack sets the packet count and never the price. Only lines holding
- * Kilograms are kept. Storage that refuses to be read or written (a private
- * window, blocked site data) leaves the Cart working for this visit, held in
- * memory.
+ * A line is one Product in one of its পাইকারি Packs (ADR-0036), so a tea may
+ * be held in several, each Pack at most once: five kilograms in 1 kg Packs and
+ * two in 500 g Packs are two lines. However a tea's Kilograms are split, they
+ * are one tea's to its Tier, its Order Limit and its stock. The Pack sets the
+ * packet count and never the price. Only lines holding Kilograms are kept.
+ * Storage that refuses to be read or written (a private window, blocked site
+ * data) leaves the Cart working for this visit, held in memory.
  */
 
 import { GRAMS_PER_KILOGRAM, gramsFromKilograms, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
@@ -19,11 +21,11 @@ export const MAX_KILOGRAMS = 999;
 
 const STORAGE_KEY = 'bongotea.cart';
 
-/** One Product's line: whole Kilograms, one to 999, and the Pack chosen for them, or null for the Product's default. */
-export type CartEntry = Readonly<{ kilograms: number; packId: number | null }>;
+/** One line: a Product's whole Kilograms, one to 999, in one of its Packs, or null for the Product's default. */
+export type CartEntry = Readonly<{ productId: number; packId: number | null; kilograms: number }>;
 
-/** Product id → its line; a Product holding none is absent. */
-export type Cart = Readonly<Record<number, CartEntry>>;
+/** Every line, each Product + Pack at most once; a line holding nothing is absent. */
+export type Cart = readonly CartEntry[];
 
 /** A পাইকারি Pack a Product's Kilograms may be supplied in, known by its weight. */
 export type BulkPack = { id: number; grams: number };
@@ -49,12 +51,13 @@ export type LimitBreach = 'below' | 'above' | null;
 /**
  * A line the Cart is priced from, with the Pack it is supplied in and the
  * packets that makes — null where the Pack cannot make the Kilograms exactly —
- * whether it is outside the tea's Order Limit, and whether it holds more than
- * is free to sell, each of which Checkout would refuse.
+ * and, for the tea's whole weight across its lines, whether it is outside the
+ * tea's Order Limit and whether it is more than is free to sell, each of which
+ * Checkout would refuse.
  */
 export type BulkCartLine = { product: CartProduct; kilograms: number; pack: BulkPack | null; packets: number | null; limit: LimitBreach; isShort: boolean };
 
-export const EMPTY_CART: Cart = Object.freeze({});
+export const EMPTY_CART: Cart = Object.freeze([]);
 
 /** Whole Kilograms from nought to 999, whatever was asked for. */
 export function clampKilograms(kilograms: number): number {
@@ -66,9 +69,10 @@ export function clampKilograms(kilograms: number): number {
 }
 
 /**
- * The Cart as stored, keeping only Product ids holding a whole number of
- * Kilograms. A line stored as bare Kilograms, from before lines had Packs,
- * is read as the Product's default.
+ * The Cart as stored, keeping only lines naming a Product and a whole number
+ * of Kilograms, each Product + Pack once. A Cart stored from before a tea
+ * could be held in several Packs — `{productId: {kilograms, packId}}`, or
+ * bare Kilograms from before lines had Packs — reads as one line per Product.
  */
 export function parseCart(raw: string | null): Cart {
     let stored: unknown;
@@ -79,24 +83,36 @@ export function parseCart(raw: string | null): Cart {
         return EMPTY_CART;
     }
 
-    if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
+    if (stored === null || typeof stored !== 'object') {
         return EMPTY_CART;
     }
 
-    const cart: Record<number, CartEntry> = {};
+    const candidates: unknown[] = Array.isArray(stored)
+        ? stored
+        : Object.entries(stored).map(([key, value]) => {
+              const entry: unknown = typeof value === 'number' ? { kilograms: value } : value;
 
-    for (const [key, value] of Object.entries(stored)) {
-        if (!/^[1-9]\d*$/.test(key)) {
+              return /^[1-9]\d*$/.test(key) && entry !== null && typeof entry === 'object' ? { ...entry, productId: Number(key) } : null;
+          });
+
+    const cart: CartEntry[] = [];
+
+    for (const candidate of candidates) {
+        if (candidate === null || typeof candidate !== 'object') {
             continue;
         }
 
-        const entry = (typeof value === 'number' ? { kilograms: value, packId: null } : value) as { kilograms?: unknown; packId?: unknown } | null;
+        const { productId, packId, kilograms } = candidate as { productId?: unknown; packId?: unknown; kilograms?: unknown };
 
-        if (entry === null || typeof entry !== 'object' || !isWholeAboveNought(entry.kilograms)) {
+        if (!isWholeAboveNought(productId) || !isWholeAboveNought(kilograms)) {
             continue;
         }
 
-        cart[Number(key)] = { kilograms: clampKilograms(entry.kilograms), packId: isWholeAboveNought(entry.packId) ? entry.packId : null };
+        const entry = { productId, packId: isWholeAboveNought(packId) ? packId : null, kilograms: clampKilograms(kilograms) };
+
+        if (!cart.some((held) => isSameLine(held, entry.productId, entry.packId))) {
+            cart.push(entry);
+        }
     }
 
     return cart;
@@ -104,6 +120,10 @@ export function parseCart(raw: string | null): Cart {
 
 function isWholeAboveNought(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function isSameLine(entry: CartEntry, productId: number, packId: number | null): boolean {
+    return entry.productId === productId && entry.packId === packId;
 }
 
 /**
@@ -116,7 +136,7 @@ export function isBulkSoldOut(product: CartProduct): boolean {
     return product.freeGrams !== null && product.freeGrams < GRAMS_PER_KILOGRAM;
 }
 
-/** The most Kilograms of a tea the Cart may hold: its পাইকারি maximum or the whole Kilograms free to sell, whichever is lower, and never past 999. */
+/** The most Kilograms of a tea the Cart may hold across its Packs: its পাইকারি maximum or the whole Kilograms free to sell, whichever is lower, and never past 999. */
 export function mostKilograms(product: CartProduct): number {
     const free = product.freeGrams === null ? MAX_KILOGRAMS : wholeKilogramsIn(product.freeGrams);
 
@@ -124,12 +144,12 @@ export function mostKilograms(product: CartProduct): number {
 }
 
 /**
- * The Kilograms a stepper may go to from what the Cart holds now: stopped at
- * `mostKilograms()`, but never stopped coming down, even from above it. A
- * Product holds one line, so the line is its whole weight in the Cart.
+ * The Kilograms a line's stepper may go to from what it holds now, given what
+ * the tea's other Packs hold: stopped where the tea's whole weight reaches
+ * `mostKilograms()`, but never stopped coming down, even from above it.
  */
-export function cappedKilograms(product: CartProduct, kilograms: number, held = 0): number {
-    return kilograms <= held ? kilograms : Math.min(kilograms, Math.max(held, mostKilograms(product)));
+export function cappedKilograms(product: CartProduct, kilograms: number, held = 0, elsewhere = 0): number {
+    return kilograms <= held ? kilograms : Math.min(kilograms, Math.max(held, mostKilograms(product) - elsewhere));
 }
 
 /** Where a tea's Kilograms fall against its পাইকারি Order Limit. */
@@ -141,22 +161,20 @@ function limitBreachOf(product: CartProduct, kilograms: number): LimitBreach {
     return product.maxKilograms !== null && kilograms > product.maxKilograms ? 'above' : null;
 }
 
-/** Sets a Product's Kilograms, keeping the Pack chosen for it; nought removes the line. */
-export function withKilograms(cart: Cart, productId: number, kilograms: number): Cart {
-    const { [productId]: replaced, ...rest } = cart;
+/** Sets a Product's Kilograms in one Pack, leaving its other Packs as they are; nought removes the line. */
+export function withKilograms(cart: Cart, productId: number, packId: number | null, kilograms: number): Cart {
     const clamped = clampKilograms(kilograms);
 
-    return clamped === 0 ? rest : { ...rest, [productId]: { kilograms: clamped, packId: replaced?.packId ?? null } };
+    if (clamped === 0) {
+        return cart.filter((entry) => !isSameLine(entry, productId, packId));
+    }
+
+    return cart.some((entry) => isSameLine(entry, productId, packId))
+        ? cart.map((entry) => (isSameLine(entry, productId, packId) ? { ...entry, kilograms: clamped } : entry))
+        : [...cart, { productId, packId, kilograms: clamped }];
 }
 
-/** Chooses the Pack a Product's Kilograms are supplied in; only a line holding Kilograms has one to choose. */
-export function withPack(cart: Cart, productId: number, packId: number): Cart {
-    const entry = cart[productId];
-
-    return entry === undefined ? cart : { ...cart, [productId]: { ...entry, packId } };
-}
-
-/** The Pack a Product's line is supplied in: the one chosen while the Product still offers it, else its default, else its first. */
+/** The Pack a Product's line is supplied in: the one named while the Product still offers it, else its default, else its first. */
 export function packFor(product: CartProduct, packId: number | null): BulkPack | null {
     return (
         product.packs.find((pack) => pack.id === packId) ??
@@ -167,51 +185,72 @@ export function packFor(product: CartProduct, packId: number | null): BulkPack |
 }
 
 /**
- * The lines the Cart is priced from, in catalogue order, each with its Pack
- * and the packets its Kilograms make. A Product the store no longer sends —
- * a draft, or one taken out of the catalogue — and one not Available now are
- * left out, so neither is ever counted or ordered.
+ * The lines the Cart is priced from, in catalogue order and each tea's in the
+ * order of its Packs, each with its Pack and the packets its Kilograms make.
+ * A line naming no Pack, or one its tea no longer offers, is supplied in the
+ * default, joining whatever that already holds. A Product the store no longer
+ * sends — a draft, or one taken out of the catalogue — and one not Available
+ * now are left out, so neither is ever counted or ordered.
  */
 export function cartLines(cart: Cart, products: CartProduct[]): BulkCartLine[] {
     return products
-        .filter((product) => product.isAvailable && (cart[product.id]?.kilograms ?? 0) > 0)
-        .map((product) => {
-            const { kilograms, packId } = cart[product.id];
-            const pack = packFor(product, packId);
+        .filter((product) => product.isAvailable)
+        .flatMap((product) => {
+            const held = new Map<number | null, number>();
 
-            return {
-                product,
-                kilograms,
-                pack,
-                packets: pack === null ? null : packetsIn(gramsFromKilograms(kilograms), pack.grams),
-                limit: limitBreachOf(product, kilograms),
-                isShort: product.freeGrams !== null && gramsFromKilograms(kilograms) > product.freeGrams,
-            };
+            for (const entry of cart) {
+                if (entry.productId === product.id) {
+                    const packId = packFor(product, entry.packId)?.id ?? null;
+
+                    held.set(packId, clampKilograms((held.get(packId) ?? 0) + entry.kilograms));
+                }
+            }
+
+            const total = [...held.values()].reduce((sum, kilograms) => sum + kilograms, 0);
+            const limit = limitBreachOf(product, total);
+            const isShort = product.freeGrams !== null && gramsFromKilograms(total) > product.freeGrams;
+            const packs: (BulkPack | null)[] = product.packs.length === 0 ? [null] : product.packs;
+
+            return packs.flatMap((pack) => {
+                const kilograms = held.get(pack?.id ?? null) ?? 0;
+
+                return kilograms === 0
+                    ? []
+                    : [{ product, kilograms, pack, packets: pack === null ? null : packetsIn(gramsFromKilograms(kilograms), pack.grams), limit, isShort }];
+            });
         });
 }
 
 /**
- * The Cart without lines for Products a buyer cannot have now. Written back
- * whenever the Cart changes, so a tea that went unavailable does not quietly
- * return to the Cart, and the total, when it comes back.
+ * The Cart without lines for Products a buyer cannot have now, each line
+ * naming the Pack it is supplied in. Written back whenever the Cart changes,
+ * so a tea that went unavailable does not quietly return to the Cart, and the
+ * total, when it comes back.
  */
 export function onlyOrderable(cart: Cart, products: CartProduct[]): Cart {
-    return Object.fromEntries(cartLines(cart, products).map((line) => [line.product.id, cart[line.product.id]]));
+    return cartLines(cart, products).map((line) => ({ productId: line.product.id, packId: line.pack?.id ?? null, kilograms: line.kilograms }));
 }
 
 /** A tea's line as the Cart would hold it, priced with the rest of the Cart, and the Cart's whole weight then. */
 export type LineQuote = { line: BulkCartLine; priced: PricedLine; totalKilograms: number };
 
 /**
- * What a tea's line would be were the Cart to hold these Kilograms of it in
- * this Pack in place of what it holds now: its packets, its Tier Price for
- * the whole Cart's weight with it, and its line total. Null for a tea a buyer
- * cannot have now, and for no Kilograms.
+ * What a tea's line in a Pack would be were the Cart to hold these Kilograms
+ * there in place of what that Pack holds now, its other Packs left as they
+ * are: its packets, its Tier Price for the whole Cart's weight with it, and
+ * its line total. Null for a tea a buyer cannot have now, and for no
+ * Kilograms.
  */
 export function quoteLine(cart: Cart, products: CartProduct[], book: PriceBook, productId: number, kilograms: number, packId: number | null): LineQuote | null {
-    const quoted = withKilograms(cart, productId, kilograms);
-    const lines = cartLines(packId === null ? quoted : withPack(quoted, productId, packId), products);
-    const index = lines.findIndex((line) => line.product.id === productId);
+    const product = products.find((candidate) => candidate.id === productId);
+
+    if (product === undefined) {
+        return null;
+    }
+
+    const chosenId = packFor(product, packId)?.id ?? null;
+    const lines = cartLines(withKilograms(onlyOrderable(cart, products), productId, chosenId, kilograms), products);
+    const index = lines.findIndex((line) => line.product.id === productId && (line.pack?.id ?? null) === chosenId);
 
     if (index === -1) {
         return null;

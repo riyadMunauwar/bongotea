@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cappedKilograms, cartLines, clampKilograms, firstKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, quoteLine, rowAnchor, rowFromAnchor, withKilograms, withPack, type CartProduct } from './cart';
+import { cappedKilograms, cartLines, clampKilograms, firstKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, quoteLine, rowAnchor, rowFromAnchor, withKilograms, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
 /** A tea in 1 kg bags, its default, unless given other পাইকারি Packs. */
@@ -15,8 +15,14 @@ const product = (id: number, isAvailable = true, tiers: Tier[] = [{ min: 1, max:
     freeGrams: null,
 });
 
-/** A line holding Kilograms in the Product's default Pack. */
-const kg = (kilograms: number) => ({ kilograms, packId: null });
+/** A line holding Kilograms of a Product, in its default Pack unless one is named. */
+const kg = (productId: number, kilograms: number, packId: number | null = null) => ({ productId, packId, kilograms });
+
+/** Assam in 1 kg bags, its default, and in 500 g ones. */
+const assam = product(3, true, undefined, [
+    { id: 30, grams: 1000 },
+    { id: 31, grams: 500 },
+]);
 
 describe('clampKilograms', () => {
     it('keeps whole Kilograms from nought to 999', () => {
@@ -29,16 +35,26 @@ describe('clampKilograms', () => {
 });
 
 describe('parseCart', () => {
-    it('reads what was stored, Packs and all', () => {
-        expect(parseCart('{"3":{"kilograms":8,"packId":31},"7":{"kilograms":4,"packId":null}}')).toStrictEqual({ 3: { kilograms: 8, packId: 31 }, 7: kg(4) });
+    it('reads what was stored, a tea in several Packs and all', () => {
+        expect(parseCart('[{"productId":3,"packId":30,"kilograms":5},{"productId":3,"packId":31,"kilograms":2},{"productId":7,"packId":null,"kilograms":4}]')).toStrictEqual([
+            kg(3, 5, 30),
+            kg(3, 2, 31),
+            kg(7, 4),
+        ]);
     });
 
-    it('reads a line stored as bare Kilograms, from before lines had Packs, as the default Pack', () => {
-        expect(parseCart('{"3":8,"7":4}')).toStrictEqual({ 3: kg(8), 7: kg(4) });
+    it('reads a Cart kept from before a tea could be in several Packs as one line each', () => {
+        expect(parseCart('{"3":{"kilograms":8,"packId":31},"7":{"kilograms":4,"packId":null}}')).toStrictEqual([kg(3, 8, 31), kg(7, 4)]);
+        expect(parseCart('{"3":8,"7":4}')).toStrictEqual([kg(3, 8), kg(7, 4)]);
     });
 
     it('drops anything that is not a Product id and a whole number of Kilograms, and any Pack that is not an id', () => {
-        expect(parseCart('{"3":8,"x":2,"5":"9","6":0,"8":-1,"9":2000,"4":{"kilograms":2,"packId":"x"}}')).toStrictEqual({ 3: kg(8), 4: kg(2), 9: kg(999) });
+        expect(parseCart('{"3":8,"x":2,"5":"9","6":0,"8":-1,"9":2000,"4":{"kilograms":2,"packId":"x"}}')).toStrictEqual([kg(3, 8), kg(4, 2), kg(9, 999)]);
+        expect(parseCart('[{"productId":"3","kilograms":2},{"productId":3,"kilograms":0},{"productId":3,"kilograms":2,"packId":-1},1,null]')).toStrictEqual([kg(3, 2)]);
+    });
+
+    it('keeps the first of a Product + Pack stored twice', () => {
+        expect(parseCart('[{"productId":3,"packId":30,"kilograms":5},{"productId":3,"packId":30,"kilograms":2}]')).toStrictEqual([kg(3, 5, 30)]);
     });
 
     it('starts empty when nothing or rubbish was stored', () => {
@@ -50,41 +66,35 @@ describe('parseCart', () => {
 
 describe('withKilograms', () => {
     it('sets a line and leaves the others', () => {
-        expect(withKilograms({ 3: kg(8) }, 7, 4)).toStrictEqual({ 3: kg(8), 7: kg(4) });
+        expect(withKilograms([kg(3, 8)], 7, null, 4)).toStrictEqual([kg(3, 8), kg(7, 4)]);
     });
 
-    it('keeps the Pack chosen for the line', () => {
-        expect(withKilograms({ 3: { kilograms: 8, packId: 31 } }, 3, 2)).toStrictEqual({ 3: { kilograms: 2, packId: 31 } });
+    it('sets one Pack of a tea and leaves its other Packs', () => {
+        expect(withKilograms([kg(3, 5, 30)], 3, 31, 2)).toStrictEqual([kg(3, 5, 30), kg(3, 2, 31)]);
+        expect(withKilograms([kg(3, 5, 30), kg(3, 2, 31)], 3, 31, 4)).toStrictEqual([kg(3, 5, 30), kg(3, 4, 31)]);
     });
 
     it('removes a line set to nothing', () => {
-        expect(withKilograms({ 3: kg(8), 7: kg(4) }, 3, 0)).toStrictEqual({ 7: kg(4) });
+        expect(withKilograms([kg(3, 8, 30), kg(3, 2, 31), kg(7, 4)], 3, 30, 0)).toStrictEqual([kg(3, 2, 31), kg(7, 4)]);
     });
 
     it('clamps what it is given', () => {
-        expect(withKilograms({}, 3, 5000)).toStrictEqual({ 3: kg(999) });
-    });
-});
-
-describe('withPack', () => {
-    it('chooses the Pack for a line holding Kilograms, and for nothing else', () => {
-        expect(withPack({ 3: kg(8) }, 3, 31)).toStrictEqual({ 3: { kilograms: 8, packId: 31 } });
-        expect(withPack({ 3: kg(8) }, 7, 71)).toStrictEqual({ 3: kg(8) });
+        expect(withKilograms(EMPTY_CART, 3, null, 5000)).toStrictEqual([kg(3, 999)]);
     });
 });
 
 describe('packFor', () => {
-    const assam = product(3, true, undefined, [
+    const packed = product(3, true, undefined, [
         { id: 31, grams: 250 },
         { id: 32, grams: 400 },
     ]);
 
-    it('takes the Pack chosen while the tea still offers it, else its default', () => {
-        expect(packFor(assam, 32)).toStrictEqual({ id: 32, grams: 400 });
-        expect(packFor(assam, 99)).toStrictEqual({ id: 31, grams: 250 });
-        expect(packFor(assam, null)).toStrictEqual({ id: 31, grams: 250 });
-        expect(packFor({ ...assam, defaultPackId: null }, null)).toStrictEqual({ id: 31, grams: 250 });
-        expect(packFor({ ...assam, packs: [] }, null)).toBeNull();
+    it('takes the Pack named while the tea still offers it, else its default', () => {
+        expect(packFor(packed, 32)).toStrictEqual({ id: 32, grams: 400 });
+        expect(packFor(packed, 99)).toStrictEqual({ id: 31, grams: 250 });
+        expect(packFor(packed, null)).toStrictEqual({ id: 31, grams: 250 });
+        expect(packFor({ ...packed, defaultPackId: null }, null)).toStrictEqual({ id: 31, grams: 250 });
+        expect(packFor({ ...packed, packs: [] }, null)).toBeNull();
     });
 });
 
@@ -94,7 +104,7 @@ describe('cartLines', () => {
         const strong = product(7);
         const unavailable = product(9, false);
 
-        const lines = cartLines({ 7: kg(4), 3: kg(8), 9: kg(2), 11: kg(5) }, [premium, strong, unavailable]);
+        const lines = cartLines([kg(7, 4), kg(3, 8), kg(9, 2), kg(11, 5)], [premium, strong, unavailable]);
 
         expect(lines).toStrictEqual([
             { product: premium, kilograms: 8, pack: { id: 30, grams: 1000 }, packets: 8, limit: null, isShort: false },
@@ -102,15 +112,29 @@ describe('cartLines', () => {
         ]);
     });
 
+    it('holds a tea in several Packs as a line each, in the order of its Packs', () => {
+        const lines = cartLines([kg(3, 2, 31), kg(3, 5, 30)], [assam]);
+
+        expect(lines.map((line) => [line.pack?.id, line.kilograms, line.packets])).toStrictEqual([
+            [30, 5, 5],
+            [31, 2, 4],
+        ]);
+    });
+
+    it('supplies a line naming no Pack, or one no longer offered, in the default, added to what that holds', () => {
+        expect(cartLines([kg(3, 2)], [assam])[0].pack?.id).toBe(30);
+        expect(cartLines([kg(3, 5, 30), kg(3, 2), kg(3, 1, 99)], [assam]).map((line) => [line.pack?.id, line.kilograms])).toStrictEqual([[30, 8]]);
+    });
+
     it('counts the packets a line makes in its Pack as it changes, and none where they do not divide', () => {
-        const assam = product(3, true, undefined, [
+        const packed = product(3, true, undefined, [
             { id: 31, grams: 250 },
             { id: 32, grams: 400 },
         ]);
 
-        expect(cartLines({ 3: kg(2) }, [assam])[0].packets).toBe(8);
-        expect(cartLines({ 3: { kilograms: 2, packId: 32 } }, [assam])[0].packets).toBe(5);
-        expect(cartLines({ 3: { kilograms: 1, packId: 32 } }, [assam])[0].packets).toBeNull();
+        expect(cartLines([kg(3, 2)], [packed])[0].packets).toBe(8);
+        expect(cartLines([kg(3, 2, 32)], [packed])[0].packets).toBe(5);
+        expect(cartLines([kg(3, 1, 32)], [packed])[0].packets).toBeNull();
     });
 });
 
@@ -118,14 +142,22 @@ describe('Order Limits', () => {
     const limited = { ...product(3), minKilograms: 2, maxKilograms: 5 };
 
     it('flags a line below its পাইকারি minimum or above its maximum', () => {
-        expect(cartLines({ 3: kg(1) }, [limited])[0].limit).toBe('below');
-        expect(cartLines({ 3: kg(2) }, [limited])[0].limit).toBeNull();
-        expect(cartLines({ 3: kg(6) }, [limited])[0].limit).toBe('above');
+        expect(cartLines([kg(3, 1)], [limited])[0].limit).toBe('below');
+        expect(cartLines([kg(3, 2)], [limited])[0].limit).toBeNull();
+        expect(cartLines([kg(3, 6)], [limited])[0].limit).toBe('above');
+    });
+
+    it('measures the tea\'s Kilograms across all its Packs', () => {
+        const limitedAssam = { ...assam, minKilograms: 3, maxKilograms: 6 };
+
+        expect(cartLines([kg(3, 2, 30), kg(3, 1, 31)], [limitedAssam]).map((line) => line.limit)).toStrictEqual([null, null]);
+        expect(cartLines([kg(3, 5, 30), kg(3, 2, 31)], [limitedAssam]).map((line) => line.limit)).toStrictEqual(['above', 'above']);
+        expect(cartLines([kg(3, 1, 30), kg(3, 1, 31)], [limitedAssam]).map((line) => line.limit)).toStrictEqual(['below', 'below']);
     });
 
     it('takes a missing end as no limit there', () => {
-        expect(cartLines({ 3: kg(999) }, [{ ...product(3), minKilograms: 2 }])[0].limit).toBeNull();
-        expect(cartLines({ 3: kg(1) }, [{ ...product(3), maxKilograms: 5 }])[0].limit).toBeNull();
+        expect(cartLines([kg(3, 999)], [{ ...product(3), minKilograms: 2 }])[0].limit).toBeNull();
+        expect(cartLines([kg(3, 1)], [{ ...product(3), maxKilograms: 5 }])[0].limit).toBeNull();
     });
 
     it('stops a stepper at the maximum, but never stops it coming down', () => {
@@ -133,6 +165,12 @@ describe('Order Limits', () => {
         expect(cappedKilograms(limited, 9)).toBe(5);
         expect(cappedKilograms(product(3), 9)).toBe(9);
         expect(cappedKilograms(limited, 1)).toBe(1);
+    });
+
+    it('stops a Pack\'s stepper where the tea\'s whole weight reaches the maximum', () => {
+        expect(cappedKilograms(limited, 4, 0, 3)).toBe(2);
+        expect(cappedKilograms(limited, 4, 1, 5)).toBe(1);
+        expect(cappedKilograms(limited, 0, 1, 5)).toBe(0);
     });
 });
 
@@ -163,10 +201,11 @@ describe('স্টক শেষ', () => {
         expect(cappedKilograms({ ...product(3), freeGrams: 0 }, 1, 3)).toBe(1);
     });
 
-    it('flags a line holding more than is free', () => {
-        expect(cartLines({ 3: kg(3) }, [counted])[0].isShort).toBe(true);
-        expect(cartLines({ 3: kg(2) }, [counted])[0].isShort).toBe(false);
-        expect(cartLines({ 3: kg(999) }, [product(3)])[0].isShort).toBe(false);
+    it('flags a line holding more than is free, the tea weighed across its Packs', () => {
+        expect(cartLines([kg(3, 3)], [counted])[0].isShort).toBe(true);
+        expect(cartLines([kg(3, 2)], [counted])[0].isShort).toBe(false);
+        expect(cartLines([kg(3, 999)], [product(3)])[0].isShort).toBe(false);
+        expect(cartLines([kg(3, 2, 30), kg(3, 1, 31)], [{ ...assam, freeGrams: 2500 }]).map((line) => line.isShort)).toStrictEqual([true, true]);
     });
 });
 
@@ -200,7 +239,11 @@ describe('priceSteps', () => {
 
 describe('onlyOrderable', () => {
     it('forgets lines for Products no longer sent or not Available, so they never come back unasked', () => {
-        expect(onlyOrderable({ 3: { kilograms: 8, packId: 30 }, 9: kg(2), 11: kg(5) }, [product(3), product(9, false)])).toStrictEqual({ 3: { kilograms: 8, packId: 30 } });
+        expect(onlyOrderable([kg(3, 8, 30), kg(9, 2), kg(11, 5)], [product(3), product(9, false)])).toStrictEqual([kg(3, 8, 30)]);
+    });
+
+    it('names the Pack each line is supplied in', () => {
+        expect(onlyOrderable([kg(3, 2), kg(3, 1, 31)], [assam])).toStrictEqual([kg(3, 2, 30), kg(3, 1, 31)]);
     });
 });
 
@@ -222,7 +265,7 @@ describe('quoteLine', () => {
     const strong = product(7);
 
     it('prices the line as the Cart would hold it, from the Tier for the whole Cart with it', () => {
-        const quote = quoteLine({ 7: kg(4) }, [premium, strong], { deliveryBands: bands }, 3, 2, 31);
+        const quote = quoteLine([kg(7, 4)], [premium, strong], { deliveryBands: bands }, 3, 2, 31);
 
         expect(quote?.line.pack).toStrictEqual({ id: 31, grams: 250 });
         expect(quote?.line.packets).toBe(8);
@@ -231,12 +274,13 @@ describe('quoteLine', () => {
         expect(quote?.totalKilograms).toBe(6);
     });
 
-    it('stands in for what the Cart already holds of the tea, Pack and all', () => {
-        const quote = quoteLine({ 3: { kilograms: 9, packId: 30 } }, [premium], { deliveryBands: bands }, 3, 2, 31);
+    it('stands in for what that Pack already holds, the tea\'s other Packs counted beside it', () => {
+        const quote = quoteLine([kg(3, 9, 30), kg(3, 1, 31)], [premium], { deliveryBands: bands }, 3, 2, 31);
 
-        expect(quote?.totalKilograms).toBe(2);
+        expect(quote?.totalKilograms).toBe(11);
         expect(quote?.line.pack?.id).toBe(31);
-        expect(quote?.priced.tierPrice).toBe(62000);
+        expect(quote?.line.kilograms).toBe(2);
+        expect(quote?.priced.tierPrice).toBe(58900);
     });
 
     it('gives no packets where the Pack cannot make the Kilograms exactly', () => {

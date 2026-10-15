@@ -7,7 +7,7 @@ import { Stepper } from '@/components/cart/stepper';
 import { bn } from '@/lang/bn';
 import { formatPhone, toBanglaDigits } from '@/lib/bangla';
 import { firstKilograms, rowAnchor, type CartProduct } from '@/lib/cart';
-import { gramsOfPackets, workableKilograms } from '@/lib/grams';
+import { gramsOfPackets } from '@/lib/grams';
 import type { CartPack } from '@/lib/retail-cart';
 import { priceRetailCart } from '@/lib/retail-pricing';
 import { withReturnPath } from '@/lib/return-path';
@@ -108,42 +108,30 @@ function BulkPurchase({ product }: { product: BulkProductCard }) {
 }
 
 /**
- * The Pack, starting on the default, the Kilograms, the packets they make,
+ * The Kilograms in the tea's default পাইকারি Pack, the packets they make,
  * the Tier Price per Kilogram for the Cart with this line in it, and the
  * line's total, all as they change. The choice is the buyer's until it is
- * added — as the pack chooser's count is — which sets the tea's line in the
- * Cart and goes on to its Bulk Order row. A new Pack moves the Kilograms on
- * to the nearest it makes exactly.
+ * added — as the pack chooser's count is — which sets the default Pack's
+ * line in the Cart and goes on to its Bulk Order row, where its other Packs
+ * are offered too.
  */
 function BulkControls({ product }: { product: CartProduct }) {
     const { links } = usePage().props;
     const cart = useCart();
     const taka = useTaka();
     const held = cart.lineOf(product.id);
-    const [packId, setPackId] = useState<number | null>(product.defaultPackId);
-    const [kilograms, setKilograms] = useState(() => firstKilograms(product, product.defaultPackId));
+    const [kilograms, setKilograms] = useState(() => firstKilograms(product, null));
     const most = cart.mostKilogramsOf(product.id);
     const least = Math.max(1, product.minKilograms ?? 1);
-    const quote = cart.quote(product.id, kilograms, packId);
+    const quote = cart.quote(product.id, kilograms, null);
     const canAdd = quote !== null && quote.line.packets !== null && quote.line.limit === null && !quote.line.isShort;
 
-    const choosePack = (chosenId: number) => {
-        const pack = product.packs.find((candidate) => candidate.id === chosenId);
-
-        setPackId(chosenId);
-
-        if (pack !== undefined) {
-            setKilograms(Math.min(most, workableKilograms(kilograms, pack.grams).find((workable) => workable >= kilograms) ?? kilograms));
-        }
-    };
-
-    /** The stored Cart appears as the page comes alive; start from what it holds of this tea. */
+    /** The stored Cart appears as the page comes alive; start from what it holds of this tea in its default Pack. */
     useEffect(() => {
         if (held !== null) {
             setKilograms(held.kilograms);
-            setPackId(held.pack?.id ?? null);
         }
-    }, [held?.kilograms, held?.pack?.id]);
+    }, [held?.kilograms]);
 
     return (
         <>
@@ -163,7 +151,7 @@ function BulkControls({ product }: { product: CartProduct }) {
 
             {quote !== null && (
                 <>
-                    <BulkPackLine line={quote.line} onPackChange={choosePack} />
+                    <BulkPackLine line={quote.line} />
 
                     <dl className="m-0 flex flex-col gap-2 border-t border-divider pt-3 text-[14px]">
                         <div className="flex items-baseline justify-between gap-3">
@@ -185,7 +173,7 @@ function BulkControls({ product }: { product: CartProduct }) {
                 type="button"
                 disabled={!canAdd}
                 onClick={() => {
-                    cart.set(product.id, kilograms, packId ?? undefined);
+                    cart.set(product.id, kilograms);
                     router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
                 }}
                 className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"

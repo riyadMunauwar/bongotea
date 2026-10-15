@@ -20,8 +20,8 @@ use Illuminate\Validation\Rule;
  * Cart by default, or the packet basket (ADR-0034). A request carrying both
  * kinds of line is refused: an Order is one kind or the other.
  *
- * Nothing here decides a price. The lines are which Products and how many
- * Kilograms; the Quote is only shape-checked, because comparing it is
+ * Nothing here decides a price. The lines are which Products, in which
+ * Packs, and how many Kilograms — a Product in several Packs a line each; the Quote is only shape-checked, because comparing it is
  * Capture's job. Every message is the buyer's, so every message is Bangla.
  */
 class CheckoutRequest extends FormRequest
@@ -85,15 +85,32 @@ class CheckoutRequest extends FormRequest
     {
         return [
             'packs' => ['prohibited'],
-            'lines' => ['required', 'array', 'list'],
-            'lines.*.productId' => ['required', 'integer', 'distinct', Rule::exists(Product::class, 'id')],
+            'lines' => ['required', 'array', 'list', self::eachPackOnce(...)],
+            'lines.*.productId' => ['required', 'integer', Rule::exists(Product::class, 'id')],
             'lines.*.kilograms' => ['required', 'integer', 'min:1', 'max:'.self::MAX_KILOGRAMS],
 
             /** Not checked to exist here: a Pack removed since it was chosen is Capture's to refuse, with the Cart as it is now. */
             'lines.*.packId' => ['nullable', 'integer', 'min:1'],
-            'quote.lines.*.productId' => ['required', 'integer', 'distinct'],
+            'quote.lines.*.productId' => ['required', 'integer'],
             'quote.lines.*.tierPrice' => ['required', 'integer', 'min:0'],
         ];
+    }
+
+    /**
+     * Refuses the same Product in the same Pack twice: a tea may come in
+     * several of its Packs, a line each, but each Pack once. Lines naming no
+     * Pack are left to Capture, which knows each Product's default.
+     */
+    private static function eachPackOnce(string $attribute, mixed $lines, Closure $fail): void
+    {
+        $named = array_filter(
+            array_map(fn (mixed $line): ?string => is_array($line) && isset($line['productId'], $line['packId']) ? $line['productId'].'-'.$line['packId'] : null, (array) $lines),
+            fn (?string $key): bool => $key !== null,
+        );
+
+        if (count($named) !== count(array_unique($named))) {
+            $fail('পাইকারি কার্টে একই চা একই প্যাকেটে দুবার আছে। কার্ট দেখে আবার চেষ্টা করুন।');
+        }
     }
 
     /**

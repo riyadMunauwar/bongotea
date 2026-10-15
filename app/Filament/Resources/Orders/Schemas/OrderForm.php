@@ -27,6 +27,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Component as SchemaComponent;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -262,12 +263,13 @@ class OrderForm
                                     ->options(fn (?Order $record): array => self::productOptions($record))
                                     ->required()
                                     ->searchable()
-                                    ->distinct()
                                     ->live()
                                     /** Another tea starts again from its own default পাইকারি Pack. */
                                     ->afterStateUpdated(fn (callable $set): mixed => $set('pack_id', null))
                                     ->visible(fn (Get $get, ?Order $record): bool => ! self::isRetail($get('../../kind'), $record))
                                     ->rule(fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record))
+                                    /** A tea may be on a bulk Order in several of its Packs, but in each only once. */
+                                    ->rule(fn (Get $get, ?Order $record, Select $component): Closure => self::onceInEachPack($get, $record, self::itemKey($component)))
                                     ->columnSpan(2),
 
                                 TextInput::make('kilograms')
@@ -297,7 +299,7 @@ class OrderForm
                                     ->placeholder(fn (Get $get, ?Order $record): ?string => self::isRetail($get('../../kind'), $record) ? null : self::defaultPackPlaceholder($get('product_id')))
                                     ->required(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
                                     ->searchable(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
-                                    ->distinct()
+                                    ->distinct(fn (Get $get, ?Order $record): bool => self::isRetail($get('../../kind'), $record))
                                     ->live()
                                     ->rule(
                                         fn (Get $get, ?Order $record): Closure => self::overrideWithinMrp($get, $record),
@@ -521,6 +523,29 @@ class OrderForm
                 'pack_id' => $get('pack_id'),
                 $field => $value,
             ]);
+
+            if ($problem !== null) {
+                $fail($problem);
+            }
+        };
+    }
+
+    /**
+     * Refuses a bulk row on its Product where an earlier row already holds
+     * the tea in the Pack this one would be supplied in. Only asked of a save
+     * that reprices, as `Repricing::apply()` is the one that would refuse it.
+     */
+    private static function onceInEachPack(Get $get, ?Order $record, string $key): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record, $key): void {
+            $lines = $get('../../lines');
+            $lines = is_array($lines) ? $lines : [];
+
+            if ($record !== null && ! Repricing::changes($record, $lines)) {
+                return;
+            }
+
+            $problem = Repricing::repeatProblem($lines, $key);
 
             if ($problem !== null) {
                 $fail($problem);
@@ -820,7 +845,7 @@ class OrderForm
     }
 
     /** The key a repeater row is held under, read off the row's own state path. */
-    private static function itemKey(TextEntry $component): string
+    private static function itemKey(SchemaComponent $component): string
     {
         return Str::afterLast($component->getContainer()->getStatePath(), '.');
     }

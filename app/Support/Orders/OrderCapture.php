@@ -69,8 +69,11 @@ class OrderCapture
      * from before bulk lines had Packs — is supplied in its Product's default
      * পাইকারি Pack; a line naming a Pack since deleted names null, and is
      * refused like a Pack that cannot be had. The Pack never prices the line.
+     * A Product may come in several of its Packs, a line each, and its
+     * Kilograms across them are one Product's to its Tier, its Order Limit
+     * and its stock; the same Product in the same Pack twice is refused.
      *
-     * @param  list<array{product: Product, kilograms: int, pack?: Pack|null}>  $lines  the Cart, one line per Product
+     * @param  list<array{product: Product, kilograms: int, pack?: Pack|null}>  $lines  the Cart, one line per Product + Pack
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
      *
@@ -84,12 +87,12 @@ class OrderCapture
             throw new CheckoutUnavailable('An Order was captured with no District.');
         }
 
-        $this->refuseMalformed($lines);
-
         $lines = array_map(fn (array $line): array => [
             ...$line,
             'pack' => array_key_exists('pack', $line) ? $line['pack'] : $line['product']->defaultBulkPack,
         ], $lines);
+
+        $this->refuseMalformed($lines);
 
         /**
          * Priced before the transaction opens, so a Cart that cannot be sold
@@ -110,10 +113,12 @@ class OrderCapture
         $customer = Customer::forPhone($details['phone']);
 
         return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
+            /** A Product in several Packs draws on its one pool, so its lines' weights are added before anything is compared. */
             $wanted = [];
 
             foreach ($lines as $line) {
-                $wanted[$line['product']->getKey()] = Grams::fromKilograms($line['kilograms']);
+                $productId = $line['product']->getKey();
+                $wanted[$productId] = ($wanted[$productId] ?? 0) + Grams::fromKilograms($line['kilograms']);
             }
 
             $short = $this->beyondFreeToSell($wanted);
@@ -417,6 +422,9 @@ class OrderCapture
         if ($refusals !== []) {
             $first = array_key_first($refusals);
 
+            /** A Product refused in one of its Packs is left out in every one, as the buyer will be shown it. */
+            $orderable = array_values(array_filter($orderable, fn (array $line): bool => ! array_key_exists($line['product']->getKey(), $refusals)));
+
             throw new QuoteRefused("Product [{$first}] {$refusals[$first]}.", self::priceOf($orderable), array_keys($refusals));
         }
 
@@ -490,7 +498,12 @@ class OrderCapture
     }
 
     /**
-     * @param  list<array{product: Product, kilograms: int}>  $lines
+     * Refuses an empty Cart, a line with no Kilograms, and a Product in the
+     * same Pack twice — read once each line is in its Pack, so a line naming
+     * none and one naming the default are the same Pack. A line whose Pack is
+     * gone is left for the Pack check to refuse.
+     *
+     * @param  list<array{product: Product, kilograms: int, pack: Pack|null}>  $lines
      *
      * @throws CheckoutUnavailable
      */
@@ -509,11 +522,17 @@ class OrderCapture
                 throw new CheckoutUnavailable("Product [{$product->getKey()}] was captured with no kilograms.");
             }
 
-            if (isset($seen[$product->getKey()])) {
-                throw new CheckoutUnavailable("Product [{$product->getKey()}] appears twice in one Cart.");
+            if ($line['pack'] === null) {
+                continue;
             }
 
-            $seen[$product->getKey()] = true;
+            $key = $product->getKey().'-'.$line['pack']->getKey();
+
+            if (isset($seen[$key])) {
+                throw new CheckoutUnavailable("Product [{$product->getKey()}] appears twice in Pack [{$line['pack']->getKey()}] in one Cart.");
+            }
+
+            $seen[$key] = true;
         }
     }
 

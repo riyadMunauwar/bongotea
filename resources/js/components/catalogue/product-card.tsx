@@ -41,7 +41,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
         <article
             className={cn(
                 'flex min-w-0 flex-col overflow-hidden rounded-[10px] border bg-white transition-[border-color,box-shadow] hover:border-green-200 hover:shadow-card',
-                kilograms > 0 ? 'border-green-200' : 'border-border',
+                cart.teaKilogramsOf(product.id) > 0 ? 'border-green-200' : 'border-border',
                 className,
             )}
         >

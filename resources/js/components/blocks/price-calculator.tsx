@@ -144,8 +144,8 @@ function Panel({ cart, products }: { cart: UseCart; products: BulkProductCard[] 
 
             {priced.lines.length > 0 && (
                 <div className="flex flex-col gap-2 border-y border-white/12 py-[14px]">
-                    {priced.lines.map((line) => (
-                        <div key={line.productId} className="flex justify-between gap-[10px] text-[14px]">
+                    {priced.lines.map((line, index) => (
+                        <div key={index} className="flex justify-between gap-[10px] text-[14px]">
                             <span className="min-w-0 text-on-dark-sub">
                                 {names.get(line.productId)}{' '}
                                 <span className="text-night-faint">

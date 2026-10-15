@@ -56,6 +56,20 @@ describe('beaconItems', () => {
 
         expect(beaconItems(priced)).toBe('12:4,14:2');
     });
+
+    it('names a tea in several Packs once, its Kilograms added up', () => {
+        const priced = priceCart(book, [
+            { product: gold, kilograms: 4 },
+            { product: green, kilograms: 2 },
+            { product: gold, kilograms: 3 },
+        ]);
+
+        expect(beaconItems(priced)).toBe('12:7,14:2');
+        expect(momentSelection(priced, 100).lines).toStrictEqual([
+            { id: '12', quantity: 7, unitPrice: 430 },
+            { id: '14', quantity: 2, unitPrice: 400 },
+        ]);
+    });
 });
 
 describe('a Pack', () => {

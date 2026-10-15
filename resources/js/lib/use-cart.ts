@@ -12,8 +12,8 @@ import {
     quoteLine,
     readCart,
     subscribeToCart,
+    packFor,
     withKilograms,
-    withPack,
     writeCart,
     type BulkCartLine,
     type CartProduct,
@@ -24,22 +24,22 @@ import { priceCart, type PricedCart } from './pricing';
 import { useMoments } from './use-moments';
 
 export type UseCart = {
-    /** The Kilograms of a Product in the Cart; nought for one a buyer cannot have now. */
-    kilogramsOf: (productId: number) => number;
-    /** A Product's line with its Pack and packet count, or null while it holds no Kilograms. */
-    lineOf: (productId: number) => BulkCartLine | null;
-    /** The most Kilograms of a Product a stepper may reach: its পাইকারি maximum or what is free to sell, whichever is lower, else 999. */
-    mostKilogramsOf: (productId: number) => number;
+    /** The Kilograms of a Product in one of its Packs, its default where none is named; nought for one a buyer cannot have now. */
+    kilogramsOf: (productId: number, packId?: number | null) => number;
+    /** A Product's whole Kilograms across its Packs. */
+    teaKilogramsOf: (productId: number) => number;
+    /** A Product's line in one of its Packs, its default where none is named, with its packet count; null while it holds no Kilograms. */
+    lineOf: (productId: number, packId?: number | null) => BulkCartLine | null;
+    /** The most Kilograms a Pack's stepper may reach, its default's where none is named: the tea's পাইকারি maximum or what is free to sell, whichever is lower, else 999, less what its other Packs hold. */
+    mostKilogramsOf: (productId: number, packId?: number | null) => number;
     /** Whether a counted Product has less than a Kilogram free to sell: স্টক শেষ পাইকারি, though still Available. */
     isSoldOut: (productId: number) => boolean;
-    /** Sets a Product's Kilograms, clamped to 0–999 and stopped at its পাইকারি maximum and what is free to sell, but never stopped coming down; refused for a Product a buyer cannot have now. With a Pack of the Product's, its Kilograms are supplied in that. From none to some is an Added to Cart. */
-    set: (productId: number, kilograms: number, packId?: number) => void;
+    /** Sets a Product's Kilograms in one of its Packs, its default where none is named, clamped to 0–999 and stopped where the tea's whole weight reaches its পাইকারি maximum or what is free to sell, but never stopped coming down; refused for a Product a buyer cannot have now. The tea from none to some is an Added to Cart. */
+    set: (productId: number, kilograms: number, packId?: number | null) => void;
     /** A Product's line were the Cart to hold these Kilograms of it in this Pack, priced with the rest of the Cart; null for one a buyer cannot have now. */
     quote: (productId: number, kilograms: number, packId: number | null) => LineQuote | null;
-    /** Chooses which of a Product's পাইকারি Packs its Kilograms are supplied in. */
-    setPack: (productId: number, packId: number) => void;
     clear: () => void;
-    /** The lines, in catalogue order, each with its Pack. */
+    /** The lines, in catalogue order, a tea in several Packs as a line each. */
     lines: BulkCartLine[];
     /** Every figure the Cart shows, worked out afresh as it changes. */
     priced: PricedCart;
@@ -59,7 +59,8 @@ export type UseCart = {
 /**
  * The one Cart, priced. Every view of the Cart goes through here, so a
  * stepper on a card, the header and the Bulk Order form all show the same
- * Kilograms, Packs and figures. The server draws an empty Cart — it cannot
+ * Kilograms, Packs and figures. A stepper that names no Pack — a card's, the
+ * price calculator's — is the tea's default Pack's. The server draws an empty Cart — it cannot
  * see the browser's storage — and the stored one appears as the page comes
  * alive.
  */
@@ -70,51 +71,56 @@ export function useCart(): UseCart {
 
     return useMemo(() => {
         const lines = cartLines(cart, pricing.products);
-        const held = new Map(lines.map((line) => [line.product.id, line]));
         const orderable = pricing.products.filter((product) => product.isAvailable);
-        const available = new Set(orderable.map((product) => product.id));
         const book = { deliveryBands: pricing.deliveryBands };
+        const productOf = (productId: number) => orderable.find((candidate) => candidate.id === productId);
+        const packIdOf = (product: CartProduct, packId: number | null) => packFor(product, packId)?.id ?? null;
+        const lineIn = (productId: number, packId: number | null) => {
+            const product = productOf(productId);
+
+            return product === undefined ? null : (lines.find((line) => line.product.id === productId && (line.pack?.id ?? null) === packIdOf(product, packId)) ?? null);
+        };
+        const teaKilogramsOf = (productId: number) => lines.reduce((sum, line) => sum + (line.product.id === productId ? line.kilograms : 0), 0);
 
         return {
-            kilogramsOf: (productId: number) => held.get(productId)?.kilograms ?? 0,
-            lineOf: (productId: number) => held.get(productId) ?? null,
-            mostKilogramsOf: (productId: number) => {
-                const product = orderable.find((candidate) => candidate.id === productId);
+            kilogramsOf: (productId: number, packId: number | null = null) => lineIn(productId, packId)?.kilograms ?? 0,
+            teaKilogramsOf,
+            lineOf: (productId: number, packId: number | null = null) => lineIn(productId, packId),
+            mostKilogramsOf: (productId: number, packId: number | null = null) => {
+                const product = productOf(productId);
 
-                return product === undefined ? MAX_KILOGRAMS : mostKilograms(product);
+                if (product === undefined) {
+                    return MAX_KILOGRAMS;
+                }
+
+                return Math.max(0, mostKilograms(product) - teaKilogramsOf(productId) + (lineIn(productId, packId)?.kilograms ?? 0));
             },
             isSoldOut: (productId: number) => {
-                const product = orderable.find((candidate) => candidate.id === productId);
+                const product = productOf(productId);
 
                 return product !== undefined && isBulkSoldOut(product);
             },
-            set: (productId: number, kilograms: number, packId?: number) => {
-                const chosen = orderable.find((candidate) => candidate.id === productId);
+            set: (productId: number, kilograms: number, packId: number | null = null) => {
+                const chosen = productOf(productId);
 
                 if (chosen === undefined) {
                     return;
                 }
 
+                const chosenId = packIdOf(chosen, packId);
                 const before = onlyOrderable(readCart(), pricing.products);
-                const counted = withKilograms(before, productId, cappedKilograms(chosen, kilograms, before[productId]?.kilograms ?? 0));
-                const after = chosen.packs.some((pack) => pack.id === packId) ? withPack(counted, productId, packId as number) : counted;
+                const teaBefore = before.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
+                const held = before.find((entry) => entry.productId === productId && entry.packId === chosenId)?.kilograms ?? 0;
+                const after = withKilograms(before, productId, chosenId, cappedKilograms(chosen, kilograms, held, teaBefore - held));
+                const teaAfter = after.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
 
                 writeCart(after);
 
-                if ((before[productId]?.kilograms ?? 0) === 0 && (after[productId]?.kilograms ?? 0) > 0) {
-                    const product = orderable.find((candidate) => candidate.id === productId);
-
-                    if (product !== undefined) {
-                        moments.addedToCart(product, after[productId].kilograms, Object.keys(before).length === 0);
-                    }
+                if (teaBefore === 0 && teaAfter > 0) {
+                    moments.addedToCart(chosen, teaAfter, before.length === 0);
                 }
             },
             quote: (productId: number, kilograms: number, packId: number | null) => quoteLine(cart, pricing.products, book, productId, kilograms, packId),
-            setPack: (productId: number, packId: number) => {
-                if (held.get(productId)?.product.packs.some((pack) => pack.id === packId)) {
-                    writeCart(withPack(onlyOrderable(readCart(), pricing.products), productId, packId));
-                }
-            },
             clear: () => writeCart(EMPTY_CART),
             lines,
             priced: priceCart(book, lines),

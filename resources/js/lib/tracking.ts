@@ -66,8 +66,21 @@ export function momentSelection(priced: PricedCart, minorUnitsPerTaka: number): 
         value: priced.subtotal / minorUnitsPerTaka,
         count: priced.totalKilograms,
         cart: 'bulk',
-        lines: priced.lines.map((line) => ({ id: String(line.productId), quantity: line.kilograms, unitPrice: line.tierPrice / minorUnitsPerTaka })),
+        lines: byProduct(priced).map((line) => ({ id: String(line.productId), quantity: line.kilograms, unitPrice: line.tierPrice / minorUnitsPerTaka })),
     };
+}
+
+/** A priced Cart's lines as one per tea, its Packs' Kilograms added up: every Pack of a tea is priced alike, and the platforms know a tea, not its Packs. */
+function byProduct(priced: PricedCart): { productId: number; kilograms: number; tierPrice: number }[] {
+    const teas = new Map<number, { productId: number; kilograms: number; tierPrice: number }>();
+
+    for (const line of priced.lines) {
+        const tea = teas.get(line.productId);
+
+        teas.set(line.productId, { productId: line.productId, kilograms: (tea?.kilograms ?? 0) + line.kilograms, tierPrice: line.tierPrice });
+    }
+
+    return [...teas.values()];
 }
 
 /** A Pack's weight as the server names it (`Pack::nameFor()`): "250 g", "1 kg", "1.5 kg". */
@@ -103,7 +116,7 @@ export function retailBeaconItems(priced: PricedRetailCart): string {
 
 /** What the beacon is told was being bought: Products and Kilograms, never a price — the server prices them itself. */
 export function beaconItems(priced: PricedCart): string {
-    return priced.lines.map((line) => `${line.productId}:${line.kilograms}`).join(',');
+    return byProduct(priced).map((line) => `${line.productId}:${line.kilograms}`).join(',');
 }
 
 /** A deduplication id for one Moment, unique enough that two never collide. */

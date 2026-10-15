@@ -1,14 +1,14 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { BulkPackLine } from '@/components/cart/bulk-pack-line';
-import { deliveryNote, discountLabel, feeText, nextDropText, stepName } from '@/components/cart/figures';
+import { BulkPackLine, TeaNotices } from '@/components/cart/bulk-pack-line';
+import { deliveryNote, discountLabel, feeText, nextDropText, packName, stepName } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
-import { rowAnchor, rowFromAnchor, type PriceStep } from '@/lib/cart';
+import { rowAnchor, rowFromAnchor, type BulkPack, type PriceStep } from '@/lib/cart';
 import { nextDropAbove, tierFor } from '@/lib/pricing';
 import { useCart, type UseCart } from '@/lib/use-cart';
 import { useTaka } from '@/lib/use-taka';
@@ -27,7 +27,9 @@ const FLASH_MILLISECONDS = 1600;
  * The Cart as a form: every published Product by Category, each row with its
  * price now — the MRP struck through and what is off it whenever the price
  * is below it — what it will cost at its next cheaper Tier, −/+, a
- * typed quantity and quick-set chips, and its line total. Beside it (below
+ * typed quantity and quick-set chips, and its line total. A tea sold in
+ * several পাইকারি Packs has −/+ and a typed quantity for each, with the
+ * packets it makes, all counted as one tea's Kilograms. Beside it (below
  * on a phone, as a bar at the bottom) the summary of the whole Cart, and
  * above the rows "সব মুছুন" while there is anything to clear. A row
  * named in the address (`#tea-12`, from a Product page's add button) is
@@ -107,8 +109,11 @@ function useFlashedRow(): number | null {
 
 function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard; cart: UseCart; quickChips: boolean; flashed: boolean }) {
     const taka = useTaka();
-    const kilograms = cart.kilogramsOf(product.id);
+    const kilograms = cart.teaKilogramsOf(product.id);
+    const packs = cart.products.find((candidate) => candidate.id === product.id)?.packs ?? [];
+    const isSeveral = packs.length > 1;
     const line = cart.lineOf(product.id);
+    const lastLine = cart.lines.filter((candidate) => candidate.product.id === product.id).at(-1) ?? null;
     const total = cart.priced.totalKilograms;
     const tier = tierFor(product, total);
     const next = product.tiers.length > 1 ? nextDropAbove(product, total) : null;
@@ -159,14 +164,25 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                     {!isGreyed && next === null && product.tiers.length > 1 && total > 0 && (
                         <span className="text-[12px] font-semibold text-primary">{bn.bulkOrder.bestNow}</span>
                     )}
-                    {line !== null && <BulkPackLine line={line} onPackChange={(packId) => cart.setPack(line.product.id, packId)} className="mt-1" />}
+                    {!isSeveral && line !== null && <BulkPackLine line={line} className="mt-1" />}
+                    {isSeveral && lastLine !== null && (
+                        <span className="mt-1 flex flex-wrap text-[12px] leading-[1.5] md:text-[13px]">
+                            <TeaNotices line={lastLine} />
+                        </span>
+                    )}
                 </div>
                 {kilograms > 0 && (
                     <span className="text-[13px] font-bold whitespace-nowrap text-primary-dark min-[1100px]:text-[15px]">{taka(tier.price * kilograms)}</span>
                 )}
             </div>
 
-            {!isGreyed ? (
+            {!isGreyed && isSeveral ? (
+                <div className="flex flex-col gap-2 min-[1100px]:w-[300px] min-[1100px]:flex-none">
+                    {packs.map((pack) => (
+                        <PackRow key={pack.id} productId={product.id} pack={pack} cart={cart} />
+                    ))}
+                </div>
+            ) : !isGreyed ? (
                 <div className="flex items-center gap-2 min-[1100px]:gap-[6px]">
                     {quickChips && (
                         <div className="grid max-w-[260px] min-w-0 flex-1 grid-cols-4 gap-1 max-md:max-w-none min-[1100px]:flex min-[1100px]:max-w-none min-[1100px]:gap-[6px]">
@@ -198,6 +214,28 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
             ) : (
                 <span className="text-[13px] font-semibold text-muted">{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</span>
             )}
+        </div>
+    );
+}
+
+/** One of a tea's পাইকারি Packs on its row: its weight, −/+ for the Kilograms in it, and the packets they make. */
+function PackRow({ productId, pack, cart }: { productId: number; pack: BulkPack; cart: UseCart }) {
+    const line = cart.lineOf(productId, pack.id);
+
+    return (
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+                <span className="flex-1 text-[13px] font-semibold text-ink min-[1100px]:text-[14px]">{bn.cart.inPacks(packName(pack.grams))}</span>
+                <Stepper
+                    kilograms={line?.kilograms ?? 0}
+                    onChange={(value) => cart.set(productId, value, pack.id)}
+                    editable
+                    max={cart.mostKilogramsOf(productId, pack.id)}
+                    className="h-10 flex-none rounded-[10px] border border-input bg-white"
+                    buttonClassName="size-10 text-primary"
+                />
+            </div>
+            {line !== null && <BulkPackLine line={line} showTeaNotices={false} className="justify-end text-right" />}
         </div>
     );
 }
