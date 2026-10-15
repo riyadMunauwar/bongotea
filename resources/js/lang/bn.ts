@@ -166,7 +166,7 @@ export const bn = {
         step: (number: string) => `ধাপ ${number}`,
         viewOrder: 'অর্ডার দেখুন →',
         barLine: (kilograms: string) => `কার্টে মোট ${kilograms} কেজি`,
-        confirmClearBoth: 'কার্টের সবকিছু মুছে ফেলবেন?',
+        confirmClearOne: (cart: string) => `${cart}ের সবকিছু মুছে ফেলবেন?`,
         packLabel: 'প্যাকেট',
         packetCount: (kilograms: string, packets: string, pack: string) => `${kilograms} কেজি = ${packets} প্যাকেট × ${pack}`,
         unpackable: (pack: string, kilograms: string, workable: string) => `${pack} প্যাকেটে ${kilograms} কেজি হয় না — ${workable} কেজি নিন`,
