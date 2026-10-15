@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
     cappedCount,
     beyondFree,
@@ -8,11 +8,9 @@ import {
     onlyOrderablePacks,
     outsideLimits,
     parseRetailCart,
-    readRetailCart,
     retailLines,
     unorderableLines,
     withCount,
-    writeRetailCart,
     type CartPack,
 } from './retail-cart';
 
@@ -151,28 +149,5 @@ describe('the Packs a buyer cannot order now', () => {
 
     it('are dropped when the Cart is written back', () => {
         expect(onlyOrderablePacks(cart, [assam, switchedOff])).toStrictEqual({ 4: 2 });
-    });
-});
-
-describe('the stored retail Cart', () => {
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
-    it('is written under a key of its own, leaving the bulk Cart\'s untouched', () => {
-        const stored = new Map<string, string>([['bongotea.cart', '{"3":8}']]);
-
-        vi.stubGlobal('window', {
-            localStorage: {
-                getItem: (key: string) => stored.get(key) ?? null,
-                setItem: (key: string, value: string) => stored.set(key, value),
-            },
-        });
-
-        writeRetailCart({ 4: 2 });
-
-        expect(stored.get('bongotea.retail-cart')).toBe('{"4":2}');
-        expect(stored.get('bongotea.cart')).toBe('{"3":8}');
-        expect(readRetailCart()).toStrictEqual({ 4: 2 });
     });
 });

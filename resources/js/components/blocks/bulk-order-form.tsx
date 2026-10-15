@@ -10,6 +10,7 @@ import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { rowAnchor, rowFromAnchor, type BulkPack, type PriceStep } from '@/lib/cart';
 import { nextDropAbove, tierFor } from '@/lib/pricing';
+import { checkoutFor } from '@/lib/contents';
 import { useCart, type UseCart } from '@/lib/use-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
@@ -35,8 +36,8 @@ const FLASH_MILLISECONDS = 1600;
  * named in the address (`#tea-12`, from a Product page's add button) is
  * scrolled to and flashed.
  */
-export function BulkOrderForm({ heading, text, quickChips, showTierList, categories }: BulkOrderFormProps) {
-    const cart = useCart();
+export function BulkOrderForm({ cart: drawn, heading, text, quickChips, showTierList, categories }: BulkOrderFormProps) {
+    const cart = useCart(drawn?.id ?? null);
     const flashed = useFlashedRow();
     const steps = cart.steps;
 
@@ -284,7 +285,7 @@ function Summary({ cart, steps }: { cart: UseCart; steps: PriceStep[] | null }) 
                     <StepCells steps={steps} className="px-1 py-[7px] text-[12px] leading-[1.45]" />
                 </div>
             )}
-            <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="w-full p-[15px] text-[16px]">
+            <ContinueButton cartId={cart.cartId} disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="w-full p-[15px] text-[16px]">
                 {bn.bulkOrder.continue}
             </ContinueButton>
         </aside>
@@ -313,7 +314,7 @@ function BottomBar({ cart }: { cart: UseCart }) {
                     <span className="text-[12px] text-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
                     <b className="text-[21px] leading-[1.3] font-bold text-ink">{taka(priced.total)}</b>
                 </div>
-                <ContinueButton disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
+                <ContinueButton cartId={cart.cartId} disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
                     {bn.bulkOrder.continueShort}
                 </ContinueButton>
             </div>
@@ -322,14 +323,14 @@ function BottomBar({ cart }: { cart: UseCart }) {
 }
 
 /** On to the Checkout; greyed and inert while the Cart is empty. */
-function ContinueButton({ disabled, className, children }: { disabled: boolean; className: string; children: string }) {
+function ContinueButton({ cartId, disabled, className, children }: { cartId: number | null; disabled: boolean; className: string; children: string }) {
     const { links } = usePage().props;
 
     return (
         <button
             type="button"
             disabled={disabled}
-            onClick={() => router.visit(links.checkout)}
+            onClick={() => cartId !== null && router.visit(checkoutFor(links.checkout, cartId))}
             className={cn('cursor-pointer rounded-[10px] border-0 text-center font-semibold text-white disabled:cursor-not-allowed', disabled ? 'bg-disabled' : 'bg-primary hover:bg-primary-dark', className)}
         >
             {children}

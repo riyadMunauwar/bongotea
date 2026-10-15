@@ -18,7 +18,7 @@ import type { DeliveryChartProps } from '@/types/blocks';
 export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryChartProps) {
     const taka = useTaka();
     const { pricing } = usePage().props;
-    const { priced } = useCart();
+    const { priced } = useCart(usePage().props.startingCarts.bulk);
     const bands = pricing.deliveryBands;
     const dearest = Math.max(...bands.map((band) => band.fee));
     const free = bands.find((band) => band.fee === 0);

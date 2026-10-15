@@ -50,7 +50,7 @@ function retailCheckoutOf(array $lines, int $deliveryCharge, int $total, array $
         'phone' => '01712345678',
         'district' => 'Dhaka',
         'address' => 'House 4, Road 12, Banani',
-        'cart' => 'retail',
+        'cart' => openCart(OrderKind::Retail)->getKey(),
         'packs' => array_map(fn (array $line): array => ['packId' => $line[0]->getKey(), 'productId' => $line[0]->product_id, 'count' => $line[1]], $lines),
         'quote' => [
             'lines' => array_map(fn (array $line): array => ['packId' => $line[0]->getKey(), 'packPrice' => $line[2]], $lines),
@@ -61,10 +61,15 @@ function retailCheckoutOf(array $lines, int $deliveryCharge, int $total, array $
     ];
 }
 
-it('opens the Checkout for the packet basket when its link names it, and for the bulk Cart otherwise', function () {
-    $this->get(route('checkout', ['cart' => 'retail']))->assertInertia(fn (Assert $page) => $page->component('checkout')->where('cart', 'retail'));
-    $this->get(route('checkout'))->assertInertia(fn (Assert $page) => $page->where('cart', 'bulk'));
-    $this->get(route('checkout', ['cart' => 'nonsense']))->assertInertia(fn (Assert $page) => $page->where('cart', 'bulk'));
+it('opens the Checkout for the Cart its link names, reading the kind from the Cart', function () {
+    $retail = openCart(OrderKind::Retail);
+
+    $this->get(route('checkout', ['cart' => $retail->getKey()]))
+        ->assertInertia(fn (Assert $page) => $page->component('checkout')->where('cart.id', $retail->getKey())->where('cart.kind', 'retail')->where('cart.isOpen', true));
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page->where('cart.kind', 'bulk'));
+    $this->get(route('checkout'))->assertNotFound();
+    $this->get(route('checkout', ['cart' => 'retail']))->assertNotFound();
+    $this->get(route('checkout', ['cart' => 999]))->assertNotFound();
 });
 
 it('captures the packet basket as a retail Order of Pack lines, stamping each line\'s weight, prices and cost', function () {
@@ -197,7 +202,7 @@ it('refuses a request that mixes Kilogram and Pack lines', function () {
 
     $this->postJson(route('checkout.store'), [
         ...retailCheckoutOf([[$pack, 1, 27000]], 6000, 33000),
-        'cart' => 'bulk',
+        'cart' => openCart()->getKey(),
         'lines' => [['productId' => $tea->id, 'kilograms' => 1]],
     ])->assertUnprocessable()->assertJsonValidationErrors('packs');
 

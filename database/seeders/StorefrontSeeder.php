@@ -43,13 +43,14 @@ class StorefrontSeeder extends Seeder
 
     public function run(): void
     {
-        $this->startingCart(OrderKind::Retail, 'খুচরা অর্ডার করুন', 0);
-        $this->startingCart(OrderKind::Bulk, 'পাইকারি অর্ডার করুন', 1);
+        $retail = $this->startingCart(OrderKind::Retail, 'খুচরা অর্ডার করুন', 0);
+        $bulk = $this->startingCart(OrderKind::Bulk, 'পাইকারি অর্ডার করুন', 1);
 
         $this->systemPage(SystemPage::Home, 'হোম', 'home', self::homeBlocks());
 
         $this->systemPage(SystemPage::BulkOrder, 'পাইকারি অর্ডার', 'bulk-order', [
             self::block(BulkOrderForm::class, [
+                'cart_id' => $bulk->getKey(),
                 'heading' => 'একসাথে চা অর্ডার করুন',
                 'text' => 'যে যে চা লাগবে, শুধু কত কেজি লাগবে সেটি দিন। সব চা মিলিয়ে মোট কেজি অনুযায়ী দাম নিজে থেকেই হিসাব হবে।',
                 'quick_chips' => true,
@@ -59,6 +60,7 @@ class StorefrontSeeder extends Seeder
 
         $this->systemPage(SystemPage::PacketBasket, 'খুচরা কার্ট', 'packet-basket', [
             self::block(PacketBasket::class, [
+                'cart_id' => $retail->getKey(),
                 'heading' => 'আপনার খুচরা কার্ট',
                 'text' => 'নিজের কাপের জন্য প্যাকেটে চা। প্যাকেটের দাম আলাদা, পাইকারি কার্টের সাথে মেলানো হয় না।',
             ]),

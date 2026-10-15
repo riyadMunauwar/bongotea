@@ -58,6 +58,7 @@ function checkoutOf(array $lines, int $deliveryCharge, int $total, array $detail
         'address' => 'House 4, Road 12, Banani',
         'shop_name' => 'Rahim Tea Stall',
         'note' => 'Call before coming',
+        'cart' => openCart()->getKey(),
         'lines' => array_map(fn (array $line): array => ['productId' => $line[0]->getKey(), 'kilograms' => $line[1]], $lines),
         'quote' => [
             'lines' => array_map(fn (array $line): array => ['productId' => $line[0]->getKey(), 'tierPrice' => $line[2]], $lines),
@@ -77,7 +78,7 @@ function sevenKilograms(Product $premium, Product $strong, array $details = []):
 it('draws the checkout with every district and no payment choice while only cash on delivery is on', function () {
     $tea = premium();
 
-    $this->get(route('checkout'))
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('checkout')
@@ -92,7 +93,7 @@ it('offers a payment choice once more than one payment method is switched on, ea
     (new SslCommerzScript)->makeUsable();
     app(PaymentSettings::class)->with(['sslcommerzLogo' => 'payment-methods/ours.svg'])->save();
 
-    $this->get(route('checkout'))
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))
         ->assertInertia(fn (Assert $page) => $page->where('paymentMethods', [
             ['name' => 'cash_on_delivery', 'logoUrl' => asset('images/payment-methods/cash-on-delivery.svg')],
             ['name' => 'sslcommerz', 'logoUrl' => Storage::disk(PaymentSettings::LOGO_DISK)->url('payment-methods/ours.svg')],

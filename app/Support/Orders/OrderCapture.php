@@ -4,6 +4,7 @@ namespace App\Support\Orders;
 
 use App\Enums\OrderKind;
 use App\Enums\PaymentMethod;
+use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pack;
@@ -76,16 +77,19 @@ class OrderCapture
      * @param  list<array{product: Product, kilograms: int, pack?: Pack|null}>  $lines  the Cart, one line per Product + Pack
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
      * @param  Quote|null  $quote  what the Customer was shown; null where nobody was shown figures, as for an Order a seeder or a test captures
+     * @param  Cart|null  $cart  the Cart the Order is taken from, refused unless open and bulk; null where none is, as for an Order a seeder or a test captures
      *
      * @throws QuoteRefused where a Product or its Pack cannot be had now, a Product is outside its Order Limit, the Cart wants more than is Free to Sell, or the Quote disagrees with the store
      * @throws PackingRefused where a line's Kilograms are not a whole number of its Pack
-     * @throws CheckoutUnavailable where the Cart or the details cannot become an Order
+     * @throws CheckoutUnavailable where the Cart is closed or retail, or the Cart or the details cannot become an Order
      */
-    public function capture(array $lines, array $details, ?Quote $quote = null): Order
+    public function capture(array $lines, array $details, ?Quote $quote = null, ?Cart $cart = null): Order
     {
         if (blank($details['district'] ?? null)) {
             throw new CheckoutUnavailable('An Order was captured with no District.');
         }
+
+        self::refuseCart($cart, OrderKind::Bulk);
 
         $lines = array_map(fn (array $line): array => [
             ...$line,
@@ -112,7 +116,7 @@ class OrderCapture
          */
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
+        return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs, $cart): Order {
             /** A Product in several Packs draws on its one pool, so its lines' weights are added before anything is compared. */
             $wanted = [];
 
@@ -127,7 +131,7 @@ class OrderCapture
                 throw new QuoteRefused(self::shortMessage($short[0]), $priced, shortProductIds: $short);
             }
 
-            $order = $this->createOrder($customer, $details, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryBand?->label());
+            $order = $this->createOrder($customer, $details, $cart, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryBand?->label());
 
             foreach ($lines as $index => $line) {
                 $order->lines()->create($this->line($line['product'], $line['pack'], $priced->lines[$index], $costs));
@@ -150,15 +154,18 @@ class OrderCapture
      *
      * @param  list<array{packId: int, productId: int, pack: Pack|null, count: int}>  $lines  the packet basket, one line per Pack; a Pack since deleted is null
      * @param  array{name: string|null, phone: string, email?: string|null, address: string|null, district: string|null, shop_name?: string|null, note?: string|null, payment_method: PaymentMethod}  $details
+     * @param  Cart|null  $cart  the Cart the Order is taken from, refused unless open and retail
      *
      * @throws RetailQuoteRefused where a Pack cannot be ordered now, a Product is outside its Order Limit, or the Quote disagrees with the store
-     * @throws CheckoutUnavailable where the basket or the details cannot become an Order
+     * @throws CheckoutUnavailable where the Cart is closed or bulk, or the basket or the details cannot become an Order
      */
-    public function captureRetail(array $lines, array $details, ?RetailQuote $quote = null): Order
+    public function captureRetail(array $lines, array $details, ?RetailQuote $quote = null, ?Cart $cart = null): Order
     {
         if (blank($details['district'] ?? null)) {
             throw new CheckoutUnavailable('An Order was captured with no District.');
         }
+
+        self::refuseCart($cart, OrderKind::Retail);
 
         $this->refuseMalformedRetail($lines);
 
@@ -169,7 +176,7 @@ class OrderCapture
 
         $customer = Customer::forPhone($details['phone']);
 
-        return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs): Order {
+        return DB::transaction(function () use ($customer, $details, $lines, $priced, $costs, $cart): Order {
             /** Several Packs of one Product draw on its one pool, so their weights are added before anything is compared (ADR-0035). */
             $wanted = [];
 
@@ -189,7 +196,7 @@ class OrderCapture
                 throw new RetailQuoteRefused(self::shortMessage($short[0]), $priced, shortPackIds: $shortPacks);
             }
 
-            $order = $this->createOrder($customer, $details, OrderKind::Retail, $priced->deliveryCharge, self::RETAIL_DELIVERY_LABEL);
+            $order = $this->createOrder($customer, $details, $cart, OrderKind::Retail, $priced->deliveryCharge, self::RETAIL_DELIVERY_LABEL);
 
             foreach ($lines as $index => $line) {
                 $order->lines()->create($this->packLine($line['pack'], $priced->lines[$index], $costs));
@@ -257,14 +264,40 @@ class OrderCapture
     }
 
     /**
-     * The Order row itself, before its lines, the same for either kind.
+     * Refuses a Cart that is closed — switched off, on no published Page, or
+     * deleted — or of the other kind (ADR-0038): nobody checks out from a
+     * Cart the store has closed, and an Order is the kind of its Cart.
+     *
+     * @throws CheckoutUnavailable
+     */
+    private static function refuseCart(?Cart $cart, OrderKind $kind): void
+    {
+        if ($cart === null) {
+            return;
+        }
+
+        if ($cart->kind !== $kind) {
+            throw new CheckoutUnavailable("The Cart {$cart->name} is not {$kind->value}.");
+        }
+
+        if (! $cart->isOpen()) {
+            throw new CheckoutUnavailable("The Cart {$cart->name} is closed.");
+        }
+    }
+
+    /**
+     * The Order row itself, before its lines, the same for either kind. The
+     * Cart it came from is recorded with the name it bears now, so a Cart
+     * renamed or deleted later leaves the Order reading as it did.
      *
      * @param  array<string, mixed>  $details
      */
-    private function createOrder(Customer $customer, array $details, OrderKind $kind, int $deliveryCharge, ?string $deliveryLabel): Order
+    private function createOrder(Customer $customer, array $details, ?Cart $cart, OrderKind $kind, int $deliveryCharge, ?string $deliveryLabel): Order
     {
         return $customer->orders()->create([
             'kind' => $kind,
+            'cart_id' => $cart?->getKey(),
+            'cart_name' => $cart?->name,
             'customer_name' => $details['name'],
 
             /**

@@ -21,7 +21,7 @@ import type { BulkProductCard } from '@/types/catalogue';
  * page; and emptying it asks first, since that empties the Cart.
  */
 export function PriceCalculator({ heading, text, categories }: PriceCalculatorProps) {
-    const cart = useCart();
+    const cart = useCart(usePage().props.startingCarts.bulk);
 
     if (categories.length === 0) {
         return null;

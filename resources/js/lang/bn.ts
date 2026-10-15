@@ -288,6 +288,9 @@ export const bn = {
         suggestions: 'মিলে যাওয়া চা',
     },
     checkout: {
+        closed: (name: string) => `${name} এখন বন্ধ`,
+        closedHint: 'এই কার্ট থেকে এখন অর্ডার করা যাবে না।',
+        home: 'হোম পেজে যান',
         back: '← চা ও পরিমাণ বদলান',
         heading: 'কোথায় পাঠাবো?',
         name: 'আপনার নাম',

@@ -169,6 +169,7 @@ describe('Capture', function () {
 
         $this->postJson(route('checkout.store'), [
             ...limitDetails(),
+            'cart' => openCart()->getKey(),
             'lines' => [['productId' => $this->assam->getKey(), 'kilograms' => 6]],
             'quote' => ['lines' => [['productId' => $this->assam->getKey(), 'tierPrice' => 50000]], 'deliveryCharge' => 12000, 'total' => 312000],
         ])

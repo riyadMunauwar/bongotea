@@ -17,8 +17,8 @@ import { useTaka } from '@/lib/use-taka';
  */
 export function CartBar() {
     const { links } = usePage().props;
-    const cart = useCart();
-    const retail = useRetailCart();
+    const cart = useCart(usePage().props.startingCarts.bulk);
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const taka = useTaka();
 
     if (cart.isEmpty && retail.isEmpty) {

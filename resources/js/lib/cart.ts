@@ -1,25 +1,23 @@
 /**
- * The Cart (ADR-0029): a list of lines, `[{productId, packId, kilograms}]`,
- * kept in this browser's `localStorage` and nowhere else. Every view of it —
- * product-card steppers, the header, the Bulk Order form, the price
- * calculator — reads and writes this one store through `useCart()`, so no two
- * quantities can disagree.
+ * A bulk Cart's Contents (ADR-0029, ADR-0038): a list of lines,
+ * `[{productId, packId, kilograms}]`, kept per Cart in this browser's
+ * `localStorage` (`lib/contents.ts`) and nowhere else. Every view of one
+ * Cart's Contents — its page, the header, a price calculator set to it —
+ * reads and writes them through `useCart(cartId)`, so no two quantities can
+ * disagree, and no two Carts' Contents meet.
  *
  * A line is one Product in one of its পাইকারি Packs (ADR-0036), so a tea may
  * be held in several, each Pack at most once: five kilograms in 1 kg Packs and
  * two in 500 g Packs are two lines. However a tea's Kilograms are split, they
  * are one tea's to its Tier, its Order Limit and its stock. The Pack sets the
  * packet count and never the price. Only lines holding Kilograms are kept.
- * Storage that refuses to be read or written (a private window, blocked site
- * data) leaves the Cart working for this visit, held in memory.
  */
 
+import { contentsStore, type ContentsKind } from './contents';
 import { GRAMS_PER_KILOGRAM, gramsFromKilograms, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
 import { priceCart, type PriceBook, type PricedLine, type ProductPrices } from './pricing';
 
 export const MAX_KILOGRAMS = 999;
-
-const STORAGE_KEY = 'bongotea.cart';
 
 /** One line: a Product's whole Kilograms, one to 999, in one of its Packs, or null for the Product's default. */
 export type CartEntry = Readonly<{ productId: number; packId: number | null; kilograms: number }>;
@@ -75,14 +73,15 @@ export function clampKilograms(kilograms: number): number {
  * bare Kilograms from before lines had Packs — reads as one line per Product.
  */
 export function parseCart(raw: string | null): Cart {
-    let stored: unknown;
-
     try {
-        stored = raw === null ? null : JSON.parse(raw);
+        return cartFrom(raw === null ? null : JSON.parse(raw));
     } catch {
         return EMPTY_CART;
     }
+}
 
+/** One bulk Cart's Contents from what was stored, read as `parseCart()` reads it. */
+export function cartFrom(stored: unknown): Cart {
     if (stored === null || typeof stored !== 'object') {
         return EMPTY_CART;
     }
@@ -304,59 +303,13 @@ export function priceSteps(products: ProductPrices[], totalKilograms: number): P
     });
 }
 
-const listeners = new Set<() => void>();
+/** How the bulk Carts' Contents are kept: by Cart id under one key, the single Cart of before Carts were named moved into the starting one. */
+export const BULK_CONTENTS: ContentsKind<Cart> = {
+    key: 'bongotea.bulk-contents',
+    legacyKey: 'bongotea.cart',
+    from: cartFrom,
+    isEmpty: (cart) => cart.length === 0,
+};
 
-/** The Cart as last read or written; null when it must be read from storage again. */
-let current: Cart | null = null;
-
-/** This browser's localStorage, or null where it cannot be had. */
-export function storage(): Storage | null {
-    try {
-        return typeof window === 'undefined' ? null : window.localStorage;
-    } catch {
-        return null;
-    }
-}
-
-/** The Cart now. The same object until it changes, as `useSyncExternalStore` needs. */
-export function readCart(): Cart {
-    if (current === null) {
-        try {
-            current = parseCart(storage()?.getItem(STORAGE_KEY) ?? null);
-        } catch {
-            current = EMPTY_CART;
-        }
-    }
-
-    return current;
-}
-
-export function writeCart(cart: Cart): void {
-    current = cart;
-
-    try {
-        storage()?.setItem(STORAGE_KEY, JSON.stringify(cart));
-    } catch {
-        // Kept in memory for this visit; see the note at the top.
-    }
-
-    listeners.forEach((listener) => listener());
-}
-
-/** Calls the listener whenever the Cart changes, here or in another tab. */
-export function subscribeToCart(listener: () => void): () => void {
-    const fromAnotherTab = (event: StorageEvent) => {
-        if (event.key === STORAGE_KEY || event.key === null) {
-            current = null;
-            listener();
-        }
-    };
-
-    listeners.add(listener);
-    window.addEventListener('storage', fromAnotherTab);
-
-    return () => {
-        listeners.delete(listener);
-        window.removeEventListener('storage', fromAnotherTab);
-    };
-}
+/** Every bulk Cart's Contents in this browser. */
+export const bulkContents = contentsStore(BULK_CONTENTS);

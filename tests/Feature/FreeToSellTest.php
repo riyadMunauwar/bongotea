@@ -72,6 +72,7 @@ function bulkCheckoutFor(Product $product, int $kilograms): array
         'phone' => '01712345678',
         'district' => 'Dhaka',
         'address' => 'House 4, Road 12, Banani',
+        'cart' => openCart()->getKey(),
         'lines' => [['productId' => $product->getKey(), 'kilograms' => $kilograms]],
         'quote' => [
             'lines' => [['productId' => $product->getKey(), 'tierPrice' => $priced->lines[0]->tierPrice]],
@@ -96,7 +97,7 @@ function retailCheckoutFor(Pack $pack, int $count): array
         'phone' => '01712345678',
         'district' => 'Dhaka',
         'address' => 'House 4, Road 12, Banani',
-        'cart' => 'retail',
+        'cart' => openCart(OrderKind::Retail)->getKey(),
         'packs' => [['packId' => $pack->getKey(), 'productId' => $pack->product_id, 'count' => $count]],
         'quote' => [
             'lines' => [['packId' => $pack->getKey(), 'packPrice' => 27000]],

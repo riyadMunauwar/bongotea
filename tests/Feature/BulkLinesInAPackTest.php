@@ -127,6 +127,7 @@ describe('the Checkout', function () {
             'phone' => '01712345678',
             'district' => 'Dhaka',
             'address' => 'Banani',
+            'cart' => openCart()->getKey(),
             'lines' => [['productId' => $assam->getKey(), ...$line]],
             'quote' => [
                 'lines' => [['productId' => $assam->getKey(), 'tierPrice' => 50000]],

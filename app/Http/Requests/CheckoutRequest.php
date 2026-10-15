@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\OrderKind;
 use App\Enums\PaymentMethod;
+use App\Models\Cart;
 use App\Models\Pack;
 use App\Models\Product;
 use App\Support\Bangla;
@@ -16,9 +18,11 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the Checkout: the delivery details, the Cart's lines and the
- * Quote the buyer was shown, for whichever Cart it was opened for — the bulk
- * Cart by default, or the packet basket (ADR-0034). A request carrying both
- * kinds of line is refused: an Order is one kind or the other.
+ * Quote the buyer was shown, for the one Cart it was opened for, named by id
+ * (ADR-0038): Kilogram lines for a bulk Cart, Pack lines for a retail one,
+ * and the other kind refused, because an Order is one kind or the other. A
+ * closed Cart is refused. A Product not assigned to the Cart is still taken:
+ * assignment lays out a page and is never a fence.
  *
  * Nothing here decides a price. The lines are which Products, in which
  * Packs, and how many Kilograms — a Product in several Packs a line each; the Quote is only shape-checked, because comparing it is
@@ -31,6 +35,8 @@ class CheckoutRequest extends FormRequest
 
     /** Packs of one size, as the packet basket allows. */
     public const MAX_PACKS = 99;
+
+    private ?Cart $checkedOut = null;
 
     /** Nobody signs in to order; there is no user to authorize. */
     public function authorize(): bool
@@ -67,7 +73,12 @@ class CheckoutRequest extends FormRequest
                 ? ['required', 'string', Rule::in(PaymentMethod::names($this->offeredMethods()))]
                 : ['nullable'],
 
-            'cart' => ['nullable', 'string', Rule::in(['bulk', 'retail'])],
+            /** The Cart checked out, by id; its kind decides which lines are asked for, and a closed one is refused (ADR-0038). */
+            'cart' => ['required', 'integer', function (string $attribute, mixed $value, Closure $fail): void {
+                if (! $this->cart()?->isOpen()) {
+                    $fail('এই কার্টটি এখন বন্ধ। এখান থেকে অর্ডার করা যাবে না।');
+                }
+            }],
 
             ...($this->isRetail() ? self::retailRules() : self::bulkRules()),
 
@@ -132,10 +143,25 @@ class CheckoutRequest extends FormRequest
         ];
     }
 
-    /** Whether the Checkout was opened for the packet basket rather than the bulk Cart. */
+    /**
+     * The Cart the Checkout was opened for, deleted or not, or null where
+     * the request names none that exists.
+     */
+    public function cart(): ?Cart
+    {
+        $cartId = filter_var($this->input('cart'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        if ($cartId === false) {
+            return null;
+        }
+
+        return $this->checkedOut ??= Cart::withTrashed()->find($cartId);
+    }
+
+    /** Whether the Cart checked out is a retail one, whose lines are Packs. */
     public function isRetail(): bool
     {
-        return $this->input('cart') === 'retail';
+        return $this->cart()?->kind === OrderKind::Retail;
     }
 
     /**
@@ -151,6 +177,8 @@ class CheckoutRequest extends FormRequest
             'address.required' => 'ঠিকানা লিখুন।',
             'payment_method.required' => 'কীভাবে টাকা দেবেন বেছে নিন।',
             'payment_method.in' => 'তালিকা থেকে টাকা দেওয়ার উপায় বেছে নিন।',
+            'cart.required' => 'কোন কার্ট থেকে অর্ডার, তা পাওয়া যায়নি। পাতাটি আবার খুলুন।',
+            'cart.integer' => 'কোন কার্ট থেকে অর্ডার, তা পাওয়া যায়নি। পাতাটি আবার খুলুন।',
             'lines.required' => 'পাইকারি কার্টে কোনো চা নেই।',
             'lines.*' => 'পাইকারি কার্টের পরিমাণ ঠিক নেই। কার্ট দেখে আবার চেষ্টা করুন।',
             'packs.required' => 'খুচরা কার্টে কোনো প্যাকেট নেই।',

@@ -18,7 +18,7 @@ import { packName } from './figures';
  * beside it is the bulk Cart's and is not touched.
  */
 export function PackChooserButton({ productId, productName, className }: { productId: number; productName: string; className?: string }) {
-    const retail = useRetailCart();
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const packs = retail.packsOf(productId);
     const [open, setOpen] = useState(false);
 
@@ -62,7 +62,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
     const dialog = useRef<HTMLDialogElement>(null);
     const { props, url } = usePage();
     const { links } = props;
-    const retail = useRetailCart();
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);

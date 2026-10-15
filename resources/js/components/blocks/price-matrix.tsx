@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { discountPercent } from '@/components/cart/figures';
 import { lowestPrice, tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -21,7 +21,7 @@ import { SectionHeading } from './shared';
  */
 export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
     const taka = useTaka();
-    const cart = useCart();
+    const cart = useCart(usePage().props.startingCarts.bulk);
     const total = cart.priced.totalKilograms;
     const columns = Math.max(1, ...categories.flatMap((category) => category.products.map((product) => product.tiers.length)));
     const gridTemplateColumns = `var(--matrix-name) minmax(88px, auto) repeat(${columns}, minmax(104px, 1fr))`;

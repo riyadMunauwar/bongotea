@@ -4,9 +4,11 @@ namespace App\Support\Storefront;
 
 use App\Enums\OrderKind;
 use App\Enums\SystemPage;
+use App\Models\Cart;
 use App\Models\Pack;
 use App\Models\Page;
 use App\Models\Product;
+use App\Support\Pages\CartPlacements;
 use App\Support\PhoneNumber;
 use App\Support\Pricing\DeliveryBand;
 use App\Support\Pricing\PriceBook;
@@ -155,6 +157,48 @@ class StorefrontShell
                     ->map(fn (Pack $pack): array => CatalogueProps::cartPack($product, $pack)))
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * Every open Cart (ADR-0038) — switched on, not deleted, on a published
+     * Page — in the Merchant's order, with the link its Page gives it. A
+     * closed Cart is never listed: nobody is offered it.
+     *
+     * @return list<array{id: int, name: string, kind: string, href: string, sortOrder: int}>
+     */
+    public function carts(): array
+    {
+        $pages = CartPlacements::pages();
+
+        return Cart::query()
+            ->where('is_switched_on', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (Cart $cart): bool => $pages->get($cart->getKey())?->isPublished() ?? false)
+            ->map(fn (Cart $cart): array => [
+                'id' => $cart->getKey(),
+                'name' => $cart->name,
+                'kind' => $cart->kind->value,
+                'href' => $pages->get($cart->getKey())->path(),
+                'sortOrder' => $cart->sort_order,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The two Carts the store opened with, by kind, deleted or not: the
+     * browser moves what it held before Carts were named into them, once.
+     *
+     * @return array{bulk: ?int, retail: ?int}
+     */
+    public function startingCarts(): array
+    {
+        return [
+            'bulk' => Cart::startingFor(OrderKind::Bulk)?->getKey(),
+            'retail' => Cart::startingFor(OrderKind::Retail)?->getKey(),
         ];
     }
 

@@ -29,7 +29,7 @@ type Way = 'bulk' | 'retail';
  * place of the controls.
  */
 export function PurchasePanel({ product, isGreyed, className }: { product: ProductDetail; isGreyed: boolean; className?: string }) {
-    const retail = useRetailCart();
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const isSoldRetail = retail.packsOf(product.id).length > 0;
     const [way, setWay] = useState<Way>(product.isSoldBulk ? 'bulk' : 'retail');
     const shown: Way = product.isSoldBulk && (way === 'bulk' || !isSoldRetail) ? 'bulk' : 'retail';
@@ -97,7 +97,7 @@ function WayToggle({ way, onChange }: { way: Way; onChange: (way: Way) => void }
 
 /** Buying by the Kilogram, or why it cannot be done now. */
 function BulkPurchase({ product }: { product: BulkProductCard }) {
-    const cart = useCart();
+    const cart = useCart(usePage().props.startingCarts.bulk);
     const chosen = cart.products.find((candidate) => candidate.id === product.id);
 
     if (chosen === undefined || cart.isSoldOut(product.id)) {
@@ -117,7 +117,7 @@ function BulkPurchase({ product }: { product: BulkProductCard }) {
  */
 function BulkControls({ product }: { product: CartProduct }) {
     const { links } = usePage().props;
-    const cart = useCart();
+    const cart = useCart(usePage().props.startingCarts.bulk);
     const taka = useTaka();
     const held = cart.lineOf(product.id);
     const [kilograms, setKilograms] = useState(() => firstKilograms(product, null));
@@ -193,7 +193,7 @@ function BulkControls({ product }: { product: CartProduct }) {
 function RetailPurchase({ product }: { product: ProductDetail }) {
     const { props, url } = usePage();
     const { links, retailPricing } = props;
-    const retail = useRetailCart();
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const taka = useTaka();
     const packs = retail.packsOf(product.id);
     const isPickable = (pack: CartPack) => pack.isOrderable && !retail.isSoldOut(pack.id);

@@ -276,9 +276,9 @@ it('hands each content Block kind the props its component draws', function (arra
         pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
         ['heading' => 'ডেলিভারি চার্জ', 'text' => null, 'offersCashOnDelivery' => true],
     ],
-    'packet basket, its wording alone, since it draws the shared retail pricing' => [
+    'packet basket, its wording and no Cart where none is named, since it draws the shared retail pricing' => [
         pageBlock('packet_basket', ['heading' => 'আপনার প্যাকেট ঝুড়ি', 'text' => '']),
-        ['heading' => 'আপনার প্যাকেট ঝুড়ি', 'text' => null],
+        ['cart' => null, 'heading' => 'আপনার প্যাকেট ঝুড়ি', 'text' => null],
     ],
 ]);
 

@@ -332,9 +332,9 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
 it('opens the store with the two starting Carts, once, never putting back one renamed or deleted', function () {
     $this->artisan('bongotea:install', installOptions(['--demo' => false, '--blank' => true]))->assertSuccessful();
 
-    expect(Cart::query()->orderBy('sort_order')->get()->map(fn (Cart $cart): array => [$cart->name, $cart->kind, $cart->is_switched_on])->all())->toBe([
-        ['খুচরা অর্ডার করুন', OrderKind::Retail, true],
-        ['পাইকারি অর্ডার করুন', OrderKind::Bulk, true],
+    expect(Cart::query()->orderBy('sort_order')->get()->map(fn (Cart $cart): array => [$cart->name, $cart->kind, $cart->is_switched_on, $cart->link(), $cart->isOpen()])->all())->toBe([
+        ['খুচরা অর্ডার করুন', OrderKind::Retail, true, '/packet-basket', true],
+        ['পাইকারি অর্ডার করুন', OrderKind::Bulk, true, '/bulk-order', true],
     ]);
 
     Cart::startingFor(OrderKind::Retail)->update(['name' => 'প্যাকেট চা']);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AdjustmentCause;
+use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ShipmentStatus;
@@ -8,6 +9,7 @@ use App\Enums\StockMovementReason;
 use App\Enums\TrackingMoment;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Payment;
@@ -194,6 +196,18 @@ function signInAs(string $phone): void
         ->getCookie(CustomerGuard::COOKIE);
 
     test()->withCredentials()->withCookie(CustomerGuard::COOKIE, $cookie->getValue());
+}
+
+/**
+ * An open Cart of a kind for a Checkout to name: switched on and drawn on a
+ * published Page. The same one each time within a test.
+ */
+function openCart(OrderKind $kind = OrderKind::Bulk): Cart
+{
+    $name = "Checkout {$kind->value}";
+
+    return Cart::query()->where('kind', $kind)->where('name', $name)->first()
+        ?? Cart::factory()->state(['kind' => $kind, 'name' => $name])->onAPage()->create();
 }
 
 /**

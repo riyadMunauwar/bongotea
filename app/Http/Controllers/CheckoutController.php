@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\PaymentMethod;
 use App\Http\Requests\CheckoutRequest;
 use App\Http\Requests\RetryPaymentRequest;
+use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\TrackingContext;
@@ -54,14 +55,27 @@ class CheckoutController extends Controller
      * the Cart itself from the shared `pricing` prop. A payment choice is
      * drawn only where more than one method is offered. A Customer Signed in
      * finds their number already typed; nobody is asked to sign in.
+     *
+     * Opened for one Cart, named by id in the link (ADR-0038), whose kind
+     * decides what is checked out. A Cart since closed is still drawn, as
+     * closed; one that never existed is not found.
      */
     public function create(Request $request, Catalogue $catalogue, PaymentSettings $payments): InertiaResponse
     {
         $signedIn = Auth::guard('customer')->user();
+        $cartId = filter_var($request->query('cart'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $cart = $cartId === false ? null : Cart::withTrashed()->find($cartId);
+
+        abort_if($cart === null, ResponseCode::HTTP_NOT_FOUND);
 
         return Inertia::render('checkout', [
-            /** Which Cart the Checkout is opened for (ADR-0034): the packet basket's link names it, and anything else is the bulk Cart. */
-            'cart' => $request->query('cart') === 'retail' ? 'retail' : 'bulk',
+            'cart' => [
+                'id' => $cart->getKey(),
+                'name' => $cart->name,
+                'kind' => $cart->kind->value,
+                'href' => $cart->link(),
+                'isOpen' => $cart->isOpen(),
+            ],
             'signedInPhone' => $signedIn === null ? null : PhoneNumber::asDialled($signedIn->phone),
             'districts' => config('giopages.districts'),
             'paymentMethods' => PaymentMethod::withLogos($payments->offeredMethods()),
@@ -83,8 +97,8 @@ class CheckoutController extends Controller
     {
         try {
             $order = $request->isRetail()
-                ? $capture->captureRetail($request->retailLines(), $request->details(), $request->retailQuote())
-                : $capture->capture($request->cartLines(), $request->details(), $request->quote());
+                ? $capture->captureRetail($request->retailLines(), $request->details(), $request->retailQuote(), $request->cart())
+                : $capture->capture($request->cartLines(), $request->details(), $request->quote(), $request->cart());
         } catch (QuoteRefused $refusal) {
             return self::refused($refusal->current->toArray(), $refusal->unavailableProductIds, $refusal->shortProductIds, $refusal->outsideLimitProductIds);
         } catch (RetailQuoteRefused $refusal) {

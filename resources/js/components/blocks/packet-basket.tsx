@@ -6,6 +6,7 @@ import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { returnPath } from '@/lib/return-path';
 import type { HeldPack } from '@/lib/retail-cart';
+import { checkoutFor } from '@/lib/contents';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
@@ -23,8 +24,8 @@ import { Picture, SectionHeading } from './shared';
  * bought from. An empty basket points back to the shop. Every figure comes
  * from the retail pricing mirror, never from the bulk Cart.
  */
-export function PacketBasket({ heading, text }: PacketBasketProps) {
-    const retail = useRetailCart();
+export function PacketBasket({ cart: drawn, heading, text }: PacketBasketProps) {
+    const retail = useRetailCart(drawn?.id ?? null);
     const isBare = retail.isEmpty && retail.unorderable.length === 0;
     const back = useReturnPath();
 
@@ -159,7 +160,7 @@ function Summary({ retail }: { retail: UseRetailCart }) {
             <button
                 type="button"
                 disabled={isHeldUp}
-                onClick={() => router.visit(`${links.checkout}?cart=retail`)}
+                onClick={() => retail.cartId !== null && router.visit(checkoutFor(links.checkout, retail.cartId))}
                 className={cn(
                     'w-full cursor-pointer rounded-[10px] border-0 p-[15px] text-center text-[16px] font-semibold text-white disabled:cursor-not-allowed',
                     isHeldUp ? 'bg-disabled' : 'bg-primary hover:bg-primary-dark',

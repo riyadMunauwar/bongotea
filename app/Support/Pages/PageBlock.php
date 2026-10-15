@@ -3,11 +3,15 @@
 namespace App\Support\Pages;
 
 use App\Enums\ImageSlot;
+use App\Enums\OrderKind;
+use App\Models\Cart;
 use App\Models\Page;
 use App\Support\Storefront\StorefrontMenus;
+use Closure;
 use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
@@ -225,6 +229,46 @@ abstract class PageBlock
             ->visibility('public')
             ->image()
             ->maxSize(4096);
+    }
+
+    /**
+     * Which Cart of a kind the Block draws. A Cart stands on one Page at most
+     * (ADR-0038), so one another Page already draws is refused, naming it.
+     */
+    protected static function cartInput(OrderKind $kind): Select
+    {
+        return Select::make('cart_id')
+            ->label('Cart')
+            ->required()
+            ->options(fn (): array => Cart::query()->where('kind', $kind)->orderBy('sort_order')->orderBy('id')->pluck('name', 'id')->all())
+            ->rule(fn (?Page $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                $other = is_numeric($value) ? CartPlacements::pageOf((int) $value, $record?->getKey()) : null;
+
+                if ($other !== null) {
+                    $fail("This Cart already stands on the Page \"{$other->title}\". A Cart stands on one Page at most.");
+                }
+            });
+    }
+
+    /**
+     * The Cart a Block draws, as its component needs it, or null where none
+     * of that kind is named or it no longer exists at all. A deleted Cart is
+     * still found, and drawn closed.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{id: int, name: string, kind: string, isOpen: bool}|null
+     */
+    protected static function cart(array $data, OrderKind $kind): ?array
+    {
+        $cartId = $data['cart_id'] ?? null;
+        $cart = is_numeric($cartId) ? Cart::withTrashed()->where('kind', $kind)->find((int) $cartId) : null;
+
+        return $cart === null ? null : [
+            'id' => $cart->getKey(),
+            'name' => $cart->name,
+            'kind' => $cart->kind->value,
+            'isOpen' => $cart->isOpen(),
+        ];
     }
 
     protected static function videoInput(string $name, string $label = 'YouTube video'): TextInput

@@ -4,6 +4,7 @@
  */
 
 import type { BulkProductCard, CategoryDetail, CategoryReference, CategoryTheme, ProductCard } from '@/types/catalogue';
+import type { BlockCart } from '@/types';
 
 export type BlockButton = { label: string; href: string };
 
@@ -207,6 +208,8 @@ export type CartCategory = CategoryReference & {
 };
 
 export type BulkOrderFormProps = {
+    /** The Cart the form draws; null where none is named. */
+    cart: BlockCart | null;
     heading: string | null;
     text: string | null;
     quickChips: boolean;
@@ -238,6 +241,8 @@ export type DeliveryChartProps = {
 export type OrderProgress = 'received' | 'confirmed' | 'sent' | 'delivered' | 'cancelled';
 
 export type PacketBasketProps = {
+    /** The Cart the basket draws; null where none is named. */
+    cart: BlockCart | null;
     heading: string | null;
     text: string | null;
 };

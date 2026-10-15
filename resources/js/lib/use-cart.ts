@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import { useMemo, useSyncExternalStore } from 'react';
 import {
+    bulkContents,
     cappedKilograms,
     cartLines,
     EMPTY_CART,
@@ -8,22 +9,26 @@ import {
     MAX_KILOGRAMS,
     mostKilograms,
     onlyOrderable,
+    packFor,
     priceSteps,
     quoteLine,
-    readCart,
-    subscribeToCart,
-    packFor,
     withKilograms,
-    writeCart,
     type BulkCartLine,
+    type Cart,
     type CartProduct,
     type LineQuote,
     type PriceStep,
 } from './cart';
+import type { ContentsByCart } from './contents';
 import { priceCart, type PricedCart } from './pricing';
 import { useMoments } from './use-moments';
 
+/** What the server draws: no Contents in any Cart. */
+const NO_CONTENTS: ContentsByCart<Cart> = Object.freeze({});
+
 export type UseCart = {
+    /** The Cart these Contents are kept in; null for none. */
+    cartId: number | null;
     /** The Kilograms of a Product in one of its Packs, its default where none is named; nought for one a buyer cannot have now. */
     kilogramsOf: (productId: number, packId?: number | null) => number;
     /** A Product's whole Kilograms across its Packs. */
@@ -57,16 +62,18 @@ export type UseCart = {
 };
 
 /**
- * The one Cart, priced. Every view of the Cart goes through here, so a
- * stepper on a card, the header and the Bulk Order form all show the same
- * Kilograms, Packs and figures. A stepper that names no Pack — a card's, the
- * price calculator's — is the tea's default Pack's. The server draws an empty Cart — it cannot
- * see the browser's storage — and the stored one appears as the page comes
- * alive.
+ * One bulk Cart's Contents, priced from them alone (ADR-0038). Every view of
+ * a Cart's Contents goes through here, so its page, the header and a price
+ * calculator set to it all show the same Kilograms, Packs and figures, and
+ * never another Cart's. A stepper that names no Pack — a card's, the price
+ * calculator's — is the tea's default Pack's. No Cart (null) holds nothing
+ * and takes nothing. The server draws empty Contents — it cannot see the
+ * browser's storage — and the stored ones appear as the page comes alive.
  */
-export function useCart(): UseCart {
-    const { pricing } = usePage().props;
-    const cart = useSyncExternalStore(subscribeToCart, readCart, () => EMPTY_CART);
+export function useCart(cartId: number | null): UseCart {
+    const { pricing, startingCarts } = usePage().props;
+    const contents = useSyncExternalStore(bulkContents.subscribe, () => bulkContents.read(startingCarts.bulk), () => NO_CONTENTS);
+    const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_CART;
     const moments = useMoments();
 
     return useMemo(() => {
@@ -83,6 +90,7 @@ export function useCart(): UseCart {
         const teaKilogramsOf = (productId: number) => lines.reduce((sum, line) => sum + (line.product.id === productId ? line.kilograms : 0), 0);
 
         return {
+            cartId,
             kilogramsOf: (productId: number, packId: number | null = null) => lineIn(productId, packId)?.kilograms ?? 0,
             teaKilogramsOf,
             lineOf: (productId: number, packId: number | null = null) => lineIn(productId, packId),
@@ -103,25 +111,29 @@ export function useCart(): UseCart {
             set: (productId: number, kilograms: number, packId: number | null = null) => {
                 const chosen = productOf(productId);
 
-                if (chosen === undefined) {
+                if (cartId === null || chosen === undefined) {
                     return;
                 }
 
                 const chosenId = packIdOf(chosen, packId);
-                const before = onlyOrderable(readCart(), pricing.products);
+                const before = onlyOrderable(bulkContents.read(startingCarts.bulk)[cartId] ?? EMPTY_CART, pricing.products);
                 const teaBefore = before.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
                 const held = before.find((entry) => entry.productId === productId && entry.packId === chosenId)?.kilograms ?? 0;
                 const after = withKilograms(before, productId, chosenId, cappedKilograms(chosen, kilograms, held, teaBefore - held));
                 const teaAfter = after.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
 
-                writeCart(after);
+                bulkContents.write(cartId, after);
 
                 if (teaBefore === 0 && teaAfter > 0) {
                     moments.addedToCart(chosen, teaAfter, before.length === 0);
                 }
             },
             quote: (productId: number, kilograms: number, packId: number | null) => quoteLine(cart, pricing.products, book, productId, kilograms, packId),
-            clear: () => writeCart(EMPTY_CART),
+            clear: () => {
+                if (cartId !== null) {
+                    bulkContents.write(cartId, EMPTY_CART);
+                }
+            },
             lines,
             priced: priceCart(book, lines),
             isEmpty: lines.length === 0,
@@ -134,5 +146,5 @@ export function useCart(): UseCart {
             ),
             products: pricing.products,
         };
-    }, [cart, pricing, moments]);
+    }, [cart, cartId, pricing, startingCarts, moments]);
 }

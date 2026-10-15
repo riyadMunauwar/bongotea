@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\OrderKind;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
@@ -33,6 +34,7 @@ class PacketBasket extends PageBlock
     public static function fields(): array
     {
         return [
+            self::cartInput(OrderKind::Retail),
             TextInput::make('heading')->maxLength(160),
             TextInput::make('text')->maxLength(300),
         ];
@@ -41,6 +43,7 @@ class PacketBasket extends PageBlock
     public static function props(array $data): array
     {
         return [
+            'cart' => self::cart($data, OrderKind::Retail),
             'heading' => self::text($data, 'heading'),
             'text' => self::text($data, 'text'),
         ];

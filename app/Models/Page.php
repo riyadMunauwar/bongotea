@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PageStatus;
 use App\Enums\SystemPage;
+use App\Support\Pages\CartPlacements;
 use Database\Factories\PageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -65,6 +66,10 @@ class Page extends Model
             if ($page->exists && $page->isDirty('system_role')) {
                 throw new LogicException("Page {$page->getKey()}'s system role can never change.");
             }
+
+            if ($page->isDirty('blocks')) {
+                $page->refuseCartPlacedElsewhere();
+            }
         });
 
         static::deleting(function (Page $page): void {
@@ -72,6 +77,28 @@ class Page extends Model
                 throw new LogicException("Page {$page->getKey()} is the {$page->system_role->getLabel()} System Page and cannot be deleted.");
             }
         });
+    }
+
+    /**
+     * A Cart stands on one Page at most (ADR-0038), so every link to it leads
+     * to one place: a Page drawing a Cart twice, or one another Page already
+     * draws, is refused, naming that Page.
+     */
+    private function refuseCartPlacedElsewhere(): void
+    {
+        $cartIds = CartPlacements::cartIdsIn($this->blocks);
+
+        if (count($cartIds) !== count(array_unique($cartIds))) {
+            throw new LogicException("Page \"{$this->title}\" draws the same Cart twice.");
+        }
+
+        $elsewhere = CartPlacements::pages($this->getKey());
+
+        foreach ($cartIds as $cartId) {
+            if ($other = $elsewhere->get($cartId)) {
+                throw new LogicException("Cart {$cartId} already stands on the Page \"{$other->title}\".");
+            }
+        }
     }
 
     public function isPublished(): bool

@@ -9,19 +9,21 @@ import {
     MAX_PACKS,
     onlyOrderablePacks,
     outsideLimits,
-    readRetailCart,
+    retailContents,
     retailLines,
-    subscribeToRetailCart,
     unorderableLines,
     withCount,
-    writeRetailCart,
     type CartPack,
     type HeldPack,
+    type RetailCart,
 } from './retail-cart';
+import type { ContentsByCart } from './contents';
 import { priceRetailCart, type PricedRetailCart } from './retail-pricing';
 import { useMoments } from './use-moments';
 
 export type UseRetailCart = {
+    /** The Cart these Contents are kept in; null for none. */
+    cartId: number | null;
     /** How many of a Pack the Cart holds; nought for one a buyer cannot order now. */
     countOf: (packId: number) => number;
     /** The most of a Pack a stepper may reach: where its tea, with its other Packs held, would pass its খুচরা maximum or what is free to sell, else 99. */
@@ -52,15 +54,20 @@ export type UseRetailCart = {
     packsOf: (productId: number) => CartPack[];
 };
 
+/** What the server draws: no Contents in any Cart. */
+const NO_CONTENTS: ContentsByCart<RetailCart> = Object.freeze({});
+
 /**
- * The one retail Cart, priced (ADR-0034). Every view of it goes through
- * here, and it never touches the bulk Cart or its figures. The server draws
- * an empty basket — it cannot see the browser's storage — and the stored one
- * appears as the page comes alive.
+ * One retail Cart's Contents, priced from them alone (ADR-0034, ADR-0038).
+ * Every view of them goes through here, and it never touches another Cart's
+ * Contents or figures. No Cart (null) holds nothing and takes nothing. The
+ * server draws empty Contents — it cannot see the browser's storage — and
+ * the stored ones appear as the page comes alive.
  */
-export function useRetailCart(): UseRetailCart {
-    const { retailPricing } = usePage().props;
-    const cart = useSyncExternalStore(subscribeToRetailCart, readRetailCart, () => EMPTY_RETAIL_CART);
+export function useRetailCart(cartId: number | null): UseRetailCart {
+    const { retailPricing, startingCarts } = usePage().props;
+    const contents = useSyncExternalStore(retailContents.subscribe, () => retailContents.read(startingCarts.retail), () => NO_CONTENTS);
+    const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_RETAIL_CART;
     const moments = useMoments();
 
     return useMemo(() => {
@@ -69,8 +76,15 @@ export function useRetailCart(): UseRetailCart {
         const orderable = new Set(retailPricing.packs.filter((pack) => pack.isOrderable).map((pack) => pack.id));
         const outside = outsideLimits(lines);
         const short = beyondFree(lines);
+        const stored = () => (cartId === null ? EMPTY_RETAIL_CART : (retailContents.read(startingCarts.retail)[cartId] ?? EMPTY_RETAIL_CART));
+        const write = (held: RetailCart) => {
+            if (cartId !== null) {
+                retailContents.write(cartId, held);
+            }
+        };
 
         return {
+            cartId,
             countOf: (packId: number) => held.get(packId) ?? 0,
             mostOf: (packId: number) => Math.min(MAX_PACKS, cappedCount(cart, retailPricing.packs, packId, MAX_PACKS)),
             isSoldOut: (packId: number) => {
@@ -79,14 +93,14 @@ export function useRetailCart(): UseRetailCart {
                 return pack !== undefined && isPackSoldOut(pack);
             },
             set: (packId: number, count: number) => {
-                if (!orderable.has(packId)) {
+                if (cartId === null || !orderable.has(packId)) {
                     return;
                 }
 
-                const before = onlyOrderablePacks(readRetailCart(), retailPricing.packs);
+                const before = onlyOrderablePacks(stored(), retailPricing.packs);
                 const after = withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count));
 
-                writeRetailCart(after);
+                write(after);
 
                 if ((before[packId] ?? 0) === 0 && (after[packId] ?? 0) > 0) {
                     const pack = retailPricing.packs.find((candidate) => candidate.id === packId);
@@ -96,8 +110,8 @@ export function useRetailCart(): UseRetailCart {
                     }
                 }
             },
-            remove: (packId: number) => writeRetailCart(withCount(readRetailCart(), packId, 0)),
-            clear: () => writeRetailCart(EMPTY_RETAIL_CART),
+            remove: (packId: number) => write(withCount(stored(), packId, 0)),
+            clear: () => write(EMPTY_RETAIL_CART),
             lines,
             unorderable: unorderableLines(cart, retailPricing.packs),
             priced: priceRetailCart({ deliveryCharge: retailPricing.deliveryCharge, freeDeliveryFrom: retailPricing.freeDeliveryFrom }, lines),
@@ -108,5 +122,5 @@ export function useRetailCart(): UseRetailCart {
             hasShort: short.size > 0,
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
-    }, [cart, retailPricing, moments]);
+    }, [cart, cartId, retailPricing, startingCarts, moments]);
 }

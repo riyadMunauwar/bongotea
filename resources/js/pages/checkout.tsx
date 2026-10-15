@@ -10,10 +10,11 @@ import { useMoments } from '@/lib/use-moments';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
+import type { CartKind } from '@/types';
 
 type CheckoutPageProps = {
-    /** Which Cart the Checkout was opened for (ADR-0034): the bulk Cart, or the packet basket. */
-    cart: 'bulk' | 'retail';
+    /** The one Cart the Checkout was opened for (ADR-0038), whose kind decides what is checked out; drawn closed where it has closed since. */
+    cart: { id: number; name: string; kind: CartKind; href: string | null; isOpen: boolean };
     /** Every district a parcel can go to, by the name the store stores. */
     districts: string[];
     /** The methods offered, by stored name with the logo to draw; a choice is drawn only where there is more than one. */
@@ -67,11 +68,12 @@ type Refusal = {
  * emptied once the Order is placed.
  */
 export default function CheckoutPage() {
-    const { cart: kind, districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
+    const { cart: checkedOut, districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
     const { links } = usePage().props;
-    const cart = useCart();
-    const retail = useRetailCart();
-    const isRetail = kind === 'retail';
+    const isRetail = checkedOut.kind === 'retail';
+    const cart = useCart(isRetail ? null : checkedOut.id);
+    const retail = useRetailCart(isRetail ? checkedOut.id : null);
+
     /** What holds up placing the Order in whichever Cart is being checked out: a tea outside its Order Limit, or more than is free to sell. */
     const isOutsideLimit = isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit;
     const isShort = isRetail ? retail.hasShort : cart.hasShort;
@@ -144,6 +146,7 @@ export default function CheckoutPage() {
         form.transform((data) => ({
             ...data,
             phone: toLatinDigits(data.phone),
+            cart: checkedOut.id,
             ...(isRetail ? retailPayload(retail) : bulkPayload(cart)),
         }));
 
@@ -203,13 +206,25 @@ export default function CheckoutPage() {
         return <div className="min-h-[60vh]" />;
     }
 
+    if (!checkedOut.isOpen) {
+        return (
+            <div className="shell-container flex flex-col items-center gap-3 py-16 text-center md:py-24">
+                <h1 className="m-0 text-[clamp(22px,3vw,30px)] font-semibold text-ink">{bn.checkout.closed(checkedOut.name)}</h1>
+                <p className="m-0 text-[15px] text-muted">{bn.checkout.closedHint}</p>
+                <Link href="/" className="mt-2 rounded-[10px] bg-primary px-6 py-3 text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white">
+                    {bn.checkout.home}
+                </Link>
+            </div>
+        );
+    }
+
     if (isEmpty) {
         return (
             <div className="shell-container flex flex-col items-center gap-3 py-16 text-center md:py-24">
                 <h1 className="m-0 text-[clamp(22px,3vw,30px)] font-semibold text-ink">{isRetail ? bn.packs.empty : bn.checkout.empty}</h1>
                 <p className="m-0 text-[15px] text-muted">{isRetail ? bn.packs.emptyHint : bn.checkout.emptyHint}</p>
                 <Link
-                    href={isRetail ? '/' : links.bulkOrder}
+                    href={checkedOut.href ?? '/'}
                     className="mt-2 rounded-[10px] bg-primary px-6 py-3 text-[16px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white"
                 >
                     {isRetail ? bn.packs.shop : bn.checkout.chooseTea}
@@ -223,7 +238,7 @@ export default function CheckoutPage() {
 
     return (
         <div className="shell-container pt-6 pb-14 md:pt-10">
-            <Link href={isRetail ? links.packetBasket : links.bulkOrder} className="mb-[6px] inline-block py-[6px] text-[14px] font-semibold text-primary no-underline">
+            <Link href={checkedOut.href ?? '/'} className="mb-[6px] inline-block py-[6px] text-[14px] font-semibold text-primary no-underline">
                 {bn.checkout.back}
             </Link>
             <h1 className="m-0 mb-5 text-[clamp(24px,3.4vw,40px)] leading-[1.35] font-semibold text-ink">{bn.checkout.heading}</h1>
@@ -502,7 +517,7 @@ function bulkPayload({ lines, priced }: UseCart) {
 /** What the request carries for the packet basket: its Packs, each with its Product, and the retail Quote shown. */
 function retailPayload({ lines, priced }: UseRetailCart) {
     return {
-        cart: 'retail',
+
         packs: lines.map(({ pack, count }) => ({ packId: pack.id, productId: pack.productId, count })),
         quote: {
             lines: priced.lines.map((line) => ({ packId: line.packId, packPrice: line.packPrice })),

@@ -12,7 +12,7 @@
 
 import { router } from '@inertiajs/react';
 import type { SharedProps } from '@/types';
-import { storage } from './cart';
+import { storage } from './contents';
 import type { PricedCart } from './pricing';
 import type { CartPack } from './retail-cart';
 import type { PricedRetailCart } from './retail-pricing';

@@ -1,21 +1,19 @@
 /**
- * The retail Cart, the খুচরা কার্ট (ADR-0034): `{packId: count}` kept in this
- * browser's `localStorage` beside the bulk Cart (`lib/cart.ts`) and never
- * merged with it, under a key of its own. Every view of it — the pack
- * chooser, the header's bag, the packet basket page, the cart bar — reads and
- * writes this one store through `useRetailCart()`.
+ * A retail Cart's Contents (ADR-0034, ADR-0038): `{packId: count}` kept per
+ * Cart in this browser's `localStorage` (`lib/contents.ts`) beside the bulk
+ * Carts' and never merged with them. Every view of one Cart's Contents — its
+ * page, the pack chooser, the header's bag, the cart bar — reads and writes
+ * them through `useRetailCart(cartId)`.
  *
- * Only lines holding Packs are kept. Storage that refuses to be read or
- * written leaves the Cart working for this visit, held in memory.
+ * Only lines holding Packs are kept.
  */
 
-import { storage, type LimitBreach } from './cart';
+import type { LimitBreach } from './cart';
+import { contentsStore, type ContentsKind } from './contents';
 import { gramsOfPackets } from './grams';
 import type { PackPrices, RetailLine } from './retail-pricing';
 
 export const MAX_PACKS = 99;
-
-const STORAGE_KEY = 'bongotea.retail-cart';
 
 /** Pack id → how many, one to 99; a Pack held nought times is absent. */
 export type RetailCart = Readonly<Record<number, number>>;
@@ -52,14 +50,15 @@ export function clampCount(count: number): number {
 
 /** The retail Cart as stored, keeping only Pack ids held a whole number of times. */
 export function parseRetailCart(raw: string | null): RetailCart {
-    let stored: unknown;
-
     try {
-        stored = raw === null ? null : JSON.parse(raw);
+        return retailCartFrom(raw === null ? null : JSON.parse(raw));
     } catch {
         return EMPTY_RETAIL_CART;
     }
+}
 
+/** One retail Cart's Contents from what was stored, read as `parseRetailCart()` reads it. */
+export function retailCartFrom(stored: unknown): RetailCart {
     if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
         return EMPTY_RETAIL_CART;
     }
@@ -186,50 +185,13 @@ export function onlyOrderablePacks(cart: RetailCart, packs: CartPack[]): RetailC
     return Object.fromEntries(retailLines(cart, packs).map((line) => [line.pack.id, line.count]));
 }
 
-const listeners = new Set<() => void>();
+/** How the retail Carts' Contents are kept: by Cart id under one key, the packet basket of before Carts were named moved into the starting one. */
+export const RETAIL_CONTENTS: ContentsKind<RetailCart> = {
+    key: 'bongotea.retail-contents',
+    legacyKey: 'bongotea.retail-cart',
+    from: retailCartFrom,
+    isEmpty: (cart) => Object.keys(cart).length === 0,
+};
 
-/** The retail Cart as last read or written; null when it must be read from storage again. */
-let current: RetailCart | null = null;
-
-/** The retail Cart now. The same object until it changes, as `useSyncExternalStore` needs. */
-export function readRetailCart(): RetailCart {
-    if (current === null) {
-        try {
-            current = parseRetailCart(storage()?.getItem(STORAGE_KEY) ?? null);
-        } catch {
-            current = EMPTY_RETAIL_CART;
-        }
-    }
-
-    return current;
-}
-
-export function writeRetailCart(cart: RetailCart): void {
-    current = cart;
-
-    try {
-        storage()?.setItem(STORAGE_KEY, JSON.stringify(cart));
-    } catch {
-        // Kept in memory for this visit; see the note at the top.
-    }
-
-    listeners.forEach((listener) => listener());
-}
-
-/** Calls the listener whenever the retail Cart changes, here or in another tab. */
-export function subscribeToRetailCart(listener: () => void): () => void {
-    const fromAnotherTab = (event: StorageEvent) => {
-        if (event.key === STORAGE_KEY || event.key === null) {
-            current = null;
-            listener();
-        }
-    };
-
-    listeners.add(listener);
-    window.addEventListener('storage', fromAnotherTab);
-
-    return () => {
-        listeners.delete(listener);
-        window.removeEventListener('storage', fromAnotherTab);
-    };
-}
+/** Every retail Cart's Contents in this browser. */
+export const retailContents = contentsStore(RETAIL_CONTENTS);

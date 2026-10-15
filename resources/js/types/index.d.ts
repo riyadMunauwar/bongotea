@@ -61,6 +61,25 @@ export type Seo = {
     siteName: string;
 };
 
+export type CartKind = 'bulk' | 'retail';
+
+/** A Cart a Customer may be offered: switched on, not deleted, and on a published Page. */
+export type OpenCart = {
+    id: number;
+    name: string;
+    kind: CartKind;
+    href: string;
+    sortOrder: number;
+};
+
+/** The Cart a Block draws, open or closed; a closed one is drawn closed. */
+export type BlockCart = {
+    id: number;
+    name: string;
+    kind: CartKind;
+    isOpen: boolean;
+};
+
 export type SharedProps = {
     store: Store;
     announcement: Announcement | null;
@@ -100,6 +119,10 @@ export type SharedProps = {
         /** Every Pack of every published Product, in catalogue order; a Product with none sends none. */
         packs: CartPack[];
     };
+    /** Every open Cart (ADR-0038), in the Merchant's order, each with its Page's link. */
+    carts: OpenCart[];
+    /** The Carts the store opened with, deleted or not: what the browser held before Carts were named moves into them, once. */
+    startingCarts: { bulk: number | null; retail: number | null };
     seo: Seo;
     /** How many minor units make one taka; every price is sent in minor units. */
     minorUnitsPerTaka: number;

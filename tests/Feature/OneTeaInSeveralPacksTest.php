@@ -109,6 +109,7 @@ describe('the Checkout', function () {
             'phone' => '01712345678',
             'district' => 'Dhaka',
             'address' => 'Banani',
+            'cart' => openCart()->getKey(),
             'lines' => array_map(fn (array $line): array => ['productId' => $darjeeling->getKey(), 'packId' => $line[0]->getKey(), 'kilograms' => $line[1]], $packs),
             'quote' => [
                 'lines' => array_map(fn (): array => ['productId' => $darjeeling->getKey(), 'tierPrice' => 55000], $packs),

@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\OrderKind;
 use App\Support\Pages\PageBlock;
 use App\Support\Storefront\Catalogue;
 use App\Support\Storefront\CatalogueProps;
@@ -36,6 +37,7 @@ class BulkOrderForm extends PageBlock
     public static function fields(): array
     {
         return [
+            self::cartInput(OrderKind::Bulk),
             TextInput::make('heading')->maxLength(160),
             TextInput::make('text')->maxLength(300),
             Toggle::make('quick_chips')
@@ -50,6 +52,7 @@ class BulkOrderForm extends PageBlock
     public static function props(array $data): array
     {
         return [
+            'cart' => self::cart($data, OrderKind::Bulk),
             'heading' => self::text($data, 'heading'),
             'text' => self::text($data, 'text'),
             'quickChips' => (bool) ($data['quick_chips'] ?? true),

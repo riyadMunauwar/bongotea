@@ -9,8 +9,8 @@ import { useRetailCart } from './use-retail-cart';
  * and a Product nobody has counted never is.
  */
 export function useIsSoldOut(product: { id: number; isSoldBulk: boolean }): boolean {
-    const cart = useCart();
-    const retail = useRetailCart();
+    const cart = useCart(null);
+    const retail = useRetailCart(null);
     const packs = retail.packsOf(product.id).filter((pack) => pack.isOrderable);
 
     if (!product.isSoldBulk && packs.length === 0) {

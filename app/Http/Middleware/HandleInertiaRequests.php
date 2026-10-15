@@ -48,6 +48,8 @@ class HandleInertiaRequests extends Middleware
             'links' => fn (): array => $shell()->links(),
             'pricing' => fn (): array => $shell()->pricing(),
             'retailPricing' => fn (): array => $shell()->retailPricing(),
+            'carts' => fn (): array => $shell()->carts(),
+            'startingCarts' => fn (): array => $shell()->startingCarts(),
             'seo' => fn (): array => Seo::forStore(app(StoreSettings::class), $request)->toArray(),
             'minorUnitsPerTaka' => fn (): int => Money::factor(),
             'tracking' => fn (): array => [

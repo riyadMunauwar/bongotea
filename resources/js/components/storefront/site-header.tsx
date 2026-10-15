@@ -25,8 +25,8 @@ import { StoreLogo } from './store-logo';
 export function SiteHeader() {
     const { store, announcement, menus, links } = usePage().props;
     const [menuOpen, setMenuOpen] = useState(false);
-    const { priced } = useCart();
-    const retail = useRetailCart();
+    const { priced } = useCart(usePage().props.startingCarts.bulk);
+    const retail = useRetailCart(usePage().props.startingCarts.retail);
     const taka = useTaka();
 
     useEffect(() => router.on('navigate', () => setMenuOpen(false)), []);

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderKind;
+use App\Support\Pages\CartPlacements;
 use Database\Factories\CartFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,6 +22,10 @@ use LogicException;
  * to it later joins no Cart until it is assigned itself. A Product is
  * assigned only to a Cart of a way it is sold (`CartProduct` refuses the
  * rest), and may be assigned to any number of them.
+ *
+ * It is drawn by a Block on one Page at most, so its link is that Page's
+ * path. Switched off, on no published Page, or deleted, it is closed: no one
+ * is offered it or checks out from it.
  *
  * Deleting is soft: past Orders and Customers' Contents keep resolving its
  * name. `starting_kind` marks the two Carts the store opens with, one of each
@@ -77,5 +82,25 @@ class Cart extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class)->using(CartProduct::class);
+    }
+
+    /** The Page this Cart is drawn on, published or not; null while it stands on none. */
+    public function page(): ?Page
+    {
+        return CartPlacements::pageOf($this->getKey());
+    }
+
+    /** Where a Customer reaches this Cart: its Page's path, or null while that Page is not published or there is none. */
+    public function link(): ?string
+    {
+        $page = $this->page();
+
+        return $page?->isPublished() ? $page->path() : null;
+    }
+
+    /** Whether a Customer may be offered this Cart and check out from it: switched on, not deleted, and on a published Page. */
+    public function isOpen(): bool
+    {
+        return $this->is_switched_on && ! $this->trashed() && $this->link() !== null;
     }
 }
