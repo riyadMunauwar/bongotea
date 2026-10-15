@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { CartKind } from '@/types';
 import { addRule, type AddRule } from './add-rule';
 import { withAddedKilograms } from './cart';
+import { mindCart } from './current-cart';
 import { withAddedPacks } from './retail-cart';
 import { changeBulkContents } from './use-cart';
 import { useMoments } from './use-moments';
@@ -37,11 +38,13 @@ export function useAdding(): UseAdding {
 
                 if (product !== undefined) {
                     changeBulkContents(cartFrom(carts, cartId), product, pricing.products, startingCarts.bulk, moments, (before) => withAddedKilograms(before, product, packId, kilograms));
+                    mindCart('bulk', cartId);
                 }
             },
             addPacks: (cartId: number, packId: number, count: number) => {
                 if (retailPricing.packs.some((pack) => pack.id === packId && pack.isOrderable)) {
                     changeRetailContents(cartFrom(carts, cartId), packId, retailPricing.packs, startingCarts.retail, moments, (before) => withAddedPacks(before, retailPricing.packs, packId, count));
+                    mindCart('retail', cartId);
                 }
             },
         }),

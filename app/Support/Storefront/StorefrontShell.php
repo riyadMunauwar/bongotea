@@ -182,6 +182,27 @@ class StorefrontShell
     }
 
     /**
+     * Every closed Cart — switched off, on no published Page, or deleted —
+     * by name and kind, and nothing else (ADR-0038). Nobody is offered one;
+     * the browser only names it where its Contents are kept, shown as বন্ধ
+     * for the Customer to clear.
+     *
+     * @return list<array{id: int, name: string, kind: string}>
+     */
+    public function closedCarts(): array
+    {
+        $open = array_column($this->carts(), 'id');
+
+        return Cart::withTrashed()
+            ->whereKeyNot($open)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Cart $cart): array => ['id' => $cart->getKey(), 'name' => $cart->name, 'kind' => $cart->kind->value])
+            ->all();
+    }
+
+    /**
      * The two Carts the store opened with, by kind, deleted or not: the
      * browser moves what it held before Carts were named into them, once.
      *

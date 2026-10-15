@@ -236,7 +236,7 @@ function RetailFromLine({ productId }: { productId: number }) {
 /** "খুচরা ৳X থেকে" from a Product's cheapest খুচরা Pack, or null where it is not sold খুচরা. */
 function useRetailFromLabel(productId: number): string | null {
     const taka = useTaka();
-    const prices = useRetailCart(usePage().props.headerCarts.retail?.id ?? null)
+    const prices = useRetailCart(null)
         .packsOf(productId)
         .map((pack) => pack.price);
 

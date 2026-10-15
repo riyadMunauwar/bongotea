@@ -16,7 +16,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/** | .ai/rules/filament.md |
 | app/Support/Inventory/**, app/Models/StockMovement.php, app/Models/StockCount.php, app/Models/Supplier.php, app/Models/Supply.php, app/Models/SupplyLine.php, app/Enums/StockMovementReason.php, app/Enums/AdjustmentCause.php, app/Support/Orders/OrderCapture.php, app/Models/OrderLine.php, app/Filament/Clusters/Inventory/**, app/Support/Inventory/Grams.php, app/Support/Orders/** | .ai/rules/inventory.md |
 | resources/js/** | .ai/rules/js.md |
-| resources/js/lib/cart.ts, resources/js/lib/contents.ts, resources/js/lib/use-adding.ts | .ai/rules/lib.md |
+| resources/js/lib/cart.ts, resources/js/lib/contents.ts, resources/js/lib/use-adding.ts, resources/js/lib/current-cart.ts | .ai/rules/lib.md |
 | app/Support/Menus/**, app/Models/Menu.php, app/Models/MenuItem.php, app/Filament/Resources/Menus/**, app/Filament/Pages/Header.php, app/Filament/Pages/Footer.php, app/Support/Settings/HeaderSettings.php, app/Support/Settings/FooterSettings.php, app/Support/Storefront/StorefrontMenus.php | .ai/rules/menus.md |
 | app/Support/Orders/OrderOwnership.php, app/Http/Controllers/CheckoutController.php, resources/views/checkout/order-complete.blade.php | .ai/rules/order-complete.md |
 | app/Filament/Resources/Orders/** | .ai/rules/orders.md |

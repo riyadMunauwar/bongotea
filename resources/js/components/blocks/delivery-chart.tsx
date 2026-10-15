@@ -5,6 +5,7 @@ import { TruckIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { useCart } from '@/lib/use-cart';
+import { useCurrentCarts } from '@/lib/use-current-carts';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { DeliveryChartProps } from '@/types/blocks';
@@ -18,7 +19,7 @@ import type { DeliveryChartProps } from '@/types/blocks';
 export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryChartProps) {
     const taka = useTaka();
     const { pricing } = usePage().props;
-    const { priced } = useCart(usePage().props.headerCarts.bulk?.id ?? null);
+    const { priced } = useCart(useCurrentCarts().bulk?.id ?? null);
     const bands = pricing.deliveryBands;
     const dearest = Math.max(...bands.map((band) => band.fee));
     const free = bands.find((band) => band.fee === 0);

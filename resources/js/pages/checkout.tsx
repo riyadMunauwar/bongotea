@@ -5,6 +5,7 @@ import { deliveryNote, discountLabel, feeText, packName, retailDeliveryNote } fr
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
+import { forgetCart } from '@/lib/current-cart';
 import { useCart, type UseCart } from '@/lib/use-cart';
 import { useMoments } from '@/lib/use-moments';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
@@ -154,12 +155,14 @@ export default function CheckoutPage() {
             onSuccess: (response) => {
                 setPlaced(true);
 
-                /** Only the Cart this Order was placed from: the other one is still the buyer's. */
+                /** Only the Cart this Order was placed from: every other Cart's Contents are still the buyer's, and the Current Cart moves to one of them. */
                 if (isRetail) {
                     retail.clear();
                 } else {
                     cart.clear();
                 }
+
+                forgetCart(checkedOut.kind, checkedOut.id);
 
                 window.location.assign(response.redirect);
             },

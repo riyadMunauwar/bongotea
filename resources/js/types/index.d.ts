@@ -122,6 +122,8 @@ export type SharedProps = {
     };
     /** Every open Cart (ADR-0038), in the Merchant's order, each with its Page's link. */
     carts: OpenCart[];
+    /** Every closed Cart, by name: offered to nobody, named only where this browser still keeps Contents in it. */
+    closedCarts: { id: number; name: string; kind: CartKind }[];
     /** The Carts the store opened with, deleted or not: what the browser held before Carts were named moves into them, once. */
     startingCarts: { bulk: number | null; retail: number | null };
     /** The Carts the header's খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন buttons open; null where that Cart is closed and its button is not drawn. */

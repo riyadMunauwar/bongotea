@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { bn } from '@/lang/bn';
+import { mindCart } from '@/lib/current-cart';
 import type { CartBlockProps } from '@/types/blocks';
 import { BulkCart } from './bulk-cart';
 import { RetailCart } from './retail-cart';
@@ -13,6 +15,13 @@ import { SectionHeading } from './shared';
  */
 export function CartBlock(props: CartBlockProps) {
     const { cart, heading, text } = props;
+
+    /** Standing on a Cart's page makes it the Current Cart of its kind. */
+    useEffect(() => {
+        if (cart?.isOpen) {
+            mindCart(cart.kind, cart.id);
+        }
+    }, [cart?.id, cart?.kind, cart?.isOpen]);
 
     if (cart === null) {
         return null;

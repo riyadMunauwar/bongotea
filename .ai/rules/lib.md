@@ -3,6 +3,7 @@ paths:
   - resources/js/lib/cart.ts
   - resources/js/lib/contents.ts
   - resources/js/lib/use-adding.ts
+  - resources/js/lib/current-cart.ts
 ---
 
 # Lib
@@ -15,3 +16,6 @@ Each bulk Cart's Contents are `[{productId, packId, kilograms}]`, each Product +
 
 ## Outside a Cart's page, buttons only add, through useAdding and the add-rule
 Product cards, the product page and the pack chooser show no Cart's quantity (`useCart(null)` / `useRetailCart(null)` for prices, limits and স্টক শেষ only). They add through `useAdding()`: `ruleFor(product.cartIds, kind)` (pure `addRule()` in lib/add-rule.ts — one open assigned Cart straight in, several a choice, none every open Cart of the kind, closed never offered) fed to `useCartChoice()` (the কোন কার্টে যোগ করবেন? dialog), then `addKilograms`/`addPacks`, which add on top via `withAddedKilograms`/`withAddedPacks`. Steppers on a Cart's page keep set semantics (`withCappedKilograms`). Both paths write through `changeBulkContents`/`changeRetailContents`, which raise Added to Cart.
+
+## The header icons and Cart bar follow the Current Cart, resolved every time
+`bongotea.current-carts` stores the Cart of each kind the browser last minded: set by `mindCart()` from a Cart Block's page, `useAdding()` and the header's list, cleared by `forgetCart()` after a Capture empties it. Never read it raw: `useCurrentCarts()` resolves through `resolveCurrentCart()` (stored if open, else an open Cart of the kind holding something, else the header button's, else the only open one), so a closed Cart is never Current. The Cart bar is `barCarts()`: Current Carts holding something, then a "+N আরও কার্ট" row; a closed Cart's Contents (named from the shared `closedCarts` prop) show as বন্ধ with only মুছুন and are never dropped. The price matrix and delivery chart read the Current bulk Cart.

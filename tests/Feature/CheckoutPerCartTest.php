@@ -141,6 +141,18 @@ describe('a Cart on a Page', function () {
         ]));
     });
 
+    it('names every closed Cart apart, by name and kind alone, so kept Contents can be shown as closed', function () {
+        $open = Cart::factory()->retail()->onAPage()->create();
+        $off = Cart::factory()->bulk()->switchedOff()->onAPage()->create(['name' => 'Winter']);
+        $deleted = Cart::factory()->retail()->onAPage()->create(['name' => 'Eid 2025']);
+        $deleted->delete();
+
+        $this->get($open->link())->assertInertia(fn (Assert $page) => $page->where('closedCarts', [
+            ['id' => $off->id, 'name' => 'Winter', 'kind' => 'bulk'],
+            ['id' => $deleted->id, 'name' => 'Eid 2025', 'kind' => 'retail'],
+        ]));
+    });
+
     it('refuses to place a Cart on a second Page, naming the first', function () {
         $cart = Cart::factory()->bulk()->onAPage()->create();
         $first = $cart->page();

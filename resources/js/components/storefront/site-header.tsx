@@ -1,13 +1,10 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { bn } from '@/lang/bn';
-import { toBanglaDigits } from '@/lib/bangla';
-import { useCart } from '@/lib/use-cart';
-import { useRetailCart } from '@/lib/use-retail-cart';
-import { useTaka } from '@/lib/use-taka';
 import { AnnouncementBar } from './announcement-bar';
+import { CurrentCartLink } from './current-cart-link';
 import { DesktopNav } from './desktop-nav';
-import { BagIcon, CartIcon, ParcelIcon } from './icons';
+import { ParcelIcon } from './icons';
 import { MenuAnchor } from './menu-anchor';
 import { MobileMenu } from './mobile-menu';
 import { SearchBox } from './search-box';
@@ -17,19 +14,16 @@ import { StoreLogo } from './store-logo';
  * The sticky header on every storefront page: the announcement bar, then
  * either the full two-row header (from 1024px) or the compact one with its
  * drawer. Which is drawn is decided in CSS, so the server draws both and the
- * first paint never jumps. From 1024px each Cart's button names it and shows
- * what it all comes to, delivery included, with its size on the icon — the
- * পাইকারি কার্ট's Kilograms, the খুচরা কার্ট's Packs; the compact header
- * draws the icons alone. খুচরা অর্ডার করুন stands left of পাইকারি অর্ডার
- * করুন, each opening the Cart chosen in Header settings (ADR-0038); a
- * button whose Cart is closed is not drawn, nor is its icon.
+ * first paint never jumps. The two icons follow the browser's Current Cart of
+ * each kind (ADR-0038): from 1024px each names it and shows what it all comes
+ * to, delivery included, with its size on the icon — a bulk Cart's Kilograms,
+ * a retail Cart's Packs; the compact header draws the icons alone. খুচরা
+ * অর্ডার করুন stands left of পাইকারি অর্ডার করুন, each opening the Cart
+ * chosen in Header settings; a button whose Cart is closed is not drawn.
  */
 export function SiteHeader() {
     const { store, announcement, menus, links, headerCarts } = usePage().props;
     const [menuOpen, setMenuOpen] = useState(false);
-    const { priced } = useCart(headerCarts.bulk?.id ?? null);
-    const retail = useRetailCart(headerCarts.retail?.id ?? null);
-    const taka = useTaka();
 
     useEffect(() => router.on('navigate', () => setMenuOpen(false)), []);
 
@@ -49,30 +43,8 @@ export function SiteHeader() {
                                 <span className="text-[14px] font-semibold">{bn.header.myOrders}</span>
                             </span>
                         </MenuAnchor>
-                        {headerCarts.retail && (
-                            <MenuAnchor href={headerCarts.retail.href} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
-                                <span className="relative flex">
-                                    <BagIcon />
-                                    <CartBadge count={retail.priced.packCount} />
-                                </span>
-                                <span className="flex flex-col leading-[1.25]">
-                                    <span className="text-[11px] text-muted">{bn.header.packetBasket}</span>
-                                    <span className="text-[14px] font-bold">{taka(retail.priced.total)}</span>
-                                </span>
-                            </MenuAnchor>
-                        )}
-                        {headerCarts.bulk && (
-                            <MenuAnchor href={headerCarts.bulk.href} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
-                                <span className="relative flex">
-                                    <CartIcon />
-                                    <CartBadge count={priced.totalKilograms} />
-                                </span>
-                                <span className="flex flex-col leading-[1.25]">
-                                    <span className="text-[11px] text-muted">{bn.header.cart}</span>
-                                    <span className="text-[14px] font-bold">{taka(priced.total)}</span>
-                                </span>
-                            </MenuAnchor>
-                        )}
+                        <CurrentCartLink kind="retail" />
+                        <CurrentCartLink kind="bulk" />
                     </div>
                 </div>
                 <div className="border-t border-divider">
@@ -132,22 +104,8 @@ export function SiteHeader() {
                             </MenuAnchor>
                         )}
                     </div>
-                    {headerCarts.retail && (
-                        <MenuAnchor href={headerCarts.retail.href} aria-label={bn.header.packetBasket} className="flex size-10 flex-none items-center justify-center text-ink hover:text-ink">
-                            <span className="relative flex">
-                                <BagIcon />
-                                <CartBadge count={retail.priced.packCount} />
-                            </span>
-                        </MenuAnchor>
-                    )}
-                    {headerCarts.bulk && (
-                        <MenuAnchor href={headerCarts.bulk.href} aria-label={bn.header.cart} className="flex size-10 flex-none items-center justify-center text-ink hover:text-ink">
-                            <span className="relative flex">
-                                <CartIcon />
-                                <CartBadge count={priced.totalKilograms} />
-                            </span>
-                        </MenuAnchor>
-                    )}
+                    <CurrentCartLink kind="retail" compact />
+                    <CurrentCartLink kind="bulk" compact />
                 </div>
                 <SearchBox compact className="h-11 flex-none" />
             </div>
@@ -157,15 +115,3 @@ export function SiteHeader() {
     );
 }
 
-/** A Cart's size on its icon, once it holds any: the bulk Cart's Kilograms, the packet basket's Packs. */
-function CartBadge({ count }: { count: number }) {
-    if (count === 0) {
-        return null;
-    }
-
-    return (
-        <span className="absolute -top-[6px] -right-2 box-border flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-cart-badge px-[5px] text-[11px] font-bold text-white">
-            {toBanglaDigits(count)}
-        </span>
-    );
-}
