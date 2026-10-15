@@ -90,9 +90,10 @@ export const bn = {
         perKilogram: '/কেজি',
         why: (category: string) => `কেন ${category}`,
         noMatches: 'এই বাছাইয়ে কোনো চা নেই',
+        loadMore: (remaining: string) => `আরও দেখুন (${remaining}টি বাকি)`,
     },
     catalogue: {
-        strength: 'কড়া ভাব',
+        strength: 'সামগ্রিক রেটিং',
         tierRange: (min: string, max: string | null) => (max === null ? `${min}+ কেজি` : `${min}–${max} কেজি`),
         offMrp: (amount: string, percent: string | null) => (percent === null ? `${amount} ছাড়` : `${amount} ছাড় (${percent}%)`),
         mrp: 'এমআরপি',

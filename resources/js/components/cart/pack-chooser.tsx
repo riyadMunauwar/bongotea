@@ -34,11 +34,11 @@ export function PackChooserButton({ productId, productName, className }: { produ
                 type="button"
                 onClick={() => setOpen(true)}
                 className={cn(
-                    'box-border flex w-full cursor-pointer items-center justify-center gap-2 rounded-[8px] border border-primary bg-white px-[6px] py-[9px] text-[13px] font-semibold text-primary-dark hover:bg-green-50 md:rounded-[10px] md:p-[11px] md:text-[15px]',
+                    'box-border flex w-full cursor-pointer items-center justify-center gap-[6px] rounded-[8px] border border-primary bg-white px-1 py-[7px] text-[12px] font-semibold text-primary-dark hover:bg-green-50 md:text-[13px]',
                     className,
                 )}
             >
-                <BagIcon size={18} className="max-md:hidden" />
+                <BagIcon size={15} className="max-md:hidden" />
                 {held > 0 ? (
                     bn.packs.inBasket(toBanglaDigits(held))
                 ) : (

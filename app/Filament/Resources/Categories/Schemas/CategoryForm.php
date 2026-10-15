@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Categories\Schemas;
 use App\Enums\CategoryTheme;
 use App\Filament\Concerns\HasSeoFields;
 use App\Filament\Concerns\HasSlugField;
-use App\Support\Pages\Blocks\CategoryPanels;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -54,13 +53,12 @@ class CategoryForm
                                 ->rows(3),
 
                             /**
-                             * As many as the Merchant writes, three to start.
-                             * The order matters: the home page's panel shows
-                             * only the first three, the Category's page all.
+                             * As many as the Merchant writes, three to start,
+                             * shown in order on the Category's own page.
                              */
                             Repeater::make('why_points')
                                 ->label('Why choose it')
-                                ->helperText('The home page shows the first '.CategoryPanels::WHY_POINTS_SHOWN.'; the Category page shows them all. Drag to choose which lead.')
+                                ->helperText('Shown on the Category page. Drag to choose which lead.')
                                 ->simple(TextInput::make('point')->required()->maxLength(255))
                                 ->defaultItems(3)
                                 ->reorderable()

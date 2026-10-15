@@ -17,9 +17,10 @@ import { StoreLogo } from './store-logo';
  * The sticky header on every storefront page: the announcement bar, then
  * either the full two-row header (from 1024px) or the compact one with its
  * drawer. Which is drawn is decided in CSS, so the server draws both and the
- * first paint never jumps. The cart button shows the Cart's total Kilograms
- * and what it all comes to, delivery included; the bag beside it counts the
- * Packs in the packet basket and leads to it.
+ * first paint never jumps. From 1024px each Cart's button names it and shows
+ * what it all comes to, delivery included, with its size on the icon — the
+ * পাইকারি কার্ট's Kilograms, the খুচরা কার্ট's Packs; the compact header
+ * draws the icons alone.
  */
 export function SiteHeader() {
     const { store, announcement, menus, links } = usePage().props;
@@ -46,10 +47,14 @@ export function SiteHeader() {
                                 <span className="text-[14px] font-semibold">{bn.header.myOrders}</span>
                             </span>
                         </MenuAnchor>
-                        <MenuAnchor href={links.packetBasket} aria-label={bn.header.packetBasket} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
+                        <MenuAnchor href={links.packetBasket} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
                             <span className="relative flex">
                                 <BagIcon />
                                 <CartBadge count={retail.priced.packCount} />
+                            </span>
+                            <span className="flex flex-col leading-[1.25]">
+                                <span className="text-[11px] text-muted">{bn.header.packetBasket}</span>
+                                <span className="text-[14px] font-bold">{taka(retail.priced.total)}</span>
                             </span>
                         </MenuAnchor>
                         <MenuAnchor href={links.bulkOrder} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">

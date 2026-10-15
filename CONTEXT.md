@@ -75,7 +75,7 @@ How big a tea's grain looks, in the plain words a Customer uses — ছোট, �
 _Avoid_: grade, cut, granule
 
 **Strength**:
-How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words. On the Product's own page it is labelled সামগ্রিক রেটিং, and elsewhere কড়া ভাব; the label differs, the meaning never does — it is how strong the liquor is, not how good the tea is.
+How strong a Product's liquor is, as one of ten grades read the way a tea trader says them: ৫+, ৫, ৫-, ৪+, ৪, ৪-, ৩+, ৩, ৩-, ২+, strongest first. A plus or minus is a shade either side of the number and never arithmetic, so ৪- is just short of ৪, not less than it by anything. Wherever it is drawn it shows the grade as written beside a bar of five filled to the number alone. A fixed Characteristic, and the only one with a set of answers rather than words. A Customer reads it as সামগ্রিক রেটিং wherever it is drawn — on a card as on the Product's own page — under the one label, because a tea trader's buyer reads the grade that way; whatever the label suggests, it is how strong the liquor is, not how good the tea is.
 _Avoid_: strength score, rating, level, intensity
 
 **Brand**:

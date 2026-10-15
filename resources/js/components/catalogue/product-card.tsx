@@ -21,8 +21,9 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
  * its name and Brand, strength, its first Tier's price beside the MRP struck
  * through, the most a Tier takes off the MRP, and its own Tier ladder, with
  * the kilogram button, all for a Product sold পাইকারি; and — for one sold
- * খুচরা — the packet button, alone with its cheapest Pack Price where it is
- * not sold পাইকারি (ADR-0036). An
+ * খুচরা — its cheapest Pack Price and the packet button, the price leading
+ * where it is not sold পাইকারি (ADR-0036). Drawn small, so a row holds
+ * several, yet with nothing left off. An
  * unavailable Product is drawn greyed and says so, because a regular buyer
  * looks for the tea they always buy; so is one স্টক শেষ every way it is sold,
  * and one স্টক শেষ only পাইকারি says so in place of its kilogram button.
@@ -40,7 +41,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
         <article
             style={themeStyle(product.category.theme)}
             className={cn(
-                'flex min-w-0 flex-col overflow-hidden rounded-[14px] border bg-white transition-[border-color,box-shadow] hover:shadow-card md:rounded-[16px]',
+                'flex min-w-0 flex-col overflow-hidden rounded-[12px] border bg-white transition-[border-color,box-shadow] hover:shadow-card',
                 kilograms > 0 ? 'border-green-200' : 'border-border',
                 className,
             )}
@@ -51,46 +52,50 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     alt=""
                     stripes="stripes-light"
                     label={bn.catalogue.imageOf(product.name)}
-                    className={cn('flex aspect-[16/10] items-end p-2 md:aspect-[5/4] md:p-3', isGreyed && 'grayscale')}
+                    className={cn('flex aspect-[4/3] items-end p-2', isGreyed && 'grayscale')}
                 >
                     {product.badge && (
-                        <span className="absolute top-2 left-2 rounded-full bg-eyebrow px-[7px] py-[2px] text-[10px] font-semibold text-white md:top-3 md:left-3 md:px-[10px] md:py-1 md:text-[12px]">
+                        <span className="absolute top-2 left-2 rounded-full bg-eyebrow px-[7px] py-[2px] text-[10px] font-semibold text-white md:text-[11px]">
                             {product.badge}
                         </span>
                     )}
                     {kilograms > 0 && (
-                        <span className="absolute top-2 right-2 rounded-full bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white md:top-3 md:right-3 md:px-[10px] md:py-1 md:text-[12px]">
+                        <span className="absolute top-2 right-2 rounded-full bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white md:text-[11px]">
                             {bn.cart.inCart(toBanglaDigits(kilograms))}
                         </span>
                     )}
                 </Picture>
             </Link>
 
-            <div className={cn('flex flex-1 flex-col gap-[6px] p-[14px] md:gap-2 md:px-5 md:pt-[18px] md:pb-5', isGreyed && 'opacity-70')}>
+            <div className={cn('flex flex-1 flex-col gap-1 p-[10px] md:gap-[6px] md:p-3', isGreyed && 'opacity-70')}>
                 <span className="flex flex-wrap items-center gap-[6px]">
-                    <span className="rounded-full bg-(--cat-tint) px-[7px] py-[2px] text-[10px] font-semibold text-(--cat-text) md:px-[9px] md:py-[3px] md:text-[12px]">
+                    <span className="rounded-full bg-(--cat-tint) px-[7px] py-[2px] text-[10px] font-semibold text-(--cat-text) md:text-[11px]">
                         {product.category.name}
                     </span>
-                    <span className="text-[11px] text-muted md:text-[12px]">{product.brand.name}</span>
+                    <span className="text-[10px] text-muted md:text-[11px]">{product.brand.name}</span>
                 </span>
 
-                <Link href={product.href} className="text-[15px] leading-[1.35] font-bold text-ink no-underline hover:text-primary md:text-[19px]">
+                <Link href={product.href} className="text-[13px] leading-[1.35] font-bold text-ink no-underline hover:text-primary md:text-[15px]">
                     {product.name}
                 </Link>
 
-                {product.shortDescription && <p className="m-0 hidden text-[14px] leading-[1.65] text-muted md:block">{product.shortDescription}</p>}
+                {product.shortDescription && <p className="m-0 hidden text-[12px] leading-[1.55] text-muted md:block">{product.shortDescription}</p>}
 
                 {product.strength !== null && (
-                    <span className="flex items-center gap-[6px] text-[11px] text-muted md:text-[13px]">
+                    <span className="flex items-center gap-[6px] text-[10px] text-muted md:text-[11px]">
                         {bn.catalogue.strength}
                         <StrengthBar bars={product.strength.bars} />
                         <b className="font-semibold text-ink">{product.strength.grade}</b>
                     </span>
                 )}
 
-                {product.isSoldBulk ? <BulkPrices product={product} cartKilograms={cart.priced.totalKilograms} /> : <RetailFrom productId={product.id} />}
+                {product.isSoldBulk ? (
+                    <BulkPrices product={product} cartKilograms={cart.priced.totalKilograms} />
+                ) : (
+                    <RetailFrom productId={product.id} className="text-[15px] md:text-[18px]" />
+                )}
 
-                <div className="mt-auto pt-[6px] md:pt-[10px]">
+                <div className="mt-auto pt-1 md:pt-[6px]">
                     {isGreyed ? (
                         <CardNotice>{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</CardNotice>
                     ) : !product.isSoldBulk ? null : kilograms === 0 && cart.isSoldOut(product.id) ? (
@@ -99,9 +104,9 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                         <button
                             type="button"
                             onClick={() => cart.set(product.id, 1)}
-                            className="box-border flex w-full cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 bg-primary px-[6px] py-[10px] text-[13px] font-semibold text-white hover:bg-primary-dark md:rounded-[10px] md:p-3 md:text-[15px] md:font-bold"
+                            className="box-border flex w-full cursor-pointer items-center justify-center gap-[6px] rounded-[8px] border-0 bg-primary px-1 py-2 text-[12px] font-semibold text-white hover:bg-primary-dark md:text-[13px] md:font-bold"
                         >
-                            <CartIcon size={18} className="max-md:hidden" />
+                            <CartIcon size={15} className="max-md:hidden" />
                             {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
                         </button>
                     ) : (
@@ -109,11 +114,11 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             kilograms={kilograms}
                             onChange={(next) => cart.set(product.id, next)}
                             max={cart.mostKilogramsOf(product.id)}
-                            className="rounded-[8px] border border-primary bg-green-50 text-[14px] text-primary-dark md:rounded-[10px] md:text-[16px]"
-                            buttonClassName="h-[38px] w-[38px] text-primary-dark md:h-11 md:w-[46px]"
+                            className="rounded-[8px] border border-primary bg-green-50 text-[13px] text-primary-dark md:text-[14px]"
+                            buttonClassName="h-[32px] w-[32px] text-primary-dark md:h-[34px] md:w-[36px]"
                         />
                     )}
-                    {!isGreyed && <PackChooserButton productId={product.id} productName={product.name} className={cn(product.isSoldBulk && 'mt-2')} />}
+                    {!isGreyed && <PackChooserButton productId={product.id} productName={product.name} className={cn(product.isSoldBulk && 'mt-[6px]')} />}
                 </div>
             </div>
         </article>
@@ -123,13 +128,13 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
 /** In place of a card's buttons: why it cannot be ordered now. */
 function CardNotice({ children }: { children: string }) {
     return (
-        <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-[6px] py-[10px] text-[13px] font-semibold text-muted md:rounded-[10px] md:p-3 md:text-[15px]">
+        <span className="box-border flex w-full items-center justify-center rounded-[8px] bg-surface px-1 py-2 text-[12px] font-semibold text-muted md:text-[13px]">
             {children}
         </span>
     );
 }
 
-/** A পাইকারি Product's first Tier Price beside the MRP struck through, the most a Tier takes off, and its ladder. */
+/** A পাইকারি Product's first Tier Price beside the MRP struck through, the most a Tier takes off, its খুচরা price where it has one, and its ladder. */
 function BulkPrices({ product, cartKilograms }: { product: BulkProductCard; cartKilograms: number }) {
     const taka = useTaka();
     const first = firstTierPrice(product.tiers);
@@ -138,27 +143,29 @@ function BulkPrices({ product, cartKilograms }: { product: BulkProductCard; cart
 
     return (
         <>
-            <span className="mt-[2px] flex flex-wrap items-baseline gap-[6px] md:mt-1">
-                <b className="text-[17px] font-extrabold text-ink md:text-[24px]">
+            <span className="mt-[2px] flex flex-wrap items-baseline gap-x-[6px] gap-y-[2px]">
+                <b className="text-[15px] font-extrabold text-ink md:text-[18px]">
                     {taka(first)}
                     {bn.blocks.perKilogram}
                 </b>
                 {first < product.mrp && (
                     <>
-                        <s className="text-[12px] text-muted md:text-[14px]">{taka(product.mrp)}</s>
-                        <span className="text-[11px] font-semibold text-primary md:text-[13px]">{discountLabel(product.mrp, first, taka)}</span>
+                        <s className="text-[11px] text-muted md:text-[12px]">{taka(product.mrp)}</s>
+                        <span className="text-[10px] font-semibold text-primary md:text-[11px]">{discountLabel(product.mrp, first, taka)}</span>
                     </>
                 )}
                 {maxSaving > 0 && (
-                    <span className="rounded-[5px] bg-offer-tint px-[6px] py-px text-[10px] font-bold text-cart-badge md:rounded-[6px] md:px-2 md:py-[2px] md:text-[12px]">
+                    <span className="rounded-[5px] bg-offer-tint px-[6px] py-px text-[10px] font-bold text-cart-badge md:text-[11px]">
                         <span className="md:hidden">{bn.catalogue.upToOffShort(taka(maxSaving))}</span>
                         <span className="max-md:hidden">{bn.catalogue.upToOff(taka(maxSaving))}</span>
                     </span>
                 )}
             </span>
 
+            <RetailFromLine productId={product.id} />
+
             {product.tiers.length > 1 && (
-                <div className="mt-1 md:mt-[6px]">
+                <div className="mt-[2px]">
                     <TierLadder mrp={product.mrp} tiers={product.tiers} cartKilograms={cartKilograms} />
                 </div>
             )}
@@ -166,16 +173,34 @@ function BulkPrices({ product, cartKilograms }: { product: BulkProductCard; cart
     );
 }
 
-/** A Product sold only খুচরা has no Tiers, so its card leads with its cheapest খুচরা Pack Price. */
-export function RetailFrom({ productId }: { productId: number }) {
+/** A Product sold only খুচরা has no Tiers, so it leads with its cheapest খুচরা Pack Price. */
+export function RetailFrom({ productId, className }: { productId: number; className?: string }) {
+    const label = useRetailFromLabel(productId);
+
+    if (label === null) {
+        return null;
+    }
+
+    return <b className={cn('mt-[2px] text-[17px] font-extrabold text-ink md:mt-1 md:text-[24px]', className)}>{label}</b>;
+}
+
+/** The cheapest খুচরা Pack Price as a quiet line under a পাইকারি Product's prices, where it is sold খুচরা too. */
+function RetailFromLine({ productId }: { productId: number }) {
+    const label = useRetailFromLabel(productId);
+
+    if (label === null) {
+        return null;
+    }
+
+    return <span className="text-[11px] font-semibold text-primary-dark md:text-[12px]">{label}</span>;
+}
+
+/** "খুচরা ৳X থেকে" from a Product's cheapest খুচরা Pack, or null where it is not sold খুচরা. */
+function useRetailFromLabel(productId: number): string | null {
     const taka = useTaka();
     const prices = useRetailCart()
         .packsOf(productId)
         .map((pack) => pack.price);
 
-    if (prices.length === 0) {
-        return null;
-    }
-
-    return <b className="mt-[2px] text-[17px] font-extrabold text-ink md:mt-1 md:text-[24px]">{bn.catalogue.retailFrom(taka(Math.min(...prices)))}</b>;
+    return prices.length === 0 ? null : bn.catalogue.retailFrom(taka(Math.min(...prices)));
 }

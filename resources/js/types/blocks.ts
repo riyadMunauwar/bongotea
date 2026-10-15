@@ -185,7 +185,12 @@ export type CategoryPanelsProps = {
     tags: { id: number; name: string }[];
     /** Empty while only one Brand has published Products, so no Brand filter is drawn. */
     brands: { id: number; name: string }[];
-    categories: (CategoryDetail & { products: ProductCard[] })[];
+    /** Cards across a row from 1024px; a phone always shows two, a tablet three. */
+    columns: 3 | 4 | 5;
+    /** How many cards a band shows at first, and how many more each "load more" adds. */
+    batchSize: number;
+    /** Without what the Category says about itself or its why points, which only its own page draws. */
+    categories: (Omit<CategoryDetail, 'about' | 'whyPoints'> & { products: ProductCard[] })[];
 };
 
 export type ProductRailProps = {

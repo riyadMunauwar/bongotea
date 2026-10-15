@@ -64,9 +64,9 @@ it('tiles each Category that has published Products with its count and lowest to
         );
 });
 
-it('draws a panel per Category with its first three why points, its Products, the Tags they carry, and no Brand filter while one Brand sells', function () {
+it('draws a panel per Category with its short header, its Products, the Tags they carry, and no Brand filter while one Brand sells', function () {
     $brand = Brand::factory()->create();
-    $premium = Category::factory()->create(['sort_order' => 0, 'why_points' => ['হাতে বাছাই করা কচি পাতা', 'গাঢ় রং', 'দীর্ঘস্থায়ী সুগন্ধ', 'হোটেলে জনপ্রিয়']]);
+    $premium = Category::factory()->create(['sort_order' => 0, 'quality_headline' => 'সেরা পাতা', 'about' => 'হাতে বাছাই', 'why_points' => ['গাঢ় রং']]);
     $silver = Category::factory()->create(['sort_order' => 1]);
     $milk = Tag::factory()->create(['name' => 'দুধ চায়ের জন্য', 'sort_order' => 1]);
     $plain = Tag::factory()->create(['name' => 'রং চায়ের জন্য', 'sort_order' => 0]);
@@ -90,13 +90,32 @@ it('draws a panel per Category with its first three why points, its Products, th
             ->where('page.blocks.0.props.brands', [])
             ->has('page.blocks.0.props.categories', 2)
             ->where('page.blocks.0.props.categories.0.id', $premium->id)
-            ->where('page.blocks.0.props.categories.0.whyPoints', ['হাতে বাছাই করা কচি পাতা', 'গাঢ় রং', 'দীর্ঘস্থায়ী সুগন্ধ'])
+            ->where('page.blocks.0.props.categories.0.qualityHeadline', 'সেরা পাতা')
+            ->missing('page.blocks.0.props.categories.0.about')
+            ->missing('page.blocks.0.props.categories.0.whyPoints')
             ->where('page.blocks.0.props.categories.0.productCount', 1)
             ->where('page.blocks.0.props.categories.0.products.0.id', $royal->id)
             ->where('page.blocks.0.props.categories.0.products.0.tagIds', collect([$milk->id, $plain->id])->sort()->values()->all())
             ->where('page.blocks.0.props.categories.1.products.0.id', $strong->id)
         );
 });
+
+it('lays the panels out in the columns and batches the Merchant chose, falling back on four and eight', function (array $data, int $columns, int $batchSize) {
+    Product::factory()->create();
+
+    pageWithBlock('category_panels', $data);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.columns', $columns)
+            ->where('page.blocks.0.props.batchSize', $batchSize)
+        );
+})->with([
+    'unset' => [[], 4, 8],
+    'chosen' => [['columns' => '5', 'batch_size' => '12'], 5, 12],
+    'out of range' => [['columns' => '7', 'batch_size' => '500'], 4, 48],
+    'too few' => [['columns' => '3', 'batch_size' => '0'], 3, 1],
+]);
 
 it('offers a Brand filter once more than one Brand has published Products', function () {
     $ours = Brand::factory()->create(['name' => 'Bongotea']);
