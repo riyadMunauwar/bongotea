@@ -11,7 +11,8 @@ const SWIPE_PX = 40;
 /**
  * The home hero: slides that fade and zoom in, advance on their own, swipe
  * on a phone, and carry dots (and arrows on a wider screen). Choosing a slide
- * restarts the clock. Laid out as a banner, it is the About and Contact
+ * restarts the clock. It runs the full width of the screen, its words kept
+ * in line with the page beneath. Laid out as a banner, it is the About and Contact
  * pages' dark header instead.
  */
 export function HeroCarousel({ layout, slides }: HeroCarouselProps) {
@@ -53,7 +54,7 @@ function Carousel({ slides }: { slides: HeroCarouselProps['slides'] }) {
                     go(active + (travelled < 0 ? 1 : -1));
                 }
             }}
-            className="relative mx-auto h-[440px] max-w-[1240px] overflow-hidden bg-ink md:mt-5 md:h-[500px] md:rounded-[18px]"
+            className="relative h-[440px] overflow-hidden bg-ink md:h-[520px]"
         >
             {slides.map((slide, index) => {
                 const isActive = index === active;
