@@ -235,7 +235,7 @@ describe('the storefront', function () {
             ]);
     })->with('tracking providers')->with([
         'a product page' => fn (): string => route('product', Product::factory()->create()->slug),
-        'the checkout' => fn (): string => route('checkout'),
+        'the checkout' => fn (): string => route('checkout', ['cart' => openCart()->getKey()]),
     ]);
 
     /**
@@ -308,7 +308,7 @@ describe('the storefront', function () {
 
         app(TrackingSettings::class)->with(['countsVisits' => $counts])->save();
 
-        test()->get(route('checkout'))->assertInertia(fn (Assert $page) => $page
+        test()->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page
             ->where('tracking.beacon', $told ? route('tracking.report') : null)
             ->where('tracking.moments', TrackingSnippet::MOMENTS));
     })->with([

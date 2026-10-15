@@ -173,10 +173,10 @@ it('keeps the browser signed in for thirty days and no longer', function () {
     signInAs('01712345678');
 
     $this->travel(29)->days();
-    $this->get(route('checkout'))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', '01712345678'));
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', '01712345678'));
 
     $this->travel(2)->days();
-    $this->get(route('checkout'))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', null));
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', null));
 });
 
 it('signs the browser out', function () {
@@ -189,7 +189,7 @@ it('signs the browser out', function () {
 
 it('ignores a cookie it cannot read', function () {
     $this->withCookie(CustomerGuard::COOKIE, 'not json')
-        ->get(route('checkout'))
+        ->get(route('checkout', ['cart' => openCart()->getKey()]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('signedInPhone', null));
 });
@@ -197,9 +197,9 @@ it('ignores a cookie it cannot read', function () {
 it('pre-fills the Checkout with the signed-in number', function () {
     Product::factory()->create();
 
-    $this->get(route('checkout'))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', null));
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', null));
 
     signInAs('+880 1712-345678');
 
-    $this->get(route('checkout'))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', '01712345678'));
+    $this->get(route('checkout', ['cart' => openCart()->getKey()]))->assertInertia(fn (Assert $page) => $page->where('signedInPhone', '01712345678'));
 });

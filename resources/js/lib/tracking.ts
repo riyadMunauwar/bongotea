@@ -31,15 +31,22 @@ export type MomentSelection = {
     value: number;
     count: number;
     cart: 'bulk' | 'retail';
+    /** The Cart itself and the name it bears (ADR-0038), where the Moment knows it. */
+    cartId?: number;
+    cartName?: string;
     lines: { id: string; quantity: number; unitPrice: number; variant?: string }[];
 };
 
 /** A Moment about the packet basket, or some of it: the Packs priced, and the Packs themselves. */
 export type RetailMoment = { cart: 'retail'; priced: PricedRetailCart; packs: CartPack[] };
 
+/** The Cart a Moment came from (ADR-0038). */
+export type MomentCart = { id: number; name: string };
+
 /** Which Products this browser's Cart has reported Added to Cart for, and the Cart they were added to. */
 export type CartMoments = { cart: string; reported: number[] };
 
+/** Each Cart's own record, by Cart id: a tea added to two Carts is two Added to Carts. */
 const CART_MOMENTS_KEY = 'bongotea.cart-moments';
 
 /** The packet basket's own record, so a Pack and a Product of the same id never stand in for each other. */
@@ -61,11 +68,12 @@ export function cartMomentFor(record: CartMoments | null, cartWasEmpty: boolean,
 }
 
 /** A priced Cart, or one Product priced as a Cart of its own, as the Pixel reports it. */
-export function momentSelection(priced: PricedCart, minorUnitsPerTaka: number): MomentSelection {
+export function momentSelection(priced: PricedCart, minorUnitsPerTaka: number, from: MomentCart | null = null): MomentSelection {
     return {
         value: priced.subtotal / minorUnitsPerTaka,
         count: priced.totalKilograms,
         cart: 'bulk',
+        ...cartOf(from),
         lines: byProduct(priced).map((line) => ({ id: String(line.productId), quantity: line.kilograms, unitPrice: line.tierPrice / minorUnitsPerTaka })),
     };
 }
@@ -89,13 +97,14 @@ export function packVariant(grams: number): string {
 }
 
 /** Packs priced as the Pixel reports them: each as its Product, the count its quantity, the Pack Price its price, the weight its variant. */
-export function retailMomentSelection({ priced, packs }: RetailMoment, minorUnitsPerTaka: number): MomentSelection {
+export function retailMomentSelection({ priced, packs }: RetailMoment, minorUnitsPerTaka: number, from: MomentCart | null = null): MomentSelection {
     const byId = new Map(packs.map((pack) => [pack.id, pack]));
 
     return {
         value: priced.subtotal / minorUnitsPerTaka,
         count: priced.packCount,
         cart: 'retail',
+        ...cartOf(from),
         lines: priced.lines.map((line) => {
             const pack = byId.get(line.packId);
 
@@ -133,7 +142,7 @@ export function momentId(): string {
  * was about, for every Moment but a Visit: the bulk Cart's figures, or a
  * `RetailMoment` for the packet basket.
  */
-export function reportMoment(tracking: Tracking, minorUnitsPerTaka: number, moment: StorefrontMoment, id: string, priced: PricedCart | RetailMoment | null = null): void {
+export function reportMoment(tracking: Tracking, minorUnitsPerTaka: number, moment: StorefrontMoment, id: string, priced: PricedCart | RetailMoment | null = null, from: MomentCart | null = null): void {
     if (typeof window === 'undefined') {
         return;
     }
@@ -141,7 +150,7 @@ export function reportMoment(tracking: Tracking, minorUnitsPerTaka: number, mome
     try {
         const pixel = (window as unknown as Record<string, Partial<Record<StorefrontMoment, (id: string, selection?: MomentSelection) => void>> | undefined>)[tracking.moments];
 
-        pixel?.[moment]?.(id, priced === null ? undefined : isRetail(priced) ? retailMomentSelection(priced, minorUnitsPerTaka) : momentSelection(priced, minorUnitsPerTaka));
+        pixel?.[moment]?.(id, priced === null ? undefined : isRetail(priced) ? retailMomentSelection(priced, minorUnitsPerTaka, from) : momentSelection(priced, minorUnitsPerTaka, from));
     } catch {
         // The Pixel is somebody else's script; its failing is not the page's.
     }
@@ -151,6 +160,10 @@ export function reportMoment(tracking: Tracking, minorUnitsPerTaka: number, mome
     }
 
     const query = new URLSearchParams({ moment, id });
+
+    if (from !== null) {
+        query.set('cart_id', String(from.id));
+    }
 
     if (priced !== null && isRetail(priced)) {
         query.set('cart', 'retail');
@@ -191,7 +204,7 @@ function isRetail(priced: PricedCart | RetailMoment): priced is RetailMoment {
     return 'cart' in priced && priced.cart === 'retail';
 }
 
-function readCartMoments(key: string = CART_MOMENTS_KEY): CartMoments | null {
+function readCartMoments(key: string): CartMoments | null {
     try {
         const stored: unknown = JSON.parse(storage()?.getItem(key) ?? 'null');
 
@@ -211,11 +224,12 @@ function readCartMoments(key: string = CART_MOMENTS_KEY): CartMoments | null {
  * same for one Product in one Cart, so a second report of it is one event at
  * the Provider and one row in the outbox.
  */
-export function addedToCartId(cartWasEmpty: boolean, productId: number): string | null {
-    const { record, reports } = cartMomentFor(readCartMoments(), cartWasEmpty, productId, momentId());
+export function addedToCartId(cartId: number, cartWasEmpty: boolean, productId: number): string | null {
+    const key = `${CART_MOMENTS_KEY}.${cartId}`;
+    const { record, reports } = cartMomentFor(readCartMoments(key), cartWasEmpty, productId, momentId());
 
     try {
-        storage()?.setItem(CART_MOMENTS_KEY, JSON.stringify(record));
+        storage()?.setItem(key, JSON.stringify(record));
     } catch {
         // Kept for nobody; at worst the Product is reported again in this Cart.
     }
@@ -228,14 +242,25 @@ export function addedToCartId(cartWasEmpty: boolean, productId: number): string 
  * is an Added to Cart — once per Pack per basket, however many follow it —
  * and if so its deduplication id, kept apart from the bulk Cart's.
  */
-export function addedToRetailCartId(basketWasEmpty: boolean, packId: number): string | null {
-    const { record, reports } = cartMomentFor(readCartMoments(RETAIL_CART_MOMENTS_KEY), basketWasEmpty, packId, momentId());
+export function addedToRetailCartId(cartId: number, basketWasEmpty: boolean, packId: number): string | null {
+    const key = `${RETAIL_CART_MOMENTS_KEY}.${cartId}`;
+    const { record, reports } = cartMomentFor(readCartMoments(key), basketWasEmpty, packId, momentId());
 
     try {
-        storage()?.setItem(RETAIL_CART_MOMENTS_KEY, JSON.stringify(record));
+        storage()?.setItem(key, JSON.stringify(record));
     } catch {
         // Kept for nobody; at worst the Pack is reported again in this basket.
     }
 
     return reports ? `${record.cart}-pack-${packId}` : null;
+}
+
+/** The Cart a Selection names, where the Moment knows it. */
+function cartOf(from: MomentCart | null): { cartId?: number; cartName?: string } {
+    return from === null ? {} : { cartId: from.id, ...(from.name === '' ? {} : { cartName: from.name }) };
+}
+
+/** A Cart a Moment came from, by id, named as the open Carts name it; a Cart closed since goes by its id alone, and the server names it. */
+export function cartFrom(openCarts: { id: number; name: string }[], cartId: number): MomentCart {
+    return { id: cartId, name: openCarts.find((cart) => cart.id === cartId)?.name ?? '' };
 }

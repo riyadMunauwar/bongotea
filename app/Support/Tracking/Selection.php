@@ -2,6 +2,7 @@
 
 namespace App\Support\Tracking;
 
+use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Pack;
@@ -32,8 +33,9 @@ use Illuminate\Support\Collection;
  * Money is minor units throughout, as everywhere else in the system; a driver
  * converts at the wire.
  *
- * Every Selection says which Cart it came from, `bulk` or `retail`
- * (ADR-0034). A Pack is reported as its Product — the Product's id, the Pack
+ * Every Selection says which kind of Cart it came from, `bulk` or `retail`
+ * (ADR-0034), and — where it is known — which Cart, by id and by the name it
+ * bore (ADR-0038), so an Added to Cart in Eid Gift Packs can be told apart. A Pack is reported as its Product — the Product's id, the Pack
  * count as the quantity, the Pack Price as the unit price — with its weight
  * as the line's `variant`, so the ad platforms see one tea however it is sold.
  */
@@ -46,12 +48,16 @@ final class Selection
     /**
      * @param  list<array{id: string, quantity: int, unit_price: int, variant?: string}>  $lines
      * @param  int  $value  what the event reports as its worth, in minor units
-     * @param  string  $cart  which Cart it came from: `bulk` or `retail`
+     * @param  string  $cart  which kind of Cart it came from: `bulk` or `retail`
+     * @param  int|null  $cartId  the Cart itself (ADR-0038), where it is known
+     * @param  string|null  $cartName  the name that Cart bore then
      */
     private function __construct(
         public readonly array $lines,
         public readonly int $value,
         public readonly string $cart = self::BULK,
+        public readonly ?int $cartId = null,
+        public readonly ?string $cartName = null,
     ) {}
 
     /**
@@ -63,7 +69,7 @@ final class Selection
      */
     public static function forOrder(Order $order): self
     {
-        return self::forLines($order->lines, (int) $order->total, $order->isRetail() ? self::RETAIL : self::BULK);
+        return self::forLines($order->lines, (int) $order->total, $order->isRetail() ? self::RETAIL : self::BULK, $order->cart_id, $order->cart_name);
     }
 
     /**
@@ -73,7 +79,7 @@ final class Selection
      *
      * @param  Collection<int, OrderLine>  $lines
      */
-    public static function forLines(Collection $lines, ?int $value = null, string $cart = self::BULK): self
+    public static function forLines(Collection $lines, ?int $value = null, string $cart = self::BULK, ?int $cartId = null, ?string $cartName = null): self
     {
         $selection = $lines->map(fn (OrderLine $line): array => [
             'id' => self::identify($line->product_id, $line->product_name),
@@ -82,7 +88,7 @@ final class Selection
             ...($line->isPack() ? ['variant' => Pack::nameFor($line->pack_grams)] : []),
         ])->values()->all();
 
-        return new self($selection, $value ?? self::sum($selection), $cart);
+        return new self($selection, $value ?? self::sum($selection), $cart, $cartId, $cartName);
     }
 
     /**
@@ -108,7 +114,7 @@ final class Selection
      * @param  Collection<int, Product>  $products
      * @param  array<int, int>  $kilograms  how many of each, keyed by Product id
      */
-    public static function forProducts(Collection $products, array $kilograms): self
+    public static function forProducts(Collection $products, array $kilograms, ?Cart $from = null): self
     {
         $priced = PriceBook::current()->price($products->map(fn (Product $product): CartLine => new CartLine(
             ProductPrices::of($product),
@@ -121,7 +127,7 @@ final class Selection
             'unit_price' => $line->tierPrice,
         ], $priced->lines);
 
-        return new self($lines, $priced->subtotal);
+        return new self($lines, $priced->subtotal, self::BULK, $from?->getKey(), $from?->name);
     }
 
     /**
@@ -133,7 +139,7 @@ final class Selection
      * @param  Collection<int, Pack>  $packs
      * @param  array<int, int>  $counts  how many of each, keyed by Pack id
      */
-    public static function forPacks(Collection $packs, array $counts): self
+    public static function forPacks(Collection $packs, array $counts, ?Cart $from = null): self
     {
         $packs = $packs->values();
 
@@ -149,7 +155,7 @@ final class Selection
             'variant' => $pack->name(),
         ], $priced->lines, $packs->all());
 
-        return new self($lines, $priced->subtotal, self::RETAIL);
+        return new self($lines, $priced->subtotal, self::RETAIL, $from?->getKey(), $from?->name);
     }
 
     /**
@@ -184,15 +190,26 @@ final class Selection
         /** A row written before Selections named their Cart was bulk, which is all there was. */
         $cart = ($stored['cart'] ?? null) === self::RETAIL ? self::RETAIL : self::BULK;
 
-        return new self($lines, (int) ($stored['value'] ?? self::sum($lines)), $cart);
+        return new self(
+            $lines,
+            (int) ($stored['value'] ?? self::sum($lines)),
+            $cart,
+            is_int($stored['cart_id'] ?? null) ? $stored['cart_id'] : null,
+            is_string($stored['cart_name'] ?? null) ? $stored['cart_name'] : null,
+        );
     }
 
     /**
-     * @return array{lines: list<array{id: string, quantity: int, unit_price: int, variant?: string}>, value: int, cart: string}
+     * @return array{lines: list<array{id: string, quantity: int, unit_price: int, variant?: string}>, value: int, cart: string, cart_id?: int, cart_name?: string}
      */
     public function toArray(): array
     {
-        return ['lines' => $this->lines, 'value' => $this->value, 'cart' => $this->cart];
+        return [
+            'lines' => $this->lines,
+            'value' => $this->value,
+            'cart' => $this->cart,
+            ...($this->cartId === null ? [] : ['cart_id' => $this->cartId, 'cart_name' => $this->cartName]),
+        ];
     }
 
     /** How many things are being bought: the quantities summed, not the lines counted. */

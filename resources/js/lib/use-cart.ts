@@ -19,6 +19,7 @@ import {
     type PriceStep,
 } from './cart';
 import type { ContentsByCart } from './contents';
+import { cartFrom, type MomentCart } from './tracking';
 import { priceCart, type PricedCart } from './pricing';
 import { useMoments, type UseMoments } from './use-moments';
 
@@ -70,7 +71,7 @@ export type UseCart = {
  * browser's storage — and the stored ones appear as the page comes alive.
  */
 export function useCart(cartId: number | null): UseCart {
-    const { pricing, startingCarts } = usePage().props;
+    const { carts, pricing, startingCarts } = usePage().props;
     const contents = useSyncExternalStore(bulkContents.subscribe, () => bulkContents.read(startingCarts.bulk), () => NO_CONTENTS);
     const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_CART;
     const moments = useMoments();
@@ -111,7 +112,7 @@ export function useCart(cartId: number | null): UseCart {
                 const chosen = productOf(productId);
 
                 if (cartId !== null && chosen !== undefined) {
-                    changeBulkContents(cartId, chosen, pricing.products, startingCarts.bulk, moments, (before) => withCappedKilograms(before, chosen, packId, kilograms));
+                    changeBulkContents(cartFrom(carts, cartId), chosen, pricing.products, startingCarts.bulk, moments, (before) => withCappedKilograms(before, chosen, packId, kilograms));
                 }
             },
             quote: (productId: number, kilograms: number, packId: number | null) => quoteLine(cart, pricing.products, book, productId, kilograms, packId),
@@ -132,7 +133,7 @@ export function useCart(cartId: number | null): UseCart {
             ),
             products: pricing.products,
         };
-    }, [cart, cartId, pricing, startingCarts, moments]);
+    }, [cart, cartId, carts, pricing, startingCarts, moments]);
 }
 
 /**
@@ -141,14 +142,14 @@ export function useCart(cartId: number | null): UseCart {
  * tea goes from none to some there. Shared by a Cart's own steppers and an
  * add from anywhere else (`useAdding()`).
  */
-export function changeBulkContents(cartId: number, product: CartProduct, products: CartProduct[], startingCartId: number | null, moments: UseMoments, change: (before: Cart) => Cart): void {
-    const before = onlyOrderable(bulkContents.read(startingCartId)[cartId] ?? EMPTY_CART, products);
+export function changeBulkContents(from: MomentCart, product: CartProduct, products: CartProduct[], startingCartId: number | null, moments: UseMoments, change: (before: Cart) => Cart): void {
+    const before = onlyOrderable(bulkContents.read(startingCartId)[from.id] ?? EMPTY_CART, products);
     const after = change(before);
     const teaOf = (contents: Cart) => contents.reduce((sum, entry) => sum + (entry.productId === product.id ? entry.kilograms : 0), 0);
 
-    bulkContents.write(cartId, after);
+    bulkContents.write(from.id, after);
 
     if (teaOf(before) === 0 && teaOf(after) > 0) {
-        moments.addedToCart(product, teaOf(after), before.length === 0);
+        moments.addedToCart(product, teaOf(after), before.length === 0, from);
     }
 }

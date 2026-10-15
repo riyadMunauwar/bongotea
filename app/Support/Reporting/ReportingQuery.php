@@ -324,6 +324,7 @@ final class ReportingQuery
                     ->whereNull('latest.deleted_at')
                     ->where('latest.status', '!=', OrderStatus::Cancelled->value)
                     ->when($window->kind, fn (Builder $latest, OrderKind $kind): Builder => $latest->where('latest.kind', $kind->value))
+                    ->when($window->cartId, fn (Builder $latest, int $cartId): Builder => $latest->where('latest.cart_id', $cartId))
                     ->where('latest.created_at', '>=', $window->start->toDateTimeString())
                     ->where('latest.created_at', '<', $window->end->toDateTimeString())
                     ->select('latest.customer_name')
@@ -347,6 +348,7 @@ final class ReportingQuery
             ->whereIn('customer_id', $customerIds)
             ->where('status', '!=', OrderStatus::Cancelled->value)
             ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value))
+            ->when($window->cartId, fn (Builder $orders, int $cartId): Builder => $orders->where('cart_id', $cartId))
             ->where('created_at', '<', $window->start->toDateTimeString())
             ->distinct()
             ->pluck('customer_id')
@@ -1162,6 +1164,7 @@ final class ReportingQuery
         $firsts = Order::query()
             ->where('status', '!=', OrderStatus::Cancelled->value)
             ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value))
+            ->when($window->cartId, fn (Builder $orders, int $cartId): Builder => $orders->where('cart_id', $cartId))
             ->selectRaw('customer_id, min(created_at) as created_at')
             ->groupBy('customer_id');
 
@@ -1264,7 +1267,8 @@ final class ReportingQuery
         return Shipment::query()
             ->where('booked_at', '>=', $window->start->toDateTimeString())
             ->where('booked_at', '<', $window->end->toDateTimeString())
-            ->when($window->kind, fn (Builder $parcels, OrderKind $kind): Builder => $parcels->whereHas('order', fn (Builder $orders): Builder => $orders->where('kind', $kind->value)));
+            ->when($window->kind, fn (Builder $parcels, OrderKind $kind): Builder => $parcels->whereHas('order', fn (Builder $orders): Builder => $orders->where('kind', $kind->value)))
+            ->when($window->cartId, fn (Builder $parcels, int $cartId): Builder => $parcels->whereHas('order', fn (Builder $orders): Builder => $orders->where('cart_id', $cartId)));
     }
 
     /**
@@ -1368,7 +1372,8 @@ final class ReportingQuery
         return Order::query()
             ->where('created_at', '>=', $window->start->toDateTimeString())
             ->where('created_at', '<', $window->end->toDateTimeString())
-            ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value));
+            ->when($window->kind, fn (Builder $orders, OrderKind $kind): Builder => $orders->where('kind', $kind->value))
+            ->when($window->cartId, fn (Builder $orders, int $cartId): Builder => $orders->where('cart_id', $cartId));
     }
 
     /**

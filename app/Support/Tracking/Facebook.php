@@ -334,6 +334,8 @@ class Facebook implements Provider
             '"num_items": s.count',
             '"delivery_category": '.$this->encode(self::DELIVERY_CATEGORY),
             '"cart": s.cart',
+            '"cart_id": s.cartId',
+            '"cart_name": s.cartName',
         ], fn (?string $field): bool => $field !== null);
 
         return '(function (s) { return {'.implode(', ', $fields).'}; })('.$selection.')';
@@ -532,8 +534,10 @@ class Facebook implements Provider
             'num_items' => $selection->quantity(),
             'delivery_category' => self::DELIVERY_CATEGORY,
 
-            /** Which Cart it came from, so a Merchant can split bulk from retail in Events Manager. */
+            /** Which kind of Cart it came from, and which Cart, so a Merchant can split bulk from retail, and one Cart from another, in Events Manager. */
             'cart' => $selection->cart,
+            'cart_id' => $selection->cartId,
+            'cart_name' => $selection->cartName,
         ], fn (mixed $value): bool => $value !== null);
     }
 

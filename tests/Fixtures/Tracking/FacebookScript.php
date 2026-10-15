@@ -409,6 +409,15 @@ class FacebookScript extends ProviderScript
 
     /**
      * @param  array<string, mixed>  $event
+     * @return array{id: int|null, name: string|null}
+     */
+    public function namedCartOf(array $event): array
+    {
+        return ['id' => $event['custom_data']['cart_id'] ?? null, 'name' => $event['custom_data']['cart_name'] ?? null];
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
      * @return list<string|null>
      */
     public function variantsOf(array $event): array

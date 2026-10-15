@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { priceCart, type Tier } from './pricing';
 import type { CartPack } from './retail-cart';
 import { priceRetailCart } from './retail-pricing';
-import { addedToRetailCartId, beaconItems, cartMomentFor, momentSelection, packVariant, retailBeaconItems, retailMomentSelection } from './tracking';
+import { addedToCartId, addedToRetailCartId, beaconItems, cartMomentFor, momentSelection, packVariant, retailBeaconItems, retailMomentSelection } from './tracking';
 
 const gold = { id: 12, mrp: 55000, tiers: [{ min: 1, max: 5, price: 55000 }, { min: 6, max: null, price: 43000 }] as Tier[] };
 const green = { id: 14, mrp: 40000, tiers: [{ min: 1, max: null, price: 40000 }] as Tier[] };
@@ -96,20 +96,45 @@ describe('a Pack', () => {
     });
 });
 
-describe('addedToRetailCartId', () => {
+describe('Added to Cart, once per Cart\'s Contents', () => {
+    let stored: Map<string, string>;
+
+    beforeEach(() => {
+        stored = new Map();
+        vi.stubGlobal('window', { localStorage: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) } });
+    });
+
     afterEach(() => {
         vi.unstubAllGlobals();
     });
 
-    it('reports a Pack once per basket, under an id of its own, leaving the bulk record alone', () => {
-        const stored = new Map<string, string>([['bongotea.cart-moments', '{"cart":"b1","reported":[7]}']]);
+    it('reports a tea once per bulk Cart, whichever of its Packs comes first', () => {
+        expect(addedToCartId(7, true, 3)).not.toBeNull();
+        expect(addedToCartId(7, false, 3)).toBeNull();
+        expect(addedToCartId(9, true, 3)).not.toBeNull();
+    });
 
-        vi.stubGlobal('window', { localStorage: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) } });
+    it('reports a Pack once per retail Cart, under an id of its own, leaving the bulk record alone', () => {
+        addedToCartId(7, true, 4);
+        const bulkRecord = stored.get('bongotea.cart-moments.7');
 
-        const first = addedToRetailCartId(true, 7);
+        expect(addedToRetailCartId(8, true, 4)).toMatch(/-pack-4$/);
+        expect(addedToRetailCartId(8, false, 4)).toBeNull();
+        expect(addedToRetailCartId(10, true, 4)).not.toBeNull();
+        expect(stored.get('bongotea.cart-moments.7')).toBe(bulkRecord);
+    });
 
-        expect(first).toMatch(/-pack-7$/);
-        expect(addedToRetailCartId(false, 7)).toBeNull();
-        expect(stored.get('bongotea.cart-moments')).toBe('{"cart":"b1","reported":[7]}');
+    it('starts afresh once a Cart\'s Contents were emptied', () => {
+        const first = addedToCartId(7, true, 3);
+
+        expect(addedToCartId(7, true, 3)).not.toBe(first);
+    });
+});
+
+describe('the Cart a Moment came from', () => {
+    it('is named on the Selection by id and name, the kind kept beside it', () => {
+        const priced = priceCart({ deliveryBands: [{ min: 1, max: null, fee: 0 }] }, [{ product: { id: 3, mrp: 50000, tiers: [{ min: 1, max: null, price: 50000 }] }, kilograms: 2 }]);
+
+        expect(momentSelection(priced, 100, { id: 7, name: 'Eid Gift Packs' })).toMatchObject({ cart: 'bulk', cartId: 7, cartName: 'Eid Gift Packs' });
     });
 });

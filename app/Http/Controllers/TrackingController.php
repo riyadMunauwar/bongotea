@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\OrderKind;
 use App\Enums\TrackingMoment;
 use App\Http\Requests\CheckoutRequest;
+use App\Models\Cart;
 use App\Models\Pack;
 use App\Models\Product;
 use App\Models\TrackingContext;
@@ -145,8 +146,12 @@ class TrackingController extends Controller
 
         $retail = $request->input('cart') === Selection::RETAIL;
 
+        /** The Cart it came from, by id (ADR-0038); its name is the store's, never the browser's. */
+        $cartId = $request->input('cart_id');
+        $from = is_string($cartId) && ctype_digit($cartId) ? Cart::withTrashed()->find((int) $cartId) : null;
+
         if (! is_string($items) || strlen($items) > self::MAX_SELECTION_LENGTH) {
-            return $retail ? Selection::forPacks(collect(), []) : Selection::forProducts(collect(), []);
+            return $retail ? Selection::forPacks(collect(), [], $from) : Selection::forProducts(collect(), [], $from);
         }
 
         if ($retail) {
@@ -160,12 +165,12 @@ class TrackingController extends Controller
                 ->orderBy('id')
                 ->get();
 
-            return Selection::forPacks($packs, $counts);
+            return Selection::forPacks($packs, $counts, $from);
         }
 
         $kilograms = $this->quantities($items, CheckoutRequest::MAX_KILOGRAMS);
 
-        return Selection::forProducts(Product::query()->published()->soldAs(OrderKind::Bulk)->findMany(array_keys($kilograms)), $kilograms);
+        return Selection::forProducts(Product::query()->published()->soldAs(OrderKind::Bulk)->findMany(array_keys($kilograms)), $kilograms, $from);
     }
 
     /**

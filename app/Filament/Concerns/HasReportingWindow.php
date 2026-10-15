@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Enums\OrderKind;
+use App\Models\Cart;
 use App\Support\Reporting\ReportingPreset;
 use App\Support\Reporting\ReportingWindow;
 use Filament\Forms\Components\DatePicker;
@@ -83,6 +84,25 @@ trait HasReportingWindow
             ->label('Orders')
             ->options(OrderKind::class)
             ->placeholder('Bulk and retail')
+            ->live();
+    }
+
+    /**
+     * One Cart or every Cart (ADR-0038), beside the kind wherever it is
+     * offered, so a Merchant can judge what a themed Cart brought in. Deleted
+     * Carts are listed too: their Orders still count.
+     */
+    protected function orderCartComponent(): Select
+    {
+        return Select::make(ReportingWindow::CART_FILTER)
+            ->label('Cart')
+            ->options(fn (): array => Cart::withTrashed()
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->mapWithKeys(fn (Cart $cart): array => [$cart->getKey() => $cart->name])
+                ->all())
+            ->placeholder('Every Cart')
             ->live();
     }
 }

@@ -120,12 +120,12 @@ export default function CheckoutPage() {
             startReported.current = true;
 
             if (isRetail) {
-                retailCheckoutStarted(retail.priced, retail.lines.map((line) => line.pack));
+                retailCheckoutStarted(retail.priced, retail.lines.map((line) => line.pack), { id: checkedOut.id, name: checkedOut.name });
             } else {
-                checkoutStarted(priced);
+                checkoutStarted(priced, { id: checkedOut.id, name: checkedOut.name });
             }
         }
-    }, [isRetail, isEmpty, priced, retail, checkoutStarted, retailCheckoutStarted]);
+    }, [isRetail, isEmpty, priced, retail, checkoutStarted, retailCheckoutStarted, checkedOut]);
 
     const nameOf = (productId: number) => productNames[productId] ?? '';
 

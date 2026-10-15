@@ -6,6 +6,7 @@ use App\Enums\OrderKind;
 use App\Enums\Permission;
 use App\Filament\Resources\Orders\Actions\BookBatchWithCourierAction;
 use App\Filament\Resources\Orders\Actions\BookWithCourierAction;
+use App\Models\Cart;
 use App\Models\Order;
 use App\Support\Money;
 use App\Support\Settings\GeneralSettings;
@@ -64,6 +65,12 @@ class OrdersTable
                 TextColumn::make('kind')
                     ->badge()
                     ->sortable(),
+
+                /** The Cart it came from, under the name it bore at Capture (ADR-0038), so a Cart renamed or deleted since leaves it reading as it did. */
+                TextColumn::make('cart_name')
+                    ->label('Cart')
+                    ->placeholder('—')
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('Taken')
@@ -194,6 +201,12 @@ class OrdersTable
                 SelectFilter::make('kind')
                     ->options(OrderKind::class),
 
+                /** One Cart's Orders, which also spans every status. Deleted Carts are listed too: their Orders still count. */
+                SelectFilter::make('cart')
+                    ->label('Cart')
+                    ->options(fn (): array => Cart::withTrashed()->orderBy('sort_order')->orderBy('id')->pluck('name', 'id')->all())
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null) ? $query->where('cart_id', $data['value']) : $query),
+
                 /**
                  * "What came in today" is the question this screen is opened
                  * to answer, so the date range is the filter that matters.
@@ -315,7 +328,7 @@ class OrdersTable
     /**
      * The filters that ask something the status tabs cannot answer from where
      * they stand: "Paid but cancelled" is a Cancelled-only question, and
-     * "Unpaid online orders", "Not yet sent to a courier" and the kind span all three.
+     * "Unpaid online orders", "Not yet sent to a courier", the kind and the Cart span all three.
      * Deliberately not every filter — the date range and TrashedFilter say
      * nothing about status, so an empty table under one of those must not be
      * blamed on the tab, and offering to move to All would only trade a named
@@ -323,7 +336,7 @@ class OrdersTable
      *
      * @var list<string>
      */
-    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', self::NOT_YET_SENT_FILTER, 'kind'];
+    private const CROSS_STATUS_FILTERS = ['unpaid', 'paid_but_cancelled', self::NOT_YET_SENT_FILTER, 'kind', 'cart'];
 
     private static function isNarrowedAcrossStatuses(Table $table): bool
     {

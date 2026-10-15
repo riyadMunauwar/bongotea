@@ -18,6 +18,7 @@ import {
     type RetailCart,
 } from './retail-cart';
 import type { ContentsByCart } from './contents';
+import { cartFrom, type MomentCart } from './tracking';
 import { priceRetailCart, type PricedRetailCart } from './retail-pricing';
 import { useMoments, type UseMoments } from './use-moments';
 
@@ -65,7 +66,7 @@ const NO_CONTENTS: ContentsByCart<RetailCart> = Object.freeze({});
  * the stored ones appear as the page comes alive.
  */
 export function useRetailCart(cartId: number | null): UseRetailCart {
-    const { retailPricing, startingCarts } = usePage().props;
+    const { carts, retailPricing, startingCarts } = usePage().props;
     const contents = useSyncExternalStore(retailContents.subscribe, () => retailContents.read(startingCarts.retail), () => NO_CONTENTS);
     const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_RETAIL_CART;
     const moments = useMoments();
@@ -94,7 +95,7 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
             },
             set: (packId: number, count: number) => {
                 if (cartId !== null && orderable.has(packId)) {
-                    changeRetailContents(cartId, packId, retailPricing.packs, startingCarts.retail, moments, (before) => withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count)));
+                    changeRetailContents(cartFrom(carts, cartId), packId, retailPricing.packs, startingCarts.retail, moments, (before) => withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count)));
                 }
             },
             remove: (packId: number) => write(withCount(stored(), packId, 0)),
@@ -109,7 +110,7 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
             hasShort: short.size > 0,
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
-    }, [cart, cartId, retailPricing, startingCarts, moments]);
+    }, [cart, cartId, carts, retailPricing, startingCarts, moments]);
 }
 
 /**
@@ -118,14 +119,14 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
  * goes from none to some there. Shared by a Cart's own steppers and an add
  * from anywhere else (`useAdding()`).
  */
-export function changeRetailContents(cartId: number, packId: number, packs: CartPack[], startingCartId: number | null, moments: UseMoments, change: (before: RetailCart) => RetailCart): void {
-    const before = onlyOrderablePacks(retailContents.read(startingCartId)[cartId] ?? EMPTY_RETAIL_CART, packs);
+export function changeRetailContents(from: MomentCart, packId: number, packs: CartPack[], startingCartId: number | null, moments: UseMoments, change: (before: RetailCart) => RetailCart): void {
+    const before = onlyOrderablePacks(retailContents.read(startingCartId)[from.id] ?? EMPTY_RETAIL_CART, packs);
     const after = change(before);
     const pack = packs.find((candidate) => candidate.id === packId);
 
-    retailContents.write(cartId, after);
+    retailContents.write(from.id, after);
 
     if (pack !== undefined && (before[packId] ?? 0) === 0 && (after[packId] ?? 0) > 0) {
-        moments.packAdded(pack, after[packId], Object.keys(before).length === 0);
+        moments.packAdded(pack, after[packId], Object.keys(before).length === 0, from);
     }
 }

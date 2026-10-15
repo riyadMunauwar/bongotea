@@ -78,7 +78,7 @@ class Dashboard extends BaseDashboard
      */
     public function filtersForm(Schema $schema): Schema
     {
-        return $schema->components([...$this->reportingWindowComponents(), $this->orderKindComponent()]);
+        return $schema->components([...$this->reportingWindowComponents(), $this->orderKindComponent(), $this->orderCartComponent()]);
     }
 
     /**

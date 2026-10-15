@@ -91,7 +91,7 @@ class CourierReport extends Page
      */
     public function filtersForm(Schema $schema): Schema
     {
-        return $schema->components([...$this->reportingWindowComponents(), $this->orderKindComponent()]);
+        return $schema->components([...$this->reportingWindowComponents(), $this->orderKindComponent(), $this->orderCartComponent()]);
     }
 
     /**

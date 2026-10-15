@@ -37,6 +37,9 @@ final class ReportingWindow
     /** Bulk, Retail, or nothing for All (ADR-0034). */
     public const string KIND_FILTER = 'kind';
 
+    /** One Cart's id, or nothing for every Cart (ADR-0038). */
+    public const string CART_FILTER = 'cart';
+
     private function __construct(
         /** The first instant inside the window, in UTC. */
         public readonly CarbonImmutable $start,
@@ -52,12 +55,26 @@ final class ReportingWindow
          * Sales is the business's whole takings.
          */
         public readonly ?OrderKind $kind = null,
+
+        /**
+         * Which Cart's Orders the window counts, or null for every Cart's
+         * (ADR-0038), so a Merchant can judge what a themed Cart brought in.
+         * Orders captured before Carts existed count under the starting Cart
+         * of their kind.
+         */
+        public readonly ?int $cartId = null,
     ) {}
+
+    /** The same days, counting only the Orders of this Cart, or every Cart's where null. */
+    public function forCart(?int $cartId): self
+    {
+        return new self($this->start, $this->end, $this->preset, $this->timezone, $this->kind, $cartId);
+    }
 
     /** The same days, counting only Orders of this kind, or both where null. */
     public function forKind(?OrderKind $kind): self
     {
-        return new self($this->start, $this->end, $this->preset, $this->timezone, $kind);
+        return new self($this->start, $this->end, $this->preset, $this->timezone, $kind, $this->cartId);
     }
 
     /**
@@ -109,7 +126,11 @@ final class ReportingWindow
      */
     public static function fromFilters(?array $filters, ?CarbonInterface $now = null): self
     {
-        return self::daysFromFilters($filters, $now)->forKind(OrderKind::tryFrom((string) ($filters[self::KIND_FILTER] ?? '')));
+        $cartId = filter_var($filters[self::CART_FILTER] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return self::daysFromFilters($filters, $now)
+            ->forKind(OrderKind::tryFrom((string) ($filters[self::KIND_FILTER] ?? '')))
+            ->forCart($cartId === false ? null : $cartId);
     }
 
     /**
@@ -179,7 +200,7 @@ final class ReportingWindow
     {
         $first = $this->localStart()->subDays($this->days());
 
-        return new self($first->utc(), $this->start, $this->preset, $this->timezone, $this->kind);
+        return new self($first->utc(), $this->start, $this->preset, $this->timezone, $this->kind, $this->cartId);
     }
 
     /**

@@ -264,6 +264,14 @@ abstract class ProviderScript
     abstract public function cartOf(array $event): ?string;
 
     /**
+     * The Cart itself the Moment came from, by id and by name (ADR-0038).
+     *
+     * @param  array<string, mixed>  $event
+     * @return array{id: int|null, name: string|null}
+     */
+    abstract public function namedCartOf(array $event): array;
+
+    /**
      * Each line's variant — a Pack's weight — or null on a line that has none.
      *
      * @param  array<string, mixed>  $event

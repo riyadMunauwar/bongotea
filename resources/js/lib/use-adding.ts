@@ -7,6 +7,7 @@ import { withAddedPacks } from './retail-cart';
 import { changeBulkContents } from './use-cart';
 import { useMoments } from './use-moments';
 import { changeRetailContents } from './use-retail-cart';
+import { cartFrom } from './tracking';
 
 export type UseAdding = {
     /** Where an add of a tea that way goes, from the Carts it is assigned to: straight into one, a choice among several, or nowhere. */
@@ -35,12 +36,12 @@ export function useAdding(): UseAdding {
                 const product = pricing.products.find((candidate) => candidate.id === productId && candidate.isAvailable);
 
                 if (product !== undefined) {
-                    changeBulkContents(cartId, product, pricing.products, startingCarts.bulk, moments, (before) => withAddedKilograms(before, product, packId, kilograms));
+                    changeBulkContents(cartFrom(carts, cartId), product, pricing.products, startingCarts.bulk, moments, (before) => withAddedKilograms(before, product, packId, kilograms));
                 }
             },
             addPacks: (cartId: number, packId: number, count: number) => {
                 if (retailPricing.packs.some((pack) => pack.id === packId && pack.isOrderable)) {
-                    changeRetailContents(cartId, packId, retailPricing.packs, startingCarts.retail, moments, (before) => withAddedPacks(before, retailPricing.packs, packId, count));
+                    changeRetailContents(cartFrom(carts, cartId), packId, retailPricing.packs, startingCarts.retail, moments, (before) => withAddedPacks(before, retailPricing.packs, packId, count));
                 }
             },
         }),
