@@ -1,6 +1,7 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { BulkPackLine } from '@/components/cart/bulk-pack-line';
+import { useCartChoice } from '@/components/cart/cart-chooser';
 import { discountLabel, packName } from '@/components/cart/figures';
 import { PackStepper } from '@/components/cart/pack-chooser';
 import { Stepper } from '@/components/cart/stepper';
@@ -11,6 +12,7 @@ import { gramsOfPackets } from '@/lib/grams';
 import type { CartPack } from '@/lib/retail-cart';
 import { priceRetailCart } from '@/lib/retail-pricing';
 import { withReturnPath } from '@/lib/return-path';
+import { useAdding } from '@/lib/use-adding';
 import { useCart } from '@/lib/use-cart';
 import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
@@ -29,7 +31,7 @@ type Way = 'bulk' | 'retail';
  * place of the controls.
  */
 export function PurchasePanel({ product, isGreyed, className }: { product: ProductDetail; isGreyed: boolean; className?: string }) {
-    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
+    const retail = useRetailCart(null);
     const isSoldRetail = retail.packsOf(product.id).length > 0;
     const [way, setWay] = useState<Way>(product.isSoldBulk ? 'bulk' : 'retail');
     const shown: Way = product.isSoldBulk && (way === 'bulk' || !isSoldRetail) ? 'bulk' : 'retail';
@@ -97,41 +99,34 @@ function WayToggle({ way, onChange }: { way: Way; onChange: (way: Way) => void }
 
 /** Buying by the Kilogram, or why it cannot be done now. */
 function BulkPurchase({ product }: { product: BulkProductCard }) {
-    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
+    const cart = useCart(null);
     const chosen = cart.products.find((candidate) => candidate.id === product.id);
 
     if (chosen === undefined || cart.isSoldOut(product.id)) {
         return <WayNotice notice={bn.catalogue.bulkSoldOut} />;
     }
 
-    return <BulkControls product={chosen} />;
+    return <BulkControls product={chosen} cartIds={product.cartIds} />;
 }
 
 /**
  * The Kilograms in the tea's default পাইকারি Pack, the packets they make,
- * the Tier Price per Kilogram for the Cart with this line in it, and the
- * line's total, all as they change. The choice is the buyer's until it is
- * added — as the pack chooser's count is — which sets the default Pack's
- * line in the Cart and goes on to its Bulk Order row, where its other Packs
- * are offered too.
+ * the Tier Price per Kilogram they alone reach, and the line's total, all as
+ * they change. It shows no Cart's quantity (ADR-0038): the choice is the
+ * buyer's until it is added — as the pack chooser's count is — which adds it
+ * on top of what the default Pack holds in the Cart the add-rule names, and
+ * goes on to the tea's row there, where its other Packs are offered too.
  */
-function BulkControls({ product }: { product: CartProduct }) {
-    const { headerCarts } = usePage().props;
-    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
+function BulkControls({ product, cartIds }: { product: CartProduct; cartIds: number[] }) {
+    const adding = useAdding();
+    const { choose, chooser } = useCartChoice();
+    const cart = useCart(null);
     const taka = useTaka();
-    const held = cart.lineOf(product.id);
     const [kilograms, setKilograms] = useState(() => firstKilograms(product, null));
     const most = cart.mostKilogramsOf(product.id);
     const least = Math.max(1, product.minKilograms ?? 1);
     const quote = cart.quote(product.id, kilograms, null);
     const canAdd = quote !== null && quote.line.packets !== null && quote.line.limit === null && !quote.line.isShort;
-
-    /** The stored Cart appears as the page comes alive; start from what it holds of this tea in its default Pack. */
-    useEffect(() => {
-        if (held !== null) {
-            setKilograms(held.kilograms);
-        }
-    }, [held?.kilograms]);
 
     return (
         <>
@@ -172,14 +167,17 @@ function BulkControls({ product }: { product: CartProduct }) {
             <button
                 type="button"
                 disabled={!canAdd}
-                onClick={() => {
-                    cart.set(product.id, kilograms);
-                    router.visit(`${headerCarts.bulk?.href ?? '/'}#${rowAnchor(product.id)}`);
-                }}
+                onClick={() =>
+                    choose(adding.ruleFor(cartIds, 'bulk'), (chosen) => {
+                        adding.addKilograms(chosen.id, product.id, kilograms);
+                        router.visit(`${chosen.href}#${rowAnchor(product.id)}`);
+                    })
+                }
                 className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >
-                {held === null ? bn.product.addBulk : bn.product.updateBulk}
+                {bn.product.addBulk}
             </button>
+            {chooser}
         </>
     );
 }
@@ -188,12 +186,15 @@ function BulkControls({ product }: { product: CartProduct }) {
  * Buying in Packs: each খুচরা Pack as a chip with its Pack Price and MRP, a
  * count, and the weight and total they make, as they change. A Pack that
  * cannot be ordered now, or is স্টক শেষ, is greyed and cannot be picked.
- * Adding puts the Packs in the খুচরা কার্ট and goes on to it.
+ * Adding puts the Packs, on top of what they hold, in the Cart the add-rule
+ * names (ADR-0038) and goes on to it.
  */
 function RetailPurchase({ product }: { product: ProductDetail }) {
     const { props, url } = usePage();
-    const { headerCarts, retailPricing } = props;
-    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
+    const { retailPricing } = props;
+    const retail = useRetailCart(null);
+    const adding = useAdding();
+    const { choose, chooser } = useCartChoice();
     const taka = useTaka();
     const packs = retail.packsOf(product.id);
     const isPickable = (pack: CartPack) => pack.isOrderable && !retail.isSoldOut(pack.id);
@@ -205,8 +206,8 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
         return packs.some((pack) => pack.isOrderable) ? <WayNotice notice={bn.packs.soldOut} /> : <WayNotice notice={bn.catalogue.unavailable} note={bn.product.unavailableNote} />;
     }
 
-    /** What may still be added of the chosen Pack before its tea passes its খুচরা maximum or what is free, with what the basket already holds of it. */
-    const room = chosen === null ? 0 : retail.mostOf(chosen.id) - retail.countOf(chosen.id);
+    /** The most of the chosen Pack its tea's খুচরা maximum or what is free allows; the Cart it reaches stops it again, with what it holds there. */
+    const room = chosen === null ? 0 : retail.mostOf(chosen.id);
     const most = Math.max(1, room);
     const shownCount = Math.min(count, most);
     const total = chosen === null ? 0 : priceRetailCart(retailPricing, [{ pack: chosen, count: shownCount }]).subtotal;
@@ -269,13 +270,16 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
                         return;
                     }
 
-                    retail.set(chosen.id, retail.countOf(chosen.id) + shownCount);
-                    router.visit(withReturnPath(headerCarts.retail?.href ?? '/', url));
+                    choose(adding.ruleFor(product.cartIds, 'retail'), (cart) => {
+                        adding.addPacks(cart.id, chosen.id, shownCount);
+                        router.visit(withReturnPath(cart.href, url));
+                    });
                 }}
                 className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >
                 {bn.product.addRetail}
             </button>
+            {chooser}
         </>
     );
 }

@@ -5,20 +5,26 @@ import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { MAX_PACKS, type CartPack } from '@/lib/retail-cart';
 import { withReturnPath } from '@/lib/return-path';
+import { useAdding } from '@/lib/use-adding';
 import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
+import { useCartChoice } from './cart-chooser';
 import { packName } from './figures';
 
 /**
  * The খুচরা কিনুন button, for a Product open to retail and nothing else
- * (ADR-0034): it opens the pack chooser, which puts the chosen Packs in the
- * খুচরা কার্ট and goes straight on to it. A Product with no Packs
- * draws nothing. The kilogram stepper
- * beside it is the bulk Cart's and is not touched.
+ * (ADR-0034): it opens the pack chooser, whose Packs go — by the add-rule
+ * (ADR-0038) — into the one Cart the tea is assigned to, or the Cart the
+ * buyer picks, on top of what that Pack holds there, and the buyer is taken
+ * on to that Cart. It shows no Cart's quantity, since it cannot know which
+ * Cart it will reach. A Product with no Packs draws nothing.
  */
-export function PackChooserButton({ productId, productName, className }: { productId: number; productName: string; className?: string }) {
-    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
+export function PackChooserButton({ productId, productName, cartIds, className }: { productId: number; productName: string; cartIds: number[]; className?: string }) {
+    const { url } = usePage();
+    const retail = useRetailCart(null);
+    const adding = useAdding();
+    const { choose, chooser } = useCartChoice();
     const packs = retail.packsOf(productId);
     const [open, setOpen] = useState(false);
 
@@ -26,7 +32,14 @@ export function PackChooserButton({ productId, productName, className }: { produ
         return null;
     }
 
-    const held = packs.reduce((sum, pack) => sum + retail.countOf(pack.id), 0);
+    /** Adds the chosen Packs to the Cart the add-rule names and goes straight on to it, remembering this page for "আরও চা যোগ করুন". */
+    const add = (packId: number, count: number) => {
+        setOpen(false);
+        choose(adding.ruleFor(cartIds, 'retail'), (cart) => {
+            adding.addPacks(cart.id, packId, count);
+            router.visit(withReturnPath(cart.href, url));
+        });
+    };
 
     return (
         <>
@@ -39,15 +52,10 @@ export function PackChooserButton({ productId, productName, className }: { produ
                 )}
             >
                 <BagIcon size={15} className="max-md:hidden" />
-                {held > 0 ? (
-                    bn.packs.inBasket(toBanglaDigits(held))
-                ) : (
-                    <>
-                        {bn.packs.buy} <span className="font-normal opacity-80">· {bn.packs.buyUnit}</span>
-                    </>
-                )}
+                {bn.packs.buy} <span className="font-normal opacity-80">· {bn.packs.buyUnit}</span>
             </button>
-            <PackChooser productName={productName} packs={open ? packs : null} onClose={() => setOpen(false)} />
+            <PackChooser productName={productName} packs={open ? packs : null} onAdd={add} onClose={() => setOpen(false)} />
+            {chooser}
         </>
     );
 }
@@ -58,17 +66,14 @@ export function PackChooserButton({ productId, productName, className }: { produ
  * is greyed and cannot be picked, and so is one স্টক শেষ — heavier than what
  * is free of its tea. A native `<dialog>`, so Escape closes it.
  */
-function PackChooser({ productName, packs, onClose }: { productName: string; packs: CartPack[] | null; onClose: () => void }) {
+function PackChooser({ productName, packs, onAdd, onClose }: { productName: string; packs: CartPack[] | null; onAdd: (packId: number, count: number) => void; onClose: () => void }) {
     const dialog = useRef<HTMLDialogElement>(null);
-    const { props, url } = usePage();
-    const { headerCarts } = props;
-    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
+    const retail = useRetailCart(null);
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);
-    /** What may still be added of the chosen Pack before its tea passes its খুচরা maximum or what is free, with what the basket already holds of it. */
-    const room = chosen === null ? MAX_PACKS : retail.mostOf(chosen) - retail.countOf(chosen);
-    const most = Math.max(1, room);
+    /** The most of the chosen Pack its tea's খুচরা maximum or what is free allows; the Cart it reaches stops it again, with what it holds there. */
+    const most = chosen === null ? MAX_PACKS : Math.max(1, retail.mostOf(chosen));
     const isPickable = (pack: CartPack) => pack.isOrderable && !retail.isSoldOut(pack.id);
 
     useEffect(() => {
@@ -88,17 +93,6 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
             element.close();
         }
     }, [packs]);
-
-    /** Adds the chosen Pack and goes straight on to the খুচরা কার্ট, remembering this page for "আরও চা যোগ করুন". */
-    const buyNow = () => {
-        if (chosen === null || room < 1) {
-            return;
-        }
-
-        retail.set(chosen, retail.countOf(chosen) + Math.min(count, most));
-        onClose();
-        router.visit(withReturnPath(headerCarts.retail?.href ?? '/', url));
-    };
 
     return (
         <dialog
@@ -159,8 +153,8 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
                     <button
                         type="button"
-                        disabled={chosen === null || room < 1}
-                        onClick={buyNow}
+                        disabled={chosen === null}
+                        onClick={() => chosen !== null && onAdd(chosen, Math.min(count, most))}
                         className="cursor-pointer rounded-[10px] border-0 bg-primary px-4 py-[13px] text-[15px] font-bold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
                     >
                         {bn.packs.add}

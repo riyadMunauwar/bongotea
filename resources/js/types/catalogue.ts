@@ -62,6 +62,8 @@ type ProductCardBase = {
     brand: { id: number; name: string };
     category: CategoryReference;
     tagIds: number[];
+    /** The Carts it is assigned to, by id, which decide where an add from outside a Cart's page goes (ADR-0038). */
+    cartIds: number[];
 };
 
 export type Strength = { grade: string; bars: number };

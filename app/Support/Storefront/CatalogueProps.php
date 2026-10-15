@@ -22,10 +22,11 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * Tiers in minor units, exactly as the pricing module reads them, so the
  * Cart's mirror of the arithmetic can price straight from a card; a Product
  * sold only খুচরা goes with `isSoldBulk` false, no MRP and no Tiers, and is
- * priced by its Packs instead (ADR-0036).
+ * priced by its Packs instead (ADR-0036). `cartIds` are the Carts it is assigned
+ * to, which decide where an add from outside a Cart's page goes (ADR-0038).
  *
  * @phpstan-type ThemeTokens array{text: string, tint: string, panel: string, panelText: string, panelSubtext: string, accent: string, pillBackground: string, pillText: string, tickBackground: string, line: string}
- * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: array{grade: string, bars: int}|null, isAvailable: bool, isSoldBulk: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, mrp: ?int, tiers: list<array{min: int, max: ?int, price: int}>}
+ * @phpstan-type ProductCardProps array{id: int, name: string, href: string, shortDescription: ?string, imageUrl: ?string, badge: ?string, strength: array{grade: string, bars: int}|null, isAvailable: bool, isSoldBulk: bool, brand: array{id: int, name: string}, category: array{id: int, name: string, slug: string, href: string, theme: ThemeTokens}, tagIds: list<int>, mrp: ?int, tiers: list<array{min: int, max: ?int, price: int}>, cartIds: list<int>}
  */
 class CatalogueProps
 {
@@ -49,6 +50,7 @@ class CatalogueProps
             'tagIds' => $product->tags->pluck('id')->sort()->values()->all(),
             'mrp' => $product->mrp,
             'tiers' => $product->isSoldAs(OrderKind::Bulk) ? self::tiers($product) : [],
+            'cartIds' => $product->carts->pluck('id')->sort()->values()->all(),
         ];
     }
 

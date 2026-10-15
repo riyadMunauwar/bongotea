@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Collection;
 class Catalogue
 {
     /** What a card draws beside a Product, loaded with it wherever cards are made. */
-    public const CARD_RELATIONS = ['category', 'brand', 'tags', 'media'];
+    public const CARD_RELATIONS = ['category', 'brand', 'tags', 'media', 'carts'];
 
     /** @var Collection<int, Product>|null */
     private ?Collection $products = null;

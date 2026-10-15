@@ -19,7 +19,7 @@ import {
 } from './retail-cart';
 import type { ContentsByCart } from './contents';
 import { priceRetailCart, type PricedRetailCart } from './retail-pricing';
-import { useMoments } from './use-moments';
+import { useMoments, type UseMoments } from './use-moments';
 
 export type UseRetailCart = {
     /** The Cart these Contents are kept in; null for none. */
@@ -93,21 +93,8 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
                 return pack !== undefined && isPackSoldOut(pack);
             },
             set: (packId: number, count: number) => {
-                if (cartId === null || !orderable.has(packId)) {
-                    return;
-                }
-
-                const before = onlyOrderablePacks(stored(), retailPricing.packs);
-                const after = withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count));
-
-                write(after);
-
-                if ((before[packId] ?? 0) === 0 && (after[packId] ?? 0) > 0) {
-                    const pack = retailPricing.packs.find((candidate) => candidate.id === packId);
-
-                    if (pack !== undefined) {
-                        moments.packAdded(pack, after[packId], Object.keys(before).length === 0);
-                    }
+                if (cartId !== null && orderable.has(packId)) {
+                    changeRetailContents(cartId, packId, retailPricing.packs, startingCarts.retail, moments, (before) => withCount(before, packId, cappedCount(before, retailPricing.packs, packId, count)));
                 }
             },
             remove: (packId: number) => write(withCount(stored(), packId, 0)),
@@ -123,4 +110,22 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
     }, [cart, cartId, retailPricing, startingCarts, moments]);
+}
+
+/**
+ * Changes one retail Cart's Contents from what they hold now — Packs a buyer
+ * can no longer order dropped first — and raises Added to Cart when the Pack
+ * goes from none to some there. Shared by a Cart's own steppers and an add
+ * from anywhere else (`useAdding()`).
+ */
+export function changeRetailContents(cartId: number, packId: number, packs: CartPack[], startingCartId: number | null, moments: UseMoments, change: (before: RetailCart) => RetailCart): void {
+    const before = onlyOrderablePacks(retailContents.read(startingCartId)[cartId] ?? EMPTY_RETAIL_CART, packs);
+    const after = change(before);
+    const pack = packs.find((candidate) => candidate.id === packId);
+
+    retailContents.write(cartId, after);
+
+    if (pack !== undefined && (before[packId] ?? 0) === 0 && (after[packId] ?? 0) > 0) {
+        moments.packAdded(pack, after[packId], Object.keys(before).length === 0);
+    }
 }

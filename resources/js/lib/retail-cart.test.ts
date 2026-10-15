@@ -10,6 +10,7 @@ import {
     parseRetailCart,
     retailLines,
     unorderableLines,
+    withAddedPacks,
     withCount,
     type CartPack,
 } from './retail-cart';
@@ -149,5 +150,15 @@ describe('the Packs a buyer cannot order now', () => {
 
     it('are dropped when the Cart is written back', () => {
         expect(onlyOrderablePacks(cart, [assam, switchedOff])).toStrictEqual({ 4: 2 });
+    });
+});
+
+describe('adding Packs from outside a Cart\'s page', () => {
+    it('adds on top of what the Pack already holds', () => {
+        expect(withAddedPacks({ 4: 1 }, [pack(4)], 4, 2)).toStrictEqual({ 4: 3 });
+    });
+
+    it('stops where the tea passes what is free to sell', () => {
+        expect(withAddedPacks({ 4: 1 }, [{ ...pack(4), freeGrams: pack(4).grams * 2 }], 4, 5)).toStrictEqual({ 4: 2 });
     });
 });

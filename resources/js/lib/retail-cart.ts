@@ -163,6 +163,17 @@ export function cappedCount(cart: RetailCart, packs: CartPack[], packId: number,
 }
 
 /**
+ * Adds Packs on top of what the Pack holds, as an add from outside a Cart's
+ * page does (ADR-0038): never less than was there, and stopped at the same
+ * limits as a stepper.
+ */
+export function withAddedPacks(cart: RetailCart, packs: CartPack[], packId: number, count: number): RetailCart {
+    const held = cart[packId] ?? 0;
+
+    return withCount(cart, packId, cappedCount(cart, packs, packId, held + Math.max(0, count)));
+}
+
+/**
  * What the retail Cart holds that cannot be ordered now: a Pack switched off
  * or whose Product is unavailable, with what it was, and a Pack the store no
  * longer sends at all — removed, or its Product taken out of the catalogue —

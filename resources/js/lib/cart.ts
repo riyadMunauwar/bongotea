@@ -173,6 +173,32 @@ export function withKilograms(cart: Cart, productId: number, packId: number | nu
         : [...cart, { productId, packId, kilograms: clamped }];
 }
 
+/**
+ * Sets a tea's Kilograms in one Pack — its default where none is named — as a
+ * stepper on its Cart's page does: stopped where the tea's whole weight
+ * reaches `mostKilograms()`, never stopped coming down.
+ */
+export function withCappedKilograms(cart: Cart, product: CartProduct, packId: number | null, kilograms: number): Cart {
+    const chosenId = packFor(product, packId)?.id ?? null;
+    const held = cart.find((entry) => isSameLine(entry, product.id, chosenId))?.kilograms ?? 0;
+    const tea = cart.reduce((sum, entry) => sum + (entry.productId === product.id ? entry.kilograms : 0), 0);
+
+    return withKilograms(cart, product.id, chosenId, cappedKilograms(product, kilograms, held, tea - held));
+}
+
+/**
+ * Adds Kilograms of a tea to one Pack — its default where none is named — on
+ * top of what that Pack holds, as an add from outside a Cart's page does
+ * (ADR-0038): it never leaves less than was there, and stops at the same
+ * limits as a stepper.
+ */
+export function withAddedKilograms(cart: Cart, product: CartProduct, packId: number | null, kilograms: number): Cart {
+    const chosenId = packFor(product, packId)?.id ?? null;
+    const held = cart.find((entry) => isSameLine(entry, product.id, chosenId))?.kilograms ?? 0;
+
+    return withCappedKilograms(cart, product, chosenId, held + Math.max(0, kilograms));
+}
+
 /** The Pack a Product's line is supplied in: the one named while the Product still offers it, else its default, else its first. */
 export function packFor(product: CartProduct, packId: number | null): BulkPack | null {
     return (

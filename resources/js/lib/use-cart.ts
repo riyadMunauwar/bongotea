@@ -2,7 +2,6 @@ import { usePage } from '@inertiajs/react';
 import { useMemo, useSyncExternalStore } from 'react';
 import {
     bulkContents,
-    cappedKilograms,
     cartLines,
     EMPTY_CART,
     isBulkSoldOut,
@@ -12,7 +11,7 @@ import {
     packFor,
     priceSteps,
     quoteLine,
-    withKilograms,
+    withCappedKilograms,
     type BulkCartLine,
     type Cart,
     type CartProduct,
@@ -21,7 +20,7 @@ import {
 } from './cart';
 import type { ContentsByCart } from './contents';
 import { priceCart, type PricedCart } from './pricing';
-import { useMoments } from './use-moments';
+import { useMoments, type UseMoments } from './use-moments';
 
 /** What the server draws: no Contents in any Cart. */
 const NO_CONTENTS: ContentsByCart<Cart> = Object.freeze({});
@@ -111,21 +110,8 @@ export function useCart(cartId: number | null): UseCart {
             set: (productId: number, kilograms: number, packId: number | null = null) => {
                 const chosen = productOf(productId);
 
-                if (cartId === null || chosen === undefined) {
-                    return;
-                }
-
-                const chosenId = packIdOf(chosen, packId);
-                const before = onlyOrderable(bulkContents.read(startingCarts.bulk)[cartId] ?? EMPTY_CART, pricing.products);
-                const teaBefore = before.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
-                const held = before.find((entry) => entry.productId === productId && entry.packId === chosenId)?.kilograms ?? 0;
-                const after = withKilograms(before, productId, chosenId, cappedKilograms(chosen, kilograms, held, teaBefore - held));
-                const teaAfter = after.filter((entry) => entry.productId === productId).reduce((sum, entry) => sum + entry.kilograms, 0);
-
-                bulkContents.write(cartId, after);
-
-                if (teaBefore === 0 && teaAfter > 0) {
-                    moments.addedToCart(chosen, teaAfter, before.length === 0);
+                if (cartId !== null && chosen !== undefined) {
+                    changeBulkContents(cartId, chosen, pricing.products, startingCarts.bulk, moments, (before) => withCappedKilograms(before, chosen, packId, kilograms));
                 }
             },
             quote: (productId: number, kilograms: number, packId: number | null) => quoteLine(cart, pricing.products, book, productId, kilograms, packId),
@@ -147,4 +133,22 @@ export function useCart(cartId: number | null): UseCart {
             products: pricing.products,
         };
     }, [cart, cartId, pricing, startingCarts, moments]);
+}
+
+/**
+ * Changes one bulk Cart's Contents from what they hold now — lines for teas a
+ * buyer can no longer have dropped first — and raises Added to Cart when the
+ * tea goes from none to some there. Shared by a Cart's own steppers and an
+ * add from anywhere else (`useAdding()`).
+ */
+export function changeBulkContents(cartId: number, product: CartProduct, products: CartProduct[], startingCartId: number | null, moments: UseMoments, change: (before: Cart) => Cart): void {
+    const before = onlyOrderable(bulkContents.read(startingCartId)[cartId] ?? EMPTY_CART, products);
+    const after = change(before);
+    const teaOf = (contents: Cart) => contents.reduce((sum, entry) => sum + (entry.productId === product.id ? entry.kilograms : 0), 0);
+
+    bulkContents.write(cartId, after);
+
+    if (teaOf(before) === 0 && teaOf(after) > 0) {
+        moments.addedToCart(product, teaOf(after), before.length === 0);
+    }
 }

@@ -1,11 +1,13 @@
 import { Link, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { discountPercent } from '@/components/cart/figures';
 import { PackChooserButton } from '@/components/cart/pack-chooser';
-import { Stepper } from '@/components/cart/stepper';
+import { useCartChoice } from '@/components/cart/cart-chooser';
 import { CartIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
-import { toBanglaDigits } from '@/lib/bangla';
+import { firstKilograms } from '@/lib/cart';
+import { useAdding } from '@/lib/use-adding';
 import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
 import { useTaka } from '@/lib/use-taka';
@@ -27,12 +29,12 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
  * An unavailable Product is drawn greyed and says so, because a regular buyer
  * looks for the tea they always buy; so is one স্টক শেষ every way it is sold,
  * and one স্টক শেষ only পাইকারি says so in place of its kilogram button.
+ * Both buttons only add (ADR-0038): the card shows no Cart's quantity.
  *
  * Sized by whoever places it: a grid cell, or a slot in a sideways row.
  */
 export function ProductCard({ product, className }: { product: ProductCardProps; className?: string }) {
-    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
-    const kilograms = cart.kilogramsOf(product.id);
+    const cart = useCart(null);
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
     const percentOff = product.isSoldBulk ? discountPercent(product.mrp, firstTierPrice(product.tiers)) : null;
@@ -40,8 +42,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     return (
         <article
             className={cn(
-                'flex min-w-0 flex-col overflow-hidden rounded-[10px] border bg-white transition-[border-color,box-shadow] hover:border-green-200 hover:shadow-card',
-                cart.teaKilogramsOf(product.id) > 0 ? 'border-green-200' : 'border-border',
+                'flex min-w-0 flex-col overflow-hidden rounded-[10px] border border-border bg-white transition-[border-color,box-shadow] hover:border-green-200 hover:shadow-card',
                 className,
             )}
         >
@@ -63,11 +64,6 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                             <span className="rounded-[4px] bg-eyebrow px-[6px] py-[2px] text-[10px] font-semibold text-white md:text-[11px]">{product.badge}</span>
                         )}
                     </span>
-                    {kilograms > 0 && (
-                        <span className="absolute top-[6px] right-[6px] rounded-full bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white md:text-[11px]">
-                            {bn.cart.inCart(toBanglaDigits(kilograms))}
-                        </span>
-                    )}
                 </Picture>
             </Link>
 
@@ -93,7 +89,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                 )}
 
                 {product.isSoldBulk ? (
-                    <BulkPrices product={product} cartKilograms={cart.priced.totalKilograms} />
+                    <BulkPrices product={product} cartKilograms={0} />
                 ) : (
                     <RetailFrom productId={product.id} className="text-[15px] md:text-[17px]" />
                 )}
@@ -101,27 +97,12 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                 <div className="mt-auto flex flex-col gap-[6px] pt-[6px]">
                     {isGreyed ? (
                         <CardNotice>{product.isAvailable ? bn.catalogue.soldOut : bn.catalogue.unavailable}</CardNotice>
-                    ) : !product.isSoldBulk ? null : kilograms === 0 && cart.isSoldOut(product.id) ? (
+                    ) : !product.isSoldBulk ? null : cart.isSoldOut(product.id) ? (
                         <CardNotice>{bn.catalogue.bulkSoldOut}</CardNotice>
-                    ) : kilograms === 0 ? (
-                        <button
-                            type="button"
-                            onClick={() => cart.set(product.id, 1)}
-                            className="box-border flex w-full cursor-pointer items-center justify-center gap-[6px] rounded-[6px] border-0 bg-primary px-1 py-2 text-[12px] font-semibold text-white hover:bg-primary-dark md:text-[13px]"
-                        >
-                            <CartIcon size={15} className="max-md:hidden" />
-                            {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
-                        </button>
                     ) : (
-                        <Stepper
-                            kilograms={kilograms}
-                            onChange={(next) => cart.set(product.id, next)}
-                            max={cart.mostKilogramsOf(product.id)}
-                            className="rounded-[6px] border border-primary bg-green-50 text-[13px] text-primary-dark md:text-[14px]"
-                            buttonClassName="h-[32px] w-[32px] text-primary-dark md:h-[34px] md:w-[36px]"
-                        />
+                        <BulkAddButton product={product} />
                     )}
-                    {!isGreyed && <PackChooserButton productId={product.id} productName={product.name} />}
+                    {!isGreyed && <PackChooserButton productId={product.id} productName={product.name} cartIds={product.cartIds} />}
                 </div>
             </div>
         </article>
@@ -129,6 +110,64 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
 }
 
 /** In place of a card's buttons: why it cannot be ordered now. */
+/** How long the card says where an add went. */
+const ADDED_MILLISECONDS = 2500;
+
+/**
+ * পাইকারি কিনুন on a card (ADR-0038): adds the least a buyer may order of the
+ * tea, in its default পাইকারি Pack, to the Cart the add-rule names — on top of
+ * what is there — and leaves the buyer where they are, saying which Cart it
+ * reached. It shows no Cart's quantity.
+ */
+function BulkAddButton({ product }: { product: BulkProductCard }) {
+    const { pricing } = usePage().props;
+    const adding = useAdding();
+    const { choose, chooser } = useCartChoice();
+    const [addedTo, setAddedTo] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (addedTo === null) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => setAddedTo(null), ADDED_MILLISECONDS);
+
+        return () => window.clearTimeout(timer);
+    }, [addedTo]);
+
+    const add = () => {
+        const prices = pricing.products.find((candidate) => candidate.id === product.id);
+
+        if (prices === undefined) {
+            return;
+        }
+
+        choose(adding.ruleFor(product.cartIds, 'bulk'), (cart) => {
+            adding.addKilograms(cart.id, product.id, firstKilograms(prices, null));
+            setAddedTo(cart.name);
+        });
+    };
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={add}
+                className="box-border flex w-full cursor-pointer items-center justify-center gap-[6px] rounded-[6px] border-0 bg-primary px-1 py-2 text-[12px] font-semibold text-white hover:bg-primary-dark md:text-[13px]"
+            >
+                <CartIcon size={15} className="max-md:hidden" />
+                {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
+            </button>
+            {addedTo !== null && (
+                <span role="status" className="text-center text-[11px] font-semibold text-primary-dark md:text-[12px]">
+                    {bn.cartChooser.added(addedTo)}
+                </span>
+            )}
+            {chooser}
+        </>
+    );
+}
+
 function CardNotice({ children }: { children: string }) {
     return (
         <span className="box-border flex w-full items-center justify-center rounded-[6px] bg-surface px-1 py-2 text-[12px] font-semibold text-muted md:text-[13px]">

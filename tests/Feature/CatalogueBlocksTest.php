@@ -379,3 +379,23 @@ it('offers nothing on a price calculator whose Cart is closed, and leaves its ow
 
     expect($cart->page()->is($page))->toBeTrue();
 });
+
+it('tells each card the Carts its tea is assigned to, so an add from it knows where to go', function () {
+    $category = Category::factory()->create();
+    $tea = Product::factory()->for($category)->create();
+    $loose = Product::factory()->for($category)->create();
+    $hotel = Cart::factory()->bulk()->create();
+    $eid = Cart::factory()->retail()->create();
+    $hotel->products()->attach($tea->id);
+    $eid->products()->attach($tea->id);
+
+    pageWithBlock('product_rail', ['source' => 'category', 'category_id' => $category->id]);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.products.0.id', $tea->id)
+            ->where('page.blocks.0.props.products.0.cartIds', [$hotel->id, $eid->id])
+            ->where('page.blocks.0.props.products.1.id', $loose->id)
+            ->where('page.blocks.0.props.products.1.cartIds', [])
+        );
+});

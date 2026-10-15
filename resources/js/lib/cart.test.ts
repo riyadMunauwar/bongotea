@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cappedKilograms, cartLines, clampKilograms, firstKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, quoteLine, rowAnchor, rowFromAnchor, withKilograms, type CartProduct } from './cart';
+import { cappedKilograms, cartLines, clampKilograms, firstKilograms, isBulkSoldOut, mostKilograms, EMPTY_CART, onlyOrderable, packFor, parseCart, priceSteps, quoteLine, rowAnchor, rowFromAnchor, withAddedKilograms, withCappedKilograms, withKilograms, type CartProduct } from './cart';
 import type { Tier } from './pricing';
 
 /** A tea in 1 kg bags, its default, unless given other পাইকারি Packs. */
@@ -303,5 +303,31 @@ describe('firstKilograms', () => {
 
     it('starts at one Kilogram where the tea has no Pack to make', () => {
         expect(firstKilograms(product(3, true, undefined, []), null)).toBe(1);
+    });
+});
+
+describe('adding from outside a Cart\'s page', () => {
+    it('adds on top of what the Pack already holds', () => {
+        expect(withAddedKilograms([kg(3, 5, 30)], assam, 30, 3)).toStrictEqual([kg(3, 8, 30)]);
+    });
+
+    it('adds to the default Pack when none is named, leaving the tea\'s other Packs as they are', () => {
+        expect(withAddedKilograms([kg(3, 2, 31)], assam, null, 3)).toStrictEqual([kg(3, 2, 31), kg(3, 3, 30)]);
+    });
+
+    it('stops where the tea\'s whole weight reaches its maximum, counting its other Packs', () => {
+        const limited = { ...assam, maxKilograms: 10 };
+
+        expect(withAddedKilograms([kg(3, 4, 30), kg(3, 4, 31)], limited, 30, 5)).toStrictEqual([kg(3, 6, 30), kg(3, 4, 31)]);
+    });
+
+    it('stops at what is free to sell', () => {
+        expect(withAddedKilograms([kg(3, 5, 30)], { ...assam, freeGrams: 6500 }, 30, 3)).toStrictEqual([kg(3, 6, 30)]);
+    });
+});
+
+describe('setting a Pack on a Cart\'s page', () => {
+    it('replaces what the Pack held', () => {
+        expect(withCappedKilograms([kg(3, 5, 30)], assam, 30, 3)).toStrictEqual([kg(3, 3, 30)]);
     });
 });
