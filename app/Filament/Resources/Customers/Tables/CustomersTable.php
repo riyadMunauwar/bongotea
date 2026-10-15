@@ -25,11 +25,12 @@ class CustomersTable
     {
         return $table
             /**
-             * Nulls last said out loud: PostgreSQL puts them first on a
-             * descending sort and SQLite last, and a Customer whose Orders
-             * were all deleted is the one least worth the top of the list.
+             * Nulls last said out loud: engines disagree on where they fall
+             * on a descending sort, and a Customer whose Orders were all
+             * deleted is the one least worth the top of the list. Spelled
+             * as a sort on `is null` because MySQL has no `nulls last`.
              */
-            ->defaultSort(fn (Builder $query): Builder => $query->orderByRaw('last_ordered_at desc nulls last'))
+            ->defaultSort(fn (Builder $query): Builder => $query->orderByRaw('last_ordered_at is null, last_ordered_at desc'))
             ->columns([
                 TextColumn::make('phone')
                     ->searchable()

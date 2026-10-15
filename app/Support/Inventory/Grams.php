@@ -2,6 +2,7 @@
 
 namespace App\Support\Inventory;
 
+use Illuminate\Database\Connection;
 use InvalidArgumentException;
 
 /**
@@ -21,10 +22,10 @@ use InvalidArgumentException;
  * would drift. A row's money is therefore its grams × its cost per kilogram ÷
  * 1000, rounded half away from zero. The ledger's own money (Value at Cost) is
  * divided once, over the sum of its rows: `costOfSum()` for a sum read back
- * from SQL, `SUMMED_COST` where the sum is made in the query. A Supply is an
+ * from SQL, `summedCost()` where the sum is made in the query. A Supply is an
  * invoice, so each of its lines is rounded and the lines are added up, the way
  * the document in the Merchant's hand adds up: `cost()` for one line,
- * `LINE_COST` for the same figure in a query. A weighted average needs
+ * `lineCost()` for the same figure in a query. A weighted average needs
  * no conversion at all — Σ(grams × cost per kg) ÷ Σ(grams) is a cost per
  * kilogram already.
  *
@@ -41,16 +42,22 @@ class Grams
     /**
      * The money a set of ledger rows carries, summed and rounded in the query:
      * Σ(quantity × unit_cost) ÷ 1000, rounded half away from zero the way PHP's
-     * `round()` is, and null where nothing was summed. Both SQLite and
-     * PostgreSQL round a decimal half away from zero.
+     * `round()` is, and null where nothing was summed. SQLite, PostgreSQL and
+     * MySQL all round a decimal half away from zero.
      */
-    public const SUMMED_COST = 'cast(round(sum(quantity * unit_cost) / 1000.0) as bigint)';
+    public static function summedCost(Connection $connection): string
+    {
+        return 'cast(round(sum(quantity * unit_cost) / 1000.0) as '.self::integerType($connection).')';
+    }
 
     /**
      * One row's money in a query, rounded the way `cost()` rounds it, for
      * summing a Supply's lines as an invoice adds them up.
      */
-    public const LINE_COST = 'cast(round(quantity * unit_cost / 1000.0) as bigint)';
+    public static function lineCost(Connection $connection): string
+    {
+        return 'cast(round(quantity * unit_cost / 1000.0) as '.self::integerType($connection).')';
+    }
 
     /**
      * A kilogram figure a Merchant typed, as the grams the ledger records:
@@ -161,6 +168,16 @@ class Grams
         if ($packGrams < 1) {
             throw new InvalidArgumentException("A Pack must weigh at least a gram, not {$packGrams}.");
         }
+    }
+
+    /**
+     * The integer a cast in a query lands on: MySQL and MariaDB have no
+     * `cast(… as bigint)` and only know `signed`, which SQLite and PostgreSQL
+     * do not.
+     */
+    private static function integerType(Connection $connection): string
+    {
+        return in_array($connection->getDriverName(), ['mysql', 'mariadb'], true) ? 'signed' : 'bigint';
     }
 
     private static function greatestCommonDivisor(int $a, int $b): int

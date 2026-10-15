@@ -143,6 +143,19 @@ it('values grams at a cost per kilogram, rounding half away from zero once over 
         ->and($this->ledger->averageCost($product))->toBe(1500);
 });
 
+it('casts the money it sums in a query to an integer type the connection\'s engine knows', function (string $connection, string $integer) {
+    /** MySQL has no `cast(… as bigint)`; it is a syntax error there, and SQLite and PostgreSQL both accept it. Nothing here connects. */
+    $database = DB::connection($connection);
+
+    expect(Grams::summedCost($database))->toBe("cast(round(sum(quantity * unit_cost) / 1000.0) as {$integer})")
+        ->and(Grams::lineCost($database))->toBe("cast(round(quantity * unit_cost / 1000.0) as {$integer})");
+})->with([
+    'MySQL' => ['mysql', 'signed'],
+    'MariaDB' => ['mariadb', 'signed'],
+    'PostgreSQL' => ['pgsql', 'bigint'],
+    'SQLite' => ['sqlite', 'bigint'],
+]);
+
 it('keeps a weighted average per kilogram when deliveries are not whole kilograms', function () {
     $product = Product::factory()->create();
 

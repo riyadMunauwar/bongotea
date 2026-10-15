@@ -696,20 +696,22 @@ final class ReportingQuery
      */
     public function buying(ReportingWindow $window): Buying
     {
+        $lineCost = Grams::lineCost(DB::connection());
+
         $perSupplier = SupplyLine::query()
             ->joinSub($this->deliveriesIn($window)->select('id', 'supplier_id'), 'bought', 'bought.id', '=', 'supply_lines.supply_id')
             ->selectRaw(
                 'bought.supplier_id as supplier_id, '
                 .'count(distinct supply_lines.supply_id) as deliveries, '
                 .'sum(quantity) as units, '
-                .'sum('.Grams::LINE_COST.') as cost',
+                .'sum('.$lineCost.') as cost',
             )
             ->groupBy('bought.supplier_id')
             ->get();
 
         $perProduct = SupplyLine::query()
             ->joinSub($this->deliveriesIn($window)->select('id'), 'bought', 'bought.id', '=', 'supply_lines.supply_id')
-            ->selectRaw('product_id, sum(quantity) as units, sum('.Grams::LINE_COST.') as cost')
+            ->selectRaw('product_id, sum(quantity) as units, sum('.$lineCost.') as cost')
             ->groupBy('product_id')
             ->get();
 

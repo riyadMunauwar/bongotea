@@ -51,7 +51,7 @@ class SuppliesTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum(
                 'lines as '.self::TOTAL_COST,
                 /** Each line rounded as `SupplyLine::lineCost()` rounds it, so the list and the document add up alike. */
-                DB::raw(Grams::LINE_COST),
+                DB::raw(Grams::lineCost($query->getConnection())),
             ))
             ->columns([
                 TextColumn::make('supplied_on')

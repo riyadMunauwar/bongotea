@@ -270,7 +270,7 @@ class StockLedger
      * without either of them having to say so.
      *
      * Grams × cost per kilogram is summed and divided once in the query
-     * (`Grams::SUMMED_COST`), so the column carries minor units, rounded
+     * (`Grams::summedCost()`), so the column carries minor units, rounded
      * exactly where `valueAtCost()` rounds. A subquery of its own rather than
      * `withSum()`, because `withSum()` can only wrap its column in `sum()` and
      * the division has to sit outside it.
@@ -289,7 +289,7 @@ class StockLedger
                 /** The standing rows, so this reads the same unknown `valueAtCost()` does on a Product whose only delivery was voided. */
                 ->standing()
                 ->whereColumn('stock_movements.product_id', $products->qualifyColumn('id'))
-                ->selectRaw(Grams::SUMMED_COST),
+                ->selectRaw(Grams::summedCost($products->getConnection())),
             self::VALUE_AT_COST,
         );
     }
