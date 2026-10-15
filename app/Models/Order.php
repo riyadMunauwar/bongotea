@@ -34,6 +34,8 @@ use Spatie\Activitylog\Support\LogOptions;
 #[ObservedBy([OrderObserver::class, OrderTextObserver::class])]
 #[Fillable([
     'kind',
+    'cart_id',
+    'cart_name',
     'customer_id',
     'customer_name',
     'customer_phone',
@@ -139,6 +141,18 @@ class Order extends Model
         } while (static::withTrashed()->where('order_number', $number)->exists());
 
         return $number;
+    }
+
+    /**
+     * The Cart the Order came from, deleted or not; `cart_name` keeps the
+     * name it bore at Capture, so a rename later leaves the Order reading as
+     * it did.
+     *
+     * @return BelongsTo<Cart, $this>
+     */
+    public function cart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class)->withTrashed();
     }
 
     /**

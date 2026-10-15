@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Enums\OrderKind;
 use App\Enums\PageStatus;
 use App\Enums\SystemPage;
+use App\Models\Cart;
 use App\Models\Page;
 use App\Support\Pages\Blocks\BulkOrderForm;
 use App\Support\Pages\Blocks\CategoryPanels;
@@ -29,6 +31,9 @@ use Illuminate\Database\Seeder;
  * so on a blank store they simply draw nothing until there are Products.
  * The ordinary Pages and the Menus are `DemoStoreSeeder`'s and
  * `BlankStoreSeeder`'s.
+ *
+ * The two starting Carts, খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন, are made
+ * here too, once each and in the sort order the header draws them.
  */
 class StorefrontSeeder extends Seeder
 {
@@ -38,6 +43,9 @@ class StorefrontSeeder extends Seeder
 
     public function run(): void
     {
+        $this->startingCart(OrderKind::Retail, 'খুচরা অর্ডার করুন', 0);
+        $this->startingCart(OrderKind::Bulk, 'পাইকারি অর্ডার করুন', 1);
+
         $this->systemPage(SystemPage::Home, 'হোম', 'home', self::homeBlocks());
 
         $this->systemPage(SystemPage::BulkOrder, 'পাইকারি অর্ডার', 'bulk-order', [
@@ -77,6 +85,23 @@ class StorefrontSeeder extends Seeder
                 'blocks' => $blocks,
                 'system_role' => $role,
             ]);
+    }
+
+    /**
+     * The Cart the store opens with for that kind, made once and found again
+     * by its kind however it was renamed, switched off or deleted since.
+     */
+    private function startingCart(OrderKind $kind, string $name, int $sortOrder): Cart
+    {
+        if ($cart = Cart::startingFor($kind)) {
+            return $cart;
+        }
+
+        $cart = new Cart(['name' => $name, 'kind' => $kind, 'sort_order' => $sortOrder]);
+        $cart->starting_kind = $kind;
+        $cart->save();
+
+        return $cart;
     }
 
     /**

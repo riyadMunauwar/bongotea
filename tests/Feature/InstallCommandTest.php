@@ -1,8 +1,10 @@
 <?php
 
 use App\Enums\CategoryTheme;
+use App\Enums\OrderKind;
 use App\Enums\SystemPage;
 use App\Models\Brand;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Menu;
 use App\Models\Page;
@@ -325,4 +327,21 @@ it('adds nothing twice and puts back nothing a Merchant edited, renamed or delet
         ->and(Setting::query()->find('header')->value)->toMatchArray(['announcementEnabled' => false, 'announcementMessage' => 'ঈদ মোবারক'])
         ->and(Menu::query()->count())->toBe(5)
         ->and(User::query()->count())->toBe(1);
+});
+
+it('opens the store with the two starting Carts, once, never putting back one renamed or deleted', function () {
+    $this->artisan('bongotea:install', installOptions(['--demo' => false, '--blank' => true]))->assertSuccessful();
+
+    expect(Cart::query()->orderBy('sort_order')->get()->map(fn (Cart $cart): array => [$cart->name, $cart->kind, $cart->is_switched_on])->all())->toBe([
+        ['খুচরা অর্ডার করুন', OrderKind::Retail, true],
+        ['পাইকারি অর্ডার করুন', OrderKind::Bulk, true],
+    ]);
+
+    Cart::startingFor(OrderKind::Retail)->update(['name' => 'প্যাকেট চা']);
+    Cart::startingFor(OrderKind::Bulk)->delete();
+
+    $this->artisan('bongotea:install', ['--no-interaction' => true])->assertSuccessful();
+
+    expect(Cart::withTrashed()->count())->toBe(2)
+        ->and(Cart::query()->pluck('name')->all())->toBe(['প্যাকেট চা']);
 });

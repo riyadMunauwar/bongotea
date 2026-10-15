@@ -145,6 +145,28 @@ class Product extends Model implements HasMedia
             $product->guardMrp();
             $product->guardDefaultBulkPack();
         });
+
+        /**
+         * A Product no longer sold a way leaves every Cart of that kind, so
+         * no Cart is left offering a tea it cannot sell.
+         */
+        static::saved(function (Product $product): void {
+            foreach (['sold_bulk' => OrderKind::Bulk, 'sold_retail' => OrderKind::Retail] as $switch => $kind) {
+                if ($product->wasChanged($switch) && ! $product->isSoldAs($kind)) {
+                    $product->carts()->detach(Cart::withTrashed()->where('kind', $kind)->pluck('id'));
+                }
+            }
+        });
+    }
+
+    /**
+     * The Carts this Product is assigned to.
+     *
+     * @return BelongsToMany<Cart, $this, CartProduct>
+     */
+    public function carts(): BelongsToMany
+    {
+        return $this->belongsToMany(Cart::class)->using(CartProduct::class);
     }
 
     /** A Product sold only খুচরা has no Tiers, so nothing priced by the Kilogram, and no পাইকারি Pack to start from. */

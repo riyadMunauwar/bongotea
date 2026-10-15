@@ -30,7 +30,7 @@ class CategoryResource extends Resource
 
     protected static ?string $navigationParentItem = 'Products';
 
-    /** Under Products: Categories 0, Brands 1, Tags 2. */
+    /** Under Products: Categories 0, Brands 1, Tags 2, Carts 3. */
     protected static ?int $navigationSort = 0;
 
     protected static ?string $recordTitleAttribute = 'name';

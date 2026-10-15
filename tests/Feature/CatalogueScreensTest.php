@@ -624,7 +624,7 @@ it('opens Categories, Brands and Tags under manage catalogue and draws them unde
         ->first(fn (NavigationItem $item): bool => $item->getLabel() === 'Products');
 
     expect(collect($products->getChildItems())->map(fn (NavigationItem $item): string => $item->getLabel())->all())
-        ->toBe(['Categories', 'Brands', 'Tags']);
+        ->toBe(['Categories', 'Brands', 'Tags', 'Carts']);
 });
 
 it('refuses Categories, Brands and Tags to a panel User without manage catalogue', function () {

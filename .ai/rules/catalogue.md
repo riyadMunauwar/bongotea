@@ -11,12 +11,15 @@ paths:
   - 'app/Filament/Resources/Categories/**'
   - 'app/Filament/Resources/Brands/**'
   - 'app/Filament/Resources/Tags/**'
+  - 'app/Models/Cart.php'
+  - 'app/Models/CartProduct.php'
+  - 'app/Filament/Resources/Carts/**'
 ---
 
 # Catalogue
 
-## Categories, Brands and Tags sit under Products and share its gate
-Each declares `$navigationParentItem = 'Products'` (sorted Categories 0, Brands 1, Tags 2), so the top-level order in `AdminShellTest` is unchanged; `CatalogueScreensTest` asserts the child order. Their `canAccess()` delegates to `ProductResource::canAccess()` (`manage catalogue`), so the four open and close together. Category and Brand deletion is offered only while no Product, trashed included, names it (`products()` is `withTrashed()`, FKs are restrict) — so no bulk delete there.
+## Categories, Brands, Tags and Carts sit under Products and share its gate
+Each declares `$navigationParentItem = 'Products'` (sorted Categories 0, Brands 1, Tags 2, Carts 3), so the top-level order in `AdminShellTest` is unchanged; `CatalogueScreensTest` asserts the child order. Their `canAccess()` delegates to `ProductResource::canAccess()` (`manage catalogue`), so the five open and close together. Category and Brand deletion is offered only while no Product, trashed included, names it (`products()` is `withTrashed()`, FKs are restrict) — so no bulk delete there.
 
 ## A Product's slug locks at first publish, enforced in the model
 `first_published_at` is stamped the first time status becomes Published and never cleared, so pulling a Product back to draft keeps the lock. `Product::booted()` throws `LogicException` on any slug change once the *original* `first_published_at` is set; the form only mirrors this by disabling the field (a disabled field is not dehydrated). Renaming stays open. Never add a path that rewrites the slug, and never force-delete a Product: the soft delete is "taken out of the catalogue" and keeps the slug claimed (the unique index covers trashed rows).
@@ -29,3 +32,6 @@ Each Product owns its Tiers (`tiers` JSON, `{min, max|null, price}` in minor uni
 
 ## পাইকারি / খুচরা switches decide every surface; a খুচরা-only Product has no Tiers
 `sold_bulk`/`sold_retail` on Product and `serves_bulk`/`serves_retail` on Pack (ADR-0036). The model refuses neither switch, a Pack ticked for no way or for a way its Product is not sold, and a খুচরা Pack without MRP/Pack Price; it clears `tiers`, `price` and `mrp` from a Product not sold পাইকারি, and `priceTiers()` throws for one — so a leak onto the bulk side fails loudly. List bulk things through `Product::soldAs(OrderKind::Bulk)` / `Catalogue::soldAs()`, Packs through `Pack::isOrderableAs($kind)`. The cross-row rules (a Pack per switch that is on, Available needs a Pack) are the Product form's only, because Filament saves the Product before its Packs. ProductFactory defaults to both ways, and gives every Product sold পাইকারি a 1 kg পাইকারি-only Pack marked `default_bulk_pack_id` (so bulk Capture works with no setup) — reuse `->defaultBulkPack` rather than creating another 1000 g Pack, which the unique weight refuses, and use `withoutPacks()` where a test counts Packs. Use `bulkOnly()`/`retailOnly()` states, and `PackFactory::bulkOnly()` for a Pack of a পাইকারি-only Product. The default পাইকারি Pack is chosen on the form by weight (`default_bulk_pack`, saved after the Packs repeater) and guarded by the model only when it changes; a Pack unticked পাইকারি lets go of being the default.
+
+## A Cart's kind is locked in the model, and assignment is guarded by the CartProduct pivot
+`Cart::booted()` throws `LogicException` on any change to `kind`; the form only mirrors it with `disabledOn('edit')`. `Cart::products()` goes through `CartProduct` (`->using()`), whose `creating` hook refuses a Product not `isSoldAs()` the Cart's kind — so attach through the relation, never by inserting into `cart_product` directly. The form's Category pick is a shortcut that writes Product ticks and stores nothing. Carts are only soft-deleted: Orders keep `cart_id` plus a `cart_name` copy, and `Order::cart()` is `withTrashed()`. `starting_kind` marks the two starting Carts; `Cart::startingFor()` finds them trashed or not, so install never makes a second. `Product::booted()` detaches a Product from every Cart of a kind when its switch for that kind is turned off, so a Cart never holds a tea its form refuses.
