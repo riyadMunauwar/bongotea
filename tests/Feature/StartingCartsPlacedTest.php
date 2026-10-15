@@ -3,6 +3,7 @@
 use App\Enums\OrderKind;
 use App\Enums\PageStatus;
 use App\Models\Cart;
+use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,4 +65,24 @@ it('turns each Bulk order form and Packet basket into a Cart Block drawing the s
     ])
         ->and(Cart::find($bulk->getKey())->isOpen())->toBeTrue()
         ->and(Cart::find($retail->getKey())->isOpen())->toBeTrue();
+});
+
+it('gives a starting Cart nobody has assigned to every Product sold its way, and leaves one already assigned to alone', function () {
+    $migration = require database_path('migrations/2026_10_15_114315_assign_the_catalogue_to_the_starting_carts.php');
+
+    $bulk = Cart::factory()->bulk()->create();
+    $bulk->forceFill(['starting_kind' => OrderKind::Bulk])->save();
+    $retail = Cart::factory()->retail()->create();
+    $retail->forceFill(['starting_kind' => OrderKind::Retail])->save();
+
+    $both = Product::factory()->create();
+    $bulkOnly = Product::factory()->bulkOnly()->create();
+    $retailOnly = Product::factory()->retailOnly()->create();
+    Product::factory()->create()->delete();
+    $retail->products()->attach($retailOnly->id);
+
+    $migration->up();
+
+    expect($bulk->products()->orderBy('products.id')->pluck('products.id')->all())->toBe([$both->id, $bulkOnly->id])
+        ->and($retail->products()->pluck('products.id')->all())->toBe([$retailOnly->id]);
 });

@@ -152,7 +152,7 @@ function SubmitButton({ busy, label, busyLabel }: { busy: boolean; label: string
 }
 
 function SignedIn({ heading, phone, orders }: { heading: string | null; phone: string; orders: Order[] }) {
-    const { links } = usePage().props;
+    const { links, headerCarts } = usePage().props;
     const [open, setOpen] = useState<string | null>(orders[0]?.number ?? null);
     const signOut = useHttp({});
 
@@ -180,7 +180,7 @@ function SignedIn({ heading, phone, orders }: { heading: string | null; phone: s
             {orders.length === 0 ? (
                 <div className="flex flex-col items-start gap-3 rounded-[14px] border border-border p-5">
                     <span className="text-[15px] text-muted">{bn.myOrders.none}</span>
-                    <Link href={links.bulkOrder} className="rounded-[10px] bg-primary px-5 py-3 text-[15px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white">
+                    <Link href={headerCarts.bulk?.href ?? headerCarts.retail?.href ?? '/'} className="rounded-[10px] bg-primary px-5 py-3 text-[15px] font-semibold text-white no-underline hover:bg-primary-dark hover:text-white">
                         {bn.myOrders.orderNow}
                     </Link>
                 </div>

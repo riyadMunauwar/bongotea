@@ -72,6 +72,9 @@ export type OpenCart = {
     sortOrder: number;
 };
 
+/** An open Cart a header button opens. */
+export type HeaderCart = { id: number; name: string; href: string };
+
 /** The Cart a Block draws, open or closed; a closed one is drawn closed. */
 export type BlockCart = {
     id: number;
@@ -94,8 +97,6 @@ export type SharedProps = {
         };
     };
     links: {
-        bulkOrder: string;
-        packetBasket: string;
         myOrders: string;
         checkout: string;
         search: string;
@@ -123,6 +124,8 @@ export type SharedProps = {
     carts: OpenCart[];
     /** The Carts the store opened with, deleted or not: what the browser held before Carts were named moves into them, once. */
     startingCarts: { bulk: number | null; retail: number | null };
+    /** The Carts the header's খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন buttons open; null where that Cart is closed and its button is not drawn. */
+    headerCarts: { retail: HeaderCart | null; bulk: HeaderCart | null };
     seo: Seo;
     /** How many minor units make one taka; every price is sent in minor units. */
     minorUnitsPerTaka: number;

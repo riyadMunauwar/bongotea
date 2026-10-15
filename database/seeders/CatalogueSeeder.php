@@ -3,9 +3,11 @@
 namespace Database\Seeders;
 
 use App\Enums\CategoryTheme;
+use App\Enums\OrderKind;
 use App\Enums\ProductStatus;
 use App\Enums\Strength;
 use App\Models\Brand;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tag;
@@ -166,6 +168,13 @@ class CatalogueSeeder extends Seeder
 
             /** A bulk buyer starts from the 500 g business pack, as every পাইকারি tea's package weight says. */
             $created->update(['default_bulk_pack_id' => $created->packs()->where('grams', 500)->value('id')]);
+
+            /** The demo's starting Carts offer every tea sold their way, as the bulk order and packet basket pages did. */
+            foreach ([OrderKind::Bulk, OrderKind::Retail] as $kind) {
+                if ($created->isSoldAs($kind)) {
+                    Cart::startingFor($kind)?->products()->attach($created->getKey());
+                }
+            }
         }
     }
 

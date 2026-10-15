@@ -31,7 +31,7 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
  * Sized by whoever places it: a grid cell, or a slot in a sideways row.
  */
 export function ProductCard({ product, className }: { product: ProductCardProps; className?: string }) {
-    const cart = useCart(usePage().props.startingCarts.bulk);
+    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
     const kilograms = cart.kilogramsOf(product.id);
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
@@ -197,7 +197,7 @@ function RetailFromLine({ productId }: { productId: number }) {
 /** "খুচরা ৳X থেকে" from a Product's cheapest খুচরা Pack, or null where it is not sold খুচরা. */
 function useRetailFromLabel(productId: number): string | null {
     const taka = useTaka();
-    const prices = useRetailCart(usePage().props.startingCarts.retail)
+    const prices = useRetailCart(usePage().props.headerCarts.retail?.id ?? null)
         .packsOf(productId)
         .map((pack) => pack.price);
 

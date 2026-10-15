@@ -284,7 +284,7 @@ it('turns a bulk Cart\'s quick-set chips and price steps off', function () {
         );
 });
 
-it('fills the price calculator and the price matrix with every published Product by Category', function (string $type) {
+it('fills the price matrix with every published Product by Category', function (string $type) {
     $gold = Category::factory()->create();
     $classic = Product::factory()->for($gold)->create();
     Product::factory()->for($gold)->draft()->create();
@@ -302,7 +302,7 @@ it('fills the price calculator and the price matrix with every published Product
                 ],
             ])
         );
-})->with(['price_calculator', 'price_matrix']);
+})->with(['price_matrix']);
 
 it('lists no Product sold only খুচরা on a bulk surface', function (string $type) {
     $gold = Category::factory()->create();
@@ -317,7 +317,7 @@ it('lists no Product sold only খুচরা on a bulk surface', function (str
                 [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($bulk->fresh())]],
             ])
         );
-})->with(['price_calculator', 'price_matrix']);
+})->with(['price_matrix']);
 
 it('draws a Product sold only খুচরা on the other lists, saying it has no Tiers', function () {
     $retailOnly = Product::factory()->retailOnly()->create();
@@ -344,4 +344,38 @@ it('tiles a Category of Products sold only খুচরা with no lowest Tier p
             ->where('page.blocks.0.props.tiles.0.productCount', 1)
             ->where('page.blocks.0.props.tiles.0.lowestPrice', null)
         );
+});
+
+it('offers on a price calculator only the Products assigned to its bulk Cart, and opens that Cart\'s page', function () {
+    $gold = Category::factory()->create();
+    $assigned = Product::factory()->for($gold)->create();
+    Product::factory()->for($gold)->create();
+
+    $cart = Cart::factory()->bulk()->onAPage()->create(['name' => 'Hotel']);
+    $cart->products()->attach($assigned->getKey());
+
+    pageWithBlock('price_calculator', ['cart_id' => $cart->getKey(), 'heading' => 'হিসাব করে দেখুন']);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props', [
+            'cart' => ['id' => $cart->getKey(), 'name' => 'Hotel', 'kind' => 'bulk', 'isOpen' => true, 'href' => $cart->link()],
+            'heading' => 'হিসাব করে দেখুন',
+            'text' => null,
+            'categories' => [
+                [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($assigned->fresh())]],
+            ],
+        ]));
+});
+
+it('offers nothing on a price calculator whose Cart is closed, and leaves its own Cart where it stands', function () {
+    $cart = Cart::factory()->bulk()->switchedOff()->onAPage()->create();
+    $cart->products()->attach(Product::factory()->create()->getKey());
+    $page = $cart->page();
+
+    pageWithBlock('price_calculator', ['cart_id' => $cart->getKey()]);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.cart.href', null)->where('page.blocks.0.props.categories', []));
+
+    expect($cart->page()->is($page))->toBeTrue();
 });

@@ -29,7 +29,7 @@ type Way = 'bulk' | 'retail';
  * place of the controls.
  */
 export function PurchasePanel({ product, isGreyed, className }: { product: ProductDetail; isGreyed: boolean; className?: string }) {
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
     const isSoldRetail = retail.packsOf(product.id).length > 0;
     const [way, setWay] = useState<Way>(product.isSoldBulk ? 'bulk' : 'retail');
     const shown: Way = product.isSoldBulk && (way === 'bulk' || !isSoldRetail) ? 'bulk' : 'retail';
@@ -97,7 +97,7 @@ function WayToggle({ way, onChange }: { way: Way; onChange: (way: Way) => void }
 
 /** Buying by the Kilogram, or why it cannot be done now. */
 function BulkPurchase({ product }: { product: BulkProductCard }) {
-    const cart = useCart(usePage().props.startingCarts.bulk);
+    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
     const chosen = cart.products.find((candidate) => candidate.id === product.id);
 
     if (chosen === undefined || cart.isSoldOut(product.id)) {
@@ -116,8 +116,8 @@ function BulkPurchase({ product }: { product: BulkProductCard }) {
  * are offered too.
  */
 function BulkControls({ product }: { product: CartProduct }) {
-    const { links } = usePage().props;
-    const cart = useCart(usePage().props.startingCarts.bulk);
+    const { headerCarts } = usePage().props;
+    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
     const taka = useTaka();
     const held = cart.lineOf(product.id);
     const [kilograms, setKilograms] = useState(() => firstKilograms(product, null));
@@ -174,7 +174,7 @@ function BulkControls({ product }: { product: CartProduct }) {
                 disabled={!canAdd}
                 onClick={() => {
                     cart.set(product.id, kilograms);
-                    router.visit(`${links.bulkOrder}#${rowAnchor(product.id)}`);
+                    router.visit(`${headerCarts.bulk?.href ?? '/'}#${rowAnchor(product.id)}`);
                 }}
                 className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >
@@ -192,8 +192,8 @@ function BulkControls({ product }: { product: CartProduct }) {
  */
 function RetailPurchase({ product }: { product: ProductDetail }) {
     const { props, url } = usePage();
-    const { links, retailPricing } = props;
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const { headerCarts, retailPricing } = props;
+    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
     const taka = useTaka();
     const packs = retail.packsOf(product.id);
     const isPickable = (pack: CartPack) => pack.isOrderable && !retail.isSoldOut(pack.id);
@@ -270,7 +270,7 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
                     }
 
                     retail.set(chosen.id, retail.countOf(chosen.id) + shownCount);
-                    router.visit(withReturnPath(links.packetBasket, url));
+                    router.visit(withReturnPath(headerCarts.retail?.href ?? '/', url));
                 }}
                 className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >

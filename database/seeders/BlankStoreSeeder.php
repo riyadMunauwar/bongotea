@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Enums\OrderKind;
 use App\Enums\SystemPage;
+use App\Models\Cart;
 use App\Models\Menu;
 use App\Models\Page;
 use Database\Seeders\Concerns\AssignsMenus;
@@ -27,14 +29,15 @@ class BlankStoreSeeder extends Seeder
         }
 
         $home = Page::query()->system(SystemPage::Home)->sole()->id;
-        $bulkOrder = Page::query()->system(SystemPage::BulkOrder)->sole()->id;
+        $bulkOrder = Cart::startingFor(OrderKind::Bulk)?->page()?->getKey();
         $myOrders = Page::query()->system(SystemPage::MyOrders)->sole()->id;
 
-        $links = [
+        /** The starting bulk Cart's Page, where it still stands on one. */
+        $links = array_values(array_filter([
             self::pageLink('হোম', $home),
-            self::pageLink('পাইকারি অর্ডার', $bulkOrder),
+            $bulkOrder === null ? null : self::pageLink('পাইকারি অর্ডার', $bulkOrder),
             self::pageLink('আমার অর্ডার', $myOrders),
-        ];
+        ]));
 
         DB::transaction(function () use ($links): void {
             self::assignHeader($links);

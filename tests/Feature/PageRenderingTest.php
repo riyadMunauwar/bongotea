@@ -285,26 +285,18 @@ it('tells the delivery chart cash on delivery is not taken once the Merchant swi
     $this->get('/delivery')->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.offersCashOnDelivery', false));
 });
 
-it('points the header at the Bulk Order, Packet Basket and My Orders System Pages by role', function () {
+it('points My Orders links at its System Page by role', function () {
     Page::factory()->system(SystemPage::Home)->create();
-    Page::factory()->system(SystemPage::BulkOrder)->create(['slug' => 'paikari']);
-    Page::factory()->system(SystemPage::PacketBasket)->create(['slug' => 'jhuri']);
     Page::factory()->system(SystemPage::MyOrders)->create(['slug' => 'amar-order']);
 
-    $this->get('/')
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('links.bulkOrder', '/paikari')
-            ->where('links.packetBasket', '/jhuri')
-            ->where('links.myOrders', '/amar-order')
-        );
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('links.myOrders', '/amar-order'));
 });
 
-it('leaves a header button at its installed slug while its System Page is a draft', function () {
+it('leaves My Orders links at the installed slug while its System Page is a draft', function () {
     Page::factory()->system(SystemPage::Home)->create();
-    Page::factory()->system(SystemPage::BulkOrder)->create(['slug' => 'paikari', 'status' => 'draft']);
+    Page::factory()->system(SystemPage::MyOrders)->create(['slug' => 'amar-order', 'status' => 'draft']);
 
-    $this->get('/')
-        ->assertInertia(fn (Assert $page) => $page->where('links.bulkOrder', '/bulk-order')->where('links.packetBasket', '/packet-basket'));
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->where('links.myOrders', '/my-orders'));
 });
 
 it('links a Menu entry naming Home to the bare domain', function () {

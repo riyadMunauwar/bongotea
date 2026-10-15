@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Enums\OrderKind;
 use App\Enums\PageStatus;
 use App\Enums\SystemPage;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Menu;
 use App\Models\Page;
@@ -65,14 +67,18 @@ class DemoStoreSeeder extends Seeder
 
     public function run(): void
     {
-        if (Page::query()->whereNull('system_role')->exists() || Menu::query()->exists()) {
+        /** The starting Carts' own Pages, which the store opens with like its System Pages. */
+        $bulkOrder = Cart::startingFor(OrderKind::Bulk)?->page()?->getKey();
+        $cartPages = array_filter([$bulkOrder, Cart::startingFor(OrderKind::Retail)?->page()?->getKey()]);
+
+        if ($bulkOrder === null || Page::query()->whereNull('system_role')->whereKeyNot($cartPages)->exists() || Menu::query()->exists()) {
             return;
         }
 
-        DB::transaction(function (): void {
+        DB::transaction(function () use ($bulkOrder): void {
             $pages = [
                 'home' => Page::query()->system(SystemPage::Home)->sole()->id,
-                'bulk_order' => Page::query()->system(SystemPage::BulkOrder)->sole()->id,
+                'bulk_order' => $bulkOrder,
                 'my_orders' => Page::query()->system(SystemPage::MyOrders)->sole()->id,
             ];
 

@@ -2,8 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\OrderKind;
 use App\Filament\Clusters\Settings\Pages\SettingsPage;
 use App\Filament\Resources\Pages\PageResource;
+use App\Models\Cart;
 use App\Models\Menu;
 use App\Support\Settings\HeaderSettings;
 use BackedEnum;
@@ -42,6 +44,31 @@ class Header extends SettingsPage
     }
 
     /**
+     * The order buttons open on the Cart each actually opens, the starting
+     * one where none was ever chosen.
+     *
+     * @return array<string, mixed>
+     */
+    protected function formValues(): array
+    {
+        $header = app(HeaderSettings::class);
+
+        return [
+            ...parent::formValues(),
+            'retailCartId' => $header->cartFor(OrderKind::Retail)?->getKey(),
+            'bulkCartId' => $header->cartFor(OrderKind::Bulk)?->getKey(),
+        ];
+    }
+
+    private static function cartSelect(string $name, string $label, OrderKind $kind): Select
+    {
+        return Select::make($name)
+            ->label($label)
+            ->required()
+            ->options(fn (): array => Cart::query()->where('kind', $kind)->orderBy('sort_order')->orderBy('id')->pluck('name', 'id')->all());
+    }
+
+    /**
      * @return array<Section>
      */
     protected function formComponents(): array
@@ -55,6 +82,14 @@ class Header extends SettingsPage
                         ->options(fn (): array => Menu::query()->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
                         ->placeholder('No Menu'),
+                ]),
+
+            Section::make('Order buttons')
+                ->description('খুচরা অর্ডার করুন is drawn to the left of পাইকারি অর্ডার করুন, each opening the Cart chosen here. A button whose Cart is switched off or on no published Page is not drawn.')
+                ->columns(2)
+                ->schema([
+                    self::cartSelect('retailCartId', 'খুচরা অর্ডার করুন opens', OrderKind::Retail),
+                    self::cartSelect('bulkCartId', 'পাইকারি অর্ডার করুন opens', OrderKind::Bulk),
                 ]),
 
             Section::make('Announcement bar')

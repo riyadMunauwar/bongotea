@@ -2,6 +2,9 @@
 
 namespace App\Support\Settings;
 
+use App\Enums\OrderKind;
+use App\Models\Cart;
+
 /**
  * What is drawn only in the storefront header: which Menu is its navigation
  * (desktop and drawer share it), and the dark announcement bar above it — a
@@ -15,6 +18,15 @@ class HeaderSettings extends SettingsGroup
 {
     /** The header's Menu. None draws the header without a navigation row. */
     public ?int $menuId = null;
+
+    /**
+     * The Carts the header's খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন
+     * buttons open (ADR-0038). Never set, each is the starting Cart of its
+     * kind; a button whose Cart is closed is not drawn.
+     */
+    public ?int $retailCartId = null;
+
+    public ?int $bulkCartId = null;
 
     public bool $announcementEnabled = true;
 
@@ -37,11 +49,26 @@ class HeaderSettings extends SettingsGroup
      */
     public function with(array $values): static
     {
-        if (array_key_exists('menuId', $values)) {
-            $values['menuId'] = is_numeric($values['menuId']) ? (int) $values['menuId'] : null;
+        foreach (['menuId', 'retailCartId', 'bulkCartId'] as $id) {
+            if (array_key_exists($id, $values)) {
+                $values[$id] = is_numeric($values[$id]) ? (int) $values[$id] : null;
+            }
         }
 
         return parent::with($values);
+    }
+
+    /**
+     * The Cart a header button opens, deleted or not: the one chosen, else
+     * the starting Cart of that kind. Whether it is drawn is whether it is
+     * open.
+     */
+    public function cartFor(OrderKind $kind): ?Cart
+    {
+        $chosen = $kind === OrderKind::Bulk ? $this->bulkCartId : $this->retailCartId;
+        $cart = $chosen === null ? null : Cart::withTrashed()->where('kind', $kind)->find($chosen);
+
+        return $cart ?? Cart::startingFor($kind);
     }
 
     /**

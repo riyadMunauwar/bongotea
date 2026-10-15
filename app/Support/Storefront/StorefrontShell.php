@@ -30,17 +30,10 @@ use Illuminate\Support\Collection;
  */
 class StorefrontShell
 {
-    /**
-     * Where the header's fixed buttons lead when their System Page cannot be
-     * found: the slugs the store is installed with.
-     */
-    public const BULK_ORDER_PATH = '/bulk-order';
-
+    /** Where My Orders links lead when its System Page cannot be found: the slug the store is installed with. */
     public const MY_ORDERS_PATH = '/my-orders';
 
-    public const PACKET_BASKET_PATH = '/packet-basket';
-
-    /** Where the Bulk Order form's continue button leads. */
+    /** Where a Cart's continue button leads. */
     public const CHECKOUT_PATH = '/checkout';
 
     /** Where the header's search form sends its query. */
@@ -203,24 +196,39 @@ class StorefrontShell
     }
 
     /**
-     * Bulk Order, the Packet Basket and My Orders are found by their role, so the buttons
-     * follow a renamed slug; one not published leaves its button at the
-     * installed slug.
+     * The Carts the header's two buttons open (ADR-0038), each only while it
+     * is open: খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন, chosen in Header
+     * settings. A button whose Cart is closed is not drawn, so it is null.
      *
-     * @return array{bulkOrder: string, packetBasket: string, myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string, enquiry: string}
+     * @return array{retail: ?array{id: int, name: string, href: string}, bulk: ?array{id: int, name: string, href: string}}
+     */
+    public function headerCarts(): array
+    {
+        $button = function (OrderKind $kind): ?array {
+            $cart = $this->header->cartFor($kind);
+
+            return $cart?->isOpen() ? ['id' => $cart->getKey(), 'name' => $cart->name, 'href' => $cart->link()] : null;
+        };
+
+        return [
+            'retail' => $button(OrderKind::Retail),
+            'bulk' => $button(OrderKind::Bulk),
+        ];
+    }
+
+    /**
+     * My Orders is found by its role, so its links follow a renamed slug; one
+     * not published leaves them at the installed slug. No link here means
+     * "the" bulk or retail Cart: those name the Cart they open.
+     *
+     * @return array{myOrders: string, checkout: string, search: string, searchSuggestions: string, signInCode: string, signIn: string, signOut: string, enquiry: string}
      */
     public function links(): array
     {
-        $paths = Page::query()
-            ->published()
-            ->whereIn('system_role', [SystemPage::BulkOrder, SystemPage::PacketBasket, SystemPage::MyOrders])
-            ->get(['slug', 'system_role'])
-            ->mapWithKeys(fn (Page $page): array => [$page->system_role->value => $page->path()]);
+        $myOrders = Page::query()->published()->system(SystemPage::MyOrders)->first();
 
         return [
-            'bulkOrder' => $paths->get(SystemPage::BulkOrder->value, self::BULK_ORDER_PATH),
-            'packetBasket' => $paths->get(SystemPage::PacketBasket->value, self::PACKET_BASKET_PATH),
-            'myOrders' => $paths->get(SystemPage::MyOrders->value, self::MY_ORDERS_PATH),
+            'myOrders' => $myOrders?->path() ?? self::MY_ORDERS_PATH,
             'checkout' => self::CHECKOUT_PATH,
             'search' => self::SEARCH_PATH,
             'searchSuggestions' => self::SEARCH_SUGGESTIONS_PATH,

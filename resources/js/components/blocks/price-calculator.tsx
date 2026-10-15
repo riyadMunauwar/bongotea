@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { currentStepRange, discountLabel, feeText } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
@@ -14,16 +14,16 @@ import type { PriceCalculatorProps } from '@/types/blocks';
 import type { BulkProductCard } from '@/types/catalogue';
 
 /**
- * "হিসাব করে দেখুন": every published Product by Category with −/+, beside the
+ * "হিসাব করে দেখুন": the Products assigned to its bulk Cart, by Category, with −/+, beside the
  * dark panel adding them up — the ladder of weights with the Cart's step,
- * each line, the saving, the Delivery Charge and the total. It is the Cart
- * itself, not a scratch copy, so its button only goes on to the Bulk Order
+ * each line, the saving, the Delivery Charge and the total. It is that Cart's Contents
+ * (ADR-0038), not a scratch copy, so its button only goes on to that Cart's
  * page; and emptying it asks first, since that empties the Cart.
  */
-export function PriceCalculator({ heading, text, categories }: PriceCalculatorProps) {
-    const cart = useCart(usePage().props.startingCarts.bulk);
+export function PriceCalculator({ cart: workedWith, heading, text, categories }: PriceCalculatorProps) {
+    const cart = useCart(workedWith?.id ?? null);
 
-    if (categories.length === 0) {
+    if (workedWith?.href == null || categories.length === 0) {
         return null;
     }
 
@@ -50,7 +50,7 @@ export function PriceCalculator({ heading, text, categories }: PriceCalculatorPr
                 <div className="h-1" />
             </div>
 
-            <Panel cart={cart} products={categories.flatMap((category) => category.products)} />
+            <Panel cart={cart} href={workedWith.href} products={categories.flatMap((category) => category.products)} />
         </section>
     );
 }
@@ -109,9 +109,8 @@ function Row({ product, cart }: { product: BulkProductCard; cart: UseCart }) {
     );
 }
 
-function Panel({ cart, products }: { cart: UseCart; products: BulkProductCard[] }) {
+function Panel({ cart, href, products }: { cart: UseCart; href: string; products: BulkProductCard[] }) {
     const taka = useTaka();
-    const { links } = usePage().props;
     const { priced, steps } = cart;
     const total = priced.totalKilograms;
     const currentIndex = steps.findIndex((step) => step.current);
@@ -191,7 +190,7 @@ function Panel({ cart, products }: { cart: UseCart; products: BulkProductCard[] 
 
             <button
                 type="button"
-                onClick={() => router.visit(links.bulkOrder)}
+                onClick={() => router.visit(href)}
                 className="cursor-pointer rounded-[10px] border-0 bg-gold-accent p-[14px] text-center text-[16px] font-bold text-night hover:bg-gold-hover"
             >
                 {bn.calculator.order}

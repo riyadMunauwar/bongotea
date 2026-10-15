@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Carts\Tables;
 
+use App\Models\Cart;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
@@ -34,6 +35,13 @@ class CartsTable
                 TextColumn::make('products_count')
                     ->label('Products')
                     ->counts('products'),
+
+                /** Customers reach a Cart only through the Page its Cart Block stands on. */
+                TextColumn::make('page')
+                    ->label('Page')
+                    ->state(fn (Cart $record): ?string => $record->page()?->title)
+                    ->description(fn (Cart $record): ?string => $record->link())
+                    ->placeholder('On no Page'),
             ])
             ->filters([
                 TrashedFilter::make()

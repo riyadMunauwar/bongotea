@@ -16,9 +16,9 @@ import { useTaka } from '@/lib/use-taka';
  * once the buyer says yes.
  */
 export function CartBar() {
-    const { links } = usePage().props;
-    const cart = useCart(usePage().props.startingCarts.bulk);
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const { headerCarts } = usePage().props;
+    const cart = useCart(headerCarts.bulk?.id ?? null);
+    const retail = useRetailCart(headerCarts.retail?.id ?? null);
     const taka = useTaka();
 
     if (cart.isEmpty && retail.isEmpty) {
@@ -32,7 +32,7 @@ export function CartBar() {
                     name={bn.header.cart}
                     size={bn.packs.kilograms(toBanglaDigits(cart.priced.totalKilograms))}
                     total={taka(cart.priced.total)}
-                    href={links.bulkOrder}
+                    href={headerCarts.bulk?.href ?? '/'}
                     onClear={cart.clear}
                 />
             )}
@@ -41,7 +41,7 @@ export function CartBar() {
                     name={bn.header.packetBasket}
                     size={bn.cart.barPacks(toBanglaDigits(retail.priced.packCount))}
                     total={taka(retail.priced.total)}
-                    href={links.packetBasket}
+                    href={headerCarts.retail?.href ?? '/'}
                     onClear={retail.clear}
                 />
             )}

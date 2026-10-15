@@ -228,6 +228,8 @@ export type CartBlockProps = {
 };
 
 export type PriceCalculatorProps = {
+    /** The bulk Cart whose Contents it reads and adds to, its page where it is open; null where none is named. */
+    cart: (BlockCart & { href: string | null }) | null;
     heading: string | null;
     text: string | null;
     categories: CartCategory[];

@@ -2,6 +2,8 @@
 
 namespace Database\Seeders\Pages;
 
+use App\Enums\OrderKind;
+use App\Models\Cart;
 use App\Support\Pages\Blocks\DeliveryChart;
 use App\Support\Pages\Blocks\PriceCalculator;
 use App\Support\Pages\Blocks\PriceMatrix;
@@ -27,6 +29,7 @@ final class PricingPage extends DemoPage
         return [
             self::banner('পাইকারি দাম', 'বেশি নিলে দাম কম', 'প্রতিটি চায়ের নিজস্ব দাম আছে। সব চা মিলিয়ে কার্টে মোট কত কেজি আছে, সেই অনুযায়ী প্রতিটি চায়ের দাম বসবে: ১–৯ কেজিতে ট্রেড দাম, ১০–১৯ কেজিতে হোলসেল দাম, ২০ কেজি বা তার বেশিতে ডিস্ট্রিবিউটর দাম।'),
             self::block(PriceCalculator::class, [
+                'cart_id' => Cart::startingFor(OrderKind::Bulk)?->getKey(),
                 'heading' => 'হিসাব করে দেখুন',
                 'text' => 'চা ও কেজি বেছে নিন, প্রতিটির দাম নিচে দেখুন',
             ]),

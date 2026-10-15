@@ -21,7 +21,7 @@ import { SectionHeading } from './shared';
  */
 export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
     const taka = useTaka();
-    const cart = useCart(usePage().props.startingCarts.bulk);
+    const cart = useCart(usePage().props.headerCarts.bulk?.id ?? null);
     const total = cart.priced.totalKilograms;
     const columns = Math.max(1, ...categories.flatMap((category) => category.products.map((product) => product.tiers.length)));
     const gridTemplateColumns = `var(--matrix-name) minmax(88px, auto) repeat(${columns}, minmax(104px, 1fr))`;

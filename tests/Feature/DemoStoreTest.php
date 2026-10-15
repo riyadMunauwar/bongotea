@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\OrderKind;
+use App\Models\Cart;
 use App\Models\Page;
 
 /**
@@ -62,7 +64,9 @@ function anchorsIn(array $blocks): array
 it('opens every demo Page, each drawing its Blocks', function () {
     installDemo();
 
-    $slugs = Page::query()->whereNull('system_role')->pluck('slug')->sort()->values()->all();
+    /** The starting Carts' own Pages are the store's, not the demo's. */
+    $cartPages = [Cart::startingFor(OrderKind::Bulk)->page()->id, Cart::startingFor(OrderKind::Retail)->page()->id];
+    $slugs = Page::query()->whereNull('system_role')->whereKeyNot($cartPages)->pluck('slug')->sort()->values()->all();
 
     expect($slugs)->toBe(collect([
         'about', 'contact', 'faq', 'how-to-brew', 'our-goals', 'our-promise', 'our-purpose', 'pricing',

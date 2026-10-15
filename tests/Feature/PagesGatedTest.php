@@ -244,12 +244,12 @@ it('draws no delete for a System Page, even to a User holding delete pages', fun
 });
 
 it('never deletes a System Page, nor changes any Page\'s role', function (Closure $act) {
-    $page = Page::factory()->system(SystemPage::BulkOrder)->create();
+    $page = Page::factory()->system(SystemPage::MyOrders)->create();
 
     $act($page);
 })->with([
     'delete' => [fn (Page $page) => $page->delete()],
-    'another role' => [fn (Page $page) => $page->update(['system_role' => SystemPage::MyOrders])],
+    'another role' => [fn (Page $page) => $page->update(['system_role' => SystemPage::Home])],
     'no role' => [fn (Page $page) => $page->update(['system_role' => null])],
     'a role for an ordinary Page' => [fn () => Page::factory()->create()->update(['system_role' => SystemPage::MyOrders])],
 ])->throws(LogicException::class);
@@ -257,16 +257,16 @@ it('never deletes a System Page, nor changes any Page\'s role', function (Closur
 it('lets a System Page be reworded and reslugged while keeping its role', function () {
     $this->actingAs(User::factory()->authoringPages()->create());
 
-    $page = Page::factory()->system(SystemPage::BulkOrder)->create();
+    $page = Page::factory()->system(SystemPage::MyOrders)->create();
 
     Livewire::test(EditPage::class, ['record' => $page->getKey()])
-        ->assertSee('Bulk Order')
-        ->fillForm(['title' => 'পাইকারি অর্ডার', 'slug' => 'paikari'])
+        ->assertSee('My Orders')
+        ->fillForm(['title' => 'অর্ডার দেখুন', 'slug' => 'amar-order'])
         ->call('save')
         ->assertHasNoFormErrors();
 
     expect($page->refresh())
-        ->title->toBe('পাইকারি অর্ডার')
-        ->slug->toBe('paikari')
-        ->system_role->toBe(SystemPage::BulkOrder);
+        ->title->toBe('অর্ডার দেখুন')
+        ->slug->toBe('amar-order')
+        ->system_role->toBe(SystemPage::MyOrders);
 });

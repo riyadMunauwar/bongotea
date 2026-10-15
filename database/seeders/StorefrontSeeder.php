@@ -7,6 +7,7 @@ use App\Enums\PageStatus;
 use App\Enums\SystemPage;
 use App\Models\Cart;
 use App\Models\Page;
+use App\Models\Setting;
 use App\Support\Pages\Blocks\CartBlock;
 use App\Support\Pages\Blocks\CategoryPanels;
 use App\Support\Pages\Blocks\CategoryTiles;
@@ -17,12 +18,12 @@ use App\Support\Pages\Blocks\PromiseStrip;
 use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\VideoReviews;
 use App\Support\Pages\PageBlock;
+use App\Support\Settings\HeaderSettings;
 use Illuminate\Database\Seeder;
 
 /**
- * The System Pages every store opens with, blank or demo (ADR-0030):
- * home, bulk order, the packet basket and the customer's orders, in the mockup's Blocks and
- * copy.
+ * The System Pages every store opens with, blank or demo (ADR-0030): home
+ * and the customer's orders, in the mockup's Blocks and copy.
  *
  * A System Page is found by its role, which can never change or be deleted,
  * so each is created exactly once and whatever the Merchant has done to it
@@ -32,7 +33,9 @@ use Illuminate\Database\Seeder;
  * `BlankStoreSeeder`'s.
  *
  * The two starting Carts, খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন, are made
- * here too, once each and in the sort order the header draws them.
+ * here too (ADR-0038), once each and in the sort order the header draws
+ * them, each on an ordinary Page of its own and wired to the header's
+ * buttons.
  */
 class StorefrontSeeder extends Seeder
 {
@@ -47,7 +50,7 @@ class StorefrontSeeder extends Seeder
 
         $this->systemPage(SystemPage::Home, 'হোম', 'home', self::homeBlocks());
 
-        $this->systemPage(SystemPage::BulkOrder, 'পাইকারি অর্ডার', 'bulk-order', [
+        $this->cartPage($bulk, 'পাইকারি অর্ডার', 'bulk-order', [
             self::block(CartBlock::class, [
                 'cart_id' => $bulk->getKey(),
                 'heading' => 'একসাথে চা অর্ডার করুন',
@@ -57,7 +60,7 @@ class StorefrontSeeder extends Seeder
             ]),
         ]);
 
-        $this->systemPage(SystemPage::PacketBasket, 'খুচরা কার্ট', 'packet-basket', [
+        $this->cartPage($retail, 'খুচরা কার্ট', 'packet-basket', [
             self::block(CartBlock::class, [
                 'cart_id' => $retail->getKey(),
                 'heading' => 'আপনার খুচরা কার্ট',
@@ -71,6 +74,49 @@ class StorefrontSeeder extends Seeder
                 'text' => 'মোবাইল নম্বর দিয়ে ঢুকুন। পাসওয়ার্ড লাগবে না।',
             ]),
         ]);
+
+        $this->wireHeader($retail, $bulk);
+    }
+
+    /**
+     * A starting Cart's own Page, an ordinary one, made only when the Cart was
+     * made in this run and the slug is free: a Merchant who has since moved,
+     * edited or deleted it finds it as they left it.
+     *
+     * @param  list<array{type: string, data: array<string, mixed>}>  $blocks
+     */
+    private function cartPage(Cart $cart, string $title, string $slug, array $blocks): void
+    {
+        if (! $cart->wasRecentlyCreated || Page::query()->where('slug', $slug)->exists()) {
+            return;
+        }
+
+        Page::query()->create([
+            'title' => $title,
+            'slug' => $slug,
+            'status' => PageStatus::Published,
+            'blocks' => $blocks,
+        ]);
+    }
+
+    /**
+     * Points the header's খুচরা অর্ডার করুন and পাইকারি অর্ডার করুন buttons at the
+     * starting Carts made in this run, and never at a choice made since.
+     */
+    private function wireHeader(Cart $retail, Cart $bulk): void
+    {
+        $wired = [
+            ...($retail->wasRecentlyCreated ? ['retailCartId' => $retail->getKey()] : []),
+            ...($bulk->wasRecentlyCreated ? ['bulkCartId' => $bulk->getKey()] : []),
+        ];
+
+        if ($wired === []) {
+            return;
+        }
+
+        /** Only these two keys are written, so every other header setting keeps its default. */
+        $row = Setting::query()->find(HeaderSettings::key());
+        Setting::query()->updateOrCreate(['key' => HeaderSettings::key()], ['value' => [...($row->value ?? []), ...$wired]]);
     }
 
     /**

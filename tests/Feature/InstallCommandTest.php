@@ -150,7 +150,7 @@ it('opens the demo on header and footer Menus pointing at its Pages and Categori
     $bottom = Menu::query()->where('name', 'Footer bottom line')->sole();
 
     expect(Setting::query()->orderBy('key')->pluck('key')->all())->toBe(['footer', 'header'])
-        ->and(Setting::query()->find('header')->value)->toBe(['menuId' => $header->id])
+        ->and(Setting::query()->find('header')->value)->toBe(['retailCartId' => Cart::startingFor(OrderKind::Retail)->id, 'bulkCartId' => Cart::startingFor(OrderKind::Bulk)->id, 'menuId' => $header->id])
         ->and(Setting::query()->find('footer')->value)->toBe([
             'columns' => [
                 ['heading' => 'অর্ডার', 'menuId' => $order->id],
@@ -344,4 +344,39 @@ it('opens the store with the two starting Carts, once, never putting back one re
 
     expect(Cart::withTrashed()->count())->toBe(2)
         ->and(Cart::query()->pluck('name')->all())->toBe(['প্যাকেট চা']);
+});
+
+it('wires the header\'s order buttons to the starting Carts once, leaving a choice made since alone', function () {
+    $this->artisan('bongotea:install', installOptions(['--demo' => false, '--blank' => true]))->assertSuccessful();
+
+    $header = HeaderSettings::load();
+
+    expect($header->cartFor(OrderKind::Retail)->is(Cart::startingFor(OrderKind::Retail)))->toBeTrue()
+        ->and($header->cartFor(OrderKind::Bulk)->is(Cart::startingFor(OrderKind::Bulk)))->toBeTrue();
+
+    $hotel = Cart::factory()->bulk()->create();
+    $header->with(['bulkCartId' => $hotel->id])->save();
+
+    $this->artisan('bongotea:install', ['--no-interaction' => true])->assertSuccessful();
+
+    expect(HeaderSettings::load()->bulkCartId)->toBe($hotel->id);
+});
+
+it('opens the starting Carts on ordinary Pages a Merchant may rename or delete', function () {
+    $this->artisan('bongotea:install', installOptions(['--demo' => false, '--blank' => true]))->assertSuccessful();
+
+    $bulk = Cart::startingFor(OrderKind::Bulk);
+    $page = $bulk->page();
+
+    expect($page->isSystemPage())->toBeFalse();
+
+    $page->update(['slug' => 'paikari']);
+
+    $this->get('/')->assertInertia(fn (Assert $inertia) => $inertia->where('headerCarts.bulk.href', '/paikari'));
+
+    $page->delete();
+
+    expect($bulk->isOpen())->toBeFalse();
+
+    $this->get('/')->assertInertia(fn (Assert $inertia) => $inertia->where('headerCarts.bulk', null));
 });

@@ -18,7 +18,7 @@ import { packName } from './figures';
  * beside it is the bulk Cart's and is not touched.
  */
 export function PackChooserButton({ productId, productName, className }: { productId: number; productName: string; className?: string }) {
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
     const packs = retail.packsOf(productId);
     const [open, setOpen] = useState(false);
 
@@ -61,8 +61,8 @@ export function PackChooserButton({ productId, productName, className }: { produ
 function PackChooser({ productName, packs, onClose }: { productName: string; packs: CartPack[] | null; onClose: () => void }) {
     const dialog = useRef<HTMLDialogElement>(null);
     const { props, url } = usePage();
-    const { links } = props;
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const { headerCarts } = props;
+    const retail = useRetailCart(usePage().props.headerCarts.retail?.id ?? null);
     const taka = useTaka();
     const [chosen, setChosen] = useState<number | null>(null);
     const [count, setCount] = useState(1);
@@ -97,7 +97,7 @@ function PackChooser({ productName, packs, onClose }: { productName: string; pac
 
         retail.set(chosen, retail.countOf(chosen) + Math.min(count, most));
         onClose();
-        router.visit(withReturnPath(links.packetBasket, url));
+        router.visit(withReturnPath(headerCarts.retail?.href ?? '/', url));
     };
 
     return (

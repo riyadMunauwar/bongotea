@@ -20,13 +20,15 @@ import { StoreLogo } from './store-logo';
  * first paint never jumps. From 1024px each Cart's button names it and shows
  * what it all comes to, delivery included, with its size on the icon — the
  * পাইকারি কার্ট's Kilograms, the খুচরা কার্ট's Packs; the compact header
- * draws the icons alone.
+ * draws the icons alone. খুচরা অর্ডার করুন stands left of পাইকারি অর্ডার
+ * করুন, each opening the Cart chosen in Header settings (ADR-0038); a
+ * button whose Cart is closed is not drawn, nor is its icon.
  */
 export function SiteHeader() {
-    const { store, announcement, menus, links } = usePage().props;
+    const { store, announcement, menus, links, headerCarts } = usePage().props;
     const [menuOpen, setMenuOpen] = useState(false);
-    const { priced } = useCart(usePage().props.startingCarts.bulk);
-    const retail = useRetailCart(usePage().props.startingCarts.retail);
+    const { priced } = useCart(headerCarts.bulk?.id ?? null);
+    const retail = useRetailCart(headerCarts.retail?.id ?? null);
     const taka = useTaka();
 
     useEffect(() => router.on('navigate', () => setMenuOpen(false)), []);
@@ -47,37 +49,53 @@ export function SiteHeader() {
                                 <span className="text-[14px] font-semibold">{bn.header.myOrders}</span>
                             </span>
                         </MenuAnchor>
-                        <MenuAnchor href={links.packetBasket} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
-                            <span className="relative flex">
-                                <BagIcon />
-                                <CartBadge count={retail.priced.packCount} />
-                            </span>
-                            <span className="flex flex-col leading-[1.25]">
-                                <span className="text-[11px] text-muted">{bn.header.packetBasket}</span>
-                                <span className="text-[14px] font-bold">{taka(retail.priced.total)}</span>
-                            </span>
-                        </MenuAnchor>
-                        <MenuAnchor href={links.bulkOrder} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
-                            <span className="relative flex">
-                                <CartIcon />
-                                <CartBadge count={priced.totalKilograms} />
-                            </span>
-                            <span className="flex flex-col leading-[1.25]">
-                                <span className="text-[11px] text-muted">{bn.header.cart}</span>
-                                <span className="text-[14px] font-bold">{taka(priced.total)}</span>
-                            </span>
-                        </MenuAnchor>
+                        {headerCarts.retail && (
+                            <MenuAnchor href={headerCarts.retail.href} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
+                                <span className="relative flex">
+                                    <BagIcon />
+                                    <CartBadge count={retail.priced.packCount} />
+                                </span>
+                                <span className="flex flex-col leading-[1.25]">
+                                    <span className="text-[11px] text-muted">{bn.header.packetBasket}</span>
+                                    <span className="text-[14px] font-bold">{taka(retail.priced.total)}</span>
+                                </span>
+                            </MenuAnchor>
+                        )}
+                        {headerCarts.bulk && (
+                            <MenuAnchor href={headerCarts.bulk.href} className="flex items-center gap-[10px] text-ink no-underline hover:text-ink">
+                                <span className="relative flex">
+                                    <CartIcon />
+                                    <CartBadge count={priced.totalKilograms} />
+                                </span>
+                                <span className="flex flex-col leading-[1.25]">
+                                    <span className="text-[11px] text-muted">{bn.header.cart}</span>
+                                    <span className="text-[14px] font-bold">{taka(priced.total)}</span>
+                                </span>
+                            </MenuAnchor>
+                        )}
                     </div>
                 </div>
                 <div className="border-t border-divider">
                     <div className="shell-container flex h-[58px] items-center gap-7 text-ink">
                         {menus.header.length > 0 && <DesktopNav items={menus.header} />}
-                        <MenuAnchor
-                            href={links.bulkOrder}
-                            className="my-2 ml-auto flex items-center gap-2 rounded-[8px] bg-primary px-[18px] py-[10px] text-[14px] font-bold text-white no-underline hover:bg-primary-dark hover:text-white"
-                        >
-                            {bn.header.bulkOrder}
-                        </MenuAnchor>
+                        <div className="my-2 ml-auto flex items-center gap-3">
+                            {headerCarts.retail && (
+                                <MenuAnchor
+                                    href={headerCarts.retail.href}
+                                    className="flex items-center gap-2 rounded-[8px] border border-primary bg-white px-[18px] py-[9px] text-[14px] font-bold text-primary-dark no-underline hover:bg-green-50 hover:text-primary-dark"
+                                >
+                                    {bn.header.retailOrder}
+                                </MenuAnchor>
+                            )}
+                            {headerCarts.bulk && (
+                                <MenuAnchor
+                                    href={headerCarts.bulk.href}
+                                    className="flex items-center gap-2 rounded-[8px] bg-primary px-[18px] py-[10px] text-[14px] font-bold text-white no-underline hover:bg-primary-dark hover:text-white"
+                                >
+                                    {bn.header.bulkOrder}
+                                </MenuAnchor>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -96,25 +114,40 @@ export function SiteHeader() {
                         <span className="mr-[6px] block h-[2px] w-[14px] rounded-[2px] bg-ink" />
                     </button>
                     <StoreLogo store={store} compact />
-                    <MenuAnchor
-                        href={links.bulkOrder}
-                        className="ml-auto flex h-[38px] flex-none items-center gap-1 rounded-full bg-primary px-3 text-[13px] font-bold whitespace-nowrap text-white no-underline shadow-pill hover:text-white active:bg-primary-dark"
-                    >
-                        {bn.header.bulkOrderShort}
-                        <span className="text-[15px]">→</span>
-                    </MenuAnchor>
-                    <MenuAnchor href={links.packetBasket} aria-label={bn.header.packetBasket} className="flex size-11 items-center justify-center text-ink hover:text-ink">
-                        <span className="relative flex">
-                            <BagIcon />
-                            <CartBadge count={retail.priced.packCount} />
-                        </span>
-                    </MenuAnchor>
-                    <MenuAnchor href={links.bulkOrder} aria-label={bn.header.cart} className="flex size-11 items-center justify-center text-ink hover:text-ink">
-                        <span className="relative flex">
-                            <CartIcon />
-                            <CartBadge count={priced.totalKilograms} />
-                        </span>
-                    </MenuAnchor>
+                    <div className="ml-auto flex flex-none items-center gap-1">
+                        {headerCarts.retail && (
+                            <MenuAnchor
+                                href={headerCarts.retail.href}
+                                className="flex h-[34px] items-center rounded-full border border-primary bg-white px-[10px] text-[12px] font-bold whitespace-nowrap text-primary-dark no-underline hover:text-primary-dark active:bg-green-50"
+                            >
+                                {bn.header.retailOrderShort}
+                            </MenuAnchor>
+                        )}
+                        {headerCarts.bulk && (
+                            <MenuAnchor
+                                href={headerCarts.bulk.href}
+                                className="flex h-[34px] items-center rounded-full bg-primary px-[10px] text-[12px] font-bold whitespace-nowrap text-white no-underline shadow-pill hover:text-white active:bg-primary-dark"
+                            >
+                                {bn.header.bulkOrderShort}
+                            </MenuAnchor>
+                        )}
+                    </div>
+                    {headerCarts.retail && (
+                        <MenuAnchor href={headerCarts.retail.href} aria-label={bn.header.packetBasket} className="flex size-10 flex-none items-center justify-center text-ink hover:text-ink">
+                            <span className="relative flex">
+                                <BagIcon />
+                                <CartBadge count={retail.priced.packCount} />
+                            </span>
+                        </MenuAnchor>
+                    )}
+                    {headerCarts.bulk && (
+                        <MenuAnchor href={headerCarts.bulk.href} aria-label={bn.header.cart} className="flex size-10 flex-none items-center justify-center text-ink hover:text-ink">
+                            <span className="relative flex">
+                                <CartIcon />
+                                <CartBadge count={priced.totalKilograms} />
+                            </span>
+                        </MenuAnchor>
+                    )}
                 </div>
                 <SearchBox compact className="h-11 flex-none" />
             </div>

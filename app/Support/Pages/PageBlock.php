@@ -232,16 +232,18 @@ abstract class PageBlock
     }
 
     /**
-     * Which Cart the Block draws, of one kind or, where none is named, of
-     * either, each listed under its kind. A Cart stands on one Page at most
-     * (ADR-0038), so one another Page already draws is refused, naming it.
+     * Which Cart the Block draws — or, `$drawsIt` false, merely works with —
+     * of one kind or, where none is named, of either, each listed under its
+     * kind. A Cart stands on one Page at most (ADR-0038), so one another Page
+     * already draws is refused, naming it.
      */
-    protected static function cartInput(?OrderKind $kind = null): Select
+    protected static function cartInput(?OrderKind $kind = null, bool $drawsIt = true): Select
     {
         return Select::make('cart_id')
             ->label('Cart')
             ->required()
             ->live()
+            ->when(! $drawsIt, fn (Select $select): Select => $select->helperText('Its Contents are the ones this Block reads and adds to, and its button opens that Cart\'s page.'))
             ->options(fn (): array => Cart::query()
                 ->when($kind !== null, fn ($query) => $query->where('kind', $kind))
                 ->orderBy('sort_order')
@@ -249,8 +251,8 @@ abstract class PageBlock
                 ->get()
                 ->mapWithKeys(fn (Cart $cart): array => [$cart->getKey() => $kind === null ? "{$cart->name} ({$cart->kind->getLabel()})" : $cart->name])
                 ->all())
-            ->rule(fn (?Page $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
-                $other = is_numeric($value) ? CartPlacements::pageOf((int) $value, $record?->getKey()) : null;
+            ->rule(fn (?Page $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record, $drawsIt): void {
+                $other = $drawsIt && is_numeric($value) ? CartPlacements::pageOf((int) $value, $record?->getKey()) : null;
 
                 if ($other !== null) {
                     $fail("This Cart already stands on the Page \"{$other->title}\". A Cart stands on one Page at most.");
