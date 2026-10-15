@@ -3,8 +3,7 @@
 namespace App\Support\Pages;
 
 use App\Models\Page;
-use App\Support\Pages\Blocks\BulkOrderForm;
-use App\Support\Pages\Blocks\PacketBasket;
+use App\Support\Pages\Blocks\CartBlock;
 use Illuminate\Support\Collection;
 
 /**
@@ -26,7 +25,7 @@ class CartPlacements
      */
     public static function blockTypes(): array
     {
-        return [BulkOrderForm::type(), PacketBasket::type()];
+        return [CartBlock::type()];
     }
 
     /**

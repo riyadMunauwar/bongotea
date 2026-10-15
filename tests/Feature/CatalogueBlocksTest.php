@@ -2,6 +2,7 @@
 
 use App\Enums\CategoryTheme;
 use App\Models\Brand;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Page;
 use App\Models\Product;
@@ -198,21 +199,27 @@ it('leaves a product rail empty when what it names is gone', function () {
     $this->get('/live')->assertInertia(fn (Assert $page) => $page->where('page.blocks.0.props.products', []));
 });
 
-it('fills the bulk order form with every published Product by Category, with its switches on unless turned off', function () {
+it('lays out a bulk Cart\'s assigned Products by Category, with every other bulk Product kept aside for its Contents', function () {
     $premium = Category::factory()->create(['sort_order' => 0, 'note' => 'সেরা বাছাই পাতা']);
     $silver = Category::factory()->create(['sort_order' => 1]);
-    Category::factory()->create(['sort_order' => 2]);
+    $empty = Category::factory()->create(['sort_order' => 2]);
 
     $royal = Product::factory()->for($premium)->create();
     $strong = Product::factory()->for($silver)->unavailable()->create();
-    Product::factory()->for($silver)->draft()->create();
+    $draft = Product::factory()->for($silver)->draft()->create();
+    $unassigned = Product::factory()->for($empty)->create();
+    Product::factory()->for($empty)->retailOnly()->create();
 
-    pageWithBlock('bulk_order_form', ['heading' => 'একসাথে চা অর্ডার করুন', 'text' => 'শুধু কত কেজি লাগবে সেটি দিন।']);
+    $cart = Cart::factory()->bulk()->create(['name' => 'Hotel & Restaurant']);
+    $cart->products()->attach([$royal->getKey(), $strong->getKey(), $draft->getKey()]);
+
+    pageWithBlock('cart', ['cart_id' => $cart->getKey(), 'heading' => 'একসাথে চা অর্ডার করুন', 'text' => 'শুধু কত কেজি লাগবে সেটি দিন।']);
 
     $this->get('/live')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.type', 'bulk_order_form')
+            ->where('page.blocks.0.type', 'cart')
             ->where('page.blocks.0.props', [
+                'cart' => ['id' => $cart->getKey(), 'name' => 'Hotel & Restaurant', 'kind' => 'bulk', 'isOpen' => true],
                 'heading' => 'একসাথে চা অর্ডার করুন',
                 'text' => 'শুধু কত কেজি লাগবে সেটি দিন।',
                 'quickChips' => true,
@@ -221,12 +228,54 @@ it('fills the bulk order form with every published Product by Category, with its
                     [...CatalogueProps::categoryReference($premium), 'note' => 'সেরা বাছাই পাতা', 'products' => [CatalogueProps::card($royal->fresh())]],
                     [...CatalogueProps::categoryReference($silver), 'note' => $silver->note, 'products' => [CatalogueProps::card($strong->fresh())]],
                 ],
+                'others' => [CatalogueProps::card($unassigned->fresh())],
             ])
         );
 });
 
-it('turns the bulk order form\'s quick-set chips and price steps off', function () {
-    pageWithBlock('bulk_order_form', ['quick_chips' => false, 'show_tier_list' => false]);
+it('lays out a retail Cart\'s assigned Products sold খুচরা, leaving the bulk-only ones out', function () {
+    $gold = Category::factory()->create();
+    $both = Product::factory()->for($gold)->create();
+    $retailOnly = Product::factory()->for($gold)->retailOnly()->create();
+    $bulkOnly = Product::factory()->for($gold)->bulkOnly()->create();
+
+    $cart = Cart::factory()->retail()->create();
+    $cart->products()->attach($retailOnly->getKey());
+
+    pageWithBlock('cart', ['cart_id' => $cart->getKey()]);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.cart.kind', 'retail')
+            ->where('page.blocks.0.props.categories', [
+                [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($retailOnly->fresh())]],
+            ])
+            ->where('page.blocks.0.props.others', [CatalogueProps::card($both->fresh())])
+            ->where('page.blocks.0.props.others', fn ($others): bool => collect($others)->doesntContain('id', $bulkOnly->getKey()))
+        );
+});
+
+it('draws a closed Cart closed, its Products left out', function (Closure $close) {
+    $tea = Product::factory()->create();
+    $cart = Cart::factory()->bulk()->create();
+    $cart->products()->attach($tea->getKey());
+
+    pageWithBlock('cart', ['cart_id' => $cart->getKey()]);
+    $close($cart);
+
+    $this->get('/live')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('page.blocks.0.props.cart.isOpen', false)
+            ->where('page.blocks.0.props.categories', [])
+            ->where('page.blocks.0.props.others', [])
+        );
+})->with([
+    'switched off' => [fn (Cart $cart) => $cart->update(['is_switched_on' => false])],
+    'deleted' => [fn (Cart $cart) => $cart->delete()],
+]);
+
+it('turns a bulk Cart\'s quick-set chips and price steps off', function () {
+    pageWithBlock('cart', ['cart_id' => Cart::factory()->bulk()->create()->getKey(), 'quick_chips' => false, 'show_tier_list' => false]);
 
     $this->get('/live')
         ->assertInertia(fn (Assert $page) => $page
@@ -268,7 +317,7 @@ it('lists no Product sold only খুচরা on a bulk surface', function (str
                 [...CatalogueProps::categoryReference($gold), 'note' => $gold->note, 'products' => [CatalogueProps::card($bulk->fresh())]],
             ])
         );
-})->with(['bulk_order_form', 'price_calculator', 'price_matrix']);
+})->with(['price_calculator', 'price_matrix']);
 
 it('draws a Product sold only খুচরা on the other lists, saying it has no Tiers', function () {
     $retailOnly = Product::factory()->retailOnly()->create();

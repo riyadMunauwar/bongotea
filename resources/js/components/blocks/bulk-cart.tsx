@@ -1,21 +1,23 @@
-import { router, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { BulkPackLine, TeaNotices } from '@/components/cart/bulk-pack-line';
 import { deliveryNote, discountLabel, feeText, nextDropText, packName, stepName } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
+import { DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { rowAnchor, rowFromAnchor, type BulkPack, type PriceStep } from '@/lib/cart';
-import { nextDropAbove, tierFor } from '@/lib/pricing';
 import { checkoutFor } from '@/lib/contents';
+import { nextDropAbove, tierFor } from '@/lib/pricing';
 import { useCart, type UseCart } from '@/lib/use-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
-import type { BulkOrderFormProps } from '@/types/blocks';
-import type { BulkProductCard } from '@/types/catalogue';
+import type { BlockCart } from '@/types';
+import type { CartBlockProps } from '@/types/blocks';
+import type { BulkProductCard, ProductCard } from '@/types/catalogue';
 import { Picture, SectionHeading } from './shared';
 
 /** The quick-set chips' Kilograms. */
@@ -24,26 +26,29 @@ const QUICK_KILOGRAMS = [1, 5, 10, 20];
 /** How long a row added from elsewhere stays highlighted, as the mockup has it. */
 const FLASH_MILLISECONDS = 1600;
 
+/** Only the cards of teas sold পাইকারি, which a bulk Cart's rows can price. */
+function bulkCards(products: ProductCard[]): BulkProductCard[] {
+    return products.filter((product): product is BulkProductCard => product.isSoldBulk);
+}
+
 /**
- * The Cart as a form: every published Product by Category, each row with its
+ * A bulk Cart's page: its assigned Products by Category, each row with its
  * price now — the MRP struck through and what is off it whenever the price
- * is below it — what it will cost at its next cheaper Tier, −/+, a
- * typed quantity and quick-set chips, and its line total. A tea sold in
- * several পাইকারি Packs has −/+ and a typed quantity for each, with the
- * packets it makes, all counted as one tea's Kilograms. Beside it (below
- * on a phone, as a bar at the bottom) the summary of the whole Cart, and
- * above the rows "সব মুছুন" while there is anything to clear. A row
- * named in the address (`#tea-12`, from a Product page's add button) is
- * scrolled to and flashed.
+ * is below it — what it will cost at its next cheaper Tier, −/+, a typed
+ * quantity and quick-set chips, and its line total. A tea sold in several
+ * পাইকারি Packs has −/+ and a typed quantity for each, with the packets it
+ * makes, all counted as one tea's Kilograms. Teas the Contents hold that the
+ * Cart does not offer are drawn first, apart, and go once taken out. Beside
+ * it (below on a phone, as a bar at the bottom) the summary of this Cart's
+ * Contents alone, and above the rows "সব মুছুন" while there is anything to
+ * clear. A row named in the address (`#tea-12`, from a Product page's add
+ * button) is scrolled to and flashed.
  */
-export function BulkOrderForm({ cart: drawn, heading, text, quickChips, showTierList, categories }: BulkOrderFormProps) {
-    const cart = useCart(drawn?.id ?? null);
+export function BulkCart({ cart: drawn, heading, text, quickChips, showTierList, categories, others }: CartBlockProps & { cart: BlockCart }) {
+    const cart = useCart(drawn.id);
     const flashed = useFlashedRow();
     const steps = cart.steps;
-
-    if (categories.length === 0) {
-        return null;
-    }
+    const elsewhere = bulkCards(others).filter((product) => cart.teaKilogramsOf(product.id) > 0);
 
     return (
         <section className="pt-6 md:pt-10">
@@ -63,13 +68,21 @@ export function BulkOrderForm({ cart: drawn, heading, text, quickChips, showTier
                                 <ClearAll cart={cart} />
                             </div>
                         )}
+                        {elsewhere.length > 0 && (
+                            <div className="flex flex-col gap-2 min-[1100px]:gap-[10px]">
+                                <ElsewhereHeading />
+                                {elsewhere.map((product) => (
+                                    <Row key={product.id} product={product} cart={cart} quickChips={quickChips} flashed={flashed === product.id} />
+                                ))}
+                            </div>
+                        )}
                         {categories.map((category) => (
                             <div key={category.id} style={themeStyle(category.theme)} className="flex flex-col gap-2 min-[1100px]:gap-[10px]">
                                 <div className="flex items-baseline gap-2 px-[2px] pt-[6px]">
                                     <span className="rounded-full bg-(--cat-tint) px-[10px] py-[3px] text-[13px] font-bold text-(--cat-text)">{category.name}</span>
                                     {category.note && <span className="text-[13px] text-muted">{category.note}</span>}
                                 </div>
-                                {category.products.map((product) => (
+                                {bulkCards(category.products).map((product) => (
                                     <Row key={product.id} product={product} cart={cart} quickChips={quickChips} flashed={flashed === product.id} />
                                 ))}
                             </div>
@@ -132,14 +145,18 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
             )}
         >
             <div className="flex min-w-0 flex-1 items-center gap-[10px] min-[1100px]:gap-4">
-                <Picture
-                    src={product.imageUrl}
-                    alt=""
-                    stripes="stripes-light"
-                    className={cn('size-10 flex-none rounded-[8px] min-[1100px]:size-14', isGreyed && 'grayscale')}
-                />
+                <Link href={product.href} tabIndex={-1} aria-hidden className="flex-none">
+                    <Picture
+                        src={product.imageUrl}
+                        alt=""
+                        stripes="stripes-light"
+                        className={cn('size-10 flex-none rounded-[8px] min-[1100px]:size-14', isGreyed && 'grayscale')}
+                    />
+                </Link>
                 <div className="flex min-w-0 flex-1 flex-col min-[1100px]:gap-[2px]">
-                    <b className="text-[15px] leading-[1.4] font-semibold text-ink min-[1100px]:text-[17px]">{product.name}</b>
+                    <Link href={product.href} className="text-[15px] leading-[1.4] font-semibold text-ink no-underline hover:text-primary min-[1100px]:text-[17px]">
+                        {product.name}
+                    </Link>
                     {product.shortDescription && (
                         <span className="hidden truncate text-[14px] text-muted min-[1100px]:block">{product.shortDescription}</span>
                     )}
@@ -171,6 +188,7 @@ function Row({ product, cart, quickChips, flashed }: { product: BulkProductCard;
                             <TeaNotices line={lastLine} />
                         </span>
                     )}
+                    <DetailsLink href={product.href} className="mt-1 self-start" />
                 </div>
                 {kilograms > 0 && (
                     <span className="text-[13px] font-bold whitespace-nowrap text-primary-dark min-[1100px]:text-[15px]">{taka(tier.price * kilograms)}</span>

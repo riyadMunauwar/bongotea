@@ -217,6 +217,14 @@ export const bn = {
         checkout: 'পরের ধাপ: আপনার তথ্য দিন',
         addMore: 'আরও চা যোগ করুন',
     },
+    cartPage: {
+        details: 'প্রোডাক্টের বিস্তারিত দেখুন',
+        addedElsewhere: 'অন্য পাতা থেকে যোগ করা',
+        addedElsewhereNote: 'এই কার্টের তালিকায় নেই, তবু অর্ডারে থাকবে',
+        closed: (name: string) => `${name} এখন বন্ধ`,
+        closedHint: 'এই কার্ট থেকে এখন অর্ডার করা যাবে না।',
+        packAt: (price: string) => `${price} প্রতি প্যাকেট`,
+    },
     bulkOrder: {
         summary: 'অর্ডারের হিসাব',
         totalQuantity: 'মোট পরিমাণ',

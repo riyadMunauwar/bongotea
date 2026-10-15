@@ -3,6 +3,7 @@
 namespace App\Support\Storefront;
 
 use App\Enums\OrderKind;
+use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Pack;
 use App\Models\Product;
@@ -154,6 +155,39 @@ class CatalogueProps
         }
 
         return $categories;
+    }
+
+    /**
+     * What a Cart's page lays out (ADR-0038): each Category holding a
+     * published Product assigned to the Cart and sold its way, in the
+     * Merchant's order, with its cards; and the cards of every other Product
+     * sold that way, which the page draws apart, above them, only while the
+     * Customer's Contents hold one — assignment is never a fence. The Packs,
+     * Tiers, limits and stock come from the shared pricing props.
+     *
+     * @return array{categories: list<array<string, mixed>>, others: list<ProductCardProps>}
+     */
+    public static function cartLayout(Catalogue $catalogue, Cart $cart): array
+    {
+        $assigned = $cart->products()->pluck('products.id')->all();
+        $categories = [];
+
+        foreach ($catalogue->stocked($cart->kind) as ['category' => $category, 'products' => $products]) {
+            $products = $products->filter(fn (Product $product): bool => in_array($product->getKey(), $assigned, true));
+
+            if ($products->isNotEmpty()) {
+                $categories[] = [
+                    ...self::categoryReference($category),
+                    'note' => self::text($category->note),
+                    'products' => self::cards($products),
+                ];
+            }
+        }
+
+        return [
+            'categories' => $categories,
+            'others' => self::cards($catalogue->soldAs($cart->kind)->reject(fn (Product $product): bool => in_array($product->getKey(), $assigned, true))),
+        ];
     }
 
     /**

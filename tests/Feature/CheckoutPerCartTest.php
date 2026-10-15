@@ -9,8 +9,7 @@ use App\Models\Pack;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
-use App\Support\Pages\Blocks\BulkOrderForm;
-use App\Support\Pages\Blocks\PacketBasket;
+use App\Support\Pages\Blocks\CartBlock;
 use Inertia\Testing\AssertableInertia as Assert;
 use Livewire\Livewire;
 
@@ -126,7 +125,7 @@ describe('a Cart on a Page', function () {
         $cart = Cart::factory()->retail()->onAPage()->create(['name' => 'Eid Gift Packs']);
 
         $this->get($cart->link())->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.type', PacketBasket::type())
+            ->where('page.blocks.0.type', CartBlock::type())
             ->where('page.blocks.0.props.cart', ['id' => $cart->getKey(), 'name' => 'Eid Gift Packs', 'kind' => 'retail', 'isOpen' => true]));
     });
 
@@ -146,7 +145,7 @@ describe('a Cart on a Page', function () {
         $cart = Cart::factory()->bulk()->onAPage()->create();
         $first = $cart->page();
 
-        expect(fn () => Page::factory()->withBlocks([['type' => BulkOrderForm::type(), 'data' => ['cart_id' => $cart->getKey()]]])->create())
+        expect(fn () => Page::factory()->withBlocks([['type' => CartBlock::type(), 'data' => ['cart_id' => $cart->getKey()]]])->create())
             ->toThrow(LogicException::class, "already stands on the Page \"{$first->title}\"");
     });
 
@@ -157,7 +156,7 @@ describe('a Cart on a Page', function () {
         $this->actingAs(User::factory()->authoringPages()->create());
 
         Livewire::test(EditPage::class, ['record' => $page->getKey()])
-            ->fillForm(['blocks' => [['type' => BulkOrderForm::type(), 'data' => ['cart_id' => $cart->getKey()]]]])
+            ->fillForm(['blocks' => [['type' => CartBlock::type(), 'data' => ['cart_id' => $cart->getKey()]]]])
             ->call('save')
             ->assertHasFormErrors();
 

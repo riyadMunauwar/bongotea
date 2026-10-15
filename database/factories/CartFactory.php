@@ -6,8 +6,7 @@ use App\Enums\OrderKind;
 use App\Enums\PageStatus;
 use App\Models\Cart;
 use App\Models\Page;
-use App\Support\Pages\Blocks\BulkOrderForm;
-use App\Support\Pages\Blocks\PacketBasket;
+use App\Support\Pages\Blocks\CartBlock;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -44,17 +43,15 @@ class CartFactory extends Factory
     }
 
     /**
-     * Drawn by its kind's Block on a Page of its own, published unless told
+     * Drawn by a Cart Block on a Page of its own, published unless told
      * otherwise — so, switched on, it is open.
      */
     public function onAPage(bool $published = true): static
     {
         return $this->afterCreating(function (Cart $cart) use ($published): void {
-            $block = $cart->kind === OrderKind::Bulk ? BulkOrderForm::type() : PacketBasket::type();
-
             Page::factory()
                 ->state(['status' => $published ? PageStatus::Published : PageStatus::Draft])
-                ->withBlocks([['type' => $block, 'data' => ['cart_id' => $cart->getKey()]]])
+                ->withBlocks([['type' => CartBlock::type(), 'data' => ['cart_id' => $cart->getKey()]]])
                 ->create();
         });
     }

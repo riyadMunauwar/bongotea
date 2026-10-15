@@ -207,14 +207,24 @@ export type CartCategory = CategoryReference & {
     products: BulkProductCard[];
 };
 
-export type BulkOrderFormProps = {
-    /** The Cart the form draws; null where none is named. */
+/** A Category on a Cart's page with the Products assigned to the Cart in it. */
+export type CartBlockCategory = CategoryReference & {
+    note: string | null;
+    products: ProductCard[];
+};
+
+export type CartBlockProps = {
+    /** The Cart the Block draws, closed or open; null where none is named. */
     cart: BlockCart | null;
     heading: string | null;
     text: string | null;
+    /** A bulk Cart's quick-set chips and price steps. */
     quickChips: boolean;
     showTierList: boolean;
-    categories: CartCategory[];
+    /** The assigned Products by Category; empty for a closed Cart. */
+    categories: CartBlockCategory[];
+    /** Every other Product sold the Cart's way, drawn above the rest only while the Contents hold it. */
+    others: ProductCard[];
 };
 
 export type PriceCalculatorProps = {
@@ -239,13 +249,6 @@ export type DeliveryChartProps = {
 
 /** Where an Order stands as its Customer sees it, worked out by the server. */
 export type OrderProgress = 'received' | 'confirmed' | 'sent' | 'delivered' | 'cancelled';
-
-export type PacketBasketProps = {
-    /** The Cart the basket draws; null where none is named. */
-    cart: BlockCart | null;
-    heading: string | null;
-    text: string | null;
-};
 
 export type MyOrdersProps = {
     heading: string | null;
@@ -292,12 +295,11 @@ export type BlockPropsByType = {
     category_tiles: CategoryTilesProps;
     category_panels: CategoryPanelsProps;
     product_rail: ProductRailProps;
-    bulk_order_form: BulkOrderFormProps;
+    cart: CartBlockProps;
     price_calculator: PriceCalculatorProps;
     price_matrix: PriceMatrixProps;
     delivery_chart: DeliveryChartProps;
     my_orders: MyOrdersProps;
-    packet_basket: PacketBasketProps;
     contact_form: ContactFormProps;
 };
 

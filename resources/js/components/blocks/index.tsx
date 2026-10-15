@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { cn } from '@/lib/utils';
 import type { BlockPropsByType, PageBlock } from '@/types/blocks';
-import { BulkOrderForm } from './bulk-order-form';
+import { CartBlock } from './cart';
 import { CallToActionBand } from './call-to-action-band';
 import { CategoryPanels } from './category-panels';
 import { CategoryTiles } from './category-tiles';
@@ -16,7 +16,6 @@ import { InfoCards } from './info-cards';
 import { Journey } from './journey';
 import { MapAndAddress } from './map-and-address';
 import { MyOrders } from './my-orders';
-import { PacketBasket } from './packet-basket';
 import { PriceCalculator } from './price-calculator';
 import { PriceMatrix } from './price-matrix';
 import { ProductRail } from './product-rail';
@@ -51,8 +50,7 @@ const COMPONENTS: {
     category_tiles: CategoryTiles,
     category_panels: CategoryPanels,
     product_rail: ProductRail,
-    bulk_order_form: BulkOrderForm,
-    packet_basket: PacketBasket,
+    cart: CartBlock,
     price_calculator: PriceCalculator,
     price_matrix: PriceMatrix,
     delivery_chart: DeliveryChart,

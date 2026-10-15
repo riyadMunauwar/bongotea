@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Pages that drew "the" bulk Cart or "the" packet basket before a Block
  * named its Cart are given the starting Cart of that kind, so a Customer's
- * Contents and the Page they were gathered on stay together.
+ * Contents and the Page they were gathered on stay together; then those
+ * Blocks become the one Cart Block, drawing the Cart as they did.
  */
 function pageHolding(array $blocks): int
 {
@@ -40,6 +41,27 @@ it('places the starting Cart of each kind on the first Page drawing that kind, m
         ->and(blocksOf($first)[1]['data'])->toBe(['heading' => 'অর্ডার', 'cart_id' => $bulk->getKey()])
         ->and(blocksOf($second)[0]['data'])->toBe([])
         ->and(blocksOf($second)[1]['data'])->toBe(['cart_id' => $retail->getKey()])
-        ->and(Cart::query()->count())->toBe(2)
-        ->and($bulk->isOpen())->toBeTrue();
+        ->and(Cart::query()->count())->toBe(2);
+});
+
+it('turns each Bulk order form and Packet basket into a Cart Block drawing the same Cart under the same wording and switches', function () {
+    $migration = require database_path('migrations/2026_10_15_113144_draw_carts_with_the_cart_block.php');
+
+    $bulk = Cart::factory()->bulk()->create();
+    $retail = Cart::factory()->retail()->create();
+    $pageId = pageHolding([
+        ['type' => 'faq', 'data' => ['heading' => 'প্রশ্ন']],
+        ['type' => 'bulk_order_form', 'data' => ['cart_id' => $bulk->getKey(), 'heading' => 'অর্ডার', 'quick_chips' => false, 'show_tier_list' => true, 'anchor' => 'order']],
+        ['type' => 'packet_basket', 'data' => ['cart_id' => $retail->getKey(), 'text' => 'প্যাকেট']],
+    ]);
+
+    $migration->up();
+
+    expect(blocksOf($pageId))->toBe([
+        ['type' => 'faq', 'data' => ['heading' => 'প্রশ্ন']],
+        ['type' => 'cart', 'data' => ['cart_id' => $bulk->getKey(), 'heading' => 'অর্ডার', 'quick_chips' => false, 'show_tier_list' => true, 'anchor' => 'order']],
+        ['type' => 'cart', 'data' => ['cart_id' => $retail->getKey(), 'text' => 'প্যাকেট']],
+    ])
+        ->and(Cart::find($bulk->getKey())->isOpen())->toBeTrue()
+        ->and(Cart::find($retail->getKey())->isOpen())->toBeTrue();
 });

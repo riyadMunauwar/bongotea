@@ -232,15 +232,23 @@ abstract class PageBlock
     }
 
     /**
-     * Which Cart of a kind the Block draws. A Cart stands on one Page at most
+     * Which Cart the Block draws, of one kind or, where none is named, of
+     * either, each listed under its kind. A Cart stands on one Page at most
      * (ADR-0038), so one another Page already draws is refused, naming it.
      */
-    protected static function cartInput(OrderKind $kind): Select
+    protected static function cartInput(?OrderKind $kind = null): Select
     {
         return Select::make('cart_id')
             ->label('Cart')
             ->required()
-            ->options(fn (): array => Cart::query()->where('kind', $kind)->orderBy('sort_order')->orderBy('id')->pluck('name', 'id')->all())
+            ->live()
+            ->options(fn (): array => Cart::query()
+                ->when($kind !== null, fn ($query) => $query->where('kind', $kind))
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->mapWithKeys(fn (Cart $cart): array => [$cart->getKey() => $kind === null ? "{$cart->name} ({$cart->kind->getLabel()})" : $cart->name])
+                ->all())
             ->rule(fn (?Page $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
                 $other = is_numeric($value) ? CartPlacements::pageOf((int) $value, $record?->getKey()) : null;
 
@@ -251,19 +259,29 @@ abstract class PageBlock
     }
 
     /**
-     * The Cart a Block draws, as its component needs it, or null where none
-     * of that kind is named or it no longer exists at all. A deleted Cart is
-     * still found, and drawn closed.
+     * The Cart a Block names, of that kind where one is given, or null where
+     * none is or it no longer exists at all. A deleted Cart is still found,
+     * and drawn closed.
      *
      * @param  array<string, mixed>  $data
-     * @return array{id: int, name: string, kind: string, isOpen: bool}|null
      */
-    protected static function cart(array $data, OrderKind $kind): ?array
+    protected static function namedCart(array $data, ?OrderKind $kind = null): ?Cart
     {
         $cartId = $data['cart_id'] ?? null;
-        $cart = is_numeric($cartId) ? Cart::withTrashed()->where('kind', $kind)->find((int) $cartId) : null;
 
-        return $cart === null ? null : [
+        return is_numeric($cartId)
+            ? Cart::withTrashed()->when($kind !== null, fn ($query) => $query->where('kind', $kind))->find((int) $cartId)
+            : null;
+    }
+
+    /**
+     * A Cart as a Block's component needs it.
+     *
+     * @return array{id: int, name: string, kind: string, isOpen: bool}
+     */
+    protected static function cartProps(Cart $cart): array
+    {
+        return [
             'id' => $cart->getKey(),
             'name' => $cart->name,
             'kind' => $cart->kind->value,

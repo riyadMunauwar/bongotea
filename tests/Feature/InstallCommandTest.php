@@ -44,9 +44,9 @@ it('opens a demo install on its System Pages and demo Pages, each drawn from its
     );
 
     $expectedBlocks = [
-        '/bulk-order' => ['bulk_order_form'],
+        '/bulk-order' => ['cart'],
         '/my-orders' => ['my_orders'],
-        '/packet-basket' => ['packet_basket'],
+        '/packet-basket' => ['cart'],
         '/pricing' => ['hero_carousel', 'price_calculator', 'price_matrix', 'delivery_chart'],
         '/contact' => ['hero_carousel', 'contact_cards', 'contact_form', 'map'],
     ];

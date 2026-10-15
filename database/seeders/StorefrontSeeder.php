@@ -7,13 +7,12 @@ use App\Enums\PageStatus;
 use App\Enums\SystemPage;
 use App\Models\Cart;
 use App\Models\Page;
-use App\Support\Pages\Blocks\BulkOrderForm;
+use App\Support\Pages\Blocks\CartBlock;
 use App\Support\Pages\Blocks\CategoryPanels;
 use App\Support\Pages\Blocks\CategoryTiles;
 use App\Support\Pages\Blocks\HeroCarousel;
 use App\Support\Pages\Blocks\HowToOrder;
 use App\Support\Pages\Blocks\MyOrders;
-use App\Support\Pages\Blocks\PacketBasket;
 use App\Support\Pages\Blocks\PromiseStrip;
 use App\Support\Pages\Blocks\TextReviews;
 use App\Support\Pages\Blocks\VideoReviews;
@@ -49,7 +48,7 @@ class StorefrontSeeder extends Seeder
         $this->systemPage(SystemPage::Home, 'হোম', 'home', self::homeBlocks());
 
         $this->systemPage(SystemPage::BulkOrder, 'পাইকারি অর্ডার', 'bulk-order', [
-            self::block(BulkOrderForm::class, [
+            self::block(CartBlock::class, [
                 'cart_id' => $bulk->getKey(),
                 'heading' => 'একসাথে চা অর্ডার করুন',
                 'text' => 'যে যে চা লাগবে, শুধু কত কেজি লাগবে সেটি দিন। সব চা মিলিয়ে মোট কেজি অনুযায়ী দাম নিজে থেকেই হিসাব হবে।',
@@ -59,7 +58,7 @@ class StorefrontSeeder extends Seeder
         ]);
 
         $this->systemPage(SystemPage::PacketBasket, 'খুচরা কার্ট', 'packet-basket', [
-            self::block(PacketBasket::class, [
+            self::block(CartBlock::class, [
                 'cart_id' => $retail->getKey(),
                 'heading' => 'আপনার খুচরা কার্ট',
                 'text' => 'নিজের কাপের জন্য প্যাকেটে চা। প্যাকেটের দাম আলাদা, পাইকারি কার্টের সাথে মেলানো হয় না।',
