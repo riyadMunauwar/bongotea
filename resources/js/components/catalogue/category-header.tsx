@@ -35,7 +35,7 @@ export function CategoryHeader({ category }: { category: CategoryDetail }) {
 }
 
 /** A Category's pill beside how many teas it has and what they cost a kilogram, inside an element wearing its theme. */
-export function CategorySummary({ category }: { category: Pick<CategoryDetail, 'name' | 'productCount' | 'priceRange'> }) {
+function CategorySummary({ category }: { category: Pick<CategoryDetail, 'name' | 'productCount' | 'priceRange'> }) {
     const taka = useTaka();
     const range = category.priceRange;
 

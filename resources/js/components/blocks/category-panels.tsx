@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { CategorySummary } from '@/components/catalogue/category-header';
+import { Link } from '@inertiajs/react';
 import { ProductCard } from '@/components/catalogue/product-card';
-import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
+import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { CategoryPanelsProps } from '@/types/blocks';
 import { SectionHeading } from './shared';
@@ -19,7 +19,7 @@ const GRID: Record<CategoryPanelsProps['columns'], string> = {
 
 /**
  * "যে চা দরকার, বেছে নিন": every published Product in a full-width band per
- * Category, each band in its Category Theme, narrowed by Tag chips and — once
+ * Category, the bands white and light grey by turns, narrowed by Tag chips and — once
  * more than one Brand sells — by Brand chips. A band shows its first batch of
  * cards and a "load more" for the next while any are left; choosing a chip
  * starts every band from its first batch again. A band left with nothing
@@ -56,43 +56,45 @@ export function CategoryPanels({ eyebrow, heading, tags, brands, columns, batchS
     }
 
     return (
-        <section className="bg-surface">
-            <div className="shell-container flex flex-col gap-4 pt-10 pb-6 md:gap-5 md:pt-[72px] md:pb-10">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <SectionHeading eyebrow={eyebrow} heading={heading} />
-                    <span className="text-[14px] text-muted">{bn.blocks.productCount(toBanglaDigits(shownCount))}</span>
+        <section className="bg-white">
+            <div className="border-y border-green-200/60 bg-green-50">
+                <div className="shell-container flex flex-col gap-4 py-8 md:gap-5 md:py-12">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                        <SectionHeading eyebrow={eyebrow} heading={heading} />
+                        <span className="text-[14px] text-muted">{bn.blocks.productCount(toBanglaDigits(shownCount))}</span>
+                    </div>
+
+                    {tags.length > 0 && (
+                        <ChipRow>
+                            <Chip active={tagId === null} onClick={() => chooseTag(null)}>
+                                {bn.blocks.allTeas}
+                            </Chip>
+                            {tags.map((tag) => (
+                                <Chip key={tag.id} active={tagId === tag.id} onClick={() => chooseTag(tag.id)}>
+                                    {tag.name}
+                                </Chip>
+                            ))}
+                        </ChipRow>
+                    )}
+
+                    {brands.length > 0 && (
+                        <ChipRow>
+                            <Chip active={brandId === null} onClick={() => chooseBrand(null)}>
+                                {bn.blocks.allBrands}
+                            </Chip>
+                            {brands.map((brand) => (
+                                <Chip key={brand.id} active={brandId === brand.id} onClick={() => chooseBrand(brand.id)}>
+                                    {brand.name}
+                                </Chip>
+                            ))}
+                        </ChipRow>
+                    )}
+
+                    {filtered.length === 0 && <p className="m-0 py-6 text-center text-[15px] text-muted">{bn.blocks.noMatches}</p>}
                 </div>
-
-                {tags.length > 0 && (
-                    <ChipRow>
-                        <Chip active={tagId === null} onClick={() => chooseTag(null)}>
-                            {bn.blocks.allTeas}
-                        </Chip>
-                        {tags.map((tag) => (
-                            <Chip key={tag.id} active={tagId === tag.id} onClick={() => chooseTag(tag.id)}>
-                                {tag.name}
-                            </Chip>
-                        ))}
-                    </ChipRow>
-                )}
-
-                {brands.length > 0 && (
-                    <ChipRow>
-                        <Chip active={brandId === null} onClick={() => chooseBrand(null)}>
-                            {bn.blocks.allBrands}
-                        </Chip>
-                        {brands.map((brand) => (
-                            <Chip key={brand.id} active={brandId === brand.id} onClick={() => chooseBrand(brand.id)}>
-                                {brand.name}
-                            </Chip>
-                        ))}
-                    </ChipRow>
-                )}
-
-                {filtered.length === 0 && <p className="m-0 py-6 text-center text-[15px] text-muted">{bn.blocks.noMatches}</p>}
             </div>
 
-            {filtered.map((category) => {
+            {filtered.map((category, index) => {
                 const count = shown[category.id] ?? batchSize;
                 const remaining = category.products.length - count;
 
@@ -100,12 +102,11 @@ export function CategoryPanels({ eyebrow, heading, tags, brands, columns, batchS
                     <div
                         key={category.id}
                         id={`category-${category.slug}`}
-                        style={themeStyle(category.theme)}
-                        className="scroll-mt-[130px] bg-(--cat-panel) py-8 md:py-12 lg:scroll-mt-[170px]"
+                        className={cn('scroll-mt-[130px] py-7 md:py-10 lg:scroll-mt-[170px]', index % 2 === 0 ? 'bg-surface' : 'bg-white')}
                     >
-                        <div className="shell-container flex flex-col gap-4 md:gap-6">
+                        <div className="shell-container flex flex-col gap-4 md:gap-5">
                             <BandHeader category={category} />
-                            <div className={cn('grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4', GRID[columns])}>
+                            <div className={cn('grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3', GRID[columns])}>
                                 {category.products.slice(0, count).map((product) => (
                                     <ProductCard key={product.id} product={product} />
                                 ))}
@@ -114,7 +115,7 @@ export function CategoryPanels({ eyebrow, heading, tags, brands, columns, batchS
                                 <button
                                     type="button"
                                     onClick={() => setShown((current) => ({ ...current, [category.id]: count + batchSize }))}
-                                    className="mx-auto cursor-pointer rounded-full border border-(--cat-line) bg-white px-6 py-[10px] text-[14px] font-semibold text-ink hover:bg-surface"
+                                    className="mx-auto cursor-pointer rounded-full border border-primary bg-white px-6 py-[9px] text-[14px] font-semibold text-primary-dark hover:bg-green-50"
                                 >
                                     {bn.blocks.loadMore(toBanglaDigits(remaining))}
                                 </button>
@@ -127,14 +128,26 @@ export function CategoryPanels({ eyebrow, heading, tags, brands, columns, batchS
     );
 }
 
-/** The top of a band: its pill, how many teas and what they cost, and its quality headline. */
+/** The top of a band: its name, how many teas and what they cost, its quality headline, and the way to its own page. */
 function BandHeader({ category }: { category: PanelCategory }) {
+    const taka = useTaka();
+    const range = category.priceRange;
+
     return (
-        <div className="flex flex-col gap-[6px] md:gap-2">
-            <CategorySummary category={category} />
-            {category.qualityHeadline && (
-                <h3 className="m-0 text-[18px] leading-[1.35] font-semibold text-(--cat-panel-text) md:text-[22px]">{category.qualityHeadline}</h3>
-            )}
+        <div className="flex items-end justify-between gap-4 border-b border-border pb-3">
+            <div className="flex min-w-0 flex-col gap-1">
+                <h3 className="m-0 flex flex-wrap items-baseline gap-x-[10px] text-[18px] leading-[1.3] font-bold text-ink md:text-[21px]">
+                    {category.name}
+                    <span className="text-[12px] font-normal text-muted md:text-[13px]">
+                        {bn.blocks.productCount(toBanglaDigits(category.productCount))}
+                        {range && ` · ${taka(range.low)}–${taka(range.high).slice(1)}${bn.blocks.perKilogram}`}
+                    </span>
+                </h3>
+                {category.qualityHeadline && <p className="m-0 text-[13px] leading-[1.5] text-body md:text-[14px]">{category.qualityHeadline}</p>}
+            </div>
+            <Link href={category.href} className="flex-none text-[13px] font-semibold whitespace-nowrap text-primary-dark no-underline hover:underline md:text-[14px]">
+                {bn.blocks.seeCategory}
+            </Link>
         </div>
     );
 }

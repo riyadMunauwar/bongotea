@@ -14,8 +14,8 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Arr;
 
 /**
- * A live Block: every published Product, one band per Category in its
- * Category Theme, with filter chips for the Tags those Products carry and,
+ * A live Block: every published Product, one band per Category, white and
+ * light grey by turns, with filter chips for the Tags those Products carry and,
  * once more than one Brand has published Products, for Brands too. The
  * Merchant writes the headings and chooses how many cards a row holds on a
  * wide screen and how many each band shows at a time; the filtering and the

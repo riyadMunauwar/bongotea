@@ -91,6 +91,7 @@ export const bn = {
         why: (category: string) => `কেন ${category}`,
         noMatches: 'এই বাছাইয়ে কোনো চা নেই',
         loadMore: (remaining: string) => `আরও দেখুন (${remaining}টি বাকি)`,
+        seeCategory: 'সব দেখুন →',
     },
     catalogue: {
         strength: 'সামগ্রিক রেটিং',
@@ -101,6 +102,7 @@ export const bn = {
         upToOffShort: (amount: string) => `−${amount} পর্যন্ত`,
         ladderNote: 'কার্টের মোট কেজি অনুযায়ী দাম',
         retailFrom: (price: string) => `খুচরা ${price} থেকে`,
+        percentOff: (percent: string) => `${percent}% ছাড়`,
         unavailable: 'এখন পাওয়া যাচ্ছে না',
         soldOut: 'স্টক শেষ',
         bulkSoldOut: 'পাইকারি স্টক শেষ',
