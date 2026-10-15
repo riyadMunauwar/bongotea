@@ -17,6 +17,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -245,7 +246,7 @@ abstract class PageBlock
             ->live()
             ->when(! $drawsIt, fn (Select $select): Select => $select->helperText('Its Contents are the ones this Block reads and adds to, and its button opens that Cart\'s page.'))
             ->options(fn (): array => Cart::query()
-                ->when($kind !== null, fn ($query) => $query->where('kind', $kind))
+                ->when($kind !== null, fn (Builder $query): Builder => $query->where('kind', $kind))
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get()
@@ -272,7 +273,7 @@ abstract class PageBlock
         $cartId = $data['cart_id'] ?? null;
 
         return is_numeric($cartId)
-            ? Cart::withTrashed()->when($kind !== null, fn ($query) => $query->where('kind', $kind))->find((int) $cartId)
+            ? Cart::withTrashed()->when($kind !== null, fn (Builder $query): Builder => $query->where('kind', $kind))->find((int) $cartId)
             : null;
     }
 

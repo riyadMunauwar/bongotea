@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Pages\Schemas;
 use App\Enums\PageStatus;
 use App\Filament\Concerns\HasSeoFields;
 use App\Models\Page;
+use App\Support\Pages\CartPlacements;
 use App\Support\Pages\PageBlocks;
+use Closure;
 use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -81,6 +83,14 @@ class PageForm
                     ->schema([
                         Builder::make('blocks')
                             ->hiddenLabel()
+                            /** A Cart stands on one Page at most (ADR-0038), and once on it: each Block's own field refuses another Page, this the same Page twice. */
+                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                $cartIds = CartPlacements::cartIdsIn(array_values(is_array($value) ? $value : []));
+
+                                if (count($cartIds) !== count(array_unique($cartIds))) {
+                                    $fail('This Page draws the same Cart twice. A Cart stands on one Page, once.');
+                                }
+                            })
                             ->blocks(PageBlocks::builderBlocks())
                             ->collapsible()
                             ->cloneable()

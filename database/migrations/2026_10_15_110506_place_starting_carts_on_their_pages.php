@@ -23,14 +23,21 @@ return new class extends Migration
      * Every Block that drew "the" bulk Cart or "the" packet basket now names
      * the starting Cart of its kind, so a Customer's Contents and the Page
      * they were gathered on stay together. A Cart stands on one Page at most,
-     * so only the first such Block of each kind is given it; any other is left
-     * naming none, and draws nothing until the Merchant points it at a Cart.
+     * so only one such Block of each kind is given it — on the System Page of
+     * that job where there is one, else the first; any other is left naming
+     * none, and draws nothing until the Merchant points it at a Cart.
      */
     public function up(): void
     {
         $placed = [];
 
-        foreach (DB::table('pages')->orderBy('id')->get(['id', 'blocks']) as $page) {
+        /** The bulk order and packet basket System Pages first, so the starting Carts land where Customers have always found them. */
+        $pages = DB::table('pages')
+            ->orderByRaw("case when system_role in ('bulk_order', 'packet_basket') then 0 else 1 end")
+            ->orderBy('id')
+            ->get(['id', 'blocks']);
+
+        foreach ($pages as $page) {
             $blocks = json_decode((string) $page->blocks, true);
 
             if (! is_array($blocks)) {

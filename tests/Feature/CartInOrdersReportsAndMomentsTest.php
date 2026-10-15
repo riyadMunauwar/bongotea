@@ -136,3 +136,12 @@ describe('Moments', function () {
             ->and($script->namedCartOf($sent))->toBe(['id' => null, 'name' => null]);
     })->with('tracking providers');
 });
+
+it('names no Cart on a Moment whose Cart is of the other kind', function (ProviderScript $script) {
+    $script->switchOn();
+    $tea = Product::factory()->create();
+
+    reportToBeacon(TrackingMoment::AddedToCart, 'contents-3-'.$tea->id, ['cart_id' => (string) Cart::factory()->retail()->create()->id, 'items' => $tea->id.':1'])->assertNoContent();
+
+    expect($script->namedCartOf(sweptEventOf($script)))->toBe(['id' => null, 'name' => null]);
+})->with('tracking providers');

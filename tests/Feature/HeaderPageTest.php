@@ -106,3 +106,18 @@ describe('the order buttons', function () {
         'deleted' => [fn (Cart $cart) => $cart->delete()],
     ]);
 });
+
+it('falls back to the starting Cart once the Cart chosen is deleted, and still saves', function () {
+    $eid = Cart::factory()->bulk()->onAPage()->create();
+    app(HeaderSettings::class)->with(['bulkCartId' => $eid->id])->save();
+    $eid->delete();
+    $this->bulk->delete();
+    app()->forgetInstance(HeaderSettings::class);
+
+    expect(app(HeaderSettings::class)->cartFor(OrderKind::Bulk)->is($this->bulk))->toBeTrue();
+
+    Livewire::test(Header::class)
+        ->assertSchemaStateSet(['bulkCartId' => null])
+        ->call('save')
+        ->assertHasNoFormErrors();
+});

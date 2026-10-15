@@ -45,7 +45,9 @@ class Header extends SettingsPage
 
     /**
      * The order buttons open on the Cart each actually opens, the starting
-     * one where none was ever chosen.
+     * one where none was ever chosen — or blank where that Cart is deleted,
+     * since a Select refuses a value it does not offer and the page must
+     * still save. Left blank, a button opens the starting Cart.
      *
      * @return array<string, mixed>
      */
@@ -55,16 +57,22 @@ class Header extends SettingsPage
 
         return [
             ...parent::formValues(),
-            'retailCartId' => $header->cartFor(OrderKind::Retail)?->getKey(),
-            'bulkCartId' => $header->cartFor(OrderKind::Bulk)?->getKey(),
+            'retailCartId' => self::offered($header->cartFor(OrderKind::Retail)),
+            'bulkCartId' => self::offered($header->cartFor(OrderKind::Bulk)),
         ];
+    }
+
+    /** A Cart's id while the Select can offer it: not deleted. */
+    private static function offered(?Cart $cart): ?int
+    {
+        return $cart === null || $cart->trashed() ? null : $cart->getKey();
     }
 
     private static function cartSelect(string $name, string $label, OrderKind $kind): Select
     {
         return Select::make($name)
             ->label($label)
-            ->required()
+            ->placeholder('The starting Cart')
             ->options(fn (): array => Cart::query()->where('kind', $kind)->orderBy('sort_order')->orderBy('id')->pluck('name', 'id')->all());
     }
 

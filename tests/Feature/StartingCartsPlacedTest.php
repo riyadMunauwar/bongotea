@@ -86,3 +86,16 @@ it('gives a starting Cart nobody has assigned to every Product sold its way, and
     expect($bulk->products()->orderBy('products.id')->pluck('products.id')->all())->toBe([$both->id, $bulkOnly->id])
         ->and($retail->products()->pluck('products.id')->all())->toBe([$retailOnly->id]);
 });
+
+it('places a starting Cart on the old System Page of its job before any other Page drawing that kind', function () {
+    $migration = require database_path('migrations/2026_10_15_110506_place_starting_carts_on_their_pages.php');
+
+    $home = pageHolding([['type' => 'bulk_order_form', 'data' => []]]);
+    $bulkOrder = pageHolding([['type' => 'bulk_order_form', 'data' => []]]);
+    DB::table('pages')->where('id', $bulkOrder)->update(['system_role' => 'bulk_order']);
+
+    $migration->up();
+
+    expect(blocksOf($bulkOrder)[0]['data'])->toBe(['cart_id' => Cart::startingFor(OrderKind::Bulk)->id])
+        ->and(blocksOf($home)[0]['data'])->toBe([]);
+});

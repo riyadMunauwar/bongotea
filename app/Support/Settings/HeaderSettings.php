@@ -59,14 +59,14 @@ class HeaderSettings extends SettingsGroup
     }
 
     /**
-     * The Cart a header button opens, deleted or not: the one chosen, else
-     * the starting Cart of that kind. Whether it is drawn is whether it is
-     * open.
+     * The Cart a header button opens: the one chosen while it is not deleted,
+     * else the starting Cart of that kind, deleted or not. Whether it is
+     * drawn is whether it is open.
      */
     public function cartFor(OrderKind $kind): ?Cart
     {
         $chosen = $kind === OrderKind::Bulk ? $this->bulkCartId : $this->retailCartId;
-        $cart = $chosen === null ? null : Cart::withTrashed()->where('kind', $kind)->find($chosen);
+        $cart = $chosen === null ? null : Cart::query()->where('kind', $kind)->find($chosen);
 
         return $cart ?? Cart::startingFor($kind);
     }

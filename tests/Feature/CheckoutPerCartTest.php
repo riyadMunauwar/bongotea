@@ -175,3 +175,18 @@ describe('a Cart on a Page', function () {
         expect($page->refresh()->blocks)->toBeEmpty();
     });
 });
+
+it('refuses on the Page form a Page drawing the same Cart twice', function () {
+    $cart = Cart::factory()->bulk()->create();
+    $page = Page::factory()->create(['status' => PageStatus::Published]);
+    $block = ['type' => CartBlock::type(), 'data' => ['cart_id' => $cart->getKey()]];
+
+    $this->actingAs(User::factory()->authoringPages()->create());
+
+    Livewire::test(EditPage::class, ['record' => $page->getKey()])
+        ->fillForm(['blocks' => [$block, $block]])
+        ->call('save')
+        ->assertHasFormErrors(['blocks']);
+
+    expect($page->refresh()->blocks)->toBeEmpty();
+});

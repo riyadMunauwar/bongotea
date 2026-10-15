@@ -109,7 +109,6 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     );
 }
 
-/** In place of a card's buttons: why it cannot be ordered now. */
 /** How long the card says where an add went. */
 const ADDED_MILLISECONDS = 2500;
 
@@ -168,6 +167,7 @@ function BulkAddButton({ product }: { product: BulkProductCard }) {
     );
 }
 
+/** In place of a card's buttons: why it cannot be ordered now. */
 function CardNotice({ children }: { children: string }) {
     return (
         <span className="box-border flex w-full items-center justify-center rounded-[6px] bg-surface px-1 py-2 text-[12px] font-semibold text-muted md:text-[13px]">

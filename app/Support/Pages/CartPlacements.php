@@ -4,6 +4,7 @@ namespace App\Support\Pages;
 
 use App\Models\Page;
 use App\Support\Pages\Blocks\CartBlock;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -60,7 +61,7 @@ class CartPlacements
         $placed = collect();
 
         Page::query()
-            ->when($exceptPageId !== null, fn ($query) => $query->whereKeyNot($exceptPageId))
+            ->when($exceptPageId !== null, fn (Builder $query): Builder => $query->whereKeyNot($exceptPageId))
             ->orderBy('id')
             ->get()
             ->each(function (Page $page) use ($placed): void {

@@ -148,7 +148,9 @@ class TrackingController extends Controller
 
         /** The Cart it came from, by id (ADR-0038); its name is the store's, never the browser's. */
         $cartId = $request->input('cart_id');
-        $from = is_string($cartId) && ctype_digit($cartId) ? Cart::withTrashed()->find((int) $cartId) : null;
+        $from = is_string($cartId) && ctype_digit($cartId)
+            ? Cart::withTrashed()->where('kind', $retail ? OrderKind::Retail : OrderKind::Bulk)->find((int) $cartId)
+            : null;
 
         if (! is_string($items) || strlen($items) > self::MAX_SELECTION_LENGTH) {
             return $retail ? Selection::forPacks(collect(), [], $from) : Selection::forProducts(collect(), [], $from);
