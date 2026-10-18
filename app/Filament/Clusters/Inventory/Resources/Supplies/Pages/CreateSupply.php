@@ -6,6 +6,7 @@ use App\Filament\Clusters\Inventory\Resources\Supplies\Schemas\SupplyForm;
 use App\Filament\Clusters\Inventory\Resources\Supplies\SupplyResource;
 use App\Models\Supplier;
 use App\Support\Inventory\StockLedger;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -23,7 +24,18 @@ class CreateSupply extends CreateRecord
 {
     protected static string $resource = SupplyResource::class;
 
-    protected static ?string $title = 'Record a supply';
+    /** A shop owner adds a Purchase, so the page and its buttons say so (#172). */
+    protected static ?string $title = 'Add purchase';
+
+    protected function getCreateFormAction(): Action
+    {
+        return parent::getCreateFormAction()->label('Save purchase');
+    }
+
+    protected function getCreateAnotherFormAction(): Action
+    {
+        return parent::getCreateAnotherFormAction()->label('Save & add another');
+    }
 
     /**
      * The ledger writes the Supply, its lines and one movement per line, in

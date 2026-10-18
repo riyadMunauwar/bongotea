@@ -104,6 +104,32 @@ it('lists suppliers with how much has come from each', function () {
 |--------------------------------------------------------------------------
 */
 
+it('offers to add a purchase from the list, in the word a shop owner uses', function () {
+    Livewire::test(ListSupplies::class)
+        ->assertActionHasLabel('create', 'Add purchase');
+});
+
+it('names the page and its buttons for adding a purchase', function () {
+    Livewire::test(CreateSupply::class)
+        ->assertSeeText('Add purchase')
+        ->assertSeeText('Save purchase')
+        ->assertSeeText('Save & add another')
+        ->assertDontSeeText('Record a supply');
+});
+
+it('heads each line with the product it is for, so a long purchase can be checked against the challan', function () {
+    $tea = Product::factory()->create(['name' => 'Assam CTC']);
+
+    $page = Livewire::test(CreateSupply::class)
+        ->assertSeeText('New product')
+        ->assertDontSeeText('Assam CTC');
+
+    /** Half-filled on purpose: the header is drawn while the line is still invalid, and must not refuse to draw. */
+    $page->fillForm(['lines' => [['product_id' => $tea->getKey(), 'quantity' => null, 'unit_cost' => null]]])
+        ->assertSeeText('Assam CTC')
+        ->assertDontSeeText('New product');
+});
+
 it('records a multi-line delivery and raises what is held by it', function () {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
     $mug = Product::factory()->create(['name' => 'Clay mug']);

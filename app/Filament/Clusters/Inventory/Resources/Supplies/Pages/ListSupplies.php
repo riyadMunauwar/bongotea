@@ -13,7 +13,7 @@ class ListSupplies extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Record a supply'),
+            CreateAction::make()->label('Add purchase'),
         ];
     }
 }

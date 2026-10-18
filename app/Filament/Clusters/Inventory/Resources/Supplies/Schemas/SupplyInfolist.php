@@ -7,7 +7,6 @@ use App\Models\SupplyLine;
 use App\Support\Inventory\Grams;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -86,19 +85,18 @@ class SupplyInfolist
                     ->schema([
                         RepeatableEntry::make('lines')
                             ->hiddenLabel()
-                            ->table([
-                                TableColumn::make('Product'),
-                                TableColumn::make('Packed'),
-                                TableColumn::make('Quantity')
-                                    ->alignment(Alignment::End),
-                                TableColumn::make('Unit cost')
-                                    ->alignment(Alignment::End),
-                                TableColumn::make('Line cost')
-                                    ->alignment(Alignment::End),
-                            ])
+                            /**
+                             * A card per line, as `SupplyForm` types them, so
+                             * a line reads the same entered or recorded: the
+                             * Product across a phone with the figures two by
+                             * two under it, and the whole line on one row
+                             * from a tablet up.
+                             */
+                            ->columns(['default' => 2, 'md' => 5])
                             ->schema([
                                 TextEntry::make('product.name')
-                                    ->label('Product'),
+                                    ->label('Product')
+                                    ->columnSpan(['default' => 2, 'md' => 1]),
 
                                 /** As the challan said it, read off what the line recorded rather than its Pack today. */
                                 TextEntry::make('packing')

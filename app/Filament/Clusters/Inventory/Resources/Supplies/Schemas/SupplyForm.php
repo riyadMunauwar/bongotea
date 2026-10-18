@@ -10,7 +10,6 @@ use App\Support\Settings\GeneralSettings;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
@@ -54,6 +53,22 @@ class SupplyForm
 
     /** A line typed as so many packets of a Pack. */
     public const PACKETS = 'pcs';
+
+    /**
+     * A line's grid: two across on a phone, four on a tablet, and twelve on a
+     * wide screen, where the seven fields share one row.
+     *
+     * @var array{default: int, md: int, '2xl': int}
+     */
+    private const LINE_COLUMNS = ['default' => 2, 'md' => 4, '2xl' => 12];
+
+    /**
+     * A field that is one column wherever a line wraps, and two of the twelve
+     * once the whole line is on one row. Product takes the full width of a phone and half a tablet.
+     *
+     * @var array{default: int, '2xl': int}
+     */
+    private const LINE_FIELD_SPAN = ['default' => 1, '2xl' => 2];
 
     public static function configure(Schema $schema): Schema
     {
@@ -117,22 +132,25 @@ class SupplyForm
                             /** A delivery of nothing is not a delivery, and the ledger refuses one too. */
                             ->minItems(1)
                             ->reorderable(false)
-                            ->table([
-                                TableColumn::make('Product')
-                                    ->markAsRequired(),
-                                TableColumn::make('In'),
-                                TableColumn::make('Pack'),
-                                TableColumn::make('Quantity')
-                                    ->alignment(Alignment::End)
-                                    ->markAsRequired(),
-                                TableColumn::make('Makes')
-                                    ->alignment(Alignment::End),
-                                TableColumn::make('Unit cost')
-                                    ->alignment(Alignment::End)
-                                    ->markAsRequired(),
-                                TableColumn::make('Line cost')
-                                    ->alignment(Alignment::End),
-                            ])
+                            /**
+                             * A card per line rather than a table, because a
+                             * seven-column table has nowhere to go on a phone
+                             * and a challan is often typed in at the door.
+                             * Two fields across on a phone, four on a tablet,
+                             * and the whole line on one row on a wide screen,
+                             * where it still reads down the page like the
+                             * challan does.
+                             */
+                            ->columns(self::LINE_COLUMNS)
+                            /**
+                             * Named for its Product, so a scrolled list of
+                             * cards can be checked line by line against the
+                             * paper. `$state` is the line's snapshot, which
+                             * is not validated but is dehydrated — so every
+                             * dehydrator on a line has to take a half-typed
+                             * one, or the page stops drawing.
+                             */
+                            ->itemLabel(fn (array $state): string => self::productName($state['product_id'] ?? null) ?? 'New product')
                             ->schema([
                                 /**
                                  * The same Product may be listed twice, and
@@ -148,7 +166,8 @@ class SupplyForm
                                     ->required()
                                     ->live()
                                     /** Another Product's Pack means nothing here. */
-                                    ->afterStateUpdated(fn (Set $set): mixed => $set('pack_id', null)),
+                                    ->afterStateUpdated(fn (Set $set): mixed => $set('pack_id', null))
+                                    ->columnSpan(2),
 
                                 ToggleButtons::make('unit')
                                     ->label('In')
@@ -156,6 +175,7 @@ class SupplyForm
                                     ->default(self::KILOGRAMS)
                                     ->inline()
                                     ->grouped()
+                                    ->columnSpan(self::LINE_FIELD_SPAN)
                                     ->live(),
 
                                 /**
@@ -175,6 +195,7 @@ class SupplyForm
                                         ->mapWithKeys(fn (Pack $pack): array => [$pack->getKey() => $pack->name()])
                                         ->all())
                                     ->required(fn (Get $get): bool => self::isInPackets($get('unit')))
+                                    ->columnSpan(self::LINE_FIELD_SPAN)
                                     ->live(),
 
                                 /**
@@ -204,6 +225,7 @@ class SupplyForm
                                         }
                                     })
                                     ->suffix(fn (Get $get): string => self::isInPackets($get('unit')) ? 'pcs' : 'kg')
+                                    ->columnSpan(self::LINE_FIELD_SPAN)
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE),
 
                                 /** The figure the line was not typed in, worked out as it is typed. */
@@ -233,9 +255,11 @@ class SupplyForm
                                     ->minValue(0)
                                     ->prefix(fn (): string => app(GeneralSettings::class)->currencySymbol)
                                     ->suffix(fn (Get $get): string => self::isInPackets($get('unit')) ? '/ packet' : '/ kg')
+                                    ->columnSpan(self::LINE_FIELD_SPAN)
                                     ->live(debounce: self::RECOMPUTE_DEBOUNCE)
                                     ->formatStateUsing(fn (?int $state): ?string => $state === null ? null : Money::toMajorString($state))
-                                    ->dehydrateStateUsing(fn (string $state): int => Money::toMinorUnits($state)),
+                                    /** Null only on a line still being typed, which the card header snapshots; `required()` keeps it from being saved. */
+                                    ->dehydrateStateUsing(fn (?string $state): ?int => $state === null ? null : Money::toMinorUnits($state)),
 
                                 /** Recomputed from state, so it moves as the figures beside it are typed. */
                                 TextEntry::make('line_cost')
@@ -250,15 +274,18 @@ class SupplyForm
                             ]),
 
                         /**
-                         * Directly under the Line cost column, where an
+                         * Under the lines, at their right edge, where an
                          * invoice puts it, in the same card as the lines it
                          * adds up: this is the figure being checked against
-                         * the document in somebody's hand.
+                         * the document in somebody's hand. `gp-total` keeps
+                         * the label beside the figure on a phone too, where
+                         * Filament would stack it above.
                          */
                         Grid::make(['default' => 1, 'md' => 4])->schema([
                             TextEntry::make('total_cost')
                                 ->label('Total')
                                 ->inlineLabel()
+                                ->extraEntryWrapperAttributes(['class' => 'gp-total'])
                                 ->alignment(Alignment::End)
                                 ->weight('bold')
                                 ->size(TextSize::Large)
@@ -313,6 +340,11 @@ class SupplyForm
     private static function isInPackets(mixed $unit): bool
     {
         return $unit === self::PACKETS;
+    }
+
+    private static function productName(mixed $productId): ?string
+    {
+        return blank($productId) ? null : Product::query()->whereKey($productId)->value('name');
     }
 
     private static function packGrams(mixed $packId): ?int

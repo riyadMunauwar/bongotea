@@ -269,6 +269,23 @@
 }
 
 /*
+ * A form's running Total, label beside the figure at every width.
+ *
+ * Filament stacks an inline label above its value below `sm`, which puts a
+ * lone "Total" over a right-aligned amount on a phone — two lines that read
+ * as two things. A Purchase's total is checked against the challan in
+ * somebody's hand, so it stays one row: the word at the left, the figure at
+ * the right. From `sm` up Filament's own three-column split takes over.
+ */
+@media (max-width: 639px) {
+    .fi-in-entry.gp-total {
+        grid-template-columns: auto 1fr;
+        align-items: baseline;
+        column-gap: 1rem;
+    }
+}
+
+/*
  * An infolist entry carries no surface of its own — it is a label over a value
  * — so the only corner it has to draw from the theme is the one on a copyable
  * value's focus ring. `order_number` and the Customer's phone number are both

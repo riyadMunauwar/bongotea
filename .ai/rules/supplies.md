@@ -27,3 +27,10 @@ It turns on **two** filters, under the `filters` query-string key: `SuppliesTabl
 
 ## A Supply line is typed in KG or PCS and recorded as grams at a cost per kilogram
 Each line has `unit` (SupplyForm::KILOGRAMS/PACKETS; null reads as KG), an optional `pack_id` (required for PCS, limited to that Product's Packs) and a cost per kg or per packet. `SupplyForm::grams()`/`costPerKilogram()` are the one conversion, used by both the live Makes/Line cost figures and `CreateSupply`, so the form shows what the Supply will read; they go through `Grams` (`ofPackets`, `costPerKilogram`). `StockLedger::recordSupply()` takes `pack_id` and itself records `pack_grams` and `packets` (refusing another Product's Pack or a remainder), so a loose line never gets a packet count. The view reads `SupplyLine::packing()` off the recorded figures, never the Pack today.
+
+## A Supply's lines are cards, not a table, so the form works on a phone
+`SupplyForm`'s lines Repeater and `SupplyInfolist`'s lines RepeatableEntry are card grids (`->columns()`), not `->table()`: a seven-column table repeater has nowhere to go on a phone, and challans are typed at the door. The form is 2 across on a phone, 4 on md, and 12 on 2xl, where all seven fields share one row (`LINE_COLUMNS`, `LINE_FIELD_SPAN`); the infolist is 2 / 5. Don't put `->table()` back.
+
+Each card is headed by its Product via `itemLabel()`. Filament builds that label from `getStateSnapshot()`, which runs every field's dehydrator on a half-typed line, so every dehydrator on a line must accept null (`unit_cost`'s does) or the page stops drawing. The Total carries `gp-total` (forms.css), which keeps its inline label beside the figure below `sm`.
+
+The merchant label is Purchase (#172): "Add purchase" on the list's create action and as the page title, and "Save purchase" / "Save & add another" on the form buttons.
