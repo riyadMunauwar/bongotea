@@ -84,7 +84,7 @@ export function CurrentCartLink({ kind, compact = false }: { kind: CartKind; com
                 </button>
             )}
             {open && (
-                <div role="menu" className="absolute top-full right-0 z-50 mt-2 flex w-[220px] flex-col rounded-[12px] border border-border bg-white p-1 shadow-card">
+                <div role="menu" className="absolute top-full right-0 z-50 mt-2 flex w-[220px] flex-col gap-1 rounded-[12px] border border-border bg-white p-1.5 shadow-card">
                     {choices.map((choice) => (
                         <button
                             key={choice.id}
