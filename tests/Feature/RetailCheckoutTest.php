@@ -10,7 +10,6 @@ use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Inventory\StockLedger;
-use App\Support\Settings\DeliveryChargeSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -26,7 +25,7 @@ use Inertia\Testing\AssertableInertia as Assert;
  * 540.00 and 600.00 with delivery.
  */
 beforeEach(function () {
-    app(DeliveryChargeSettings::class)->with(['retailDeliveryCharge' => 6000, 'retailFreeDeliveryFrom' => 100000])->save();
+    retailDeliveryEverywhere(6000, freeFrom: 100000);
 });
 
 function assamPack(array $attributes = []): Pack
@@ -88,7 +87,7 @@ it('captures the packet basket as a retail Order of Pack lines, stamping each li
     expect($order->kind)->toBe(OrderKind::Retail)
         ->and($order->subtotal)->toBe(54000)
         ->and($order->delivery_charge)->toBe(6000)
-        ->and($order->delivery_label)->toBe('Retail delivery')
+        ->and($order->delivery_label)->toBe('Everywhere · 1+ kg')
         ->and($order->total)->toBe(60000)
         ->and($order->total_kilograms)->toBe(0)
         ->and($order->lines->sole()->only(['product_id', 'category_id', 'pack_id', 'pack_grams', 'product_name', 'quantity', 'unit_price', 'mrp', 'unit_cost', 'tier_min', 'tier_max', 'line_total']))->toBe([

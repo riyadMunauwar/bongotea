@@ -1,7 +1,7 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BulkPackLine } from '@/components/cart/bulk-pack-line';
-import { deliveryNote, discountLabel, feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
+import { deliveryNote, deliveryText, discountLabel, packName, retailDeliveryNote, totalText } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { districtFromTyped, districtName } from '@/lang/districts';
 import { toBanglaDigits, toLatinDigits } from '@/lib/bangla';
@@ -72,12 +72,6 @@ export default function CheckoutPage() {
     const { cart: checkedOut, districts, paymentMethods, productNames, signedInPhone } = usePage<CheckoutPageProps>().props;
     const { links } = usePage().props;
     const isRetail = checkedOut.kind === 'retail';
-    const cart = useCart(isRetail ? null : checkedOut.id);
-    const retail = useRetailCart(isRetail ? checkedOut.id : null);
-
-    /** What holds up placing the Order in whichever Cart is being checked out: a tea outside its Order Limit, or more than is free to sell. */
-    const isOutsideLimit = isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit;
-    const isShort = isRetail ? retail.hasShort : cart.hasShort;
     const taka = useTaka();
     const [districtTyped, setDistrictTyped] = useState('');
     const [refusal, setRefusal] = useState<{ text: string } | null>(null);
@@ -105,6 +99,15 @@ export default function CheckoutPage() {
         note: '',
         payment_method: paymentMethods.length > 1 ? '' : paymentMethods[0].name,
     });
+
+    /** Priced for the District as it is chosen, so the Delivery Charge is that District's zone's (ADR-0039), and the range across every zone until then. */
+    const district = form.data.district === '' ? null : form.data.district;
+    const cart = useCart(isRetail ? null : checkedOut.id, district);
+    const retail = useRetailCart(isRetail ? checkedOut.id : null, district);
+
+    /** What holds up placing the Order in whichever Cart is being checked out: a tea outside its Order Limit, or more than is free to sell. */
+    const isOutsideLimit = isRetail ? retail.hasOutsideLimit : cart.hasOutsideLimit;
+    const isShort = isRetail ? retail.hasShort : cart.hasShort;
 
     const { priced } = cart;
     const isEmpty = isRetail ? retail.isEmpty : cart.isEmpty;
@@ -454,11 +457,11 @@ function BulkSummary({ cart, nameOf }: { cart: UseCart; nameOf: (productId: numb
             <SummaryLine label={bn.bulkOrder.totalQuantity} value={bn.cart.kilogramsOf(toBanglaDigits(priced.totalKilograms))} />
             <SummaryLine label={bn.bulkOrder.average} value={taka(priced.averagePerKilogram ?? 0)} />
             <SummaryLine label={bn.bulkOrder.teaPrice} value={taka(priced.subtotal)} />
-            <SummaryLine label={bn.bulkOrder.delivery} value={feeText(priced.deliveryCharge, taka)} accent />
+            <SummaryLine label={bn.bulkOrder.delivery} value={deliveryText(priced, taka)} accent />
             {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
             <div className="flex items-baseline justify-between border-t border-divider pt-3">
                 <span className="text-[16px] font-medium">{bn.bulkOrder.total}</span>
-                <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
+                <b className="text-[26px] font-bold text-primary-dark">{totalText(priced, taka)}</b>
             </div>
             <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
             {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.bulkOrder.saving(taka(priced.savings))}</span>}
@@ -493,11 +496,11 @@ function RetailSummary({ retail }: { retail: UseRetailCart }) {
             </div>
             <SummaryLine label={bn.packs.packCount} value={bn.packs.countOf(toBanglaDigits(priced.packCount))} />
             <SummaryLine label={bn.packs.subtotal} value={taka(priced.subtotal)} />
-            <SummaryLine label={bn.packs.delivery} value={feeText(priced.deliveryCharge, taka)} accent />
+            <SummaryLine label={bn.packs.delivery} value={deliveryText(priced, taka)} accent />
             {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
             <div className="flex items-baseline justify-between border-t border-divider pt-3">
                 <span className="text-[16px] font-medium">{bn.packs.total}</span>
-                <b className="text-[26px] font-bold text-primary-dark">{taka(priced.total)}</b>
+                <b className="text-[26px] font-bold text-primary-dark">{totalText(priced, taka)}</b>
             </div>
             <span className="text-[12px] text-muted">{bn.checkout.totalWithDelivery}</span>
             {priced.savings > 0 && <span className="text-right text-[14px] font-semibold text-primary">{bn.packs.totalSaving(taka(priced.savings))}</span>}

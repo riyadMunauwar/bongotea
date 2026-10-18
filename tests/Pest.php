@@ -20,6 +20,7 @@ use App\Models\TrackingContext;
 use App\Support\Customers\CustomerGuard;
 use App\Support\Inventory\StockLedger;
 use App\Support\Orders\OrderCapture;
+use App\Support\Settings\DeliveryChargeSettings;
 use App\Support\Sms\SendText;
 use App\Support\Tracking\MomentRecorder;
 use Carbon\CarbonImmutable;
@@ -208,6 +209,18 @@ function openCart(OrderKind $kind = OrderKind::Bulk): Cart
 
     return Cart::query()->where('kind', $kind)->where('name', $name)->first()
         ?? Cart::factory()->state(['kind' => $kind, 'name' => $name])->onAPage()->create();
+}
+
+/**
+ * One retail Delivery Zone, everywhere, charging the same for any weight —
+ * what retail delivery was before zones (ADR-0039), for a test whose figures
+ * are about something else. Minor units.
+ */
+function retailDeliveryEverywhere(int $fee, ?int $freeFrom = null): void
+{
+    app(DeliveryChargeSettings::class)->with(['retailZones' => [
+        ['name' => 'Everywhere', 'districts' => [], 'everywhereElse' => true, 'bands' => [['min' => 1, 'max' => null, 'fee' => $fee]], 'freeDeliveryFrom' => $freeFrom],
+    ]])->save();
 }
 
 /**

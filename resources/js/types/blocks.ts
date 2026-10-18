@@ -4,7 +4,7 @@
  */
 
 import type { BulkProductCard, CategoryDetail, CategoryReference, CategoryTheme, ProductCard } from '@/types/catalogue';
-import type { BlockCart } from '@/types';
+import type { BlockCart, CartKind } from '@/types';
 
 export type BlockButton = { label: string; href: string };
 
@@ -241,8 +241,9 @@ export type PriceMatrixProps = {
     categories: CartCategory[];
 };
 
-/** Only wording: the bands are the shared `pricing.deliveryBands`. */
+/** Only wording and which kind: the zones are the shared `pricing.deliveryZones` or `retailPricing.deliveryZones` (ADR-0039). */
 export type DeliveryChartProps = {
+    kind: CartKind;
     heading: string | null;
     text: string | null;
     /** Whether the Merchant takes Cash on Delivery, so the chart may say so. */

@@ -10,7 +10,9 @@ use Filament\Support\Icons\Heroicon;
 use Livewire\Livewire;
 
 /**
- * The Delivery Bands a Merchant edits, and the rule they answer to: every
+ * The Delivery Zones a Merchant edits (ADR-0039), as Bulk Delivery Charges
+ * and Retail Delivery Charges, and the rules they answer to: one zone
+ * everywhere else, no District twice, and each zone's ranges covering every
  * whole kilogram from one, once. Tiers belong to each Product (ADR-0031) and
  * are not set here. What a Cart then costs is the shared worked examples'
  * business (`PricingExamplesTest`), not this file's.
@@ -18,6 +20,23 @@ use Livewire\Livewire;
 beforeEach(function () {
     $this->actingAs(User::factory()->managingSettings()->create());
 });
+
+/**
+ * A zone as the form types it: whole taka, strings.
+ *
+ * @param  list<array{0: string, 1: string, 2: string}>  $bands
+ * @param  list<string>  $districts
+ */
+function zoneRow(string $name, array $bands, array $districts = [], bool $everywhereElse = false, ?string $freeFrom = null): array
+{
+    return [
+        'name' => $name,
+        'everywhereElse' => $everywhereElse,
+        'districts' => $districts,
+        'bands' => array_map(fn (array $band): array => ['min' => $band[0], 'max' => $band[1], 'fee' => $band[2]], $bands),
+        'freeDeliveryFrom' => $freeFrom,
+    ];
+}
 
 it('sits right after Store in the Settings cluster, and is forbidden to a User who cannot manage settings', function () {
     expect(DeliveryCharges::getNavigationSort())->toBe(2);
@@ -29,99 +48,98 @@ it('sits right after Store in the Settings cluster, and is forbidden to a User w
         ->assertForbidden();
 });
 
-it('is called Delivery Charges and drawn with the scale', function () {
+it('is called Delivery Charges, drawn with the scale, and holds Bulk Delivery Charges and Retail Delivery Charges', function () {
     expect(DeliveryCharges::getNavigationLabel())->toBe('Delivery Charges')
         ->and(DeliveryCharges::getNavigationIcon())->toBe(Heroicon::OutlinedScale);
 
-    $this->get(DeliveryCharges::getUrl())->assertSeeText('Delivery Charges')->assertSeeText('Delivery Bands');
+    $this->get(DeliveryCharges::getUrl())
+        ->assertSeeText('Bulk Delivery Charges')
+        ->assertSeeText('Retail Delivery Charges')
+        ->assertDontSeeText('Delivery Bands');
 });
 
-it('still reads the Delivery Bands a Merchant saved under the old Pricing key, on the page and in every Cart', function () {
-    Setting::query()->create(['key' => 'pricing', 'value' => ['deliveryBands' => [
-        ['min' => 1, 'max' => 9, 'fee' => 9900],
-        ['min' => 10, 'max' => null, 'fee' => 0],
-    ]]]);
-
-    expect(array_column(array_values(Livewire::test(DeliveryCharges::class)->get('data.deliveryBands')), 'fee'))->toEqual([99, 0])
-        ->and(PriceBook::current()->deliveryBands[0]->fee)->toBe(9900);
-});
-
-it('opens on the mockup Delivery Bands, with fees in whole taka, and asks nothing about Tiers', function () {
+it('opens a fresh store on Inside Dhaka and Outside Dhaka for each kind, with fees in whole taka', function () {
     $component = Livewire::test(DeliveryCharges::class);
+    $retail = array_values($component->get('data.retailZones'));
 
-    expect(array_column(array_values($component->get('data.deliveryBands')), 'fee'))->toEqual([120, 150, 200, 250, 0])
-        ->and($component->get('data.tiers'))->toBeNull();
+    expect(array_column(array_values($component->get('data.bulkZones')), 'name'))->toBe(['Inside Dhaka', 'Outside Dhaka'])
+        ->and(array_column($retail, 'name'))->toBe(['Inside Dhaka', 'Outside Dhaka'])
+        ->and(array_column(array_values($retail[0]['bands']), 'fee'))->toEqual([80])
+        ->and(array_column(array_values($retail[1]['bands']), 'fee'))->toEqual([130]);
 });
 
-it('saves new Delivery Bands, which is what every Cart is then charged by', function () {
+it('saves zones, which is what every Cart of that kind is then charged by', function () {
     Livewire::test(DeliveryCharges::class)
-        ->set('data.deliveryBands', [
-            ['min' => '1', 'max' => '24', 'fee' => '180'],
-            ['min' => '25', 'max' => '', 'fee' => '0'],
+        ->set('data.bulkZones', [
+            zoneRow('Dhaka city', [['1', '24', '180'], ['25', '', '0']], ['Dhaka']),
+            zoneRow('Elsewhere', [['1', '', '300']], everywhereElse: true),
+        ])
+        ->set('data.retailZones', [
+            zoneRow('Dhaka city', [['1', '2', '70'], ['3', '', '90']], ['Dhaka', 'Gazipur'], freeFrom: '1500'),
+            zoneRow('Elsewhere', [['1', '', '130']], everywhereElse: true),
         ])
         ->call('save')
         ->assertHasNoFormErrors();
 
     app()->forgetInstance(DeliveryChargeSettings::class);
-    $book = PriceBook::current();
+    $bulk = PriceBook::current()->deliveryZones;
+    $retail = RetailPriceBook::current()->deliveryZones;
 
-    expect($book->deliveryBands[0]->fee)->toBe(18000)
-        ->and($book->deliveryBands[1]->isFree())->toBeTrue();
+    expect($bulk->for('Dhaka')->bands[0]->fee)->toBe(18000)
+        ->and($bulk->for('Sylhet')->name)->toBe('Elsewhere')
+        ->and($retail->for('Gazipur')->bandFor(3)->fee)->toBe(9000)
+        ->and($retail->for('Gazipur')->freeDeliveryFrom)->toBe(150000)
+        ->and($retail->for('Sylhet')->freeDeliveryFrom)->toBeNull();
 });
 
-it('refuses a gap, an overlap, a closed last band and an open one in the middle', function (array $bands) {
+it('refuses zones that leave a District or a weight with no charge, or charge one twice', function (array $zones) {
     Livewire::test(DeliveryCharges::class)
-        ->set('data.deliveryBands', $bands)
+        ->set('data.bulkZones', $zones)
         ->call('save')
-        ->assertHasFormErrors(['deliveryBands']);
+        ->assertHasFormErrors(['bulkZones']);
 
     expect(Setting::query()->find(DeliveryChargeSettings::key()))->toBeNull();
 })->with([
-    'a gap' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '7', 'max' => '', 'fee' => '0']]],
-    'an overlap' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '5', 'max' => '', 'fee' => '0']]],
-    'not starting at one' => [[['min' => '2', 'max' => '', 'fee' => '0']]],
-    'a closed last band' => [[['min' => '1', 'max' => '5', 'fee' => '120'], ['min' => '6', 'max' => '10', 'fee' => '0']]],
-    'open in the middle' => [[['min' => '1', 'max' => '', 'fee' => '120'], ['min' => '6', 'max' => '', 'fee' => '0']]],
+    'no zone everywhere else' => [[zoneRow('Dhaka', [['1', '', '80']], ['Dhaka'])]],
+    'two zones everywhere else' => [[zoneRow('A', [['1', '', '80']], everywhereElse: true), zoneRow('B', [['1', '', '80']], everywhereElse: true)]],
+    'one District in two zones' => [[zoneRow('A', [['1', '', '80']], ['Dhaka']), zoneRow('B', [['1', '', '80']], ['Dhaka', 'Gazipur']), zoneRow('C', [['1', '', '80']], everywhereElse: true)]],
+    'two zones of one name' => [[zoneRow('Dhaka', [['1', '', '80']], ['Dhaka']), zoneRow('dhaka', [['1', '', '80']], everywhereElse: true)]],
+    'a zone listing no District' => [[zoneRow('Dhaka', [['1', '', '80']]), zoneRow('Elsewhere', [['1', '', '80']], everywhereElse: true)]],
+    'a gap in a zone\'s ranges' => [[zoneRow('Elsewhere', [['1', '5', '120'], ['7', '', '0']], everywhereElse: true)]],
+    'an overlap in a zone\'s ranges' => [[zoneRow('Elsewhere', [['1', '5', '120'], ['5', '', '0']], everywhereElse: true)]],
+    'a closed last range' => [[zoneRow('Elsewhere', [['1', '5', '120'], ['6', '10', '0']], everywhereElse: true)]],
     'nothing at all' => [[]],
 ]);
 
-it('reads a stored table that leaves a weight uncharged as the defaults, and ignores the Tiers a row still carries', function () {
+it('reads a stored list that breaks the rules as the list already in force, and ignores the Tiers a row still carries', function () {
     Setting::query()->create(['key' => DeliveryChargeSettings::key(), 'value' => [
         'tiers' => [['key' => 'a', 'min' => 1, 'max' => 5], ['key' => 'b', 'min' => 6, 'max' => null]],
-        'deliveryBands' => 'not a list',
+        'bulkZones' => [['name' => 'Dhaka', 'districts' => ['Dhaka'], 'everywhereElse' => false, 'bands' => [['min' => 1, 'max' => null, 'fee' => 100]]]],
+        'retailZones' => 'not a list',
     ]]);
 
-    expect(app(DeliveryChargeSettings::class)->deliveryBands)->toHaveCount(5);
+    $settings = app(DeliveryChargeSettings::class);
+
+    expect(array_column($settings->bulkZones, 'name'))->toBe(['Inside Dhaka', 'Outside Dhaka'])
+        ->and(array_column($settings->retailZones, 'name'))->toBe(['Inside Dhaka', 'Outside Dhaka']);
 });
 
-it('saves the retail Delivery Charge and threshold beside the bands, which every retail Cart is then charged by', function () {
+it('reads an empty free-delivery threshold as that zone never being free', function () {
     Livewire::test(DeliveryCharges::class)
-        ->fillForm(['retailDeliveryCharge' => '70', 'retailFreeDeliveryFrom' => '1500'])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    app()->forgetInstance(DeliveryChargeSettings::class);
-    $book = RetailPriceBook::current();
-
-    expect($book->deliveryCharge)->toBe(7000)
-        ->and($book->freeDeliveryFrom)->toBe(150000)
-        ->and(PriceBook::current()->deliveryBands)->toHaveCount(5);
-});
-
-it('reads an empty free-delivery threshold as retail delivery never being free', function () {
-    Livewire::test(DeliveryCharges::class)
-        ->fillForm(['retailFreeDeliveryFrom' => ''])
+        ->set('data.retailZones', [zoneRow('Elsewhere', [['1', '', '60']], everywhereElse: true, freeFrom: '')])
         ->call('save')
         ->assertHasNoFormErrors();
 
     app()->forgetInstance(DeliveryChargeSettings::class);
 
-    expect(RetailPriceBook::current()->freeDeliveryFrom)->toBeNull();
+    expect(RetailPriceBook::current()->deliveryZones->for('Dhaka')->freeDeliveryFrom)->toBeNull();
 });
 
-it('refuses a negative retail Delivery Charge', function () {
+it('refuses a negative Delivery Charge', function () {
     Livewire::test(DeliveryCharges::class)
-        ->fillForm(['retailDeliveryCharge' => '-1'])
+        ->set('data.retailZones', [zoneRow('Elsewhere', [['1', '', '-1']], everywhereElse: true)])
         ->call('save')
-        ->assertHasFormErrors(['retailDeliveryCharge']);
+        ->assertHasErrors();
+
+    expect(Setting::query()->find(DeliveryChargeSettings::key()))->toBeNull();
 });

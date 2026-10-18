@@ -274,7 +274,11 @@ it('hands each content Block kind the props its component draws', function (arra
     ],
     'delivery chart, its wording and whether cash on delivery is taken, since it draws the shared Delivery Bands' => [
         pageBlock('delivery_chart', ['heading' => 'ডেলিভারি চার্জ', 'text' => '']),
-        ['heading' => 'ডেলিভারি চার্জ', 'text' => null, 'offersCashOnDelivery' => true],
+        ['kind' => 'bulk', 'heading' => 'ডেলিভারি চার্জ', 'text' => null, 'offersCashOnDelivery' => true],
+    ],
+    'a delivery chart of the retail zones' => [
+        pageBlock('delivery_chart', ['kind' => 'retail', 'heading' => '', 'text' => '']),
+        ['kind' => 'retail', 'heading' => null, 'text' => null, 'offersCashOnDelivery' => true],
     ],
 ]);
 

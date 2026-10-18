@@ -23,11 +23,13 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Repricing: what happens when a User changes what an unsent Order holds, and
+ * Repricing: what happens when a User changes what an unsent Order holds, or
+ * the District it goes to, and
  * how an Order taken by phone is priced in the first place.
  *
  * The whole Order is priced again as if captured that moment — today's Tier
- * Prices for its new total Kilograms, and its Delivery Charge read afresh —
+ * Prices for its new total Kilograms, and its Delivery Charge read afresh from
+ * the zone of the District it now goes to (ADR-0039) —
  * through the one pricing module the storefront answers to, so a phone buyer
  * and a web buyer pay the same. A line under a Price Override keeps its price
  * and still counts toward the total Kilograms. An Order with any Shipment is
@@ -112,9 +114,10 @@ class Repricing
      * while no row is yet a line that can be priced.
      *
      * @param  array<array-key, mixed>  $state
+     * @param  string|null  $district  where the Order goes, as the form has it; null while nobody has said, which charges no delivery
      * @return array{cart: PricedCart, lines: array<array-key, PricedLine>}|null
      */
-    public function preview(array $state): ?array
+    public function preview(array $state, ?string $district = null): ?array
     {
         $requested = self::requested($state);
         $products = self::products($requested);
@@ -131,7 +134,7 @@ class Repricing
          * which says why.
          */
         try {
-            $cart = $this->price($requested, $products);
+            $cart = $this->price($requested, $products, $district);
         } catch (InvalidArgumentException) {
             return null;
         }
@@ -373,7 +376,7 @@ class Repricing
             throw new InvalidArgumentException(reset($outside));
         }
 
-        $cart = $this->price($lines, $products);
+        $cart = $this->price($lines, $products, $order->customer_district);
         $costs = $this->ledger->averageCostFor(array_values(array_unique(array_map(fn (RequestedLine $line): int => $line->productId, $lines))));
         $wasTotal = $order->total;
         $wasPriced = $stored->isNotEmpty();
@@ -401,7 +404,7 @@ class Repricing
 
             $order->fill([
                 'delivery_charge' => $cart->deliveryCharge,
-                'delivery_label' => $cart->deliveryBand?->label(),
+                'delivery_label' => $cart->deliveryLabel(),
             ])->save();
 
             if ($wasPriced && $wasTotal !== $order->total) {
@@ -478,12 +481,12 @@ class Repricing
      * @param  array<array-key, RequestedLine>  $lines
      * @param  Collection<int, Product>  $products
      */
-    private function price(array $lines, Collection $products): PricedCart
+    private function price(array $lines, Collection $products, ?string $district): PricedCart
     {
         return PriceBook::current()->price(array_values(array_map(
             fn (RequestedLine $line): CartLine => new CartLine(ProductPrices::of($products[$line->productId]), $line->kilograms, $line->overridePrice),
             $lines,
-        )));
+        )), $district);
     }
 
     /**

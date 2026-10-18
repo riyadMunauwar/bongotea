@@ -318,10 +318,10 @@ it('draws what the SSR process rendered when it answers', function () {
         ->assertDontSee('<div id="app"></div>', false);
 });
 
-it('shares every published Product\'s MRP, Tiers and availability, and the Delivery Bands, for the browser\'s Cart', function () {
-    app(DeliveryChargeSettings::class)->with(['deliveryBands' => [
-        ['min' => 1, 'max' => 10, 'fee' => 15000],
-        ['min' => 11, 'max' => null, 'fee' => 0],
+it('shares every published Product\'s MRP, Tiers and availability, and the bulk Delivery Zones, for the browser\'s Cart', function () {
+    app(DeliveryChargeSettings::class)->with(['bulkZones' => [
+        ['name' => 'Inside Dhaka', 'districts' => ['Dhaka'], 'everywhereElse' => false, 'bands' => [['min' => 1, 'max' => 10, 'fee' => 15000], ['min' => 11, 'max' => null, 'fee' => 0]]],
+        ['name' => 'Outside Dhaka', 'districts' => [], 'everywhereElse' => true, 'bands' => [['min' => 1, 'max' => null, 'fee' => 20000]]],
     ]])->save();
 
     $premium = Product::factory()->create(['mrp' => 65000, 'tiers' => [
@@ -335,9 +335,9 @@ it('shares every published Product\'s MRP, Tiers and availability, and the Deliv
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
             ->where('pricing', [
-                'deliveryBands' => [
-                    ['min' => 1, 'max' => 10, 'fee' => 15000],
-                    ['min' => 11, 'max' => null, 'fee' => 0],
+                'deliveryZones' => [
+                    ['name' => 'Inside Dhaka', 'districts' => ['Dhaka'], 'everywhereElse' => false, 'bands' => [['min' => 1, 'max' => 10, 'fee' => 15000], ['min' => 11, 'max' => null, 'fee' => 0]], 'freeDeliveryFrom' => null],
+                    ['name' => 'Outside Dhaka', 'districts' => [], 'everywhereElse' => true, 'bands' => [['min' => 1, 'max' => null, 'fee' => 20000]], 'freeDeliveryFrom' => null],
                 ],
                 'products' => [
                     ['id' => $premium->id, 'isAvailable' => true, 'mrp' => 65000, 'packs' => [['id' => $premium->default_bulk_pack_id, 'grams' => 1000]], 'defaultPackId' => $premium->default_bulk_pack_id, 'minKilograms' => null, 'maxKilograms' => null, 'freeGrams' => null, 'tiers' => [
@@ -357,8 +357,8 @@ it('tells Home it is Home, so it draws the Cart\'s summary bar, and no other Pag
     $this->get('/about')->assertInertia(fn (Assert $page) => $page->where('page.isHome', false));
 });
 
-it('shares every Pack of every published Product, with whether it can be ordered, and the retail delivery, for the browser\'s packet basket', function () {
-    app(DeliveryChargeSettings::class)->with(['retailDeliveryCharge' => 7000, 'retailFreeDeliveryFrom' => null])->save();
+it('shares every Pack of every published Product, with whether it can be ordered, and the retail Delivery Zones, for the browser\'s packet basket', function () {
+    retailDeliveryEverywhere(7000);
 
     $assam = Product::factory()->create(['name' => 'Assam', 'slug' => 'assam']);
     $small = Pack::factory()->for($assam)->create(['grams' => 100, 'mrp' => 12000, 'price' => 11000]);
@@ -371,8 +371,9 @@ it('shares every Pack of every published Product, with whether it can be ordered
 
     $this->get('/')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('retailPricing.deliveryCharge', 7000)
-            ->where('retailPricing.freeDeliveryFrom', null)
+            ->where('retailPricing.deliveryZones', [
+                ['name' => 'Everywhere', 'districts' => [], 'everywhereElse' => true, 'bands' => [['min' => 1, 'max' => null, 'fee' => 7000]], 'freeDeliveryFrom' => null],
+            ])
             ->where('retailPricing.packs', [
                 ['id' => $small->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 100, 'mrp' => 12000, 'price' => 11000, 'isOrderable' => true, 'minGrams' => null, 'maxGrams' => null, 'freeGrams' => null],
                 ['id' => $switchedOff->id, 'productId' => $assam->id, 'productName' => 'Assam', 'href' => '/tea/assam', 'imageUrl' => null, 'grams' => 250, 'mrp' => 30000, 'price' => 27000, 'isOrderable' => false, 'minGrams' => null, 'maxGrams' => null, 'freeGrams' => null],

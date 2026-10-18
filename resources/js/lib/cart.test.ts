@@ -265,7 +265,7 @@ describe('quoteLine', () => {
     const strong = product(7);
 
     it('prices the line as the Cart would hold it, from the Tier for the whole Cart with it', () => {
-        const quote = quoteLine([kg(7, 4)], [premium, strong], { deliveryBands: bands }, 3, 2, 31);
+        const quote = quoteLine([kg(7, 4)], [premium, strong], { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands }] }, 3, 2, 31);
 
         expect(quote?.line.pack).toStrictEqual({ id: 31, grams: 250 });
         expect(quote?.line.packets).toBe(8);
@@ -275,7 +275,7 @@ describe('quoteLine', () => {
     });
 
     it('stands in for what that Pack already holds, the tea\'s other Packs counted beside it', () => {
-        const quote = quoteLine([kg(3, 9, 30), kg(3, 1, 31)], [premium], { deliveryBands: bands }, 3, 2, 31);
+        const quote = quoteLine([kg(3, 9, 30), kg(3, 1, 31)], [premium], { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands }] }, 3, 2, 31);
 
         expect(quote?.totalKilograms).toBe(11);
         expect(quote?.line.pack?.id).toBe(31);
@@ -284,12 +284,12 @@ describe('quoteLine', () => {
     });
 
     it('gives no packets where the Pack cannot make the Kilograms exactly', () => {
-        expect(quoteLine(EMPTY_CART, [premium], { deliveryBands: bands }, 3, 2, 32)?.line.packets).toBeNull();
+        expect(quoteLine(EMPTY_CART, [premium], { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands }] }, 3, 2, 32)?.line.packets).toBeNull();
     });
 
     it('quotes nothing for a tea a buyer cannot have now, or for no Kilograms', () => {
-        expect(quoteLine(EMPTY_CART, [product(3, false)], { deliveryBands: bands }, 3, 2, 30)).toBeNull();
-        expect(quoteLine(EMPTY_CART, [premium], { deliveryBands: bands }, 3, 0, 30)).toBeNull();
+        expect(quoteLine(EMPTY_CART, [product(3, false)], { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands }] }, 3, 2, 30)).toBeNull();
+        expect(quoteLine(EMPTY_CART, [premium], { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands }] }, 3, 0, 30)).toBeNull();
     });
 });
 

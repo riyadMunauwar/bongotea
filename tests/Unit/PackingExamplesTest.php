@@ -39,7 +39,8 @@ it('weighs every packet worked example as the shared file expects', function (ar
     $grams = Grams::ofPackets($example['packets'], $example['packGrams']);
 
     expect($grams)->toBe($example['expected']['grams'])
-        ->and(Kilograms::fromGrams($grams))->toBe($example['expected']['kilograms']);
+        ->and(Kilograms::fromGrams($grams))->toBe($example['expected']['kilograms'])
+        ->and(Grams::deliveryKilograms($grams))->toBe($example['expected']['deliveryKilograms']);
 })->with(packingExamples('packets'));
 
 it('refuses a Pack that weighs nothing rather than dividing by it', function () {

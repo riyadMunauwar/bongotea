@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
+import { deliveryText, packName, retailDeliveryNote, totalText } from '@/components/cart/figures';
 import { PackStepper } from '@/components/cart/pack-chooser';
 import { AddMoreLink, DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -199,11 +199,11 @@ function Summary({ retail }: { retail: UseRetailCart }) {
             <div className="flex flex-col gap-[10px]">
                 <SummaryLine label={bn.packs.packCount} value={bn.packs.countOf(toBanglaDigits(priced.packCount))} />
                 <SummaryLine label={bn.packs.subtotal} value={taka(priced.subtotal)} />
-                <SummaryLine label={bn.packs.delivery} value={isEmpty ? bn.cart.noFigure : feeText(priced.deliveryCharge, taka)} accent />
+                <SummaryLine label={bn.packs.delivery} value={isEmpty ? bn.cart.noFigure : deliveryText(priced, taka)} accent />
                 {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
                 <div className="flex items-baseline justify-between border-t border-divider pt-[14px]">
                     <span className="text-[16px] font-medium">{bn.packs.total}</span>
-                    <b className="text-[28px] font-bold text-primary-dark">{taka(priced.total)}</b>
+                    <b className="text-[28px] font-bold text-primary-dark">{totalText(priced, taka)}</b>
                 </div>
                 {priced.savings > 0 && <div className="text-right text-[14px] text-primary">{bn.packs.totalSaving(taka(priced.savings))}</div>}
             </div>

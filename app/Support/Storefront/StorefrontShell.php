@@ -10,7 +10,7 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Support\Pages\CartPlacements;
 use App\Support\PhoneNumber;
-use App\Support\Pricing\DeliveryBand;
+use App\Support\Pricing\DeliveryZone;
 use App\Support\Pricing\PriceBook;
 use App\Support\Pricing\RetailPriceBook;
 use App\Support\Settings\FooterSettings;
@@ -108,17 +108,16 @@ class StorefrontShell
      * What the Cart, held in the browser (ADR-0029), is priced from on every
      * page, since the header shows its total wherever the buyer is: every
      * published Product sold পাইকারি, with its own Tiers and whether it can
-     * be had now, and the Delivery Bands. Prices and fees in minor units.
+     * be had now, and the bulk Delivery Zones (ADR-0039), each with the
+     * Districts it covers so the Checkout charges the District as it is
+     * chosen. Prices and fees in minor units.
      *
-     * @return array{deliveryBands: list<array{min: int, max: ?int, fee: int}>, products: list<array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}>}
+     * @return array{deliveryZones: list<array{name: string, districts: list<string>, everywhereElse: bool, bands: list<array{min: int, max: int|null, fee: int}>, freeDeliveryFrom: int|null}>, products: list<array{id: int, isAvailable: bool, tiers: list<array{min: int, max: ?int, price: int}>}>}
      */
     public function pricing(): array
     {
         return [
-            'deliveryBands' => array_map(
-                fn (DeliveryBand $band): array => ['min' => $band->min, 'max' => $band->max, 'fee' => $band->fee],
-                PriceBook::current()->deliveryBands,
-            ),
+            'deliveryZones' => array_map(fn (DeliveryZone $zone): array => $zone->toArray(), PriceBook::current()->deliveryZones->zones),
             'products' => $this->catalogue->soldAs(OrderKind::Bulk)
                 ->map(fn (Product $product): array => CatalogueProps::cartProduct($product))
                 ->values()
@@ -131,19 +130,16 @@ class StorefrontShell
      * (ADR-0034), is priced from on every page, since the header counts its
      * Packs wherever the buyer is: every Pack ticked খুচরা of every published
      * Product sold খুচরা (ADR-0036), with whether it can be ordered now, and
-     * the retail Delivery Charge and threshold. A Product with none sends
+     * the retail Delivery Zones (ADR-0039). A Product with none sends
      * nothing here, and that is how the storefront knows it is not sold
      * খুচরা. Money in minor units.
      *
-     * @return array{deliveryCharge: int, freeDeliveryFrom: ?int, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int, freeGrams: ?int}>}
+     * @return array{deliveryZones: list<array{name: string, districts: list<string>, everywhereElse: bool, bands: list<array{min: int, max: int|null, fee: int}>, freeDeliveryFrom: int|null}>, packs: list<array{id: int, productId: int, productName: string, href: string, imageUrl: ?string, grams: int, mrp: int, price: int, isOrderable: bool, minGrams: ?int, maxGrams: ?int, freeGrams: ?int}>}
      */
     public function retailPricing(): array
     {
-        $book = RetailPriceBook::current();
-
         return [
-            'deliveryCharge' => $book->deliveryCharge,
-            'freeDeliveryFrom' => $book->freeDeliveryFrom,
+            'deliveryZones' => array_map(fn (DeliveryZone $zone): array => $zone->toArray(), RetailPriceBook::current()->deliveryZones->zones),
             'packs' => $this->catalogue->soldAs(OrderKind::Retail)
                 ->flatMap(fn (Product $product): Collection => $product->packs
                     ->filter(fn (Pack $pack): bool => $pack->servesAs(OrderKind::Retail))

@@ -2,6 +2,8 @@
 
 use App\Support\Pricing\CartLine;
 use App\Support\Pricing\DeliveryBand;
+use App\Support\Pricing\DeliveryZone;
+use App\Support\Pricing\DeliveryZones;
 use App\Support\Pricing\PriceBook;
 use App\Support\Pricing\ProductPrices;
 use App\Support\Pricing\Tier;
@@ -47,9 +49,7 @@ function flatPrices(int $price, ?int $mrp = null): ProductPrices
 }
 
 it('prices every worked example as the shared file expects', function (array $example) {
-    $book = new PriceBook(
-        deliveryBands: array_map(fn (array $band): DeliveryBand => new DeliveryBand($band['min'], $band['max'], $band['fee']), $example['deliveryBands']),
-    );
+    $book = new PriceBook(DeliveryZones::fromArray($example['deliveryZones']));
 
     $products = [];
 
@@ -68,23 +68,39 @@ it('prices every worked example as the shared file expects', function (array $ex
     ), $example['lines']);
 
     /** Strictly: a loose comparison would read a null average or band as a nought. */
-    expect(sortedByKey($book->price($lines)->toArray()))->toBe(sortedByKey($example['expected']));
+    expect(sortedByKey($book->price($lines, $example['district'])->toArray()))->toBe(sortedByKey($example['expected']));
 })->with(pricingExamples());
 
+function freeEverywhere(): PriceBook
+{
+    return new PriceBook(new DeliveryZones([new DeliveryZone('Everywhere', [], true, [new DeliveryBand(1, null, 0)])]));
+}
+
 it('refuses a negative quantity rather than pricing it', function () {
-    (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500), -1)]);
+    freeEverywhere()->price([new CartLine(flatPrices(500), -1)]);
 })->throws(InvalidArgumentException::class);
 
 it('refuses a Price Override below nothing', function () {
-    (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500), 1, -1)]);
+    freeEverywhere()->price([new CartLine(flatPrices(500), 1, -1)]);
 })->throws(InvalidArgumentException::class);
 
 it('refuses a Price Override above the MRP, since nothing is sold above it', function () {
-    (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500, mrp: 550), 1, 551)]);
+    freeEverywhere()->price([new CartLine(flatPrices(500, mrp: 550), 1, 551)]);
 })->throws(InvalidArgumentException::class);
 
+it('records the zone and the band an Order is charged under', function () {
+    $book = new PriceBook(new DeliveryZones([
+        new DeliveryZone('Inside Dhaka', ['Dhaka'], false, [new DeliveryBand(1, 5, 7000), new DeliveryBand(6, null, 0)]),
+        new DeliveryZone('Outside Dhaka', [], true, [new DeliveryBand(1, null, 13000)]),
+    ]));
+
+    expect($book->price([new CartLine(flatPrices(500), 3)], 'Dhaka')->deliveryLabel())->toBe('Inside Dhaka · 1–5 kg')
+        ->and($book->price([new CartLine(flatPrices(500), 3)], 'Sylhet')->deliveryLabel())->toBe('Outside Dhaka · 1+ kg')
+        ->and($book->price([new CartLine(flatPrices(500), 3)])->deliveryLabel())->toBeNull();
+});
+
 it('takes a Price Override at the MRP, which saves nothing', function () {
-    $priced = (new PriceBook([new DeliveryBand(1, null, 0)]))->price([new CartLine(flatPrices(500, mrp: 550), 2, 550)]);
+    $priced = freeEverywhere()->price([new CartLine(flatPrices(500, mrp: 550), 2, 550)]);
 
     expect($priced->subtotal)->toBe(1100)
         ->and($priced->savings)->toBe(0);

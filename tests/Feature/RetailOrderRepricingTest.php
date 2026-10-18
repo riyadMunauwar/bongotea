@@ -12,7 +12,6 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
 use App\Support\Orders\RetailRepricing;
-use App\Support\Settings\DeliveryChargeSettings;
 use Livewire\Livewire;
 
 /**
@@ -23,7 +22,7 @@ use Livewire\Livewire;
 beforeEach(function () {
     $this->actingAs(User::factory()->workingOrders()->create());
 
-    app(DeliveryChargeSettings::class)->with(['retailDeliveryCharge' => 6000, 'retailFreeDeliveryFrom' => 100000])->save();
+    retailDeliveryEverywhere(6000, freeFrom: 100000);
 });
 
 function quarterKiloOfAssam(array $attributes = []): Pack

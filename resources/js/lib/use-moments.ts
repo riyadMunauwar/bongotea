@@ -35,7 +35,7 @@ export function useMoments(): UseMoments {
     const { tracking, minorUnitsPerTaka, pricing, retailPricing } = usePage().props;
 
     return useMemo(() => {
-        const priced = (product: ProductPrices, kilograms: number) => priceCart({ deliveryBands: pricing.deliveryBands }, [{ product, kilograms }]);
+        const priced = (product: ProductPrices, kilograms: number) => priceCart({ deliveryZones: pricing.deliveryZones }, [{ product, kilograms }]);
 
         return {
             productViewed: (product) => quietly(() => reportMoment(tracking, minorUnitsPerTaka, 'product_viewed', momentId(), priced(product, 1))),
@@ -53,7 +53,7 @@ export function useMoments(): UseMoments {
                     const id = addedToRetailCartId(from.id, basketWasEmpty, pack.id);
 
                     if (id !== null) {
-                        const priced = priceRetailCart({ deliveryCharge: retailPricing.deliveryCharge, freeDeliveryFrom: retailPricing.freeDeliveryFrom }, [{ pack, count }]);
+                        const priced = priceRetailCart({ deliveryZones: retailPricing.deliveryZones }, [{ pack, count }]);
 
                         reportMoment(tracking, minorUnitsPerTaka, 'added_to_cart', id, { cart: 'retail', priced, packs: [pack] }, from);
                     }

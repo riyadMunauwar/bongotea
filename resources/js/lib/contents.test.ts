@@ -62,7 +62,7 @@ describe('Contents per Cart', () => {
         store.write(7, kilograms(8));
         store.write(9, kilograms(3));
 
-        const tierOf = (cartId: number) => priceCart({ deliveryBands: [{ min: 1, max: null, fee: 12000 }] }, cartLines(store.read(null)[cartId], [assam])).lines[0].tierPrice;
+        const tierOf = (cartId: number) => priceCart({ deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands: [{ min: 1, max: null, fee: 12000 }] }] }, cartLines(store.read(null)[cartId], [assam])).lines[0].tierPrice;
 
         expect(tierOf(7)).toBe(55000);
         expect(tierOf(9)).toBe(60000);

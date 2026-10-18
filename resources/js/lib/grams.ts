@@ -39,6 +39,11 @@ export function gramsOfPackets(packets: number, packGrams: number): number {
     return packets * packGrams;
 }
 
+/** The whole kilograms a weight is charged delivery by (ADR-0039): rounded up, so 350 g -> 1 and 2,250 g -> 3; nothing for nothing. */
+export function deliveryKilogramsOf(grams: number): number {
+    return grams <= 0 ? 0 : Math.ceil(grams / 1000);
+}
+
 /**
  * The whole kilograms nearest to these that a Pack makes exactly, for a
  * refusal to name: the one below and the one above, or the first two where

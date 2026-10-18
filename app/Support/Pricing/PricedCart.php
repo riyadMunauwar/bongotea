@@ -18,10 +18,22 @@ final readonly class PricedCart
 
         /** The Saving: what the MRPs would have come to, less the subtotal. */
         public int $savings,
+        /** Nothing while no District is known; see the range. */
         public int $deliveryCharge,
 
-        /** Null for an empty Cart, which no band covers. */
+        /** Null while no District is known. */
+        public ?DeliveryZone $deliveryZone,
+
+        /** Null for an empty Cart, which no band covers, and while no zone is known. */
         public ?DeliveryBand $deliveryBand,
+
+        /**
+         * The least and the most the Cart could pay across every zone, shown
+         * before a District is known; null for an empty Cart.
+         *
+         * @var array{least: int, most: int}|null
+         */
+        public ?array $deliveryRange,
         public int $total,
 
         /** The subtotal per Kilogram, rounded half-up to the minor unit; null for an empty Cart. */
@@ -30,15 +42,21 @@ final readonly class PricedCart
         /** Null where no line already in the Cart gets any cheaper. */
         public ?PriceDrop $nextPriceDrop,
 
-        /** Null once delivery is free, or where no band ahead of the Cart is. */
+        /** Null once delivery is free, or where no band ahead of the Cart is; before a District is known, null unless every zone agrees. */
         public ?int $kilogramsToFreeDelivery,
     ) {}
+
+    /** What the Order records as its delivery, "Inside Dhaka · 6–10 kg"; null while no zone is known. */
+    public function deliveryLabel(): ?string
+    {
+        return $this->deliveryZone?->labelFor($this->deliveryBand);
+    }
 
     /**
      * The shape the shared worked examples are written in, and the one the
      * TypeScript mirror answers in.
      *
-     * @return array{lines: list<array<string, mixed>>, totalKilograms: int, subtotal: int, savings: int, deliveryCharge: int, deliveryBand: array{min: int, max: int|null, fee: int}|null, total: int, averagePerKilogram: int|null, nextPriceDrop: array{atKilograms: int, kilogramsToGo: int, extraSaving: int}|null, kilogramsToFreeDelivery: int|null}
+     * @return array{lines: list<array<string, mixed>>, totalKilograms: int, subtotal: int, savings: int, deliveryCharge: int, deliveryZone: string|null, deliveryBand: array{min: int, max: int|null, fee: int}|null, deliveryRange: array{least: int, most: int}|null, total: int, averagePerKilogram: int|null, nextPriceDrop: array{atKilograms: int, kilogramsToGo: int, extraSaving: int}|null, kilogramsToFreeDelivery: int|null}
      */
     public function toArray(): array
     {
@@ -48,7 +66,9 @@ final readonly class PricedCart
             'subtotal' => $this->subtotal,
             'savings' => $this->savings,
             'deliveryCharge' => $this->deliveryCharge,
+            'deliveryZone' => $this->deliveryZone?->name,
             'deliveryBand' => $this->deliveryBand?->toArray(),
+            'deliveryRange' => $this->deliveryRange,
             'total' => $this->total,
             'averagePerKilogram' => $this->averagePerKilogram,
             'nextPriceDrop' => $this->nextPriceDrop?->toArray(),

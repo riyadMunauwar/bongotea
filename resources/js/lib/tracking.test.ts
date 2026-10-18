@@ -6,7 +6,7 @@ import { addedToCartId, addedToRetailCartId, beaconItems, cartMomentFor, momentS
 
 const gold = { id: 12, mrp: 55000, tiers: [{ min: 1, max: 5, price: 55000 }, { min: 6, max: null, price: 43000 }] as Tier[] };
 const green = { id: 14, mrp: 40000, tiers: [{ min: 1, max: null, price: 40000 }] as Tier[] };
-const book = { deliveryBands: [{ min: 1, max: null, fee: 12000 }] };
+const book = { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands: [{ min: 1, max: null, fee: 12000 }] }] };
 
 describe('cartMomentFor', () => {
     it('starts a Cart when the first Product goes in, and reports it', () => {
@@ -74,7 +74,7 @@ describe('beaconItems', () => {
 
 describe('a Pack', () => {
     const quarter: CartPack = { id: 7, productId: 12, productName: 'Gold', href: '/tea/gold', imageUrl: null, grams: 250, mrp: 30000, price: 27000, isOrderable: true, minGrams: null, maxGrams: null, freeGrams: null };
-    const retail = { deliveryCharge: 6000, freeDeliveryFrom: null };
+    const retail = { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands: [{ min: 1, max: null, fee: 6000 }] }] };
 
     it('is reported as its Product, its count the quantity, its Pack Price the price and its weight the variant, from the retail Cart', () => {
         const priced = priceRetailCart(retail, [{ pack: quarter, count: 3 }]);
@@ -133,7 +133,7 @@ describe('Added to Cart, once per Cart\'s Contents', () => {
 
 describe('the Cart a Moment came from', () => {
     it('is named on the Selection by id and name, the kind kept beside it', () => {
-        const priced = priceCart({ deliveryBands: [{ min: 1, max: null, fee: 0 }] }, [{ product: { id: 3, mrp: 50000, tiers: [{ min: 1, max: null, price: 50000 }] }, kilograms: 2 }]);
+        const priced = priceCart({ deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands: [{ min: 1, max: null, fee: 0 }] }] }, [{ product: { id: 3, mrp: 50000, tiers: [{ min: 1, max: null, price: 50000 }] }, kilograms: 2 }]);
 
         expect(momentSelection(priced, 100, { id: 7, name: 'Eid Gift Packs' })).toMatchObject({ cart: 'bulk', cartId: 7, cartName: 'Eid Gift Packs' });
     });

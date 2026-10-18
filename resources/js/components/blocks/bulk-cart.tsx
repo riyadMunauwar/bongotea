@@ -1,7 +1,7 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { BulkPackLine, TeaNotices } from '@/components/cart/bulk-pack-line';
-import { deliveryNote, discountLabel, feeText, nextDropText, packName, stepName } from '@/components/cart/figures';
+import { deliveryNote, deliveryText, discountLabel, nextDropText, packName, stepName, totalText } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
 import { AddMoreLink, DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
 import { Stepper } from '@/components/cart/stepper';
@@ -291,11 +291,11 @@ function Summary({ cart, steps }: { cart: UseCart; steps: PriceStep[] | null }) 
                 <SummaryLine label={bn.bulkOrder.totalQuantity} value={bn.cart.kilogramsOf(toBanglaDigits(priced.totalKilograms))} large />
                 <SummaryLine label={bn.bulkOrder.average} value={priced.averagePerKilogram === null ? taka(0) : taka(priced.averagePerKilogram)} large />
                 <SummaryLine label={bn.bulkOrder.teaPrice} value={taka(priced.subtotal)} />
-                <SummaryLine label={bn.bulkOrder.delivery} value={isEmpty ? bn.cart.noFigure : feeText(priced.deliveryCharge, taka)} accent />
+                <SummaryLine label={bn.bulkOrder.delivery} value={isEmpty ? bn.cart.noFigure : deliveryText(priced, taka)} accent />
                 {note && <span className="text-right text-[12px] text-eyebrow">{note}</span>}
                 <div className="flex items-baseline justify-between border-t border-divider pt-[14px]">
                     <span className="text-[16px] font-medium">{bn.bulkOrder.total}</span>
-                    <b className="text-[30px] font-bold text-primary-dark">{taka(priced.total)}</b>
+                    <b className="text-[30px] font-bold text-primary-dark">{totalText(priced, taka)}</b>
                 </div>
                 {priced.savings > 0 && <div className="text-right text-[14px] text-primary">{bn.bulkOrder.saving(taka(priced.savings))}</div>}
             </div>
@@ -332,7 +332,7 @@ function BottomBar({ cart }: { cart: UseCart }) {
             <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 flex-col">
                     <span className="text-[12px] text-muted">{bn.cart.barLine(toBanglaDigits(priced.totalKilograms))}</span>
-                    <b className="text-[21px] leading-[1.3] font-bold text-ink">{taka(priced.total)}</b>
+                    <b className="text-[21px] leading-[1.3] font-bold text-ink">{totalText(priced, taka)}</b>
                 </div>
                 <ContinueButton cartId={cart.cartId} disabled={isEmpty || cart.hasUnpackable || cart.hasOutsideLimit || cart.hasShort} className="flex-none px-[18px] py-[13px] text-[15px] whitespace-nowrap">
                     {bn.bulkOrder.continueShort}

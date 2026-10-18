@@ -21,7 +21,6 @@ use App\Support\Orders\RetailQuoteRefused;
 use App\Support\Pricing\CartLine;
 use App\Support\Pricing\PriceBook;
 use App\Support\Pricing\ProductPrices;
-use App\Support\Settings\DeliveryChargeSettings;
 use Livewire\Livewire;
 
 /**
@@ -37,7 +36,7 @@ beforeEach(function (): void {
     $this->stock = app(CommittedStock::class);
     $this->counter = User::factory()->countingStock()->managingCatalogue()->create();
 
-    app(DeliveryChargeSettings::class)->with(['retailDeliveryCharge' => 6000, 'retailFreeDeliveryFrom' => 100000])->save();
+    retailDeliveryEverywhere(6000, freeFrom: 100000);
 });
 
 /** Somebody counted this many grams of the Product on the shelf. */
@@ -65,7 +64,7 @@ function bulkCheckoutFor(Product $product, int $kilograms): array
 {
     $priced = PriceBook::current()->price([
         new CartLine(ProductPrices::of($product), $kilograms),
-    ]);
+    ], 'Dhaka');
 
     return [
         'name' => 'Rahim Uddin',

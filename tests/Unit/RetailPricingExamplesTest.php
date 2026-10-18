@@ -1,5 +1,8 @@
 <?php
 
+use App\Support\Pricing\DeliveryBand;
+use App\Support\Pricing\DeliveryZone;
+use App\Support\Pricing\DeliveryZones;
 use App\Support\Pricing\PackPrices;
 use App\Support\Pricing\RetailLine;
 use App\Support\Pricing\RetailPriceBook;
@@ -39,12 +42,12 @@ function retailSortedByKey(array $value): array
 }
 
 it('prices every retail worked example as the shared file expects', function (array $example) {
-    $book = new RetailPriceBook($example['deliveryCharge'], $example['freeDeliveryFrom']);
+    $book = new RetailPriceBook(DeliveryZones::fromArray($example['deliveryZones']));
 
     $packs = [];
 
     foreach ($example['packs'] as $pack) {
-        $packs[$pack['id']] = new PackPrices($pack['id'], $pack['mrp'], $pack['price']);
+        $packs[$pack['id']] = new PackPrices($pack['id'], $pack['mrp'], $pack['price'], $pack['grams']);
     }
 
     $lines = array_map(fn (array $line): RetailLine => new RetailLine(
@@ -54,17 +57,22 @@ it('prices every retail worked example as the shared file expects', function (ar
     ), $example['lines']);
 
     /** Strictly: a loose comparison would read a null distance to free delivery as a nought. */
-    expect(retailSortedByKey($book->price($lines)->toArray()))->toBe(retailSortedByKey($example['expected']));
+    expect(retailSortedByKey($book->price($lines, $example['district'])->toArray()))->toBe(retailSortedByKey($example['expected']));
 })->with(retailPricingExamples());
 
+function flatRetail(): RetailPriceBook
+{
+    return new RetailPriceBook(new DeliveryZones([new DeliveryZone('Everywhere', [], true, [new DeliveryBand(1, null, 6000)])]));
+}
+
 it('refuses a negative count rather than pricing it', function () {
-    (new RetailPriceBook(6000, null))->price([new RetailLine(new PackPrices(1, 300, 270), -1)]);
+    flatRetail()->price([new RetailLine(new PackPrices(1, 300, 270, 100), -1)]);
 })->throws(InvalidArgumentException::class);
 
 it('refuses a Price Override above the Pack\'s MRP, since nothing is sold above it', function () {
-    (new RetailPriceBook(6000, null))->price([new RetailLine(new PackPrices(1, 300, 270), 1, 301)]);
+    flatRetail()->price([new RetailLine(new PackPrices(1, 300, 270, 100), 1, 301)]);
 })->throws(InvalidArgumentException::class);
 
 it('refuses a Price Override below nothing', function () {
-    (new RetailPriceBook(6000, null))->price([new RetailLine(new PackPrices(1, 300, 270), 1, -1)]);
+    flatRetail()->price([new RetailLine(new PackPrices(1, 300, 270, 100), 1, -1)]);
 })->throws(InvalidArgumentException::class);

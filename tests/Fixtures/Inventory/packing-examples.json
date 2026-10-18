@@ -1,5 +1,5 @@
 {
-    "about": "Worked examples of packing conversions, run by Pest against App\\Support\\Inventory\\Grams and by Vitest against resources/js/lib/grams.ts. Grams are whole numbers everywhere. A weight goes into a Pack as a whole number of packets or not at all: a remainder is refused (packets: null), never rounded, and a refusal names the nearest whole kilograms that Pack does make exactly — the one below and the one above, or the first two where none lies below. Bulk kilograms are whole numbers.",
+    "about": "Worked examples of packing conversions, run by Pest against App\\Support\\Inventory\\Grams and by Vitest against resources/js/lib/grams.ts. Grams are whole numbers everywhere. A weight goes into a Pack as a whole number of packets or not at all: a remainder is refused (packets: null), never rounded, and a refusal names the nearest whole kilograms that Pack does make exactly — the one below and the one above, or the first two where none lies below. Bulk kilograms are whole numbers. A weight is charged delivery by its kilograms rounded up (ADR-0039), nothing for nothing.",
     "kilograms": [
         { "name": "2 kg in 500 g packets is 4 packets", "kilograms": 2, "packGrams": 500, "expected": { "grams": 2000, "packets": 4 } },
         { "name": "2 kg in 250 g packets is 8 packets", "kilograms": 2, "packGrams": 250, "expected": { "grams": 2000, "packets": 8 } },
@@ -12,9 +12,9 @@
         { "name": "3 kg in 2 kg packets is refused, naming 2 kg or 4 kg", "kilograms": 3, "packGrams": 2000, "expected": { "grams": 3000, "packets": null, "workableKilograms": [2, 4] } }
     ],
     "packets": [
-        { "name": "10 × 250 g is 2,500 g, 2.5 kg", "packets": 10, "packGrams": 250, "expected": { "grams": 2500, "kilograms": 2.5 } },
-        { "name": "20 × 100 g is 2,000 g, 2 kg", "packets": 20, "packGrams": 100, "expected": { "grams": 2000, "kilograms": 2 } },
-        { "name": "3 × 25 g is 75 g, 0.075 kg", "packets": 3, "packGrams": 25, "expected": { "grams": 75, "kilograms": 0.075 } },
-        { "name": "no packets is no grams", "packets": 0, "packGrams": 500, "expected": { "grams": 0, "kilograms": 0 } }
+        { "name": "10 × 250 g is 2,500 g, 2.5 kg", "packets": 10, "packGrams": 250, "expected": { "grams": 2500, "kilograms": 2.5, "deliveryKilograms": 3 } },
+        { "name": "20 × 100 g is 2,000 g, 2 kg", "packets": 20, "packGrams": 100, "expected": { "grams": 2000, "kilograms": 2, "deliveryKilograms": 2 } },
+        { "name": "3 × 25 g is 75 g, 0.075 kg", "packets": 3, "packGrams": 25, "expected": { "grams": 75, "kilograms": 0.075, "deliveryKilograms": 1 } },
+        { "name": "no packets is no grams", "packets": 0, "packGrams": 500, "expected": { "grams": 0, "kilograms": 0, "deliveryKilograms": 0 } }
     ]
 }

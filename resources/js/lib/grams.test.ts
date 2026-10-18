@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import file from '../../../tests/Fixtures/Inventory/packing-examples.json';
-import { gramsFromKilograms, gramsOfPackets, kilogramsFromGrams, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
+import { deliveryKilogramsOf, gramsFromKilograms, gramsOfPackets, kilogramsFromGrams, packetsIn, wholeKilogramsIn, workableKilograms } from './grams';
 
 /**
  * The shared packing worked examples, converted by the TypeScript mirror. Pest
@@ -29,6 +29,7 @@ describe('the shared packing examples', () => {
 
             expect(grams).toBe(example.expected.grams);
             expect(kilogramsFromGrams(grams)).toBe(example.expected.kilograms);
+            expect(deliveryKilogramsOf(grams)).toBe(example.expected.deliveryKilograms);
         });
     }
 });

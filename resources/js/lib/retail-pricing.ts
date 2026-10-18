@@ -5,15 +5,17 @@
  * The server's figures are the only ones that count: this exists to display,
  * and Capture checks what it showed. The two are held to the same arithmetic
  * by the shared worked examples in `tests/Fixtures/Pricing/retail-examples.json`.
- * It owes nothing to the bulk Tiers or Delivery Bands (`lib/pricing.ts`).
+ * It owes nothing to the bulk Tiers or the bulk Delivery Zones, though it
+ * reads its own zones with the same helpers (`lib/pricing.ts`, ADR-0039).
  * Money is in minor units, as the server sends it.
  */
 
+import { deliveryKilogramsOf, gramsOfPackets } from './grams';
+import { agreed, bandFor, chargeIn, type DeliveryBand, type DeliveryRange, type DeliveryZone, rangeOf, zoneFor } from './pricing';
+
 export type RetailPriceBook = {
-    /** The one flat charge on a retail Cart. */
-    deliveryCharge: number;
-    /** The subtotal at which delivery is free; null for never. */
-    freeDeliveryFrom: number | null;
+    /** The retail Delivery Zones, each with its threshold for free delivery. */
+    deliveryZones: DeliveryZone[];
 };
 
 export type PackPrices = {
@@ -21,6 +23,8 @@ export type PackPrices = {
     /** What the Saving is measured from; the Pack Price never exceeds it. */
     mrp: number;
     price: number;
+    /** What one Pack weighs, which the Delivery Band is read by. */
+    grams: number;
 };
 
 export type RetailLine = {
@@ -44,16 +48,35 @@ export type PricedPackLine = {
 export type PricedRetailCart = {
     lines: PricedPackLine[];
     packCount: number;
+    /** The Packs' weight rounded up to the next whole kilogram; nothing for an empty Cart. */
+    kilograms: number;
     subtotal: number;
     savings: number;
+    /** Nothing while no District is known; see the range. */
     deliveryCharge: number;
+    /** The zone's name; null while no District is known. */
+    deliveryZone: string | null;
+    /** Null for an empty Cart, and while no District is known. */
+    deliveryBand: DeliveryBand | null;
+    /** Null for an empty Cart. */
+    deliveryRange: DeliveryRange | null;
     total: number;
-    /** What the subtotal still lacks for free delivery; null once it is free, or where it never is. */
+    /** What the subtotal still lacks for free delivery; null once it is free, or where it never is; with no District, null unless every zone agrees. */
     amountToFreeDelivery: number | null;
 };
 
-/** Every figure a packet basket shows: each line its Pack Price times its count, and one flat charge. */
-export function priceRetailCart(book: RetailPriceBook, lines: RetailLine[]): PricedRetailCart {
+function amountToFreeDeliveryIn(zone: DeliveryZone, subtotal: number): number | null {
+    const from = zone.freeDeliveryFrom ?? null;
+
+    return from === null || subtotal >= from ? null : from - subtotal;
+}
+
+/**
+ * Every figure a packet basket shows: each line its Pack Price times its
+ * count, and the Delivery Charge of the zone of the District, once there is
+ * one, by the Packs' weight rounded up to the next kilogram.
+ */
+export function priceRetailCart(book: RetailPriceBook, lines: RetailLine[], district: string | null = null): PricedRetailCart {
     if (lines.some((line) => line.count < 0)) {
         throw new Error('A line cannot hold fewer than no Packs.');
     }
@@ -67,6 +90,7 @@ export function priceRetailCart(book: RetailPriceBook, lines: RetailLine[]): Pri
     }
 
     let packCount = 0;
+    let grams = 0;
     let subtotal = 0;
     let savings = 0;
 
@@ -76,6 +100,7 @@ export function priceRetailCart(book: RetailPriceBook, lines: RetailLine[]): Pri
         const lineSavings = (line.pack.mrp - packPrice) * line.count;
 
         packCount += line.count;
+        grams += gramsOfPackets(line.count, line.pack.grams);
         subtotal += packPrice * line.count;
         savings += lineSavings;
 
@@ -90,16 +115,21 @@ export function priceRetailCart(book: RetailPriceBook, lines: RetailLine[]): Pri
         };
     });
 
-    const isFree = book.freeDeliveryFrom !== null && subtotal >= book.freeDeliveryFrom;
-    const deliveryCharge = packCount === 0 || isFree ? 0 : book.deliveryCharge;
+    const kilograms = deliveryKilogramsOf(grams);
+    const zone = zoneFor(book.deliveryZones, district);
+    const deliveryCharge = zone === null ? 0 : chargeIn(zone, kilograms, subtotal);
 
     return {
         lines: pricedLines,
         packCount,
+        kilograms,
         subtotal,
         savings,
         deliveryCharge,
+        deliveryZone: zone?.name ?? null,
+        deliveryBand: zone === null ? null : bandFor(zone, kilograms),
+        deliveryRange: rangeOf(book.deliveryZones, kilograms, subtotal),
         total: subtotal + deliveryCharge,
-        amountToFreeDelivery: book.freeDeliveryFrom === null || isFree ? null : book.freeDeliveryFrom - subtotal,
+        amountToFreeDelivery: zone === null ? agreed(book.deliveryZones, (candidate) => amountToFreeDeliveryIn(candidate, subtotal)) : amountToFreeDeliveryIn(zone, subtotal),
     };
 }

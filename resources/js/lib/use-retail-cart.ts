@@ -63,9 +63,11 @@ const NO_CONTENTS: ContentsByCart<RetailCart> = Object.freeze({});
  * Every view of them goes through here, and it never touches another Cart's
  * Contents or figures. No Cart (null) holds nothing and takes nothing. The
  * server draws empty Contents — it cannot see the browser's storage — and
- * the stored ones appear as the page comes alive.
+ * the stored ones appear as the page comes alive. Given a District — the
+ * Checkout's — the Delivery Charge is that District's zone's (ADR-0039);
+ * without one it is the range across every zone.
  */
-export function useRetailCart(cartId: number | null): UseRetailCart {
+export function useRetailCart(cartId: number | null, district: string | null = null): UseRetailCart {
     const { carts, retailPricing, startingCarts } = usePage().props;
     const contents = useSyncExternalStore(retailContents.subscribe, () => retailContents.read(startingCarts.retail), () => NO_CONTENTS);
     const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_RETAIL_CART;
@@ -102,7 +104,7 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
             clear: () => write(EMPTY_RETAIL_CART),
             lines,
             unorderable: unorderableLines(cart, retailPricing.packs),
-            priced: priceRetailCart({ deliveryCharge: retailPricing.deliveryCharge, freeDeliveryFrom: retailPricing.freeDeliveryFrom }, lines),
+            priced: priceRetailCart({ deliveryZones: retailPricing.deliveryZones }, lines, district),
             isEmpty: lines.length === 0,
             limitOf: (productId: number) => outside.get(productId) ?? null,
             hasOutsideLimit: outside.size > 0,
@@ -110,7 +112,7 @@ export function useRetailCart(cartId: number | null): UseRetailCart {
             hasShort: short.size > 0,
             packsOf: (productId: number) => retailPricing.packs.filter((pack) => pack.productId === productId),
         };
-    }, [cart, cartId, carts, retailPricing, startingCarts, moments]);
+    }, [cart, cartId, carts, retailPricing, startingCarts, moments, district]);
 }
 
 /**

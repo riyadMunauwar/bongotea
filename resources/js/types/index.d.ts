@@ -4,7 +4,7 @@
  */
 
 import type { CartProduct } from '@/lib/cart';
-import type { DeliveryBand } from '@/lib/pricing';
+import type { DeliveryZone } from '@/lib/pricing';
 import type { CartPack } from '@/lib/retail-cart';
 
 export type MenuLink = {
@@ -108,15 +108,15 @@ export type SharedProps = {
     };
     /** What the browser's Cart is priced from; prices and fees in minor units. */
     pricing: {
-        deliveryBands: DeliveryBand[];
+        /** The bulk Delivery Zones (ADR-0039), each with the Districts it covers. */
+        deliveryZones: DeliveryZone[];
         /** Every published Product, in catalogue order, the unavailable ones among them. */
         products: CartProduct[];
     };
     /** What the browser's retail Cart is priced from (ADR-0034); money in minor units. */
     retailPricing: {
-        deliveryCharge: number;
-        /** The subtotal at which delivery is free; null for never. */
-        freeDeliveryFrom: number | null;
+        /** The retail Delivery Zones (ADR-0039), each with its threshold for free delivery. */
+        deliveryZones: DeliveryZone[];
         /** Every Pack of every published Product, in catalogue order; a Product with none sends none. */
         packs: CartPack[];
     };

@@ -4,45 +4,44 @@ namespace App\Support\Pricing;
 
 use App\Support\Settings\DeliveryChargeSettings;
 use InvalidArgumentException;
-use LogicException;
 
 /**
  * The pricing module: the one authority on what a Cart costs (ADR-0031).
  *
  * Each Product owns its Tiers, and every line is priced from the Tier of its
  * own Product that the Cart's total Kilograms — across every line — fall in;
- * the Delivery Charge is read from its own table by the same total. The
+ * the Delivery Charge is read by the same total from the Delivery Bands of the
+ * bulk Delivery Zone the District falls in (ADR-0039). The
  * Checkout's Capture, Repricing and an Order taken by phone all ask this, and
  * the storefront runs a TypeScript mirror of the same arithmetic
  * (`resources/js/lib/pricing.ts`) held to it by the shared worked examples in
  * `tests/Fixtures/Pricing/examples.json`.
  *
- * A Product's Tiers and the Delivery Bands are both assumed to cover every
- * whole kilogram from one without gap or overlap, which the Product and the
- * Delivery Charges settings refuse to save otherwise.
+ * A Product's Tiers and each zone's Delivery Bands are all assumed to cover
+ * every whole kilogram from one without gap or overlap, which the Product and
+ * the Delivery Charges settings refuse to save otherwise.
+ *
+ * Until a District is known no zone is, so the Cart is priced with no
+ * Delivery Charge and the range it could be across every zone, which is what
+ * the storefront shows before Checkout.
  */
 final readonly class PriceBook
 {
-    /**
-     * @param  list<DeliveryBand>  $deliveryBands  In order, the first starting at one, the last open-ended.
-     */
     public function __construct(
-        public array $deliveryBands,
+        public DeliveryZones $deliveryZones,
     ) {}
 
-    /** The Delivery Bands as the Merchant has them in Settings. */
+    /** The bulk Delivery Zones as the Merchant has them in Settings. */
     public static function current(): self
     {
-        return new self(array_map(
-            fn (array $band): DeliveryBand => new DeliveryBand($band['min'], $band['max'], $band['fee']),
-            app(DeliveryChargeSettings::class)->deliveryBands,
-        ));
+        return new self(app(DeliveryChargeSettings::class)->bulkDeliveryZones());
     }
 
     /**
      * @param  list<CartLine>  $lines
+     * @param  string|null  $district  where the Order goes; null while nobody has said
      */
-    public function price(array $lines): PricedCart
+    public function price(array $lines, ?string $district = null): PricedCart
     {
         $totalKilograms = 0;
 
@@ -84,7 +83,8 @@ final readonly class PriceBook
             $mrpTotal += $line->product->mrp * $line->kilograms;
         }
 
-        $band = $this->deliveryBandFor($totalKilograms);
+        $zone = $this->deliveryZones->for($district);
+        $band = $zone?->bandFor($totalKilograms);
         $deliveryCharge = $band->fee ?? 0;
 
         return new PricedCart(
@@ -93,11 +93,15 @@ final readonly class PriceBook
             subtotal: $subtotal,
             savings: $mrpTotal - $subtotal,
             deliveryCharge: $deliveryCharge,
+            deliveryZone: $zone,
             deliveryBand: $band,
+            deliveryRange: $this->deliveryZones->rangeFor($totalKilograms),
             total: $subtotal + $deliveryCharge,
             averagePerKilogram: $totalKilograms === 0 ? null : intdiv(2 * $subtotal + $totalKilograms, 2 * $totalKilograms),
             nextPriceDrop: $this->nextPriceDrop($lines, $totalKilograms),
-            kilogramsToFreeDelivery: $this->kilogramsToFreeDelivery($totalKilograms, $band),
+            kilogramsToFreeDelivery: $zone === null
+                ? $this->deliveryZones->agreed(fn (DeliveryZone $candidate): ?int => $candidate->kilogramsToFreeDelivery($totalKilograms))
+                : $zone->kilogramsToFreeDelivery($totalKilograms),
         );
     }
 
@@ -140,36 +144,5 @@ final readonly class PriceBook
         }
 
         return new PriceDrop($atKilograms, $atKilograms - $totalKilograms, $extraSaving);
-    }
-
-    /** Null for an empty Cart: no band starts below one kilogram. */
-    private function deliveryBandFor(int $totalKilograms): ?DeliveryBand
-    {
-        if ($totalKilograms === 0) {
-            return null;
-        }
-
-        foreach ($this->deliveryBands as $band) {
-            if ($band->contains($totalKilograms)) {
-                return $band;
-            }
-        }
-
-        throw new LogicException("No Delivery Band covers {$totalKilograms} kg; the bands must cover every whole kilogram from one.");
-    }
-
-    private function kilogramsToFreeDelivery(int $totalKilograms, ?DeliveryBand $band): ?int
-    {
-        if ($band?->isFree()) {
-            return null;
-        }
-
-        foreach ($this->deliveryBands as $candidate) {
-            if ($candidate->isFree() && $candidate->min > $totalKilograms) {
-                return $candidate->min - $totalKilograms;
-            }
-        }
-
-        return null;
     }
 }

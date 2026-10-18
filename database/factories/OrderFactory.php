@@ -37,7 +37,7 @@ class OrderFactory extends Factory
     /** A retail Order (ADR-0034); give it Pack lines with `OrderLineFactory::ofPack()`. */
     public function retail(): static
     {
-        return $this->state(fn (): array => ['kind' => OrderKind::Retail, 'delivery_label' => 'Retail delivery']);
+        return $this->state(fn (): array => ['kind' => OrderKind::Retail, 'delivery_label' => 'Everywhere · 1+ kg']);
     }
 
     public function confirmed(): static

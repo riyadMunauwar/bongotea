@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { totalText } from '@/components/cart/figures';
 import { MenuAnchor } from '@/components/storefront/menu-anchor';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
@@ -62,14 +63,14 @@ function BulkCartRow({ cart, href }: { cart: HeldCartInfo; href: string }) {
     const contents = useCart(cart.id);
     const taka = useTaka();
 
-    return <CartBarRow name={cart.name} size={bn.packs.kilograms(toBanglaDigits(contents.priced.totalKilograms))} total={taka(contents.priced.total)} href={href} onClear={contents.clear} />;
+    return <CartBarRow name={cart.name} size={bn.packs.kilograms(toBanglaDigits(contents.priced.totalKilograms))} total={totalText(contents.priced, taka)} href={href} onClear={contents.clear} />;
 }
 
 function RetailCartRow({ cart, href }: { cart: HeldCartInfo; href: string }) {
     const contents = useRetailCart(cart.id);
     const taka = useTaka();
 
-    return <CartBarRow name={cart.name} size={bn.cart.barPacks(toBanglaDigits(contents.priced.packCount))} total={taka(contents.priced.total)} href={href} onClear={contents.clear} />;
+    return <CartBarRow name={cart.name} size={bn.cart.barPacks(toBanglaDigits(contents.priced.packCount))} total={totalText(contents.priced, taka)} href={href} onClear={contents.clear} />;
 }
 
 /**

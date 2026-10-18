@@ -14,7 +14,7 @@ describe('the shared pricing examples', () => {
         const merged = { ...file.defaults, ...example };
 
         it(example.name, () => {
-            const book: PriceBook = { deliveryBands: merged.deliveryBands };
+            const book: PriceBook = { deliveryZones: merged.deliveryZones };
 
             const products = new Map<number, ProductPrices>((merged.products as ProductPrices[]).map((product) => [product.id, product]));
 
@@ -24,14 +24,14 @@ describe('the shared pricing examples', () => {
                 overridePrice: line.overridePrice ?? null,
             }));
 
-            expect(priceCart(book, lines)).toStrictEqual(example.expected);
+            expect(priceCart(book, lines, (merged.district as string | null) ?? null)).toStrictEqual(example.expected);
         });
     }
 });
 
 describe('a Price Override', () => {
     const product: ProductPrices = { id: 1, mrp: 550, tiers: [{ min: 1, max: null, price: 500 }] };
-    const book: PriceBook = { deliveryBands: [{ min: 1, max: null, fee: 0 }] };
+    const book: PriceBook = { deliveryZones: [{ name: 'Everywhere', districts: [], everywhereElse: true, bands: [{ min: 1, max: null, fee: 0 }] }] };
 
     it('is refused above the MRP, since nothing is sold above it', () => {
         expect(() => priceCart(book, [{ product, kilograms: 1, overridePrice: 551 }])).toThrow();

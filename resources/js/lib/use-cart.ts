@@ -69,8 +69,10 @@ export type UseCart = {
  * calculator's — is the tea's default Pack's. No Cart (null) holds nothing
  * and takes nothing. The server draws empty Contents — it cannot see the
  * browser's storage — and the stored ones appear as the page comes alive.
+ * Given a District — the Checkout's — the Delivery Charge is that District's
+ * zone's (ADR-0039); without one it is the range across every zone.
  */
-export function useCart(cartId: number | null): UseCart {
+export function useCart(cartId: number | null, district: string | null = null): UseCart {
     const { carts, pricing, startingCarts } = usePage().props;
     const contents = useSyncExternalStore(bulkContents.subscribe, () => bulkContents.read(startingCarts.bulk), () => NO_CONTENTS);
     const cart = (cartId === null ? undefined : contents[cartId]) ?? EMPTY_CART;
@@ -79,7 +81,7 @@ export function useCart(cartId: number | null): UseCart {
     return useMemo(() => {
         const lines = cartLines(cart, pricing.products);
         const orderable = pricing.products.filter((product) => product.isAvailable);
-        const book = { deliveryBands: pricing.deliveryBands };
+        const book = { deliveryZones: pricing.deliveryZones };
         const productOf = (productId: number) => orderable.find((candidate) => candidate.id === productId);
         const packIdOf = (product: CartProduct, packId: number | null) => packFor(product, packId)?.id ?? null;
         const lineIn = (productId: number, packId: number | null) => {
@@ -122,7 +124,7 @@ export function useCart(cartId: number | null): UseCart {
                 }
             },
             lines,
-            priced: priceCart(book, lines),
+            priced: priceCart(book, lines, district),
             isEmpty: lines.length === 0,
             hasUnpackable: lines.some((line) => line.packets === null),
             hasOutsideLimit: lines.some((line) => line.limit !== null),
@@ -133,7 +135,7 @@ export function useCart(cartId: number | null): UseCart {
             ),
             products: pricing.products,
         };
-    }, [cart, cartId, carts, pricing, startingCarts, moments]);
+    }, [cart, cartId, carts, pricing, startingCarts, moments, district]);
 }
 
 /**

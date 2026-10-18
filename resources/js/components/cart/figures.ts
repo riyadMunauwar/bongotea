@@ -2,7 +2,7 @@ import { tierRange } from '@/components/catalogue/tier-ladder';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import type { PriceStep } from '@/lib/cart';
-import type { PricedCart } from '@/lib/pricing';
+import type { DeliveryRange, PricedCart } from '@/lib/pricing';
 import type { PricedRetailCart } from '@/lib/retail-pricing';
 
 /**
@@ -16,6 +16,52 @@ type Taka = (minorUnits: number) => string;
 /** A Delivery Charge: "ফ্রি" when there is none. */
 export function feeText(fee: number, taka: Taka): string {
     return fee === 0 ? bn.cart.free : taka(fee);
+}
+
+/** What either kind of priced Cart says about its delivery (ADR-0039). */
+type DeliveryFigures = {
+    subtotal: number;
+    deliveryCharge: number;
+    /** Null while no District is known. */
+    deliveryZone: string | null;
+    /** Null for an empty Cart. */
+    deliveryRange: DeliveryRange | null;
+};
+
+/** Whether the charge still depends on a District nobody has given: no zone known, and the zones disagree. */
+export function dependsOnDistrict(priced: DeliveryFigures): boolean {
+    return priced.deliveryZone === null && priced.deliveryRange !== null && priced.deliveryRange.least !== priced.deliveryRange.most;
+}
+
+/**
+ * The Delivery Charge as a buyer may be told it: the zone's once a District
+ * is known; before that the one figure every zone agrees on, or the range
+ * "৳৭০–৳১৩০" — never one zone's figure as though it were the price.
+ */
+export function deliveryText(priced: DeliveryFigures, taka: Taka): string {
+    if (priced.deliveryZone !== null || priced.deliveryRange === null) {
+        return feeText(priced.deliveryCharge, taka);
+    }
+
+    const { least, most } = priced.deliveryRange;
+
+    return least === most ? feeText(least, taka) : bn.cart.range(feeText(least, taka), taka(most));
+}
+
+/** The total with delivery, read the same way: a range while the charge still depends on a District. */
+export function totalText(priced: DeliveryFigures, taka: Taka): string {
+    if (priced.deliveryZone !== null || priced.deliveryRange === null) {
+        return taka(priced.subtotal + priced.deliveryCharge);
+    }
+
+    const { least, most } = priced.deliveryRange;
+
+    return least === most ? taka(priced.subtotal + least) : bn.cart.range(taka(priced.subtotal + least), taka(priced.subtotal + most));
+}
+
+/** Whether delivery is free wherever it is known to go: in the zone, or before a District in every zone. */
+function isFreeDelivery(priced: DeliveryFigures): boolean {
+    return priced.deliveryZone !== null ? priced.deliveryCharge === 0 : priced.deliveryRange?.most === 0;
 }
 
 /** "আর ৩ কেজি নিলে আরও ৳১২০ সাশ্রয়", or that nothing gets cheaper from here. */
@@ -35,11 +81,15 @@ export function deliveryNote(priced: PricedCart): string | null {
         return bn.bulkOrder.deliveryByWeight;
     }
 
-    if (priced.deliveryCharge === 0) {
+    if (isFreeDelivery(priced)) {
         return bn.bulkOrder.freeDelivery;
     }
 
-    return priced.kilogramsToFreeDelivery === null ? null : bn.bulkOrder.toFreeDelivery(toBanglaDigits(priced.kilogramsToFreeDelivery));
+    if (priced.kilogramsToFreeDelivery !== null) {
+        return bn.bulkOrder.toFreeDelivery(toBanglaDigits(priced.kilogramsToFreeDelivery));
+    }
+
+    return dependsOnDistrict(priced) ? bn.cart.deliveryByDistrict : null;
 }
 
 /**
@@ -79,9 +129,13 @@ export function packName(grams: number): string {
 
 /** Under the retail Delivery Charge: whether it is free, or how much more would make it so. */
 export function retailDeliveryNote(priced: PricedRetailCart, taka: Taka): string | null {
-    if (priced.packCount > 0 && priced.deliveryCharge === 0) {
+    if (priced.packCount > 0 && isFreeDelivery(priced)) {
         return bn.packs.freeDelivery;
     }
 
-    return priced.amountToFreeDelivery === null ? null : bn.packs.toFreeDelivery(taka(priced.amountToFreeDelivery));
+    if (priced.amountToFreeDelivery !== null) {
+        return bn.packs.toFreeDelivery(taka(priced.amountToFreeDelivery));
+    }
+
+    return dependsOnDistrict(priced) ? bn.cart.deliveryByDistrict : null;
 }

@@ -1,33 +1,48 @@
 import { usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import { feeText } from '@/components/cart/figures';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { TruckIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
+import { bandFor, chargeIn } from '@/lib/pricing';
 import { useCart } from '@/lib/use-cart';
 import { useCurrentCarts } from '@/lib/use-current-carts';
+import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { DeliveryChartProps } from '@/types/blocks';
 
 /**
- * The Delivery Bands as a bar chart: one bar per band, as tall as its fee
- * against the dearest, the free band low and in gold, the band the Cart is
- * in filled and marked "আপনার কার্ট". The bands are the shared ones the Cart
- * is priced from, so the chart never disagrees with the summary.
+ * The Delivery Zones of one kind as bar charts (ADR-0039): a tab per zone
+ * where there is more than one, and in it one bar per band, as tall as its
+ * fee against the dearest, the free band low and in gold, the band the
+ * Current Cart of that kind is in filled and marked "আপনার কার্ট". The
+ * zones are the shared ones the Cart is priced from, so the chart never
+ * disagrees with the summary.
  */
-export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryChartProps) {
+export function DeliveryChart({ kind, heading, text, offersCashOnDelivery }: DeliveryChartProps) {
     const taka = useTaka();
-    const { pricing } = usePage().props;
-    const { priced } = useCart(useCurrentCarts().bulk?.id ?? null);
-    const bands = pricing.deliveryBands;
-    const dearest = Math.max(...bands.map((band) => band.fee));
-    const free = bands.find((band) => band.fee === 0);
-    const columns = { gridTemplateColumns: `repeat(${bands.length}, minmax(0, 1fr))` };
+    const { pricing, retailPricing } = usePage().props;
+    const current = useCurrentCarts();
+    const bulk = useCart(kind === 'bulk' ? (current.bulk?.id ?? null) : null).priced;
+    const retail = useRetailCart(kind === 'retail' ? (current.retail?.id ?? null) : null).priced;
+    const zones = kind === 'bulk' ? pricing.deliveryZones : retailPricing.deliveryZones;
+    const [chosen, setChosen] = useState(0);
+    const zone = zones[Math.min(chosen, zones.length - 1)];
 
-    if (bands.length === 0) {
+    if (zone === undefined || zone.bands.length === 0) {
         return null;
     }
+
+    const kilograms = kind === 'bulk' ? bulk.totalKilograms : retail.kilograms;
+    const subtotal = kind === 'bulk' ? bulk.subtotal : retail.subtotal;
+    const cartBand = bandFor(zone, kilograms);
+    const bands = zone.bands;
+    const dearest = Math.max(...bands.map((band) => band.fee));
+    const freeBand = bands.find((band) => band.fee === 0);
+    const freeFrom = zone.freeDeliveryFrom ?? null;
+    const columns = { gridTemplateColumns: `repeat(${bands.length}, minmax(0, 1fr))` };
 
     return (
         <section className="shell-container py-10 md:py-[72px]">
@@ -38,32 +53,51 @@ export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryC
                     </span>
                     <div className="flex flex-col gap-[6px]">
                         <b className="text-[clamp(20px,2vw,24px)] leading-[1.3] font-bold">{heading ?? bn.delivery.heading}</b>
-                        <span className="text-[14px] leading-[1.6] text-on-dark-sub">{text ?? bn.delivery.text}</span>
+                        <span className="text-[14px] leading-[1.6] text-on-dark-sub">{text ?? (kind === 'bulk' ? bn.delivery.text : bn.delivery.retailText)}</span>
                     </div>
-                    {free && (
+                    {(freeBand || freeFrom !== null) && (
                         <div className="flex items-center gap-[10px] rounded-[12px] bg-gold-accent px-[14px] py-3 text-night">
                             <b className="text-[22px] font-extrabold">{bn.cart.free}</b>
-                            <span className="text-[13px] leading-[1.4] font-semibold">{bn.delivery.freeFrom(toBanglaDigits(free.min))}</span>
+                            <span className="text-[13px] leading-[1.4] font-semibold">
+                                {freeBand ? bn.delivery.freeFrom(toBanglaDigits(freeBand.min)) : bn.delivery.retailFreeFrom(taka(freeFrom as number))}
+                            </span>
                         </div>
                     )}
                     <div className="flex flex-col gap-[6px] text-[13px] text-on-dark-sub">
-                        <span>{bn.delivery.sameEverywhere}</span>
+                        <span>{zones.length === 1 ? bn.delivery.sameEverywhere : bn.delivery.byZone}</span>
                         {offersCashOnDelivery && <span>{bn.delivery.cashOnDelivery}</span>}
                     </div>
                 </div>
 
                 <div className="flex flex-col gap-4 p-5 md:p-7">
+                    {zones.length > 1 && (
+                        <div role="tablist" className="flex flex-wrap gap-2">
+                            {zones.map((candidate, index) => (
+                                <button
+                                    key={candidate.name}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={candidate === zone}
+                                    onClick={() => setChosen(index)}
+                                    className={cn(
+                                        'cursor-pointer rounded-full border px-[14px] py-[6px] text-[13px] font-semibold',
+                                        candidate === zone ? 'border-primary bg-primary text-white' : 'border-border bg-white text-ink',
+                                    )}
+                                >
+                                    {candidate.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex flex-wrap items-baseline justify-between gap-3">
                         <span className="text-[15px] font-semibold text-ink">{bn.delivery.byWeight}</span>
                         <span className="text-[13px] font-semibold text-primary">
-                            {priced.deliveryBand === null
-                                ? bn.delivery.cartEmpty
-                                : bn.delivery.cartNow(toBanglaDigits(priced.totalKilograms), feeText(priced.deliveryCharge, taka))}
+                            {cartBand === null ? bn.delivery.cartEmpty : bn.delivery.cartNow(toBanglaDigits(kilograms), feeText(chargeIn(zone, kilograms, subtotal), taka))}
                         </span>
                     </div>
                     <div className="grid h-[170px] items-end gap-[6px] md:h-[200px] md:gap-[14px]" style={columns}>
                         {bands.map((band) => {
-                            const isCurrent = priced.deliveryBand?.min === band.min;
+                            const isCurrent = cartBand?.min === band.min;
                             const isFree = band.fee === 0;
                             const height = isFree ? 14 : Math.max(18, Math.round((band.fee / dearest) * 78));
 
@@ -91,10 +125,7 @@ export function DeliveryChart({ heading, text, offersCashOnDelivery }: DeliveryC
                         {bands.map((band) => (
                             <span
                                 key={band.min}
-                                className={cn(
-                                    'text-center text-[11px] leading-[1.35] md:text-[13px]',
-                                    priced.deliveryBand?.min === band.min ? 'font-bold text-primary-dark' : 'font-medium text-muted',
-                                )}
+                                className={cn('text-center text-[11px] leading-[1.35] md:text-[13px]', cartBand?.min === band.min ? 'font-bold text-primary-dark' : 'font-medium text-muted')}
                             >
                                 {tierRange(band)}
                             </span>

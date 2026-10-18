@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { currentStepRange, discountLabel, feeText } from '@/components/cart/figures';
+import { currentStepRange, deliveryText, discountLabel, totalText } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
@@ -176,11 +176,11 @@ function Panel({ cart, href, products }: { cart: UseCart; href: string; products
                 </div>
                 <div className="flex justify-between text-[14px] text-on-dark-sub">
                     <span>{bn.bulkOrder.delivery}</span>
-                    <span className="font-semibold text-gold-accent">{total === 0 ? bn.cart.noFigure : feeText(priced.deliveryCharge, taka)}</span>
+                    <span className="font-semibold text-gold-accent">{total === 0 ? bn.cart.noFigure : deliveryText(priced, taka)}</span>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 border-t border-white/12 pt-[6px]">
                     <span className="text-[15px]">{bn.bulkOrder.total}</span>
-                    <b className="text-[clamp(28px,3vw,36px)] font-extrabold">{taka(priced.total)}</b>
+                    <b className="text-[clamp(28px,3vw,36px)] font-extrabold">{totalText(priced, taka)}</b>
                 </div>
             </div>
 

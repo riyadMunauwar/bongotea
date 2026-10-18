@@ -32,7 +32,9 @@ use Illuminate\Support\Facades\DB;
  * comes from the caller*: it hands over which Products and how many kilograms
  * of each, and the delivery details, and every figure on the resulting Order
  * is worked out by the pricing module (ADR-0031) — each line's Tier Price by
- * the whole Cart's Kilograms, and the Delivery Charge by the same total.
+ * the whole Cart's Kilograms, and the Delivery Charge by the same total in the
+ * Delivery Zone the District falls in (ADR-0039), recorded with the zone and
+ * band it was charged under.
  *
  * The Checkout also hands over the Quote the Customer was shown. It is
  * compared, never believed: where the store's own figures differ, or a
@@ -56,9 +58,6 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderCapture
 {
-    /** What a retail Order's Delivery Charge is called, in place of a Delivery Band's range. */
-    public const RETAIL_DELIVERY_LABEL = 'Retail delivery';
-
     public function __construct(
         private readonly StockLedger $ledger,
         private readonly CommittedStock $stock,
@@ -104,7 +103,7 @@ class OrderCapture
          * part — a COD parcel holding less than the Customer agreed to is
          * refused at the door, at the Merchant's expense.
          */
-        $priced = $this->price($lines, $quote);
+        $priced = $this->price($lines, $quote, $details['district']);
 
         $costs = $this->ledger->averageCostFor(array_map(fn (array $line): int => $line['product']->getKey(), $lines));
 
@@ -131,7 +130,7 @@ class OrderCapture
                 throw new QuoteRefused(self::shortMessage($short[0]), $priced, shortProductIds: $short);
             }
 
-            $order = $this->createOrder($customer, $details, $cart, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryBand?->label());
+            $order = $this->createOrder($customer, $details, $cart, OrderKind::Bulk, $priced->deliveryCharge, $priced->deliveryLabel());
 
             foreach ($lines as $index => $line) {
                 $order->lines()->create($this->line($line['product'], $line['pack'], $priced->lines[$index], $costs));
@@ -144,9 +143,9 @@ class OrderCapture
 
     /**
      * Capture of the packet basket: an Order marked retail (ADR-0034), each
-     * line one Pack's worth at its Pack Price, paying the flat retail Delivery
-     * Charge — waived at the threshold — and nothing from the Tiers or the
-     * Delivery Bands. The same refusals as bulk, read for Packs: a Pack
+     * line one Pack's worth at its Pack Price, paying the retail Delivery Zone's
+     * charge for the District — waived at that zone's threshold — and nothing
+     * from the Tiers or the bulk zones. The same refusals as bulk, read for Packs: a Pack
      * removed, switched off, not ticked খুচরা, named under another Product, or
      * whose Product is not sold খুচরা or can no longer be had refuses with the basket priced as it is now, and so
      * does a Quote that disagrees, or a basket wanting more of a Product than
@@ -169,7 +168,7 @@ class OrderCapture
 
         $this->refuseMalformedRetail($lines);
 
-        $priced = $this->priceRetail($lines, $quote);
+        $priced = $this->priceRetail($lines, $quote, $details['district']);
 
         /** @var list<array{packId: int, productId: int, pack: Pack, count: int}> $lines */
         $costs = $this->ledger->averageCostFor(array_values(array_unique(array_map(fn (array $line): int => $line['pack']->product_id, $lines))));
@@ -196,7 +195,7 @@ class OrderCapture
                 throw new RetailQuoteRefused(self::shortMessage($short[0]), $priced, shortPackIds: $shortPacks);
             }
 
-            $order = $this->createOrder($customer, $details, $cart, OrderKind::Retail, $priced->deliveryCharge, self::RETAIL_DELIVERY_LABEL);
+            $order = $this->createOrder($customer, $details, $cart, OrderKind::Retail, $priced->deliveryCharge, $priced->deliveryLabel());
 
             foreach ($lines as $index => $line) {
                 $order->lines()->create($this->packLine($line['pack'], $priced->lines[$index], $costs));
@@ -332,7 +331,7 @@ class OrderCapture
      *
      * @param  list<array{packId: int, productId: int, pack: Pack|null, count: int}>  $lines
      */
-    private function priceRetail(array $lines, ?RetailQuote $quote): PricedRetailCart
+    private function priceRetail(array $lines, ?RetailQuote $quote, string $district): PricedRetailCart
     {
         $orderable = [];
         $refused = [];
@@ -348,10 +347,10 @@ class OrderCapture
         }
 
         if ($refused !== []) {
-            throw new RetailQuoteRefused("Pack [{$refused[0]}] cannot be ordered now.", self::priceRetailOf($orderable), $refused);
+            throw new RetailQuoteRefused("Pack [{$refused[0]}] cannot be ordered now.", self::priceRetailOf($orderable, $district), $refused);
         }
 
-        $priced = self::priceRetailOf($lines);
+        $priced = self::priceRetailOf($lines, $district);
 
         /** Before the Quote is compared, as for bulk. */
         self::refuseOutsideRetailLimits($lines, $priced);
@@ -366,12 +365,12 @@ class OrderCapture
     /**
      * @param  list<array{pack: Pack|null, count: int}>  $lines  every Pack present
      */
-    private static function priceRetailOf(array $lines): PricedRetailCart
+    private static function priceRetailOf(array $lines, string $district): PricedRetailCart
     {
         return RetailPriceBook::current()->price(array_map(
             fn (array $line): RetailLine => new RetailLine(PackPrices::of($line['pack']), $line['count']),
             $lines,
-        ));
+        ), $district);
     }
 
     /**
@@ -437,7 +436,7 @@ class OrderCapture
      *
      * @param  list<array{product: Product, kilograms: int, pack: Pack|null}>  $lines
      */
-    private function price(array $lines, ?Quote $quote): PricedCart
+    private function price(array $lines, ?Quote $quote, string $district): PricedCart
     {
         $orderable = [];
         $refusals = [];
@@ -458,7 +457,7 @@ class OrderCapture
             /** A Product refused in one of its Packs is left out in every one, as the buyer will be shown it. */
             $orderable = array_values(array_filter($orderable, fn (array $line): bool => ! array_key_exists($line['product']->getKey(), $refusals)));
 
-            throw new QuoteRefused("Product [{$first}] {$refusals[$first]}.", self::priceOf($orderable), array_keys($refusals));
+            throw new QuoteRefused("Product [{$first}] {$refusals[$first]}.", self::priceOf($orderable, $district), array_keys($refusals));
         }
 
         foreach ($lines as $line) {
@@ -468,7 +467,7 @@ class OrderCapture
             PackingRefused::unlessPackable($line['product'], $line['kilograms'], $pack->grams);
         }
 
-        $priced = self::priceOf($lines);
+        $priced = self::priceOf($lines, $district);
 
         /** Before the Quote is compared: a buyer told only that a price moved would send the same Cart again. */
         $outside = OrderLimit::refusals(OrderKind::Bulk, array_map(
@@ -490,12 +489,12 @@ class OrderCapture
     /**
      * @param  list<array{product: Product, kilograms: int}>  $lines
      */
-    private static function priceOf(array $lines): PricedCart
+    private static function priceOf(array $lines, string $district): PricedCart
     {
         return PriceBook::current()->price(array_map(
             fn (array $line): CartLine => new CartLine(ProductPrices::of($line['product']), $line['kilograms']),
             $lines,
-        ));
+        ), $district);
     }
 
     /**

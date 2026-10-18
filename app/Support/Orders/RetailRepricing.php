@@ -28,7 +28,8 @@ use LogicException;
  * Order holds, and how a retail Order taken by phone is priced at all.
  *
  * The whole Order is priced again as if captured that moment — today's Pack
- * Prices, and the retail Delivery Charge and threshold read afresh — through
+ * Prices, and the Delivery Charge and threshold read afresh from the retail
+ * zone of the District it now goes to (ADR-0039) — through
  * retail pricing. A line under a Price Override keeps its price, which never
  * exceeds its Pack's MRP. An Order with any Shipment is not changed at all.
  *
@@ -90,9 +91,10 @@ class RetailRepricing
      * yet a line that can be priced, or one holds an override above its MRP.
      *
      * @param  array<array-key, mixed>  $state
+     * @param  string|null  $district  where the Order goes, as the form has it; null while nobody has said, which charges no delivery
      * @return array{cart: PricedRetailCart, lines: array<array-key, PricedPackLine>}|null
      */
-    public function preview(array $state): ?array
+    public function preview(array $state, ?string $district = null): ?array
     {
         $requested = self::requested($state);
         $packs = self::packs($requested);
@@ -103,7 +105,7 @@ class RetailRepricing
         }
 
         try {
-            $cart = self::price($requested, $packs);
+            $cart = self::price($requested, $packs, $district);
         } catch (InvalidArgumentException) {
             return null;
         }
@@ -279,7 +281,7 @@ class RetailRepricing
             throw new InvalidArgumentException(reset($outside));
         }
 
-        $cart = self::price($lines, $packs);
+        $cart = self::price($lines, $packs, $order->customer_district);
         $costs = $this->ledger->averageCostFor(array_values(array_unique($packs->map(fn (Pack $pack): int => $pack->product_id)->all())));
         $wasTotal = $order->total;
         $wasPriced = $stored->isNotEmpty();
@@ -303,7 +305,7 @@ class RetailRepricing
 
             $order->fill([
                 'delivery_charge' => $cart->deliveryCharge,
-                'delivery_label' => OrderCapture::RETAIL_DELIVERY_LABEL,
+                'delivery_label' => $cart->deliveryLabel(),
             ])->save();
 
             if ($wasPriced && $wasTotal !== $order->total) {
@@ -378,12 +380,12 @@ class RetailRepricing
      * @param  array<array-key, RequestedPackLine>  $lines
      * @param  Collection<int, Pack>  $packs
      */
-    private static function price(array $lines, Collection $packs): PricedRetailCart
+    private static function price(array $lines, Collection $packs, ?string $district): PricedRetailCart
     {
         return RetailPriceBook::current()->price(array_values(array_map(
             fn (RequestedPackLine $line): RetailLine => new RetailLine(PackPrices::of($packs[$line->packId]), $line->count, $line->overridePrice),
             $lines,
-        )));
+        )), $district);
     }
 
     /**

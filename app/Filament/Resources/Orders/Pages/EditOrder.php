@@ -134,9 +134,10 @@ class EditOrder extends EditRecord
     /**
      * The Order's details are saved as they are; its lines only when they
      * changed, and then the whole Order is repriced at today's prices in the
-     * same transaction. Untouched lines keep what was agreed at Capture. An
-     * Order with a Shipment sends no lines at all — the form holds them shut —
-     * and `Repricing` refuses it besides.
+     * same transaction. A District changed reprices it too, because it moves
+     * the Order into another Delivery Zone (ADR-0039). Untouched lines keep
+     * what was agreed at Capture. An Order with a Shipment sends no lines at
+     * all — the form holds them shut — and `Repricing` refuses it besides.
      *
      * @param  Order  $record
      * @param  array<string, mixed>  $data
@@ -154,10 +155,12 @@ class EditOrder extends EditRecord
                 return $record;
             }
 
+            $districtMoved = $record->wasChanged('customer_district');
+
             try {
-                if ($record->isRetail() && RetailRepricing::changes($record, $lines)) {
+                if ($record->isRetail() && ($districtMoved || RetailRepricing::changes($record, $lines))) {
                     app(RetailRepricing::class)->apply($record, $lines, auth()->user(), $beyondStockReason);
-                } elseif (! $record->isRetail() && Repricing::changes($record, $lines)) {
+                } elseif (! $record->isRetail() && ($districtMoved || Repricing::changes($record, $lines))) {
                     app(Repricing::class)->apply($record, $lines, auth()->user(), $beyondStockReason);
                 }
             } catch (BeyondFreeToSell $refusal) {

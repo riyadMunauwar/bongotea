@@ -117,7 +117,7 @@ The moment a visitor submits the Checkout, or a User saves a new Order taken by 
 _Avoid_: conversion, submission
 
 **Repricing**:
-What happens when a User changes what an unsent Order holds — a quantity, a line, a Product: the whole Order is priced again as if captured that moment, at today's Tier Prices, for its new total Kilograms, with its Delivery Charge read afresh. The User sees the old total beside the new one before saving, because the next thing they do is tell the Customer. An Order with any Shipment is not changed at all, because what the courier will collect has already been handed to them.
+What happens when a User changes what an unsent Order holds — a quantity, a line, a Product, or the District it goes to: the whole Order is priced again as if captured that moment, at today's Tier Prices, for its new total Kilograms, with its Delivery Charge read afresh. The User sees the old total beside the new one before saving, because the next thing they do is tell the Customer. An Order with any Shipment is not changed at all, because what the courier will collect has already been handed to them.
 _Avoid_: recalculation, update, edit, adjustment
 
 **Price Override**:
@@ -173,19 +173,23 @@ A text message sent to the Merchant's own numbers, set in Settings, the moment a
 _Avoid_: admin notification, new order alert, ping
 
 **District**:
-The district an Order is delivered to, one of the country's sixty-four, chosen from a list at Capture and distinct from the free-text address that tells a courier where the door is. Every Order has one, because the store delivers nationwide and couriers want a structured region that cannot be recovered from an address afterwards. It settles nothing about what an Order costs.
+The district an Order is delivered to, one of the country's sixty-four, chosen from a list at Capture and distinct from the free-text address that tells a courier where the door is. Every Order has one, because the store delivers nationwide and couriers want a structured region that cannot be recovered from an address afterwards. It settles the Order's Delivery Zone, and through it the Delivery Charge.
 _Avoid_: zone, area, thana, city
+
+**Delivery Zone**:
+A named group of Districts the Merchant sets up — Inside Dhaka, Outside Dhaka — so that where a parcel goes can change what it costs, bulk and retail alike. Bulk and retail each have their own list of zones, set apart from each other, so one District may sit in differently drawn zones for the two kinds. Each zone has its own Delivery Bands. Every District belongs to exactly one, and one zone is "everywhere else", so a District nobody listed still has a zone. A Customer never chooses one: the District they give decides it, so nobody can pick the cheaper zone for a door that is in the dearer one.
+_Avoid_: area, region, delivery option, Delivery Area (a Courier's own word)
 
 **Kilogram**:
 The unit bulk is sold in. Every quantity a bulk Customer asks for is a whole number of kilograms of one Product, and one its chosen Pack makes exactly — two kilograms in 400 g Packs is five of them, one kilogram in them is refused and never rounded — and every bulk figure that depends on how much is bought — the Tier and the Delivery Charge among them — is read from kilograms, never from a count of lines or parcels. Retail is sold in Packs instead. Stock is held in grams beneath both, so a Kilogram and a Pack of the same tea come off one shelf.
 _Avoid_: unit, piece, item, quantity (as a unit)
 
 **Delivery Band**:
-A range of an Order's total kilograms and the Delivery Charge for it — 1–5 kg ৳120, 51 kg and over free. The bands cover every whole kilogram from one upwards without gap or overlap, are the same for the whole country, and are set in Settings. They are their own table and owe nothing to how Products are priced: where a band's edges fall says nothing about where a price changes.
+A range of an Order's total kilograms and the Delivery Charge for it within one Delivery Zone — 1–5 kg ৳120, 51 kg and over free. Each zone's bands cover every whole kilogram from one upwards without gap or overlap, and are set in Settings. A retail Order's weight is its Packs' added up and rounded up to the next whole kilogram, so 350 g is read as one. They are their own table and owe nothing to how Products are priced: where a band's edges fall says nothing about where a price changes.
 _Avoid_: delivery option, shipping tier, zone, rate, slab
 
 **Delivery Charge**:
-The amount added to an Order for getting the parcel to the door, taken from the Delivery Band its total kilograms fall in. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order. There is nothing for a Customer to choose: the weight decides it, and never the Cart an Order came from — every Cart of a kind is charged alike. A retail Order owes nothing to the Delivery Bands: it pays one flat retail charge set in Settings, waived once its total reaches a threshold set beside it.
+The amount added to an Order for getting the parcel to the door, taken from the Delivery Band its total kilograms fall in, among the bands of its Delivery Zone. It is part of what the courier collects, and it is agreed at Capture like every other figure on the Order, which records the zone's name and the band's range it was charged under as they stood then, so a zone renamed, redrawn or deleted later leaves the Order still explaining its charge. There is nothing for a Customer to choose: the District and the weight decide it, and never the Cart an Order came from — every Cart of a kind is charged alike. Bulk and retail are charged from tables of their own, never each other's; a Merchant reads the two as Bulk Delivery Charges and Retail Delivery Charges. A retail zone may also say a subtotal from which its delivery is free; with none, it never is. Until the Customer has given a District no zone is known, so anywhere before Checkout shows the charge as the range it could be — least to most across that kind's zones — and never one zone's figure as though it were the price.
 _Avoid_: shipping cost, courier fee, postage
 
 **Cancelled**:
@@ -516,7 +520,7 @@ _Avoid_: deleted, archived, removed, terminated, offboarded
 ### The installation
 
 **Settings**:
-The values a Merchant decides once for the whole store: how the store is reached and what it is called, the Delivery Bands, and what payment gateways, couriers and SMS Gateways need. What appears on every page is a Setting and what appears on one is a Block; if a single Page could reasonably differ on it, it is not a Setting.
+The values a Merchant decides once for the whole store: how the store is reached and what it is called, the Delivery Zones, and what payment gateways, couriers and SMS Gateways need. What appears on every page is a Setting and what appears on one is a Block; if a single Page could reasonably differ on it, it is not a Setting.
 _Avoid_: config, options, preferences, site settings, global settings
 
 **Menu**:

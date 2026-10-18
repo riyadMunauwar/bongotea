@@ -11,7 +11,6 @@ use App\Models\Pack;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Money;
-use App\Support\Orders\OrderCapture;
 use App\Support\Orders\Repricing;
 use App\Support\Orders\RetailRepricing;
 use App\Support\PhoneNumber;
@@ -196,6 +195,11 @@ class OrderForm
                             ->dehydrateStateUsing(self::nullWhenBlank())
                             ->placeholder(OrderDocument::NOT_ASKED),
 
+                        /**
+                         * Live, because the District settles the Delivery Zone, and with it the Delivery Charge drawn below (ADR-0039).
+                         * Held shut with the lines once a parcel is booked: what the courier collects is already theirs, and a District
+                         * moved under it would read one zone and charge another.
+                         */
                         Select::make('customer_district')
                             ->label('District')
                             ->options(fn (): array => array_combine(
@@ -203,6 +207,8 @@ class OrderForm
                                 config('giopages.districts'),
                             ))
                             ->required()
+                            ->live()
+                            ->disabled(fn (?Order $record): bool => $record?->hasAnyShipment() ?? false)
                             ->searchable(),
 
                         Textarea::make('customer_address')
@@ -325,7 +331,7 @@ class OrderForm
                                 TextEntry::make('price_per_kilogram')
                                     ->label(fn (Get $get, ?Order $record): string => self::isRetail($get('../../kind'), $record) ? 'Pack Price' : 'Price per kg')
                                     ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::linePrice(
-                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'))['lines'][self::itemKey($component)] ?? null,
+                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'), $get('../../customer_district'))['lines'][self::itemKey($component)] ?? null,
                                     )),
 
                                 /**
@@ -359,7 +365,7 @@ class OrderForm
                                 TextEntry::make('line_total')
                                     ->label('Line total')
                                     ->state(fn (Get $get, Component $livewire, ?Order $record, TextEntry $component): string => self::money(
-                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'))['lines'][self::itemKey($component)]['total'] ?? null,
+                                        self::figures($livewire, $get('../../lines'), $record, $get('../../kind'), $get('../../customer_district'))['lines'][self::itemKey($component)]['total'] ?? null,
                                     )),
                             ]),
 
@@ -391,7 +397,7 @@ class OrderForm
                     ->schema([
                         TextEntry::make('subtotal')
                             ->alignment(Alignment::End)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['subtotal'])),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['subtotal'])),
 
                         /**
                          * Never typed: the Delivery Band the Order's total
@@ -401,8 +407,8 @@ class OrderForm
                         TextEntry::make('delivery_charge')
                             ->label('Delivery')
                             ->alignment(Alignment::End)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['delivery']))
-                            ->hint(fn (Get $get, Component $livewire, ?Order $record): ?string => self::figures($livewire, $get('lines'), $record, $get('kind'))['band']),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['delivery']))
+                            ->hint(fn (Get $get, Component $livewire, ?Order $record): ?string => self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['band']),
 
                         /** Includes delivery, so nobody does arithmetic against a cash payment. */
                         TextEntry::make('total')
@@ -410,7 +416,7 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->weight('bold')
                             ->size(TextSize::Large)
-                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['total'])),
+                            ->state(fn (Get $get, Component $livewire, ?Order $record): string => self::money(self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['total'])),
 
                         /**
                          * What a User reads out on the confirmation call
@@ -422,11 +428,11 @@ class OrderForm
                             ->alignment(Alignment::End)
                             ->color('warning')
                             ->weight('bold')
-                            ->visible(fn (Get $get, Component $livewire, ?Order $record): bool => $record !== null && self::figures($livewire, $get('lines'), $record, $get('kind'))['repriced'])
+                            ->visible(fn (Get $get, Component $livewire, ?Order $record): bool => $record !== null && self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['repriced'])
                             ->state(fn (Get $get, Component $livewire, ?Order $record): ?string => $record === null ? null : sprintf(
                                 'was %s → now %s',
                                 Money::format($record->total),
-                                self::money(self::figures($livewire, $get('lines'), $record, $get('kind'))['total']),
+                                self::money(self::figures($livewire, $get('lines'), $record, $get('kind'), $get('customer_district'))['total']),
                             )),
                     ]),
             ]);
@@ -705,16 +711,17 @@ class OrderForm
      *
      * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
      */
-    private static function figures(Component $livewire, mixed $lines, ?Order $record, mixed $kind = null): array
+    private static function figures(Component $livewire, mixed $lines, ?Order $record, mixed $kind = null, mixed $district = null): array
     {
         $lines = is_array($lines) ? $lines : [];
+        $district = is_string($district) && $district !== '' ? $district : null;
         $retail = self::isRetail($kind, $record);
         self::$figures ??= new WeakMap;
         $worked = self::$figures[$livewire] ?? [];
-        $key = md5(serialize([$retail, $lines]));
+        $key = md5(serialize([$retail, $lines, $district]));
 
         if (! array_key_exists($key, $worked)) {
-            $worked[$key] = $retail ? self::workOutRetailFigures($lines, $record) : self::workOutFigures($lines, $record);
+            $worked[$key] = $retail ? self::workOutRetailFigures($lines, $record, $district) : self::workOutFigures($lines, $record, $district);
             self::$figures[$livewire] = $worked;
         }
 
@@ -722,12 +729,16 @@ class OrderForm
     }
 
     /**
+     * The bulk Order's figures: as captured while its lines and District are
+     * untouched, else priced afresh at today's Tier Prices and the zone of the
+     * District the form now names.
+     *
      * @param  array<array-key, mixed>  $lines
      * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
      */
-    private static function workOutFigures(array $lines, ?Order $record): array
+    private static function workOutFigures(array $lines, ?Order $record, ?string $district): array
     {
-        if ($record !== null && ! Repricing::changes($record, $lines)) {
+        if ($record !== null && ! Repricing::changes($record, $lines) && $district === $record->customer_district) {
             $stored = $record->lines()->get()->keyBy('id');
             $byKey = [];
 
@@ -753,7 +764,7 @@ class OrderForm
             ];
         }
 
-        $preview = app(Repricing::class)->preview($lines);
+        $preview = app(Repricing::class)->preview($lines, $district);
 
         if ($preview === null) {
             return ['repriced' => true, 'subtotal' => null, 'delivery' => null, 'band' => null, 'total' => null, 'lines' => []];
@@ -763,7 +774,7 @@ class OrderForm
             'repriced' => true,
             'subtotal' => $preview['cart']->subtotal,
             'delivery' => $preview['cart']->deliveryCharge,
-            'band' => $preview['cart']->deliveryBand?->label(),
+            'band' => $preview['cart']->deliveryLabel(),
             'total' => $preview['cart']->total,
             'lines' => array_map(fn (PricedLine $line): array => [
                 'price' => $line->tierPrice,
@@ -774,15 +785,16 @@ class OrderForm
     }
 
     /**
-     * The retail Order's figures: as captured while its lines are untouched,
-     * else priced afresh at today's Pack Prices and retail Delivery Charge.
+     * The retail Order's figures: as captured while its lines and District are
+     * untouched, else priced afresh at today's Pack Prices and the retail zone
+     * of the District the form now names.
      *
      * @param  array<array-key, mixed>  $lines
      * @return array{repriced: bool, subtotal: int|null, delivery: int|null, band: string|null, total: int|null, lines: array<array-key, array{price: int, total: int, note: string|null}>}
      */
-    private static function workOutRetailFigures(array $lines, ?Order $record): array
+    private static function workOutRetailFigures(array $lines, ?Order $record, ?string $district): array
     {
-        if ($record !== null && ! RetailRepricing::changes($record, $lines)) {
+        if ($record !== null && ! RetailRepricing::changes($record, $lines) && $district === $record->customer_district) {
             $stored = $record->lines()->get()->keyBy('id');
             $byKey = [];
 
@@ -797,7 +809,7 @@ class OrderForm
             return ['repriced' => false, 'subtotal' => $record->subtotal, 'delivery' => $record->delivery_charge, 'band' => $record->delivery_label, 'total' => $record->total, 'lines' => $byKey];
         }
 
-        $preview = app(RetailRepricing::class)->preview($lines);
+        $preview = app(RetailRepricing::class)->preview($lines, $district);
 
         if ($preview === null) {
             return ['repriced' => true, 'subtotal' => null, 'delivery' => null, 'band' => null, 'total' => null, 'lines' => []];
@@ -807,7 +819,7 @@ class OrderForm
             'repriced' => true,
             'subtotal' => $preview['cart']->subtotal,
             'delivery' => $preview['cart']->deliveryCharge,
-            'band' => OrderCapture::RETAIL_DELIVERY_LABEL,
+            'band' => $preview['cart']->deliveryLabel(),
             'total' => $preview['cart']->total,
             'lines' => array_map(fn (PricedPackLine $line): array => [
                 'price' => $line->packPrice,

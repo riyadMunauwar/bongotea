@@ -21,9 +21,27 @@ export type Tier = KilogramRange & { price: number };
 
 export type DeliveryBand = KilogramRange & { fee: number };
 
-export type PriceBook = {
+/**
+ * A Delivery Zone (ADR-0039): the Districts it covers and the bands a parcel
+ * to any of them is charged from. Exactly one zone of each kind is
+ * everywhere else, covering every District no other zone lists.
+ */
+export type DeliveryZone = {
+    name: string;
+    /** As the store stores them; empty for the everywhere-else zone. */
+    districts: string[];
+    everywhereElse: boolean;
     /** In order, covering every whole kilogram from one without gap or overlap. */
-    deliveryBands: DeliveryBand[];
+    bands: DeliveryBand[];
+    /** The subtotal from which delivery here is free; null or absent for never. A bulk zone has none. */
+    freeDeliveryFrom?: number | null;
+};
+
+/** The least and the most a Cart could pay across every zone, shown before a District is known. */
+export type DeliveryRange = { least: number; most: number };
+
+export type PriceBook = {
+    deliveryZones: DeliveryZone[];
 };
 
 export type ProductPrices = {
@@ -64,15 +82,20 @@ export type PricedCart = {
     totalKilograms: number;
     subtotal: number;
     savings: number;
+    /** Nothing while no District is known; see the range. */
     deliveryCharge: number;
-    /** Null for an empty Cart. */
+    /** The zone's name; null while no District is known. */
+    deliveryZone: string | null;
+    /** Null for an empty Cart, and while no District is known. */
     deliveryBand: DeliveryBand | null;
+    /** Null for an empty Cart. */
+    deliveryRange: DeliveryRange | null;
     total: number;
     /** The subtotal per Kilogram, rounded half-up to the minor unit; null for an empty Cart. */
     averagePerKilogram: number | null;
     /** The nearest weight at which a line already in the Cart gets cheaper; null where none does. */
     nextPriceDrop: PriceDrop | null;
-    /** Null once delivery is free, or where no free band lies ahead. */
+    /** Null once delivery is free, or where no free band lies ahead; with no District, null unless every zone agrees. */
     kilogramsToFreeDelivery: number | null;
 };
 
@@ -139,32 +162,78 @@ function nextPriceDrop(lines: CartLine[], totalKilograms: number): PriceDrop | n
     return { atKilograms: at, kilogramsToGo: at - totalKilograms, extraSaving };
 }
 
-function deliveryBandFor(book: PriceBook, totalKilograms: number): DeliveryBand | null {
-    if (totalKilograms === 0) {
+/** The zone a District is delivered under; null while no District is known. */
+export function zoneFor(zones: DeliveryZone[], district: string | null): DeliveryZone | null {
+    if (district === null || district === '') {
         return null;
     }
 
-    const band = book.deliveryBands.find((candidate) => contains(candidate, totalKilograms));
+    const zone = zones.find((candidate) => candidate.districts.includes(district)) ?? zones.find((candidate) => candidate.everywhereElse);
+
+    if (zone === undefined) {
+        throw new Error('No Delivery Zone is everywhere else.');
+    }
+
+    return zone;
+}
+
+/** Null for an empty Cart: no band starts below one kilogram. */
+export function bandFor(zone: DeliveryZone, kilograms: number): DeliveryBand | null {
+    if (kilograms === 0) {
+        return null;
+    }
+
+    const band = zone.bands.find((candidate) => contains(candidate, kilograms));
 
     if (band === undefined) {
-        throw new Error(`No Delivery Band covers ${totalKilograms} kg.`);
+        throw new Error(`No Delivery Band of ${zone.name} covers ${kilograms} kg.`);
     }
 
     return band;
 }
 
-function kilogramsToFreeDelivery(book: PriceBook, totalKilograms: number, band: DeliveryBand | null): number | null {
-    if (band !== null && band.fee === 0) {
+/** What a Cart of this weight and subtotal pays in a zone, its threshold reached or not; nothing for an empty one. */
+export function chargeIn(zone: DeliveryZone, kilograms: number, subtotal = 0): number {
+    const band = bandFor(zone, kilograms);
+    const isFree = (zone.freeDeliveryFrom ?? null) !== null && subtotal >= (zone.freeDeliveryFrom as number);
+
+    return band === null || isFree ? 0 : band.fee;
+}
+
+/** The least and the most across every zone; null for an empty Cart. */
+export function rangeOf(zones: DeliveryZone[], kilograms: number, subtotal = 0): DeliveryRange | null {
+    if (kilograms === 0) {
         return null;
     }
 
-    const free = book.deliveryBands.find((candidate) => candidate.fee === 0 && candidate.min > totalKilograms);
+    const charges = zones.map((zone) => chargeIn(zone, kilograms, subtotal));
+
+    return { least: Math.min(...charges), most: Math.max(...charges) };
+}
+
+/** What every zone answers alike, or null where they differ. */
+export function agreed(zones: DeliveryZone[], ask: (zone: DeliveryZone) => number | null): number | null {
+    const answers = zones.map(ask);
+
+    return answers.every((answer) => answer === answers[0]) ? (answers[0] ?? null) : null;
+}
+
+function kilogramsToFreeDeliveryIn(zone: DeliveryZone, totalKilograms: number): number | null {
+    if (bandFor(zone, totalKilograms)?.fee === 0) {
+        return null;
+    }
+
+    const free = zone.bands.find((candidate) => candidate.fee === 0 && candidate.min > totalKilograms);
 
     return free === undefined ? null : free.min - totalKilograms;
 }
 
-/** Every figure a Cart shows, each line priced from its own Product's Tier for the whole Cart's Kilograms. */
-export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
+/**
+ * Every figure a Cart shows, each line priced from its own Product's Tier for
+ * the whole Cart's Kilograms, and the Delivery Charge from the zone of the
+ * District, once there is one.
+ */
+export function priceCart(book: PriceBook, lines: CartLine[], district: string | null = null): PricedCart {
     if (lines.some((line) => line.kilograms < 0)) {
         throw new Error('A line cannot hold fewer than no Kilograms.');
     }
@@ -201,7 +270,8 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
         };
     });
 
-    const band = deliveryBandFor(book, totalKilograms);
+    const zone = zoneFor(book.deliveryZones, district);
+    const band = zone === null ? null : bandFor(zone, totalKilograms);
     const deliveryCharge = band?.fee ?? 0;
 
     return {
@@ -210,10 +280,13 @@ export function priceCart(book: PriceBook, lines: CartLine[]): PricedCart {
         subtotal,
         savings: mrpTotal - subtotal,
         deliveryCharge,
+        deliveryZone: zone?.name ?? null,
         deliveryBand: band,
+        deliveryRange: rangeOf(book.deliveryZones, totalKilograms),
         total: subtotal + deliveryCharge,
         averagePerKilogram: totalKilograms === 0 ? null : divide(2 * subtotal + totalKilograms, 2 * totalKilograms),
         nextPriceDrop: nextPriceDrop(lines, totalKilograms),
-        kilogramsToFreeDelivery: kilogramsToFreeDelivery(book, totalKilograms, band),
+        kilogramsToFreeDelivery:
+            zone === null ? agreed(book.deliveryZones, (candidate) => kilogramsToFreeDeliveryIn(candidate, totalKilograms)) : kilogramsToFreeDeliveryIn(zone, totalKilograms),
     };
 }

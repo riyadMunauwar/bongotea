@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
+import { totalText } from '@/components/cart/figures';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { useCart } from '@/lib/use-cart';
@@ -50,7 +51,7 @@ export function CurrentCartLink({ kind, compact = false }: { kind: CartKind; com
     }
 
     const size = kind === 'bulk' ? bulk.priced.totalKilograms : retail.priced.packCount;
-    const total = kind === 'bulk' ? bulk.priced.total : retail.priced.total;
+    const total = kind === 'bulk' ? totalText(bulk.priced, taka) : totalText(retail.priced, taka);
     const Icon = kind === 'bulk' ? CartIcon : BagIcon;
 
     return (
@@ -67,7 +68,7 @@ export function CurrentCartLink({ kind, compact = false }: { kind: CartKind; com
                 {!compact && (
                     <span className="flex max-w-[150px] flex-col leading-[1.25]">
                         <span className="truncate text-[11px] text-muted">{cart.name}</span>
-                        <span className="text-[14px] font-bold">{taka(total)}</span>
+                        <span className="text-[14px] font-bold">{total}</span>
                     </span>
                 )}
             </MenuAnchor>

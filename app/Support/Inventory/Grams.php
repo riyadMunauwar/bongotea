@@ -113,6 +113,15 @@ class Grams
     }
 
     /**
+     * The whole kilograms a weight is charged delivery by (ADR-0039): rounded
+     * up, so 350 g -> 1 and 2,250 g -> 3; nothing for nothing.
+     */
+    public static function deliveryKilograms(int $grams): int
+    {
+        return $grams <= 0 ? 0 : intdiv($grams + 999, 1000);
+    }
+
+    /**
      * The whole kilograms nearest to these that a Pack makes exactly, for a
      * refusal to name: the one below and the one above, or the first two where
      * none lies below — 1 kg in 400 g -> [2, 4], 5 kg in 400 g -> [4, 6]. Just
