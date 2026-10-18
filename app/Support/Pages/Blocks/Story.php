@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\RichEditor\RichContentRenderer;
@@ -27,6 +28,16 @@ class Story extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedDocumentText;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'A short line set large beside rich text, or rich text alone.';
     }
 
     public static function fields(): array

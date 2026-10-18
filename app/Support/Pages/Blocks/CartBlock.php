@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\OrderKind;
 use App\Models\Cart;
 use App\Support\Pages\PageBlock;
@@ -40,6 +41,16 @@ class CartBlock extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedShoppingCart;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Selling;
+    }
+
+    public static function description(): string
+    {
+        return 'A Cart as a page: its Products, each with a stepper, beside that Cart\'s summary.';
     }
 
     public static function fields(): array

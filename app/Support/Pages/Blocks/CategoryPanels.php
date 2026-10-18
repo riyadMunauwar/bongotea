@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\Tag;
@@ -48,6 +49,16 @@ class CategoryPanels extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedRectangleStack;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Catalogue;
+    }
+
+    public static function description(): string
+    {
+        return 'Every published Product in bands by Category, with Tag and Brand filters.';
     }
 
     public static function fields(): array

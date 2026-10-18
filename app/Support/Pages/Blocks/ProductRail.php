@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
@@ -41,6 +42,16 @@ class ProductRail extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedViewColumns;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Catalogue;
+    }
+
+    public static function description(): string
+    {
+        return 'A sideways row of product cards from a Category, Tag, Brand or Products picked by hand.';
     }
 
     public static function fields(): array

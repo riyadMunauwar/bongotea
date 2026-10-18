@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Models\Page;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
@@ -32,6 +33,16 @@ class RecipeCards extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedBeaker;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'Recipes as cards that open to ingredients, steps and tips.';
     }
 
     public static function fields(): array

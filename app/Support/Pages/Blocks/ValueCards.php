@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -25,6 +26,16 @@ class ValueCards extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedSquares2x2;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'What the store stands for, as cards in a row of three.';
     }
 
     public static function fields(): array

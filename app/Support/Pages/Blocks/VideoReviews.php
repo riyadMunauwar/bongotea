@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
@@ -27,6 +28,16 @@ class VideoReviews extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedVideoCamera;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'Buyers on camera: tall cards that swipe sideways and play in a modal.';
     }
 
     public static function fields(): array

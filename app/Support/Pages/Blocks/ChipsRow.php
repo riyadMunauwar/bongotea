@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -29,6 +30,16 @@ class ChipsRow extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedTag;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Banners;
+    }
+
+    public static function description(): string
+    {
+        return 'A centred row of words in pills, each of which may be a link.';
     }
 
     public static function fields(): array

@@ -1,5 +1,6 @@
 /*
- * Forms: sections, inputs, infolists and the Order Line repeater.
+ * Forms: sections, inputs, infolists, the Order Line repeater and the Block
+ * picker.
  *
  * Authoring a Page, editing a Product, reading an Order and correcting a
  * quantity on an Order Line are four screens that have to read as one
@@ -275,4 +276,134 @@
  */
 .fi-in-text-item > .fi-copyable {
     border-radius: var(--gp-radius);
+}
+
+/*
+ * The Page editor's Block picker: a modal of icon tiles, by group, under a
+ * search box.
+ *
+ * The header stays put and only the tiles scroll, so the search box is always
+ * in reach and each group's heading can stick to the top of the scrolling
+ * area while its tiles pass under it. On a phone the modal fills the screen,
+ * three tiles across, because a dropdown or a floating card left most of the
+ * kinds out of sight there; it widens to four across on a tablet and six on a
+ * wide screen.
+ */
+.gp-block-picker > .fi-modal-window-ctn > .fi-modal-window {
+    max-height: calc(100dvh - 2rem);
+    overflow: hidden;
+
+    & .fi-modal-header {
+        padding-bottom: 1rem;
+        border-bottom: var(--gp-hairline);
+    }
+
+    & .fi-modal-content {
+        min-height: 0;
+        overflow-y: auto;
+        padding-top: 0;
+        gap: 0;
+    }
+}
+
+.gp-block-picker-header {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-inline-end: 2rem;
+}
+
+.gp-block-picker-group-label {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 1rem 0 0.5rem;
+    background: var(--gp-surface);
+    color: var(--gray-500);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.gp-block-picker-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.gp-block-picker-tile {
+    display: flex;
+    min-height: 6.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0.5rem;
+    border: var(--gp-hairline);
+    border-radius: var(--gp-radius-lg);
+    background: var(--gp-surface);
+    text-align: center;
+    transition: background-color 150ms, border-color 150ms;
+
+    &:hover,
+    &:focus-visible {
+        border-color: var(--gp-border-control);
+        background: var(--gp-surface-accented);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--gp-action);
+        outline-offset: 2px;
+    }
+}
+
+.gp-block-picker-tile-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: var(--gray-500);
+}
+
+.gp-block-picker-tile-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+}
+
+.gp-block-picker-empty {
+    padding: 2rem 0;
+    color: var(--gray-500);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+@media (max-width: 639px) {
+    .gp-block-picker > .fi-modal-window-ctn {
+        padding: 0;
+
+        & > .fi-modal-window {
+            height: 100dvh;
+            max-height: 100dvh;
+            border-radius: 0;
+        }
+    }
+}
+
+@media (min-width: 640px) {
+    .gp-block-picker-tiles {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+    .gp-block-picker > .fi-modal-window-ctn > .fi-modal-window {
+        max-width: 56rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .gp-block-picker-tiles {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -26,6 +27,16 @@ class PromiseStrip extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedCheckBadge;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Banners;
+    }
+
+    public static function description(): string
+    {
+        return 'Up to four short promises in a strip, each with a glyph and a line.';
     }
 
     public static function fields(): array

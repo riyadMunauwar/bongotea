@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\PaymentMethod;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\TextInput;
@@ -28,6 +29,16 @@ class DeliveryChart extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedTruck;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Selling;
+    }
+
+    public static function description(): string
+    {
+        return 'A bar per Delivery Band: what delivery costs, and from where it is free.';
     }
 
     public static function fields(): array

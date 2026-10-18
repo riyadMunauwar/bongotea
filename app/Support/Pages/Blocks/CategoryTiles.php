@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Models\Category;
 use App\Support\Pages\PageBlock;
 use App\Support\Storefront\Catalogue;
@@ -30,6 +31,16 @@ class CategoryTiles extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedSquares2x2;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Catalogue;
+    }
+
+    public static function description(): string
+    {
+        return 'One tile per Category, with how many teas it has and its lowest price.';
     }
 
     public static function fields(): array

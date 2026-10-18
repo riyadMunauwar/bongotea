@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
@@ -27,6 +28,16 @@ class Journey extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedMap;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'The tea\'s journey from garden to shop, as numbered pictures.';
     }
 
     public static function fields(): array

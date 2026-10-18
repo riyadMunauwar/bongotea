@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\OrderProgress;
 use App\Models\Customer;
 use App\Models\Order;
@@ -41,6 +42,16 @@ class MyOrders extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedClipboardDocumentList;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::ContactAndAccount;
+    }
+
+    public static function description(): string
+    {
+        return 'Signing in with a one-time code, then every Order of the Customer\'s and how far it has got.';
     }
 
     public static function fields(): array

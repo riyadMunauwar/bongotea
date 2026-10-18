@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -29,6 +30,16 @@ class MapAndAddress extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedMapPin;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::ContactAndAccount;
+    }
+
+    public static function description(): string
+    {
+        return 'A Google Map beside the store\'s address and opening hours.';
     }
 
     public static function fields(): array

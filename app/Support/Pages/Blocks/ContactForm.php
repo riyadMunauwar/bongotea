@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
@@ -29,6 +30,16 @@ class ContactForm extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedChatBubbleBottomCenterText;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::ContactAndAccount;
+    }
+
+    public static function description(): string
+    {
+        return 'A form whose question becomes an Enquiry for someone to call back.';
     }
 
     public static function fields(): array

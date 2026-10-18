@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\ImageSlot;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
@@ -29,6 +30,16 @@ class HeroCarousel extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedPhoto;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Banners;
+    }
+
+    public static function description(): string
+    {
+        return 'Slides across the top of a Page that advance on their own, or one dark page header.';
     }
 
     public static function fields(): array

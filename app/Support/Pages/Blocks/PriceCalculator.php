@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Enums\OrderKind;
 use App\Support\Pages\PageBlock;
 use App\Support\Storefront\Catalogue;
@@ -32,6 +33,16 @@ class PriceCalculator extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedCalculator;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Selling;
+    }
+
+    public static function description(): string
+    {
+        return 'A bulk Cart\'s Products with steppers and a running total, to work out an order.';
     }
 
     public static function fields(): array

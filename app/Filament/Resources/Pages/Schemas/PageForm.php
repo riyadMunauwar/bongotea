@@ -8,7 +8,6 @@ use App\Models\Page;
 use App\Support\Pages\CartPlacements;
 use App\Support\Pages\PageBlocks;
 use Closure;
-use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -81,7 +80,7 @@ class PageForm
                     ->description('The page from top to bottom. Every Block can carry an anchor and be hidden on phones or wider screens.')
                     ->columnSpanFull()
                     ->schema([
-                        Builder::make('blocks')
+                        BlocksBuilder::make('blocks')
                             ->hiddenLabel()
                             /** A Cart stands on one Page at most (ADR-0038), and once on it: each Block's own field refuses another Page, this the same Page twice. */
                             ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {

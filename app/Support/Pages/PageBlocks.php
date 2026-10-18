@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages;
 
+use App\Enums\BlockGroup;
 use App\Models\Page;
 use App\Support\Pages\Blocks\CallToActionBand;
 use App\Support\Pages\Blocks\CartBlock;
@@ -34,9 +35,9 @@ use Filament\Forms\Components\Builder\Block;
  * The fixed set of Block kinds, and a Page's Blocks as the storefront draws
  * them.
  *
- * The order here is the order the editor offers them in. A stored Block of a
- * kind not listed — one since removed — is left out of the page rather than
- * failing it.
+ * The order here is the order the editor offers them in, within the group
+ * each is filed under. A stored Block of a kind not listed — one since
+ * removed — is left out of the page rather than failing it.
  *
  * @phpstan-type StorefrontBlock array{type: string, anchor: ?string, hideOnMobile: bool, hideOnDesktop: bool, props: array<string, mixed>}
  */
@@ -77,6 +78,31 @@ class PageBlocks
     public static function builderBlocks(): array
     {
         return array_map(fn (string $kind): Block => $kind::builderBlock(), self::KINDS);
+    }
+
+    /**
+     * The kinds as the editor's Block picker lays them out: by group, in the
+     * groups' own order, each group's kinds in the order listed here. A
+     * group no kind is filed under is left out, and so is any kind whose
+     * type is not among `$offeredTypes` when they are given.
+     *
+     * @param  list<string>|null  $offeredTypes
+     * @return list<array{label: string, kinds: list<class-string<PageBlock>>}>
+     */
+    public static function pickerGroups(?array $offeredTypes = null): array
+    {
+        $groups = [];
+
+        foreach (BlockGroup::cases() as $group) {
+            $kinds = array_values(array_filter(self::KINDS, fn (string $kind): bool => $kind::group() === $group
+                && ($offeredTypes === null || in_array($kind::type(), $offeredTypes, true))));
+
+            if ($kinds !== []) {
+                $groups[] = ['label' => $group->getLabel(), 'kinds' => $kinds];
+            }
+        }
+
+        return $groups;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -28,6 +29,16 @@ class HowToOrder extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedListBullet;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Selling;
+    }
+
+    public static function description(): string
+    {
+        return 'Numbered steps to order, a button to start, a video and the hotline.';
     }
 
     public static function fields(): array

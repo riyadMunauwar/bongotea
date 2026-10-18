@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use App\Support\Storefront\Catalogue;
 use App\Support\Storefront\CatalogueProps;
@@ -29,6 +30,16 @@ class PriceMatrix extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedTableCells;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Selling;
+    }
+
+    public static function description(): string
+    {
+        return 'Every Product\'s price at each of its Tiers, the Tier the Cart is in highlighted.';
     }
 
     public static function fields(): array

@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -33,6 +34,16 @@ class Table extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedTableCells;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Information;
+    }
+
+    public static function description(): string
+    {
+        return 'Words in rows and columns: a table on wide screens, stacked cards on phones.';
     }
 
     public static function fields(): array

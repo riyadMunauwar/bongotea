@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Models\Page;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
@@ -33,6 +34,16 @@ class InfoCards extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedRectangleStack;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Information;
+    }
+
+    public static function description(): string
+    {
+        return 'Cards with room to explain, with lists, a note and a button, one to three across.';
     }
 
     public static function fields(): array

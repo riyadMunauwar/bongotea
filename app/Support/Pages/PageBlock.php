@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages;
 
+use App\Enums\BlockGroup;
 use App\Enums\ImageSlot;
 use App\Enums\OrderKind;
 use App\Models\Cart;
@@ -48,6 +49,12 @@ abstract class PageBlock
     abstract public static function label(): string;
 
     abstract public static function icon(): Heroicon;
+
+    /** Where the editor's Block picker files this kind. */
+    abstract public static function group(): BlockGroup;
+
+    /** One line saying what this kind draws, for whoever is choosing one in the picker. */
+    abstract public static function description(): string;
 
     /**
      * @return list<Component>

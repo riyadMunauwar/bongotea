@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -27,6 +28,16 @@ class ContactCards extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedPhone;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::ContactAndAccount;
+    }
+
+    public static function description(): string
+    {
+        return 'Call, WhatsApp and email as three cards, from the Store settings.';
     }
 
     public static function fields(): array

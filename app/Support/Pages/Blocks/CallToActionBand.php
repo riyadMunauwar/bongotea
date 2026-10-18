@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\TextInput;
 use Filament\Support\Icons\Heroicon;
@@ -25,6 +26,16 @@ class CallToActionBand extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedMegaphone;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Banners;
+    }
+
+    public static function description(): string
+    {
+        return 'A dark band that asks for the order, with up to four buttons.';
     }
 
     public static function fields(): array

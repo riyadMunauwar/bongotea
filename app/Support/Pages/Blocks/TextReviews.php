@@ -2,6 +2,7 @@
 
 namespace App\Support\Pages\Blocks;
 
+use App\Enums\BlockGroup;
 use App\Support\Pages\PageBlock;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -28,6 +29,16 @@ class TextReviews extends PageBlock
     public static function icon(): Heroicon
     {
         return Heroicon::OutlinedChatBubbleLeftRight;
+    }
+
+    public static function group(): BlockGroup
+    {
+        return BlockGroup::Trust;
+    }
+
+    public static function description(): string
+    {
+        return 'What shopkeepers say, as review cards.';
     }
 
     public static function fields(): array
