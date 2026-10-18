@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatTaka } from '@/lib/bangla';
-import { deliveryText, discountLabel, discountPercent, packName, retailDeliveryNote, totalText } from './figures';
+import { bestDiscountLabel, bestDiscountPercent, deliveryText, discountLabel, discountPercent, packName, retailDeliveryNote, totalText } from './figures';
 
 const taka = (minorUnits: number) => formatTaka(minorUnits / 100);
 
@@ -26,6 +26,32 @@ describe('discountPercent', () => {
     it('is the share alone, rounded down, and nothing at the MRP', () => {
         expect(discountPercent(48000, 40500)).toBe('১৫');
         expect(discountPercent(50000, 50000)).toBeNull();
+    });
+});
+
+describe('bestDiscountPercent', () => {
+    it('is the largest share off its MRP among what can be had, whichever Pack or Tier gives it', () => {
+        const bulkDeepestTier = { mrp: 60000, price: 52000 };
+        const smallPack = { mrp: 18000, price: 16000 };
+        const kilogramPack = { mrp: 60000, price: 56000 };
+
+        expect(bestDiscountPercent([kilogramPack, smallPack])).toBe('১১');
+        expect(bestDiscountPercent([kilogramPack, smallPack, bulkDeepestTier])).toBe('১৩');
+    });
+
+    it('is nothing when nothing is below its MRP, or nothing can be had', () => {
+        expect(bestDiscountPercent([{ mrp: 60000, price: 60000 }])).toBeNull();
+        expect(bestDiscountPercent([])).toBeNull();
+    });
+});
+
+describe('bestDiscountLabel', () => {
+    it('promises the deepest Tier as "up to", in taka and as a share of the MRP', () => {
+        expect(bestDiscountLabel(60000, 52000, taka)).toBe('সর্বোচ্চ ৳৮০ ছাড় (১৩%)');
+    });
+
+    it('says nothing when even the deepest Tier is at the MRP', () => {
+        expect(bestDiscountLabel(60000, 60000, taka)).toBeNull();
     });
 });
 

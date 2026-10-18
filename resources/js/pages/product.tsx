@@ -1,6 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { Picture } from '@/components/blocks/shared';
 import { discountLabel } from '@/components/cart/figures';
 import { OtherTeas } from '@/components/catalogue/other-teas';
@@ -25,8 +25,8 @@ type ProductPageProps = {
  * A Product at its own address. On a wide screen its gallery sits on the left
  * with what it is like under it — its Characteristics in groups (the basics,
  * the quality, the Merchant's own under অন্যান্য), its Storage tips, where it
- * does best and how to brew it — and the purchase panel stays in view on the
- * right. On a phone the gallery comes first, then the panel, then the rest.
+ * does best and how to brew it — and the purchase panel on the right stays in
+ * view while it fits the screen. On a phone the gallery comes first, then the panel, then the rest.
  * Below both: its own Tier ladder where it is sold পাইকারি, its description,
  * business tips and other teas. Every characteristic the Merchant left blank
  * is simply not drawn. A Product স্টক শেষ every way it is sold is drawn greyed
@@ -37,6 +37,8 @@ export default function ProductPage() {
     const { productViewed } = useMoments();
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
+    const panel = useRef<HTMLDivElement>(null);
+    const fitsInView = useFitsInView(panel);
 
     /**
      * Product Viewed, once each time a Product's page is opened — not again as
@@ -81,7 +83,9 @@ export default function ProductPage() {
             <div className="grid items-start gap-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-12 md:gap-y-8">
                 <Gallery product={product} isGreyed={isGreyed} />
 
-                <PurchasePanel product={product} isGreyed={isGreyed} className="md:sticky md:top-[150px] md:col-start-2 md:row-span-2 md:row-start-1 md:max-h-[calc(100vh-170px)] md:overflow-y-auto" />
+                <div ref={panel} className={cn('md:col-start-2 md:row-span-2 md:row-start-1', fitsInView && 'md:sticky md:top-[150px]')}>
+                    <PurchasePanel product={product} isGreyed={isGreyed} />
+                </div>
 
                 <div className="flex flex-col gap-[18px] md:col-start-1">
                     <CharacteristicGroup heading={bn.product.basicsHeading} characteristics={basics} />
@@ -160,6 +164,41 @@ export default function ProductPage() {
             <OtherTeas products={others} />
         </div>
     );
+}
+
+/** What stays clear of the panel when it is held in view: the header above it (its `top`) and a margin below. */
+const HELD_PANEL_CLEARANCE = 170;
+
+/**
+ * Whether the purchase panel is short enough to be held in view as the page
+ * scrolls. One taller than the screen — a long name, the description opened,
+ * a short screen — scrolls with the page instead, so nothing in it is ever
+ * out of reach and it never scrolls on its own.
+ */
+function useFitsInView(panel: RefObject<HTMLDivElement | null>): boolean {
+    const [fits, setFits] = useState(true);
+
+    useEffect(() => {
+        const element = panel.current;
+
+        if (element === null) {
+            return;
+        }
+
+        const measure = () => setFits(element.offsetHeight <= window.innerHeight - HELD_PANEL_CLEARANCE);
+        const observer = new ResizeObserver(measure);
+
+        observer.observe(element);
+        window.addEventListener('resize', measure);
+        measure();
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, [panel]);
+
+    return fits;
 }
 
 type Characteristic = { label: string; value: ReactNode };

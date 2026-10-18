@@ -1,8 +1,8 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BulkPackLine } from '@/components/cart/bulk-pack-line';
 import { useCartChoice } from '@/components/cart/cart-chooser';
-import { discountLabel, packName } from '@/components/cart/figures';
+import { bestDiscountLabel, bestDiscountPercent, packName } from '@/components/cart/figures';
 import { PackStepper } from '@/components/cart/pack-chooser';
 import { Stepper } from '@/components/cart/stepper';
 import { bn } from '@/lang/bn';
@@ -18,7 +18,7 @@ import { useRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
 import type { BulkProductCard, ProductDetail } from '@/types/catalogue';
-import { RetailFrom } from './product-card';
+import { RetailFrom, useRetailOffers } from './product-card';
 import { firstTierPrice, lowestPrice } from './tier-ladder';
 
 type Way = 'bulk' | 'retail';
@@ -37,7 +37,7 @@ export function PurchasePanel({ product, isGreyed, className }: { product: Produ
     const shown: Way = product.isSoldBulk && (way === 'bulk' || !isSoldRetail) ? 'bulk' : 'retail';
 
     return (
-        <div className={cn('flex flex-col gap-[18px]', className)}>
+        <div className={cn('flex flex-col gap-3', className)}>
             <span className="flex flex-wrap items-center gap-2">
                 <Link href={product.category.href} className="rounded-full bg-(--cat-tint) px-[11px] py-[3px] text-[13px] font-semibold text-(--cat-text) no-underline">
                     {product.category.name}
@@ -48,9 +48,9 @@ export function PurchasePanel({ product, isGreyed, className }: { product: Produ
                 {product.badge && <span className="rounded-full bg-eyebrow px-[10px] py-[3px] text-[12px] font-semibold text-white">{product.badge}</span>}
             </span>
 
-            <h1 className="m-0 text-[clamp(28px,3.6vw,44px)] leading-[1.25] font-semibold text-ink">{product.name}</h1>
+            <h1 className="m-0 text-[clamp(24px,2.6vw,32px)] leading-[1.25] font-semibold text-ink">{product.name}</h1>
 
-            {product.shortDescription && <p className="m-0 text-[clamp(16px,1.4vw,19px)] leading-[1.7] text-muted">{product.shortDescription}</p>}
+            {product.shortDescription && <ShortDescription text={product.shortDescription} />}
 
             {isGreyed ? (
                 <>
@@ -60,10 +60,41 @@ export function PurchasePanel({ product, isGreyed, className }: { product: Produ
                     <HotlineNote note={product.isAvailable ? bn.product.soldOutNote : bn.product.unavailableNote} />
                 </>
             ) : (
-                <div className="flex flex-col gap-4 rounded-[16px] border border-border bg-white p-4 md:p-5">
+                <div className="flex flex-col gap-3 rounded-[16px] border border-border bg-white p-4">
                     {product.isSoldBulk && isSoldRetail && <WayToggle way={shown} onChange={setWay} />}
                     {shown === 'bulk' && product.isSoldBulk ? <BulkPurchase product={product} /> : <RetailPurchase product={product} />}
                 </div>
+            )}
+        </div>
+    );
+}
+
+/**
+ * The short description held to two lines, so the panel stays short enough to
+ * stay in view, with আরও পড়ুন to open it — offered only where it runs longer.
+ */
+function ShortDescription({ text }: { text: string }) {
+    const paragraph = useRef<HTMLParagraphElement>(null);
+    const [isOpen, setIsOpen] = useState(false);
+    const [isLonger, setIsLonger] = useState(false);
+
+    useEffect(() => {
+        const element = paragraph.current;
+
+        if (element !== null && !isOpen) {
+            setIsLonger(element.scrollHeight > element.clientHeight);
+        }
+    }, [text, isOpen]);
+
+    return (
+        <div className="flex flex-col items-start gap-1">
+            <p ref={paragraph} className={cn('m-0 text-[15px] leading-[1.6] text-muted md:text-[16px]', !isOpen && 'line-clamp-2')}>
+                {text}
+            </p>
+            {(isLonger || isOpen) && (
+                <button type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen} className="cursor-pointer border-0 bg-transparent p-0 text-[14px] font-semibold text-primary">
+                    {isOpen ? bn.product.readLess : bn.product.readMore}
+                </button>
             )}
         </div>
     );
@@ -173,7 +204,7 @@ function BulkControls({ product, cartIds }: { product: CartProduct; cartIds: num
                         router.visit(`${chosen.href}#${rowAnchor(product.id)}`);
                     })
                 }
-                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
+                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-3 text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >
                 {bn.product.addBulk}
             </button>
@@ -214,7 +245,7 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
 
     return (
         <>
-            <RetailFrom productId={product.id} />
+            <RetailPrices productId={product.id} />
 
             <div role="radiogroup" aria-label={bn.product.packHeading} className="flex flex-wrap gap-2">
                 {packs.map((pack) => (
@@ -275,7 +306,7 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
                         router.visit(withReturnPath(cart.href, url));
                     });
                 }}
-                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-[14px] text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
+                className="cursor-pointer rounded-[10px] border-0 bg-primary px-6 py-3 text-[16px] font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-disabled"
             >
                 {bn.product.addRetail}
             </button>
@@ -284,22 +315,35 @@ function RetailPurchase({ product }: { product: ProductDetail }) {
     );
 }
 
-/** The price range a Kilogram of a পাইকারি Product runs over its Tiers, beside its MRP struck through. */
+/** The price range a Kilogram of a পাইকারি Product runs over its Tiers, beside its MRP struck through and its Best Discount there. */
 function BulkPrices({ product }: { product: CartProduct }) {
     const taka = useTaka();
     const first = firstTierPrice(product.tiers);
     const lowest = lowestPrice(product.tiers);
+    const best = bestDiscountLabel(product.mrp, lowest, taka);
 
     return (
         <span className="text-[15px] text-muted">
             <b className="text-[24px] font-bold text-primary-dark">{lowest < first ? `${taka(lowest)}–${taka(first)}` : taka(first)}</b>
             {bn.blocks.perKilogram}
-            {first < product.mrp && (
+            {best !== null && (
                 <>
                     {' '}
-                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s> <span className="font-semibold text-primary">{discountLabel(product.mrp, first, taka)}</span>
+                    {bn.catalogue.mrp} <s>{taka(product.mrp)}</s> <span className="font-semibold text-primary">{best}</span>
                 </>
             )}
+        </span>
+    );
+}
+
+/** "খুচরা ৳X থেকে", with the Best Discount among the Packs that can be bought now beside it. */
+function RetailPrices({ productId }: { productId: number }) {
+    const best = bestDiscountPercent(useRetailOffers(productId));
+
+    return (
+        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <RetailFrom productId={productId} />
+            {best !== null && <span className="text-[15px] font-semibold text-primary">{bn.catalogue.upToPercentOff(best)}</span>}
         </span>
     );
 }

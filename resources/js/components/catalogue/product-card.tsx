@@ -1,6 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { Picture } from '@/components/blocks/shared';
-import { discountPercent } from '@/components/cart/figures';
+import { bestDiscountPercent, type Offer } from '@/components/cart/figures';
 import { PackChooserButton } from '@/components/cart/pack-chooser';
 import { useCartChoice } from '@/components/cart/cart-chooser';
 import { CartIcon } from '@/components/storefront/icons';
@@ -19,8 +19,8 @@ import { firstTierPrice, lowestPrice, TierLadder } from './tier-ladder';
 
 /**
  * A Product as every list draws it, plain and white in the manner of a
- * pharmacy shelf: its picture with the share its first Tier takes off the MRP
- * and its badge in the corner, its Category and Brand, its name, strength, its
+ * pharmacy shelf: its picture with its Best Discount and its badge in the
+ * corner, its Category and Brand, its name, strength, its
  * first Tier's price beside the MRP struck through, the most a Tier takes off
  * the MRP, and its own Tier ladder, with the kilogram button, all for a
  * Product sold পাইকারি; and — for one sold খুচরা — its cheapest Pack Price
@@ -37,7 +37,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     const cart = useCart(null);
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
-    const percentOff = product.isSoldBulk ? discountPercent(product.mrp, firstTierPrice(product.tiers)) : null;
+    const percentOff = useBestDiscountPercent(product);
 
     return (
         <article
@@ -57,7 +57,7 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
                     <span className="absolute top-[6px] left-[6px] flex flex-col items-start gap-1">
                         {percentOff && !isGreyed && (
                             <span className="rounded-[4px] bg-cart-badge px-[6px] py-[2px] text-[10px] font-bold text-white md:text-[11px]">
-                                {bn.catalogue.percentOff(percentOff)}
+                                {bn.catalogue.upToPercentOff(percentOff)}
                             </span>
                         )}
                         {product.badge && (
@@ -222,4 +222,27 @@ function useRetailFromLabel(productId: number): string | null {
         .map((pack) => pack.price);
 
     return prices.length === 0 ? null : bn.catalogue.retailFrom(taka(Math.min(...prices)));
+}
+
+/**
+ * The Best Discount as a share alone: the deeper of its deepest Tier, unless
+ * it is পাইকারি স্টক শেষ, and its খুচরা Pack with the largest share off among
+ * those that can be bought now.
+ */
+function useBestDiscountPercent(product: ProductCardProps): string | null {
+    const cart = useCart(null);
+    const retailOffers = useRetailOffers(product.id);
+    const bulkOffers: Offer[] = product.isSoldBulk && !cart.isSoldOut(product.id) ? [{ mrp: product.mrp, price: lowestPrice(product.tiers) }] : [];
+
+    return bestDiscountPercent([...bulkOffers, ...retailOffers]);
+}
+
+/** A Product's খুচরা Packs that can be bought now, each as its Pack Price beside its MRP. */
+export function useRetailOffers(productId: number): Offer[] {
+    const retail = useRetailCart(null);
+
+    return retail
+        .packsOf(productId)
+        .filter((pack) => pack.isOrderable && !retail.isSoldOut(pack.id))
+        .map((pack) => ({ mrp: pack.mrp, price: pack.price }));
 }

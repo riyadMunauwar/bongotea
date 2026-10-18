@@ -110,6 +110,27 @@ export function discountPercent(mrp: number, tierPrice: number): string | null {
     return percent <= 0 ? null : toBanglaDigits(percent);
 }
 
+/** A price a Product can be had at now — a Tier's or a খুচরা Pack's — beside the MRP it is measured against. */
+export type Offer = { mrp: number; price: number };
+
+/**
+ * The Best Discount as a share alone: the largest share off its MRP among the
+ * offers that can be had now, rounded down, in Bangla digits; null when none
+ * is below its MRP.
+ */
+export function bestDiscountPercent(offers: Offer[]): string | null {
+    const best = offers.reduce<Offer | null>((most, offer) => (most === null || (offer.mrp - offer.price) * most.mrp > (most.mrp - most.price) * offer.mrp ? offer : most), null);
+
+    return best === null ? null : discountPercent(best.mrp, best.price);
+}
+
+/** The Best Discount of a পাইকারি Product, from its deepest Tier, as "up to" in taka and as a share; null when that Tier is at the MRP. */
+export function bestDiscountLabel(mrp: number, lowestTierPrice: number, taka: Taka): string | null {
+    const off = mrp - lowestTierPrice;
+
+    return off <= 0 ? null : bn.catalogue.upToOffMrp(taka(off), discountPercent(mrp, lowestTierPrice));
+}
+
 /** A price step's name in the ladder of weights: ধাপ ১, ধাপ ২, ধাপ ৩… */
 export function stepName(index: number): string {
     return bn.cart.step(toBanglaDigits(index + 1));

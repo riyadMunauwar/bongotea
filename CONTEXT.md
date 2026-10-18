@@ -94,6 +94,10 @@ _Avoid_: Regular Price, base price, list price, compare-at price, original price
 What a Customer is told they save: for each line, the MRP less the Tier Price in force, times its Kilograms, added up. Always measured from the MRP, so even a one-kilogram Cart has one when its first Tier sits below the MRP. Not the amount more Kilograms would knock off, which compares one Tier with the next.
 _Avoid_: discount total, bulk saving, you-save, markdown
 
+**Best Discount**:
+The most a Product can be had below its MRP right now, as a share of the MRP: its deepest Tier, or the খুচরা Pack with the largest share off, whichever is bigger — counting only a way, or a Pack, that can be bought now, never one স্টক শেষ or not orderable. Shown to entice, always as "up to" (সর্বোচ্চ), and on the page for পাইকারি with the taka as well. It is a promise of what is possible, not what any one Cart gets — that is its Saving.
+_Avoid_: max discount, top discount, percent off, deal badge
+
 **Tier Price**:
 What one Kilogram of a Product costs in one of its Tiers, typed by the Merchant in whole taka — never worked out from a discount, because wholesale tea is quoted as a price per kilogram at a weight, not as money off. The Tier Price in force at Capture is what the Order Line records, so a price changed afterwards moves no Order.
 _Avoid_: unit price (as a stored figure), bulk price, wholesale price, rate, tier discount
