@@ -26,7 +26,8 @@ type ProductPageProps = {
  * with what it is like under it — its Characteristics in groups (the basics,
  * the quality, the Merchant's own under অন্যান্য), its Storage tips, where it
  * does best and how to brew it — and the purchase panel on the right stays in
- * view while it fits the screen. On a phone the gallery comes first, then the panel, then the rest.
+ * view beside them, letting go once that column ends and the price ladder
+ * comes up. On a phone the gallery comes first, then the panel, then the rest.
  * Below both: its own Tier ladder where it is sold পাইকারি, its description,
  * business tips and other teas. Every characteristic the Merchant left blank
  * is simply not drawn. A Product স্টক শেষ every way it is sold is drawn greyed
@@ -38,7 +39,7 @@ export default function ProductPage() {
     const isSoldOut = useIsSoldOut(product);
     const isGreyed = !product.isAvailable || isSoldOut;
     const panel = useRef<HTMLDivElement>(null);
-    const fitsInView = useFitsInView(panel);
+    const stickyTop = useStickyTop(panel);
 
     /**
      * Product Viewed, once each time a Product's page is opened — not again as
@@ -83,7 +84,7 @@ export default function ProductPage() {
             <div className="grid items-start gap-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-12 md:gap-y-8">
                 <Gallery product={product} isGreyed={isGreyed} />
 
-                <div ref={panel} className={cn('md:col-start-2 md:row-span-2 md:row-start-1', fitsInView && 'md:sticky md:top-[150px]')}>
+                <div ref={panel} style={{ top: stickyTop }} className="md:sticky md:col-start-2 md:row-span-2 md:row-start-1">
                     <PurchasePanel product={product} isGreyed={isGreyed} />
                 </div>
 
@@ -166,17 +167,24 @@ export default function ProductPage() {
     );
 }
 
-/** What stays clear of the panel when it is held in view: the header above it (its `top`) and a margin below. */
-const HELD_PANEL_CLEARANCE = 170;
+/** Where the purchase panel is held: clear of the sticky header above it. */
+const HELD_PANEL_TOP = 150;
+
+/** The gap kept under a panel taller than the screen once its foot is in view. */
+const HELD_PANEL_FOOT = 20;
 
 /**
- * Whether the purchase panel is short enough to be held in view as the page
- * scrolls. One taller than the screen — a long name, the description opened,
- * a short screen — scrolls with the page instead, so nothing in it is ever
- * out of reach and it never scrolls on its own.
+ * Where the purchase panel sticks as the page scrolls. It stays beside the
+ * gallery and what the tea is like, and lets go when that column ends and the
+ * price ladder comes up — that is the grid ending, which sticky does by itself.
+ *
+ * One that fits the screen is held under the header. One taller than the
+ * screen — a long name, the description opened, a short screen — first
+ * scrolls with the page until its foot is in view and is held there, so
+ * nothing in it is ever out of reach and it never scrolls on its own.
  */
-function useFitsInView(panel: RefObject<HTMLDivElement | null>): boolean {
-    const [fits, setFits] = useState(true);
+function useStickyTop(panel: RefObject<HTMLDivElement | null>): number {
+    const [top, setTop] = useState(HELD_PANEL_TOP);
 
     useEffect(() => {
         const element = panel.current;
@@ -185,7 +193,7 @@ function useFitsInView(panel: RefObject<HTMLDivElement | null>): boolean {
             return;
         }
 
-        const measure = () => setFits(element.offsetHeight <= window.innerHeight - HELD_PANEL_CLEARANCE);
+        const measure = () => setTop(Math.min(HELD_PANEL_TOP, window.innerHeight - element.offsetHeight - HELD_PANEL_FOOT));
         const observer = new ResizeObserver(measure);
 
         observer.observe(element);
@@ -198,7 +206,7 @@ function useFitsInView(panel: RefObject<HTMLDivElement | null>): boolean {
         };
     }, [panel]);
 
-    return fits;
+    return top;
 }
 
 type Characteristic = { label: string; value: ReactNode };
