@@ -16,7 +16,7 @@ use LogicException;
  * counting the shelf rather than by driving the figure negative on purpose.
  *
  * Carries what was held and the delta refused, so a screen can say "you have
- * three, that removes five" and nudge toward Set exact count.
+ * three, that removes five" and nudge toward saying what is there now.
  *
  * A `LogicException` for the reason `StockNotCounted` is one: it names a thing
  * that may not be done, not a failure on the way to doing it.

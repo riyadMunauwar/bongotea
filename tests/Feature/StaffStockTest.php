@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Filament\Resources\Orders\Pages\CreateOrder;
@@ -36,7 +35,7 @@ beforeEach(function () {
 /** Somebody counted this many kilograms of Assam on the shelf. */
 function shelveAssam(int $kilograms): void
 {
-    app(StockLedger::class)->recordCount(test()->assam, $kilograms * 1000, AdjustmentCause::OpeningCount, null, test()->counter);
+    app(StockLedger::class)->recordCount(test()->assam, $kilograms * 1000, null, null, test()->counter);
 }
 
 /** A bulk Order for Assam as the Checkout captures it. */
@@ -106,7 +105,7 @@ describe('a User without the Permission', function () {
     it('is never refused for taking weight off, even where stock has since fallen below the Order', function () {
         shelveAssam(5);
         $order = assamOrdered(5);
-        app(StockLedger::class)->recordCount($this->assam, 2000, AdjustmentCause::Lost, null, $this->counter);
+        app(StockLedger::class)->recordCount($this->assam, 2000, cause('Lost'), null, $this->counter);
 
         savedWith($order, 'kilograms', 3)->assertHasNoFormErrors();
 
@@ -116,7 +115,7 @@ describe('a User without the Permission', function () {
     it('cancels an Order beyond stock', function () {
         shelveAssam(5);
         $order = assamOrdered(5);
-        app(StockLedger::class)->recordCount($this->assam, 2000, AdjustmentCause::Lost, null, $this->counter);
+        app(StockLedger::class)->recordCount($this->assam, 2000, cause('Lost'), null, $this->counter);
 
         Livewire::test(EditOrder::class, ['record' => $order->getKey()])
             ->fillForm(['status' => OrderStatus::Cancelled->value])

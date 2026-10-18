@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\StockMovementReason;
@@ -46,7 +45,7 @@ function retailParcel(CourierScript $script, int $grams = 250, int $count = 4): 
     $pack = Pack::factory()->for($product)->create(['grams' => $grams, 'mrp' => 30000, 'price' => 27000]);
     OrderLine::factory()->for($order)->ofPack($pack, $count)->create();
 
-    app(StockLedger::class)->recordCount($product, 10000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($product, 10000);
 
     return [$order->refresh(), $product];
 }

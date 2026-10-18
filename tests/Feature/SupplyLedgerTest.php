@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
 use App\Models\Pack;
 use App\Models\Product;
@@ -209,7 +208,7 @@ it('refuses a Pack belonging to another Product, and writes nothing', function (
 it('knows no cost for a product nobody has bought', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 30000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($product, 30000, null, null, $this->buyer);
 
     /** Unknown rather than free: a Product with no known cost must not present itself as infinitely profitable. */
     expect($this->ledger->averageCost($product))->toBeNull()
@@ -238,7 +237,7 @@ it('leaves an earlier movement stamped at what it was worth then, whatever is su
     $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10000, 10000), null, $this->buyer);
 
     /** Something moves while the average is 100.00 — the count finds two short, and the Adjustment is stamped at that. */
-    $this->ledger->recordCount($product, 8000, AdjustmentCause::Damaged, null, $this->buyer);
+    $this->ledger->recordCount($product, 8000, cause('Damaged'), null, $this->buyer);
 
     $adjustment = StockMovement::query()->where('reason', StockMovementReason::Adjustment)->sole();
 
@@ -258,7 +257,7 @@ it('stamps an adjustment with the average in force rather than with anything any
     $this->ledger->recordSupply($this->supplier, '2026-09-02', deliveryOf($product, 30000, 20000), null, $this->buyer);
 
     /** Four found on a second shelf, entering at what a unit is worth rather than at either price paid. */
-    $this->ledger->recordCount($product, 44000, AdjustmentCause::Found, null, $this->buyer);
+    $this->ledger->recordCount($product, 44000, cause('Found'), null, $this->buyer);
 
     $adjustment = StockMovement::query()->where('reason', StockMovementReason::Adjustment)->sole();
 
@@ -273,7 +272,7 @@ it('blends units nobody recorded buying into the average rather than standing th
     $product = Product::factory()->create();
 
     /** Thirty on the shelf before anything was ever bought through the system. */
-    $this->ledger->recordCount($product, 30000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($product, 30000, null, null, $this->buyer);
 
     $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 10000, 20000), null, $this->buyer);
 
@@ -287,9 +286,9 @@ it('never reports a value below nothing on a shelf that holds something', functi
     $product = Product::factory()->create();
 
     /** The ordinary way a Merchant adopts stock: count first, buy afterwards, count again. */
-    $this->ledger->recordCount($product, 30000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($product, 30000, null, null, $this->buyer);
     $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 10000, 20000), null, $this->buyer);
-    $this->ledger->recordCount($product, 5000, AdjustmentCause::Lost, null, $this->buyer);
+    $this->ledger->recordCount($product, 5000, cause('Lost'), null, $this->buyer);
 
     /**
      * The thirty-five that went left at what a unit was worth — 50.00 — and
@@ -309,7 +308,7 @@ it('keeps what a unit was worth after the last of it has gone out', function () 
     $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10000, 10000), null, $this->buyer);
 
     /** Everything supplied written off, which empties the shelf without making the price paid unknowable. */
-    $this->ledger->recordCount($product, 0, AdjustmentCause::Lost, null, $this->buyer);
+    $this->ledger->recordCount($product, 0, cause('Lost'), null, $this->buyer);
 
     expect($this->ledger->onHand($product))->toBe(0)
         ->and($this->ledger->averageCost($product))->toBe(10000)
@@ -341,7 +340,7 @@ it('reads what a whole list of products is worth in one query', function () {
     $uncosted = Product::factory()->create();
 
     $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($bought, 10000, 10000), null, $this->buyer);
-    $this->ledger->recordCount($uncosted, 5000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($uncosted, 5000, null, null, $this->buyer);
 
     $products = $this->ledger->withValueAtCost(Product::query())->get()->keyBy('id');
 
@@ -362,7 +361,7 @@ it('puts a product back exactly where it stood before a supply it should never h
     $product = Product::factory()->create();
 
     /** The shelf as it stood: counted, and bought for once at a price of its own. */
-    $this->ledger->recordCount($product, 12000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($product, 12000, null, null, $this->buyer);
     $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 20000, 10000), 'INV-1', $this->buyer);
 
     $onHandBefore = $this->ledger->onHand($product);
@@ -485,7 +484,7 @@ it('keeps quoting the last price that was really paid, not the one on a voided d
 
     /** Bought once at 100.00 and all of it gone again, so the shelf is empty but the price is known. */
     $this->ledger->recordSupply($this->supplier, '2026-09-01', deliveryOf($product, 10000, 10000), 'INV-1', $this->buyer);
-    $this->ledger->recordCount($product, 0, AdjustmentCause::Damaged, null, $this->buyer);
+    $this->ledger->recordCount($product, 0, cause('Damaged'), null, $this->buyer);
 
     $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', deliveryOf($product, 5000, 20000), 'INV-2', $this->buyer);
 

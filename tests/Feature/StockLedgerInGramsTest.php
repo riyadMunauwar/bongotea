@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
 use App\Models\OrderLine;
 use App\Models\Product;
@@ -66,7 +65,7 @@ it('converts every existing ledger row to grams without moving a figure a screen
     $countId = DB::table('stock_counts')->insertGetId([
         'product_id' => $assam->getKey(),
         'quantity' => 9,
-        'cause' => AdjustmentCause::Lost->value,
+        'adjustment_cause_id' => cause('Lost')->getKey(),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -76,7 +75,7 @@ it('converts every existing ledger row to grams without moving a figure a screen
     $uncostedCountId = DB::table('stock_counts')->insertGetId([
         'product_id' => $darjeeling->getKey(),
         'quantity' => 3,
-        'cause' => AdjustmentCause::OpeningCount->value,
+        'is_opening' => true,
         'created_at' => now(),
         'updated_at' => now(),
     ]);

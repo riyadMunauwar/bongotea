@@ -1,13 +1,14 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
+use App\Models\AdjustmentCause;
 use App\Models\Product;
 use App\Models\StockCount;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Inventory\AdjustmentBelowZero;
+use App\Support\Inventory\AdjustmentCauseRefused;
 use App\Support\Inventory\StockLedger;
 use App\Support\Inventory\StockNotCounted;
 use Illuminate\Support\Facades\File;
@@ -94,11 +95,13 @@ it('reads what is held for a whole list of products in one query', function () {
 it('takes a first count as the opening balance, attributed to whoever counted', function () {
     $product = Product::factory()->create();
 
-    $count = $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, 'Two boxes in the back', $this->counter);
+    $count = $this->ledger->recordCount($product, 30, null, 'Two boxes in the back', $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(30)
         ->and($count->quantity)->toBe(30)
-        ->and($count->cause)->toBe(AdjustmentCause::OpeningCount)
+        /** An opening count is a fact the ledger saw, never a cause anybody picked (ADR-0040). */
+        ->and($count->is_opening)->toBeTrue()
+        ->and($count->adjustmentCause)->toBeNull()
         ->and($count->note)->toBe('Two boxes in the back')
         ->and($count->user->name)->toBe('Nasrin Akter');
 
@@ -115,8 +118,8 @@ it('takes a first count as the opening balance, attributed to whoever counted', 
 it('writes the difference between what was counted and what the ledger held', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
-    $this->ledger->recordCount($product, 22, AdjustmentCause::Damaged, 'Water damage', $this->counter);
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
+    $this->ledger->recordCount($product, 22, cause('Damaged'), 'Water damage', $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(22)
         ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([30, -8]);
@@ -125,8 +128,8 @@ it('writes the difference between what was counted and what the ledger held', fu
 it('measures a second count against the first rather than against nothing', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 12, AdjustmentCause::OpeningCount, null, $this->counter);
-    $this->ledger->recordCount($product, 19, AdjustmentCause::Found, null, $this->counter);
+    $this->ledger->recordCount($product, 12, null, null, $this->counter);
+    $this->ledger->recordCount($product, 19, cause('Found'), null, $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(19)
         ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([12, 7]);
@@ -135,18 +138,67 @@ it('measures a second count against the first rather than against nothing', func
 it('records a count that agrees with the ledger as an adjustment of nothing', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 12, AdjustmentCause::OpeningCount, null, $this->counter);
-    $this->ledger->recordCount($product, 12, AdjustmentCause::Miscount, null, $this->counter);
+    $this->ledger->recordCount($product, 12, null, null, $this->counter);
+    $checked = $this->ledger->recordCount($product, 12, cause('Miscount'), null, $this->counter);
 
     /** Somebody looked and the ledger was right, which is a thing worth being able to read. */
     expect($this->ledger->onHand($product))->toBe(12)
-        ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([12, 0]);
+        ->and(StockMovement::query()->orderBy('id')->pluck('quantity')->all())->toBe([12, 0])
+        /** Nothing happened to explain, so it carries no cause — the shelf moved under the dialog to where it was aimed. */
+        ->and($checked->adjustmentCause)->toBeNull()
+        ->and($checked->is_opening)->toBeFalse();
+});
+
+it('refuses a cause on a first count, which is an opening count and nothing else', function () {
+    $product = Product::factory()->create();
+
+    expect(fn () => $this->ledger->recordCount($product, 30, cause('Found'), null, $this->counter))
+        ->toThrow(AdjustmentCauseRefused::class);
+
+    expect($this->ledger->onHand($product))->toBeNull();
+});
+
+it('refuses a count that moves the figure without a cause', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
+
+    expect(fn () => $this->ledger->recordCount($product, 22, null, null, $this->counter))
+        ->toThrow(AdjustmentCauseRefused::class);
+
+    expect($this->ledger->onHand($product))->toBe(30);
+});
+
+it('refuses a cause going the other way from the change', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
+
+    /** "Two more, damaged" is the record the directions exist to prevent. */
+    expect(fn () => $this->ledger->recordCount($product, 32, cause('Damaged'), null, $this->counter))
+        ->toThrow(AdjustmentCauseRefused::class)
+        ->and(fn () => $this->ledger->recordAdjustment($product, -2, cause('Found'), null, $this->counter))
+        ->toThrow(AdjustmentCauseRefused::class);
+
+    /** Miscount is honestly either way. */
+    $this->ledger->recordCount($product, 32, cause('Miscount'), null, $this->counter);
+    $this->ledger->recordAdjustment($product, -2, cause('Miscount'), null, $this->counter);
+
+    expect($this->ledger->onHand($product))->toBe(30);
+});
+
+it('refuses a retired cause, which is off the list', function () {
+    $product = Product::factory()->create();
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
+
+    $retired = AdjustmentCause::factory()->retired()->create();
+
+    expect(fn () => $this->ledger->recordAdjustment($product, 2, $retired, null, $this->counter))
+        ->toThrow(AdjustmentCauseRefused::class);
 });
 
 it('puts a genuinely empty shelf into the ledger, which nothing else could tell from an uncounted one', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 0, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 0, null, null, $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(0)
         ->and(StockMovement::count())->toBe(1);
@@ -160,7 +212,7 @@ it('writes the count and its adjustment together or writes neither', function ()
         throw new RuntimeException('The ledger could not be written to.');
     });
 
-    expect(fn () => $this->ledger->recordCount($product, 5, AdjustmentCause::OpeningCount, null, $this->counter))
+    expect(fn () => $this->ledger->recordCount($product, 5, null, null, $this->counter))
         ->toThrow(RuntimeException::class);
 
     /** A count on the record with no movement behind it would be a shelf somebody looked at and a figure that never heard about it. */
@@ -194,9 +246,9 @@ it('is the only thing in the application that writes a movement', function () {
 
 it('raises what is held by a positive delta, writing one adjustment of exactly that delta', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
 
-    $count = $this->ledger->recordAdjustment($product, 5, AdjustmentCause::Found, 'Found behind the counter', $this->counter);
+    $count = $this->ledger->recordAdjustment($product, 5, cause('Found'), 'Found behind the counter', $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(35)
         ->and($count->quantity)->toBe(35);
@@ -211,29 +263,22 @@ it('raises what is held by a positive delta, writing one adjustment of exactly t
 
 it('lowers what is held by a negative delta, writing one adjustment of exactly that delta', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 30, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 30, null, null, $this->counter);
 
-    $this->ledger->recordAdjustment($product, -2, AdjustmentCause::Damaged, 'Two dropped', $this->counter);
+    $this->ledger->recordAdjustment($product, -2, cause('Damaged'), 'Two dropped', $this->counter);
 
     expect($this->ledger->onHand($product))->toBe(28)
         ->and(StockMovement::query()->latest('id')->value('quantity'))->toBe(-2)
         ->and(StockMovement::count())->toBe(2);
 });
 
-it('adopts a product nobody has counted at the delta, when the delta is an increase', function () {
+it('refuses to change a product nobody has counted either way, and writes nothing', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordAdjustment($product, 5, AdjustmentCause::Found, null, $this->counter);
-
-    /** "+5" on a fresh Product means there are five, exactly as a first count of five would. */
-    expect($this->ledger->onHand($product))->toBe(5)
-        ->and(StockMovement::sole()->quantity)->toBe(5);
-});
-
-it('refuses to decrease a product nobody has counted, and writes nothing', function () {
-    $product = Product::factory()->create();
-
-    expect(fn () => $this->ledger->recordAdjustment($product, -3, AdjustmentCause::Damaged, null, $this->counter))
+    /** An unknown has nothing to change from: a first figure is always what is there now (ADR-0040). */
+    expect(fn () => $this->ledger->recordAdjustment($product, -3, cause('Damaged'), null, $this->counter))
+        ->toThrow(StockNotCounted::class)
+        ->and(fn () => $this->ledger->recordAdjustment($product, 5, cause('Found'), null, $this->counter))
         ->toThrow(StockNotCounted::class);
 
     /** An unknown is not a figure to take from, so nothing entered the ledger. */
@@ -244,9 +289,9 @@ it('refuses to decrease a product nobody has counted, and writes nothing', funct
 
 it('refuses a decrease that would take what is held below zero, and writes nothing', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 3, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 3, null, null, $this->counter);
 
-    expect(fn () => $this->ledger->recordAdjustment($product, -5, AdjustmentCause::Lost, null, $this->counter))
+    expect(fn () => $this->ledger->recordAdjustment($product, -5, cause('Lost'), null, $this->counter))
         ->toThrow(AdjustmentBelowZero::class);
 
     /** Below zero is a thing the ledger concludes, never one a Merchant asserts: what was held is untouched. */
@@ -256,9 +301,9 @@ it('refuses a decrease that would take what is held below zero, and writes nothi
 
 it('allows a decrease that lands exactly on nothing', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 4, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 4, null, null, $this->counter);
 
-    $this->ledger->recordAdjustment($product, -4, AdjustmentCause::Damaged, null, $this->counter);
+    $this->ledger->recordAdjustment($product, -4, cause('Damaged'), null, $this->counter);
 
     /** A shelf counted down to empty is a legal figure; only below nothing is refused. */
     expect($this->ledger->onHand($product))->toBe(0)
@@ -267,9 +312,9 @@ it('allows a decrease that lands exactly on nothing', function () {
 
 it('refuses an adjustment of nothing, which is not an adjustment', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 10, null, null, $this->counter);
 
-    expect(fn () => $this->ledger->recordAdjustment($product, 0, AdjustmentCause::Miscount, null, $this->counter))
+    expect(fn () => $this->ledger->recordAdjustment($product, 0, cause('Miscount'), null, $this->counter))
         ->toThrow(InvalidArgumentException::class);
 
     expect(StockMovement::count())->toBe(1);
@@ -277,11 +322,11 @@ it('refuses an adjustment of nothing, which is not an adjustment', function () {
 
 it('carries the cause and note onto the resulting record, attributed to whoever adjusted', function () {
     $product = Product::factory()->create();
-    $this->ledger->recordCount($product, 10, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 10, null, null, $this->counter);
 
-    $count = $this->ledger->recordAdjustment($product, 2, AdjustmentCause::Found, 'Turned up in the stockroom', $this->counter);
+    $count = $this->ledger->recordAdjustment($product, 2, cause('Found'), 'Turned up in the stockroom', $this->counter);
 
-    expect($count->cause)->toBe(AdjustmentCause::Found)
+    expect($count->adjustmentCause->name)->toBe('Found')
         ->and($count->note)->toBe('Turned up in the stockroom')
         ->and($count->user->name)->toBe('Nasrin Akter')
         ->and(StockMovement::query()->latest('id')->first()->user->name)->toBe('Nasrin Akter');
@@ -295,7 +340,7 @@ it('stamps the adjustment at the product\'s average cost, inherited from the cou
         ['product_id' => $product->getKey(), 'quantity' => 10, 'unit_cost' => 500],
     ]);
 
-    $this->ledger->recordAdjustment($product, 3, AdjustmentCause::Found, null, $this->counter);
+    $this->ledger->recordAdjustment($product, 3, cause('Found'), null, $this->counter);
 
     /** The units found are worth what everything else on that shelf is worth. */
     expect(StockMovement::query()->where('reason', StockMovementReason::Adjustment)->sole()->unit_cost)->toBe(500)
@@ -327,7 +372,7 @@ it('refuses to edit or delete a count', function () {
 it('keeps a soft-deleted product\'s movements and still answers what it held', function () {
     $product = Product::factory()->create();
 
-    $this->ledger->recordCount($product, 14, AdjustmentCause::OpeningCount, null, $this->counter);
+    $this->ledger->recordCount($product, 14, null, null, $this->counter);
 
     $product->delete();
 

@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Support\Inventory\StockLedger;
@@ -97,7 +96,7 @@ it('holds an empty shelf somebody counted apart from a shelf nobody has visited'
     $counted = Product::factory()->create(['name' => 'Counted candle']);
     Product::factory()->create(['name' => 'Uncounted candle']);
 
-    app(StockLedger::class)->recordCount($counted, 0, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($counted, 0);
 
     $rows = stockHoldingsByName();
 
@@ -108,7 +107,7 @@ it('holds an empty shelf somebody counted apart from a shelf nobody has visited'
 it('says a counted Product nothing was ever bought for is worth an unknown rather than nothing', function () {
     $product = Product::factory()->create(['name' => 'Counted candle']);
 
-    app(StockLedger::class)->recordCount($product, 6000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($product, 6000);
 
     expect(stockHoldingRows(stockHoldings()))->toBe([['Counted candle', 6000, null]])
         ->and(stockHoldings()->valueHeld)->toBeNull();
@@ -149,7 +148,7 @@ it('drops a withdrawn Product once it holds nothing, so a retired line does not 
     $retired = Product::factory()->create(['name' => 'Retired candle']);
     Product::factory()->create(['name' => 'Sylhet tea']);
 
-    app(StockLedger::class)->recordCount($retired, 0, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($retired, 0);
 
     $retired->delete();
 

@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\PaymentMethod;
 use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\EditOrder;
@@ -86,7 +85,7 @@ describe('Capture', function () {
     });
 
     it('holds the tea\'s whole weight across its Packs to what is free to sell', function () {
-        app(StockLedger::class)->recordCount($this->darjeeling, 6000, AdjustmentCause::OpeningCount, null, User::factory()->countingStock()->create());
+        app(StockLedger::class)->recordCount($this->darjeeling, 6000, null, null, User::factory()->countingStock()->create());
 
         expect(fn () => captureDarjeeling($this->darjeeling, [[$this->kilo, 5], [$this->half, 2]]))
             ->toThrow(fn (QuoteRefused $refusal) => expect($refusal->shortProductIds)->toBe([$this->darjeeling->getKey()]));

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Tables;
 
 use App\Enums\ProductStatus;
+use App\Filament\Clusters\Inventory\Resources\StockCounts\Actions\AdjustStockAction;
 use App\Models\Product;
 use App\Support\Inventory\CommittedStock;
 use App\Support\Inventory\DaysOfCover;
@@ -223,6 +224,8 @@ class ProductsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                /** Where a Merchant sees On Hand and notices it is wrong, one click from putting it right (ADR-0040). */
+                AdjustStockAction::make(),
             ])
             ->toolbarActions([
                 /** Taken out and put back, never force-deleted, for the reason `EditProduct` gives. */

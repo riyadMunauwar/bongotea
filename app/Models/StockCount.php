@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\AdjustmentCause;
 use Database\Factories\StockCountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -31,7 +30,8 @@ use LogicException;
 #[Fillable([
     'product_id',
     'quantity',
-    'cause',
+    'adjustment_cause_id',
+    'is_opening',
     'note',
     'user_id',
 ])]
@@ -44,7 +44,7 @@ class StockCount extends Model
     {
         return [
             'quantity' => 'integer',
-            'cause' => AdjustmentCause::class,
+            'is_opening' => 'boolean',
         ];
     }
 
@@ -69,6 +69,18 @@ class StockCount extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    /**
+     * Why the shelf was out, from the Merchant's own list (ADR-0040). None on
+     * an opening count and none where the count agreed: both are facts the
+     * ledger saw rather than reasons anybody picked.
+     *
+     * @return BelongsTo<AdjustmentCause, $this>
+     */
+    public function adjustmentCause(): BelongsTo
+    {
+        return $this->belongsTo(AdjustmentCause::class);
     }
 
     /**

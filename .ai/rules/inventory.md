@@ -7,7 +7,8 @@ paths:
   - app/Models/Supply.php
   - app/Models/SupplyLine.php
   - app/Enums/StockMovementReason.php
-  - app/Enums/AdjustmentCause.php
+  - app/Models/AdjustmentCause.php
+  - app/Enums/AdjustmentDirection.php
   - app/Support/Orders/OrderCapture.php
   - app/Models/OrderLine.php
   - 'app/Filament/Clusters/Inventory/**'
@@ -22,7 +23,7 @@ paths:
 
 On Hand is the sum of `stock_movements.quantity` and is stored nowhere: read it with `onHand(Product)` for one, or `withOnHand(Builder)` (alias `StockLedger::ON_HAND`) for a list. Both answer **null** for a Product with no movements, and every screen draws that as `—`, never `0` — unknown and none are different facts, like a Courier's Balance. Negative is legal and drawn loudly.
 
-`StockLedger::recordCount()` writes the Stock Count and its Adjustment in one transaction, always exactly one movement per count — including a zero one when the count agrees, which is what also puts a genuinely empty shelf into the ledger. Nobody types a quantity or a difference anywhere.
+`StockLedger::recordCount()` writes the Stock Count and its Adjustment in one transaction, always exactly one movement per count — including a zero one when the count agrees, which is what also puts a genuinely empty shelf into the ledger. `recordAdjustment()` is the same write with the figure worked out from a signed delta, against On Hand read under the Product's `lockForUpdate()`. Causes are `AdjustmentCause` rows the Merchant keeps (ADR-0040): the ledger refuses (`AdjustmentCauseRefused`) a cause on an opening count, a moving figure without one, a retired one, or one whose direction does not fit; a difference of nothing stores no cause. Opening count is `stock_counts.is_opening`, never a cause row, and Checked is a non-opening count with no cause.
 
 `StockMovement` and `StockCount` refuse `updating` and `deleting` at the model, and the panel offers no edit or delete route. A mistake is answered by another row.
 

@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\AdjustmentCause;
 use App\Models\Product;
 use App\Models\StockCount;
 use App\Models\User;
@@ -28,7 +27,7 @@ class StockCountFactory extends Factory
         return [
             'product_id' => Product::factory(),
             'quantity' => fake()->numberBetween(0, 200) * 1000,
-            'cause' => AdjustmentCause::OpeningCount,
+            'is_opening' => true,
             'note' => null,
             'user_id' => User::factory(),
         ];

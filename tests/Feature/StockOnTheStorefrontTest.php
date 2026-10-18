@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\OrderStatus;
 use App\Enums\SystemPage;
 use App\Models\Order;
@@ -32,7 +31,7 @@ beforeEach(function (): void {
 /** Somebody counted this many grams of a tea on the shelf. */
 function countedOnTheShelf(Product $tea, int $grams): void
 {
-    app(StockLedger::class)->recordCount($tea, $grams, AdjustmentCause::OpeningCount, null, User::factory()->countingStock()->create());
+    app(StockLedger::class)->recordCount($tea, $grams, null, null, User::factory()->countingStock()->create());
 }
 
 it('sends both Carts each tea\'s Free to Sell in grams', function () {

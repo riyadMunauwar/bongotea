@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
@@ -42,7 +41,7 @@ beforeEach(function (): void {
 /** Somebody counted this many grams of the Product on the shelf. */
 function countShelf(Product $product, int $grams): void
 {
-    app(StockLedger::class)->recordCount($product, $grams, AdjustmentCause::OpeningCount, null, test()->counter);
+    app(StockLedger::class)->recordCount($product, $grams, null, null, test()->counter);
 }
 
 /** An Order for this many kilograms of one Product, in the given state. */

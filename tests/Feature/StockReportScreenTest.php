@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Filament\Clusters\Reports\Pages\CourierReport;
 use App\Filament\Clusters\Reports\Pages\StockReport;
 use App\Filament\Clusters\Reports\ReportsCluster;
@@ -42,7 +41,7 @@ function aShelfOfStock(): array
     $mug = Product::factory()->create(['name' => 'Clay mug']);
     $candle = Product::factory()->create(['name' => 'Uncounted candle']);
 
-    app(StockLedger::class)->recordCount($mug, 3000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($mug, 3000);
 
     app(StockLedger::class)->recordSupply(
         supplier: Supplier::factory()->create(['name' => 'Dhaka Traders']),
@@ -122,7 +121,7 @@ it('says what is held altogether, and how much of the catalogue that covers', fu
 });
 
 it('says the worth of an installation that has recorded no buying is unknown, never nothing', function () {
-    app(StockLedger::class)->recordCount(Product::factory()->create(), 5000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount(Product::factory()->create(), 5000);
 
     Livewire::test(StockValueStat::class)
         ->assertSee('Not known')

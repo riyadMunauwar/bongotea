@@ -2,9 +2,9 @@
 
 namespace App\Support\Inventory;
 
-use App\Enums\AdjustmentCause;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
+use App\Models\AdjustmentCause;
 use App\Models\OrderLine;
 use App\Models\Pack;
 use App\Models\Product;
@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Models\Supply;
 use App\Models\User;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -911,106 +912,77 @@ class StockLedger
     }
 
     /**
-     * Record what a User counted, and square the ledger with it.
+     * Record what is on the shelf now, and square the ledger with it.
      *
      * The count and its Adjustment are written together or not at all: a
      * count with no movement behind it is a shelf somebody looked at and a
      * figure that never heard about it. The Adjustment's quantity is the
-     * difference between what was counted and what the ledger held — worked
-     * out here, because nobody in this system ever types a quantity or a
-     * difference.
+     * difference between what was counted and what the ledger holds at the
+     * moment of writing — worked out here, so a parcel booked while the dialog
+     * was open is measured against rather than lost (ADR-0040).
      *
-     * What was counted is in grams (ADR-0035); the count form converts the
-     * kilograms a Merchant types.
+     * What was counted is in grams (ADR-0035); the dialog converts the packets
+     * and kilograms a Merchant types.
      *
      * A Product nobody has counted holds an unknown rather than zero, and the
-     * first count is measured against zero all the same: what the count finds
-     * is the opening balance, which is why starting this system up is nothing
-     * more than counting the Products that matter this afternoon.
+     * first count is measured against zero all the same: what it finds is the
+     * opening balance, recorded as such and carrying no cause — an opening
+     * count is a fact the ledger saw, never a reason somebody picked.
      *
      * A count that agrees with the ledger writes an Adjustment of zero rather
-     * than nothing. It is the record that somebody looked and the ledger was
-     * right — and on a Product counted for the first time it is also what
-     * puts a genuinely empty shelf into the ledger, which nothing else could
-     * distinguish from a shelf nobody has visited.
+     * than nothing, and carries no cause because nothing happened to explain.
+     * It is the record that somebody looked and the ledger was right — and on
+     * a Product counted for the first time it is also what puts a genuinely
+     * empty shelf into the ledger, which nothing else could distinguish from a
+     * shelf nobody has visited.
+     *
+     * Anywhere the figure moves, the cause is compulsory and must go the way
+     * the change went (`AdjustmentCauseRefused`).
      */
     public function recordCount(
         Product $product,
         int $counted,
-        AdjustmentCause $cause,
+        ?AdjustmentCause $cause = null,
         ?string $note = null,
         ?User $countedBy = null,
     ): StockCount {
-        return DB::transaction(function () use ($product, $counted, $cause, $note, $countedBy): StockCount {
-            $count = StockCount::create([
-                'product_id' => $product->getKey(),
-                'quantity' => $counted,
-                'cause' => $cause,
-                'note' => $note,
-                'user_id' => $countedBy?->getKey(),
-            ]);
-
-            $this->write(
-                product: $product,
-                quantity: $counted - ($this->onHand($product) ?? 0),
-                reason: StockMovementReason::Adjustment,
-                source: $count,
-                user: $countedBy,
-
-                /** The average in force at this instant: units found or lost are worth what everything else on that shelf is. */
-                unitCost: $this->averageCost($product),
-            );
-
-            return $count;
-        });
+        return $this->square($product, fn (?int $onHand): int => $counted, $cause, $note, $countedBy);
     }
 
     /**
-     * Add or remove a known number of grams, and let a count do the arithmetic.
+     * Add or remove a known number of grams: the change as the Merchant knows
+     * it — two packets broke, five turned up behind the counter.
      *
-     * The friendlier face of `recordCount()`, for the everyday case a Merchant
-     * has rather than a stocktake: two got dropped, five turned up behind the
-     * counter. The Merchant knows the change and its direction, never the
-     * shelf's new total — so this reads what is held, adds the signed delta to
-     * it, and hands the sum to `recordCount()` as the figure counted. What
-     * comes back is one ordinary Adjustment movement of exactly the delta,
-     * written in one transaction, immutable and cost-stamped at the average —
-     * every one of those inherited rather than re-earned, because a +/− is a
-     * count and not a new kind of thing (ADR-0021).
+     * Applied as a change, against what is held at the moment of writing, and
+     * written as one ordinary Adjustment of exactly the delta — immutable and
+     * cost-stamped at the average, because a change is a count with the total
+     * worked out rather than a new kind of thing (ADR-0021).
      *
-     * The caller signs the delta and its magnitude is a plain positive number:
-     * the screen's button says the direction, so nobody types a minus. A
-     * positive delta (Increase) raises what is held; a negative one (Decrease)
-     * lowers it. A delta of nothing is not an adjustment and is refused.
+     * Refused three ways before the cause is even asked about:
      *
-     * A Decrease is guarded where a count is not, because a count is a fact a
-     * User establishes by looking and a Decrease is an assertion about a shelf
-     * they have not recounted. Two things it may not assert:
+     * - A delta of nothing, which is not a change.
      *
-     * - Removing from a Product nobody has counted, which holds an unknown
-     *   rather than a figure to take from (`StockNotCounted`). An Increase on
-     *   the same Product is welcome: it adopts the Product at the delta, the
-     *   way a first count adopts it at what was found.
+     * - A Product nobody has counted (`StockNotCounted`), either way. An
+     *   unknown has nothing to change from, so a first figure is always what is
+     *   there now (ADR-0040).
      *
      * - Taking what is held below nothing (`AdjustmentBelowZero`). Below zero
      *   is a figure the ledger may conclude but never one a Merchant may assert
      *   by hand; a shelf genuinely emptier than the ledger thinks is answered
-     *   by counting it.
+     *   by saying what is there now.
      */
     public function recordAdjustment(
         Product $product,
         int $delta,
-        AdjustmentCause $cause,
+        ?AdjustmentCause $cause,
         ?string $note = null,
         ?User $adjustedBy = null,
     ): StockCount {
         if ($delta === 0) {
-            throw new InvalidArgumentException('An adjustment of nothing is not an adjustment. A +/− carries a signed, non-zero delta.');
+            throw new InvalidArgumentException('An adjustment of nothing is not an adjustment. A change carries a signed, non-zero delta.');
         }
 
-        $onHand = $this->onHand($product);
-
-        if ($delta < 0) {
+        return $this->square($product, function (?int $onHand) use ($product, $delta): int {
             if ($onHand === null) {
                 throw new StockNotCounted($product);
             }
@@ -1018,10 +990,68 @@ class StockLedger
             if ($onHand + $delta < 0) {
                 throw new AdjustmentBelowZero($product, $onHand, $delta);
             }
-        }
 
-        /** The count does the arithmetic the Merchant would otherwise have to: On Hand ± delta, recorded as the figure counted. */
-        return $this->recordCount($product, ($onHand ?? 0) + $delta, $cause, $note, $adjustedBy);
+            return $onHand + $delta;
+        }, $cause, $note, $adjustedBy);
+    }
+
+    /**
+     * Write a Stock Count and its Adjustment, the figure counted being worked
+     * out from what is held by whichever way the Merchant said it.
+     *
+     * The Product's row is locked first, so two adjustments of one Product
+     * serialise — the same lock Capture's stock check takes — and On Hand is
+     * read once, under it, for both the figure and the difference.
+     *
+     * @param  Closure(?int): int  $counted
+     */
+    private function square(
+        Product $product,
+        Closure $counted,
+        ?AdjustmentCause $cause,
+        ?string $note,
+        ?User $by,
+    ): StockCount {
+        return DB::transaction(function () use ($product, $counted, $cause, $note, $by): StockCount {
+            Product::withTrashed()->whereKey($product->getKey())->lockForUpdate()->first();
+
+            $onHand = $this->onHand($product);
+            $figure = $counted($onHand);
+            $difference = $figure - ($onHand ?? 0);
+            $opening = $onHand === null;
+
+            if ($opening && $cause !== null) {
+                throw new AdjustmentCauseRefused($product, $difference, $cause, opening: true);
+            }
+
+            if ($difference !== 0 && ! $opening && ($cause === null || ! $cause->fits($difference))) {
+                throw new AdjustmentCauseRefused($product, $difference, $cause, opening: false);
+            }
+
+            $count = StockCount::create([
+                'product_id' => $product->getKey(),
+                'quantity' => $figure,
+
+                /** Nothing to explain where nothing moved, and a first figure is explained by being first. */
+                'adjustment_cause_id' => $difference === 0 ? null : $cause?->getKey(),
+                'is_opening' => $opening,
+                'note' => $note,
+                'user_id' => $by?->getKey(),
+            ]);
+
+            $this->write(
+                product: $product,
+                quantity: $difference,
+                reason: StockMovementReason::Adjustment,
+                source: $count,
+                user: $by,
+
+                /** The average in force at this instant: units found or lost are worth what everything else on that shelf is. */
+                unitCost: $this->averageCost($product),
+            );
+
+            return $count;
+        });
     }
 
     /**

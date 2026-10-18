@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\OrderKind;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
@@ -9,6 +8,7 @@ use App\Enums\StockMovementReason;
 use App\Enums\TrackingMoment;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Models\AdjustmentCause;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -450,7 +450,7 @@ function parcelOfCountedStock(CourierScript $script, int $held = 10, int $ordere
     $product = $order->lines()->sole()->product;
 
     /** Held and ordered are both kilograms; the ledger counts grams (ADR-0035). */
-    app(StockLedger::class)->recordCount($product, $held * 1000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($product, $held * 1000);
 
     return [$order->refresh(), $product];
 }
@@ -471,10 +471,19 @@ function shelfOf(string $name, ?int $counted = null): Product
 
     /** Counted in kilograms, recorded in the ledger's grams (ADR-0035). */
     if ($counted !== null) {
-        app(StockLedger::class)->recordCount($product, $counted * 1000, AdjustmentCause::OpeningCount);
+        app(StockLedger::class)->recordCount($product, $counted * 1000);
     }
 
     return $product;
+}
+
+/**
+ * One of the Adjustment Causes every installation starts with (ADR-0040), by
+ * the name the migration seeded it under.
+ */
+function cause(string $name): AdjustmentCause
+{
+    return AdjustmentCause::query()->where('name', $name)->firstOrFail();
 }
 
 /**

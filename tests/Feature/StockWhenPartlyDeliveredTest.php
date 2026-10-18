@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\ShipmentStatus;
 use App\Enums\StockMovementReason;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
@@ -65,7 +64,7 @@ function parcelPartlyDelivered(CourierScript $script, int $held = 10): array
         'quantity' => 2,
     ]);
 
-    app(StockLedger::class)->recordCount($refused, $held * 1000, AdjustmentCause::OpeningCount);
+    app(StockLedger::class)->recordCount($refused, $held * 1000);
 
     $parcel = parcelReportedAs($order->refresh(), $script, $script->partlyDeliveredWording());
 

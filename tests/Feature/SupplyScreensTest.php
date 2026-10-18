@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AdjustmentCause;
 use App\Enums\StockMovementReason;
 use App\Filament\Clusters\Inventory\InventoryCluster;
 use App\Filament\Clusters\Inventory\Resources\StockCounts\StockCountResource;
@@ -467,7 +466,7 @@ it('offers no way to edit or delete a delivery', function () {
 it('voids a wrong delivery from the document it was recorded on, and puts the shelf back', function () {
     $jacket = Product::factory()->create(['name' => 'Winter Jacket']);
 
-    $this->ledger->recordCount($jacket, 12000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($jacket, 12000, null, null, $this->buyer);
 
     /** 500 where somebody meant 50. */
     $mistake = $this->ledger->recordSupply($this->supplier, '2026-09-10', [
@@ -610,7 +609,7 @@ it('shows what each product is worth at cost, beside what is held', function () 
     ], null, $this->buyer);
 
     /** Counted but never bought: units held, and nobody knows what they cost. */
-    $this->ledger->recordCount($counted, 12000, AdjustmentCause::OpeningCount, null, $this->buyer);
+    $this->ledger->recordCount($counted, 12000, null, null, $this->buyer);
 
     Livewire::test(ListProducts::class)
         ->assertTableColumnStateSet(StockLedger::ON_HAND, 40000, $bought)
