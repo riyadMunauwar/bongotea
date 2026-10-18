@@ -92,7 +92,7 @@ class PageForm
                                 }
                             })
                             ->blocks(PageBlocks::builderBlocks())
-                            ->collapsible()
+                            ->collapsed()
                             ->cloneable()
                             ->addActionLabel('Add a Block'),
                     ]),

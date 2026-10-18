@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Fieldset;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * One kind of Block: what the editor asks for, and what the storefront is
@@ -62,9 +63,38 @@ abstract class PageBlock
     public static function builderBlock(): Block
     {
         return Block::make(static::type())
-            ->label(static::label())
+            ->label(fn (?array $state): string => static::headerLabel($state))
             ->icon(static::icon())
             ->schema([...static::fields(), self::placementFields()]);
+    }
+
+    /**
+     * What a Block's header in the editor says: its kind, and once filled in,
+     * what it holds, so a collapsed Page still reads as an outline.
+     *
+     * @param  array<string, mixed>|null  $data
+     */
+    protected static function headerLabel(?array $data): string
+    {
+        $summary = $data === null ? null : static::summary($data);
+
+        return $summary === null ? static::label() : static::label().' — '.Str::limit($summary, 60);
+    }
+
+    /**
+     * The few words that tell this Block from another of its kind: the Cart
+     * it draws or works with, else its heading, else its anchor. A kind whose heading is
+     * not where it says what it holds overrides this.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected static function summary(array $data): ?string
+    {
+        $anchor = self::anchor($data);
+
+        return self::namedCart($data)?->name
+            ?? self::text($data, 'heading')
+            ?? ($anchor === null ? null : '#'.$anchor);
     }
 
     private static function placementFields(): Fieldset

@@ -61,6 +61,19 @@ class HeroCarousel extends PageBlock
         ];
     }
 
+    /**
+     * A carousel has no heading of its own; its first slide is what it opens on.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected static function summary(array $data): ?string
+    {
+        $slides = is_array($data['slides'] ?? null) ? array_values($data['slides']) : [];
+        $firstSlide = is_array($slides[0] ?? null) ? $slides[0] : [];
+
+        return self::text($firstSlide, 'title') ?? parent::summary($data);
+    }
+
     public static function props(array $data): array
     {
         return [
