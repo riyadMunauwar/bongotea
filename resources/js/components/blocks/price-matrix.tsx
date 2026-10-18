@@ -42,7 +42,7 @@ export function PriceMatrix({ heading, text, categories }: PriceMatrixProps) {
                     <div className="grid bg-surface text-[12px] font-semibold text-muted" style={{ gridTemplateColumns }}>
                         <span className="sticky left-0 bg-surface px-4 py-3">{bn.matrix.tea}</span>
                         <span className="px-[10px] py-3 text-center">{bn.catalogue.mrp}</span>
-                        <span className="px-[10px] py-3" style={{ gridColumn: `span ${columns}` }}>
+                        <span className="px-[10px] py-3 text-center" style={{ gridColumn: `span ${columns}` }}>
                             {bn.matrix.ladder}
                         </span>
                     </div>
