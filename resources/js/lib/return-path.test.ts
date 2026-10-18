@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { returnPath, withReturnPath } from './return-path';
+import { rowFromAnchor } from './cart';
+import { returnPath, withReturnPath, withReturnPathToRow } from './return-path';
 
 /** What the খুচরা কার্ট page's address bar would hold after the pack chooser sent the buyer there. */
 function searchOf(url: string): string {
@@ -14,6 +15,14 @@ describe('going back for another tea', () => {
 
     it('goes to the page it was asked for', () => {
         expect(new URL(withReturnPath('/packet-basket', '/'), 'https://bongotea.test').pathname).toBe('/packet-basket');
+    });
+
+    it('opens a পাইকারি Cart at the tea just added, still knowing the page it came from', () => {
+        const url = new URL(withReturnPathToRow('/bulk-order', '/category/black-tea?page=2', 12), 'https://bongotea.test');
+
+        expect(url.pathname).toBe('/bulk-order');
+        expect(rowFromAnchor(url.hash)).toBe(12);
+        expect(returnPath(url.search)).toBe('/category/black-tea?page=2');
     });
 
     it('falls back to the home page when nobody said where they came from', () => {

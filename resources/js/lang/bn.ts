@@ -217,14 +217,13 @@ export const bn = {
         emptyHint: 'যে চায়ে “খুচরা কিনুন” আছে, সেখান থেকে পছন্দের প্যাকেট বেছে নিন।',
         shop: 'চা দেখুন',
         checkout: 'পরের ধাপ: আপনার তথ্য দিন',
-        addMore: 'আরও চা যোগ করুন',
     },
     cartChooser: {
         heading: 'কোন কার্টে যোগ করবেন?',
-        added: (name: string) => `✓ ${name}-এ যোগ হয়েছে`,
     },
     cartPage: {
         details: 'প্রোডাক্টের বিস্তারিত দেখুন',
+        addMore: 'আরও চা যোগ করুন',
         addedElsewhere: 'অন্য পাতা থেকে যোগ করা',
         addedElsewhereNote: 'এই কার্টের তালিকায় নেই, তবু অর্ডারে থাকবে',
         closed: (name: string) => `${name} এখন বন্ধ`,

@@ -1,14 +1,12 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 import { feeText, packName, retailDeliveryNote } from '@/components/cart/figures';
 import { PackStepper } from '@/components/cart/pack-chooser';
-import { DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
+import { AddMoreLink, DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
 import { themeStyle } from '@/components/catalogue/theme';
 import { bn } from '@/lang/bn';
 import { toBanglaDigits } from '@/lib/bangla';
 import { checkoutFor } from '@/lib/contents';
 import type { CartPack } from '@/lib/retail-cart';
-import { returnPath } from '@/lib/return-path';
 import { useRetailCart, type UseRetailCart } from '@/lib/use-retail-cart';
 import { useTaka } from '@/lib/use-taka';
 import { cn } from '@/lib/utils';
@@ -30,7 +28,6 @@ import { Picture, SectionHeading } from './shared';
  */
 export function RetailCart({ cart: drawn, heading, text, categories, others }: CartBlockProps & { cart: BlockCart }) {
     const retail = useRetailCart(drawn.id);
-    const back = useReturnPath();
     const elsewhere = others.filter((product) => retail.packsOf(product.id).some((pack) => retail.countOf(pack.id) > 0));
     const isBare = categories.length === 0 && retail.isEmpty && retail.unorderable.length === 0;
 
@@ -70,9 +67,7 @@ export function RetailCart({ cart: drawn, heading, text, categories, others }: C
                                     ))}
                                 </div>
                             ))}
-                            <Link href={back} className="self-start py-1 text-[14px] font-semibold text-primary no-underline">
-                                + {bn.packs.addMore}
-                            </Link>
+                            <AddMoreLink />
                         </div>
                         <Summary retail={retail} />
                     </div>
@@ -80,15 +75,6 @@ export function RetailCart({ cart: drawn, heading, text, categories, others }: C
             </div>
         </section>
     );
-}
-
-/** Where "আরও চা যোগ করুন" goes; the home page until mounted, because the server has no address bar to read. */
-function useReturnPath(): string {
-    const [back, setBack] = useState('/');
-
-    useEffect(() => setBack(returnPath(window.location.search)), []);
-
-    return back;
 }
 
 function EmptyBasket() {

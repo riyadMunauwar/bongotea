@@ -1,5 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { Picture } from '@/components/blocks/shared';
 import { discountPercent } from '@/components/cart/figures';
 import { PackChooserButton } from '@/components/cart/pack-chooser';
@@ -7,6 +6,7 @@ import { useCartChoice } from '@/components/cart/cart-chooser';
 import { CartIcon } from '@/components/storefront/icons';
 import { bn } from '@/lang/bn';
 import { firstKilograms } from '@/lib/cart';
+import { withReturnPathToRow } from '@/lib/return-path';
 import { useAdding } from '@/lib/use-adding';
 import { useCart } from '@/lib/use-cart';
 import { cn } from '@/lib/utils';
@@ -109,33 +109,19 @@ export function ProductCard({ product, className }: { product: ProductCardProps;
     );
 }
 
-/** How long the card says where an add went. */
-const ADDED_MILLISECONDS = 2500;
-
 /**
  * পাইকারি কিনুন on a card (ADR-0038): adds the least a buyer may order of the
  * tea, in its default পাইকারি Pack, to the Cart the add-rule names — on top of
- * what is there — and leaves the buyer where they are, saying which Cart it
- * reached. It shows no Cart's quantity.
+ * what is there — and takes the buyer on to that tea's row in it, remembering
+ * this page for "আরও চা যোগ করুন". It shows no Cart's quantity.
  */
 function BulkAddButton({ product }: { product: BulkProductCard }) {
-    const { pricing } = usePage().props;
+    const { url, props } = usePage();
     const adding = useAdding();
     const { choose, chooser } = useCartChoice();
-    const [addedTo, setAddedTo] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (addedTo === null) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => setAddedTo(null), ADDED_MILLISECONDS);
-
-        return () => window.clearTimeout(timer);
-    }, [addedTo]);
 
     const add = () => {
-        const prices = pricing.products.find((candidate) => candidate.id === product.id);
+        const prices = props.pricing.products.find((candidate) => candidate.id === product.id);
 
         if (prices === undefined) {
             return;
@@ -143,7 +129,7 @@ function BulkAddButton({ product }: { product: BulkProductCard }) {
 
         choose(adding.ruleFor(product.cartIds, 'bulk'), (cart) => {
             adding.addKilograms(cart.id, product.id, firstKilograms(prices, null));
-            setAddedTo(cart.name);
+            router.visit(withReturnPathToRow(cart.href, url, product.id));
         });
     };
 
@@ -157,11 +143,6 @@ function BulkAddButton({ product }: { product: BulkProductCard }) {
                 <CartIcon size={15} className="max-md:hidden" />
                 {bn.cart.add} <span className="font-normal opacity-80">· {bn.cart.addUnit}</span>
             </button>
-            {addedTo !== null && (
-                <span role="status" className="text-center text-[11px] font-semibold text-primary-dark md:text-[12px]">
-                    {bn.cartChooser.added(addedTo)}
-                </span>
-            )}
             {chooser}
         </>
     );

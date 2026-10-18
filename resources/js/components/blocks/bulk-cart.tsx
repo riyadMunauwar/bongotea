@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { BulkPackLine, TeaNotices } from '@/components/cart/bulk-pack-line';
 import { deliveryNote, discountLabel, feeText, nextDropText, packName, stepName } from '@/components/cart/figures';
 import { ClearAll } from '@/components/cart/clear-all';
-import { DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
+import { AddMoreLink, DetailsLink, ElsewhereHeading } from '@/components/cart/row-parts';
 import { Stepper } from '@/components/cart/stepper';
 import { tierRange } from '@/components/catalogue/tier-ladder';
 import { themeStyle } from '@/components/catalogue/theme';
@@ -41,8 +41,9 @@ function bulkCards(products: ProductCard[]): BulkProductCard[] {
  * Cart does not offer are drawn first, apart, and go once taken out. Beside
  * it (below on a phone, as a bar at the bottom) the summary of this Cart's
  * Contents alone, and above the rows "সব মুছুন" while there is anything to
- * clear. A row named in the address (`#tea-12`, from a Product page's add
- * button) is scrolled to and flashed.
+ * clear. A row named in the address (`#tea-12`, from a Product page's or a
+ * card's add button) is scrolled to and flashed, and "আরও চা যোগ করুন"
+ * goes back to the page a card sent the buyer from.
  */
 export function BulkCart({ cart: drawn, heading, text, quickChips, showTierList, categories, others }: CartBlockProps & { cart: BlockCart }) {
     const cart = useCart(drawn.id);
@@ -87,6 +88,7 @@ export function BulkCart({ cart: drawn, heading, text, quickChips, showTierList,
                                 ))}
                             </div>
                         ))}
+                        <AddMoreLink />
                         {quickChips && <span className="mt-1 text-center text-[12px] text-muted md:hidden">{bn.bulkOrder.chipsHint}</span>}
                     </div>
 
